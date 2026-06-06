@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../guard.php'; require_login();
+require_once __DIR__ . '/../guard.php'; require_role([0, 2, 3, 4]); // clinical roles only (no Observer)
  
 require ('../dbconnect.php');
 $consultation_to_service = $_REQUEST['consultation_to_service'];

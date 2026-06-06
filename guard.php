@@ -94,6 +94,29 @@ if (!function_exists('require_capability')) {
     }
 }
 
+if (!function_exists('require_patient_access')) {
+    // Object-level authorization for patient-state actions (discharge / transfer / etc.).
+    // Mirrors the UI gate exactly: allow Admin (position 0), anyone with the manage_patient
+    // capability, or the patient's own primary consultant. Anyone else is forbidden — this
+    // makes the previously UI-only ownership check real (closes the IDOR, S1).
+    function require_patient_access($patient_id) {
+        global $mysqli;
+        require_login();
+        $u = current_user();
+        if ($u && (int) $u['position'] === 0) { return; }                 // Admin
+        if ($u && (string) ($u['manage_patient'] ?? '') === '1') { return; } // Can-Manage
+        $pid = (int) $patient_id;
+        if ($pid > 0 && $u && isset($mysqli) && ($stmt = $mysqli->prepare('SELECT consultant_id FROM picupatients WHERE ID = ?'))) {
+            $stmt->bind_param('i', $pid);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            if ($row && (int) $row['consultant_id'] === (int) $u['member_id']) { return; } // primary consultant
+        }
+        deny(403, 'Forbidden: you are not the primary consultant for this patient.');
+    }
+}
+
 // --- CSRF helpers (csrf_token / csrf_field / csrf_verify) ---
 require_once __DIR__ . '/csrf.php';
 

@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../guard.php'; require_login();
+require_once __DIR__ . '/../guard.php'; require_role([0, 2, 3, 4]); require_patient_access($_REQUEST['bookId'] ?? 0);
 
 session_start();
 require_once ('../dbconnect.php');
