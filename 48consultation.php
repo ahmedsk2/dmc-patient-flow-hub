@@ -178,7 +178,7 @@ while ($row = $result1->fetch_assoc()) {
                                                     <form method='post' name='undo' action='48consultation.php'>".csrf_field()."
                                                         <input type='hidden' name='consultid' value='".htmlspecialchars($s['id'], ENT_QUOTES, 'UTF-8')."'>";
                                             if ($s['signoff_date'] == $today) {
-                                                echo "<button type='submit' value='submit' class='btn btn-warning' name='undo_btn' onclick='undoconsult(this)'>Undo Signoff</button>";
+                                                echo "<button type='submit' value='submit' class='btn btn-warning' name='undo_btn' onclick='return undoconsult(this)'>Undo Signoff</button>";
                                             }
                                             echo "
                                                     </form>
@@ -210,6 +210,9 @@ require 'footer.php';
 <script>
 
 function undoconsult(button) {
+    // W4: confirm undoing a sign-off, with the patient identity from the row.
+    var idy = window.dmcRowIdentity(button);
+    if (!window.dmcConfirm("Undo this sign-off?", idy.name, idy.mrn)) { return false; }
     // Disable the button and show loading spinner
     button.disabled = true;
     button.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"><span class="sr-only">Loading...</span></div>';
@@ -223,6 +226,7 @@ function undoconsult(button) {
 
     // Allow the form to be submitted
     button.form.submit();
+    return false;
 }
 
 </script>

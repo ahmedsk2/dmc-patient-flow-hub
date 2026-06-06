@@ -29,21 +29,22 @@ $patient['current_location']='Ward';
 
 //   mysqli_query($mysqli, $query);
 
+ $ok = true;
+
  $stmt = $mysqli->prepare($query);
  $stmt->bind_param("sssssisss", $patient['MRN'], $patient['PNAME'], $patient['ADMDATE'], $patient['admissiondiagnosis'], $patient['nationality'], $patient['gender'], $patient['age'], $patient['admitted_by'], $patient['current_location']);
  if (!$stmt -> execute()) {
-   echo("Error description: " . $mysqli -> error);
-
-  
-
-
+   error_log("icu-transfer INSERT failed (pid $pid): " . $mysqli->error);
+   $ok = false;
  }
  $query = "UPDATE  picupatients SET  DISDATE=?,med_DISDATE=?,DISTO='Ward', MORTALITY='Alive', trans_discharge='Transfer from ICU', trans_discharge_by=?  WHERE ID=?";
  $stmt = $mysqli->prepare($query);
  $stmt->bind_param("sssi", $today, $today, $patient['admitted_by'], $pid);
  if (!$stmt -> execute()) {
-   echo("Error description: " . $mysqli -> error);
+   error_log("icu-transfer UPDATE failed (pid $pid): " . $mysqli->error);
+   $ok = false;
  }
 
-
+// Machine-detectable status so the caller only reloads on confirmed success (W1).
+echo $ok ? "Record transferred successfully" : "Error transferring record";
 ?>

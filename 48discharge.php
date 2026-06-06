@@ -327,6 +327,9 @@ require 'footer.php';
 <script>
 
 function undodischarge(button) {
+    // W4: confirm undoing a discharge, with the patient identity from the row.
+    var idy = window.dmcRowIdentity(button);
+    if (!window.dmcConfirm("Undo this discharge and return the patient to active status?", idy.name, idy.mrn)) { return false; }
     // Disable the button and show loading spinner
     button.disabled = true;
     button.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"><span class="sr-only">Loading...</span></div>';

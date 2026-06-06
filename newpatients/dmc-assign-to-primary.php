@@ -9,7 +9,7 @@ require_once ('../dbconnect.php');
 ?>
 
 <form autocomplete='off' id='assignconsultant' method='POST' action='dmc-new-admissions.php'>
-<input class='txtdata' type='hidden' name='patientid1' value='<?php echo htmlspecialchars($id, ENT_QUOTES, 'UTF-8'); ?> style='text-align: center;' required>
+<input class='txtdata' type='hidden' name='patientid1' value='<?php echo htmlspecialchars($id, ENT_QUOTES, 'UTF-8'); ?>' required>
 
 
 <label>Primary Consultant</label>

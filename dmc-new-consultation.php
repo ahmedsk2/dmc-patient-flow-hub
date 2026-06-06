@@ -225,7 +225,7 @@ if (in_array($user['position'], $access_PICU_endorsement)) {
 <form method='post' name='signoff' action='dmc-new-consultation.php' id="signoff_form_<?= htmlspecialchars($consultation['id'], ENT_QUOTES, 'UTF-8') ?>">
 <?php echo csrf_field(); ?>
     <input type='hidden' name='consultid' value='<?= htmlspecialchars($consultation['id'], ENT_QUOTES, 'UTF-8') ?>'>
-    <button type='submit' name='signoff_btn' class='btn btn-danger' style='color: aliceblue;line-height: 2;margin-top: 3%;padding: 0px 10%;width: 100%;' onclick='signOff(this)'>Sign Off</button>
+    <button type='submit' name='signoff_btn' class='btn btn-danger' style='color: aliceblue;line-height: 2;margin-top: 3%;padding: 0px 10%;width: 100%;' onclick='return signOff(this)'>Sign Off</button>
 </form>
                                                         <a class='btn btn-info' href='#details_modal' data-book-id='<?= htmlspecialchars($consultation['id'], ENT_QUOTES, 'UTF-8') ?>' data-bs-toggle='modal' style='color: aliceblue;line-height: 2;margin-top: 3%;padding: 0px 10%;width: 100%;'>Modify</a>
                                                     <?php } ?>
@@ -356,6 +356,9 @@ if (in_array($user['position'], $access_PICU_endorsement)) {
 <script>
 
 function signOff(button) {
+    // W4: confirm sign-off with the patient identity from the consultation row.
+    var idy = window.dmcRowIdentity(button);
+    if (!window.dmcConfirm("Sign off this consultation?", idy.name, idy.mrn)) { return false; }
     // Disable the button and show loading spinner
     button.disabled = true;
     button.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"><span class="sr-only">Loading...</span></div>';
@@ -369,6 +372,7 @@ function signOff(button) {
 
     // Allow the form to be submitted
     button.form.submit();
+    return false;
 }
 
 
@@ -378,15 +382,23 @@ function auto_grow(element) {
 }
 
 function del(value) {
-    if (!confirm("Do you really want to delete this consultation?")) {
-        return false;
-    }
     var rowname = "row" + value;
     var row = document.getElementById(rowname);
+
+    // W4: confirm with the patient identity; W1: only remove the row on confirmed success.
+    var idy = window.dmcRowIdentity(row);
+    if (!window.dmcConfirm("Permanently DELETE this consultation?", idy.name, idy.mrn)) {
+        return false;
+    }
+
     var id = value;
     data = { id: id };
-    $.post('consultations/dmc-consultation-delete.php', data, function(data) {});
-    row.style.display = "none";
+    $.post('consultations/dmc-consultation-delete.php', data)
+      .done(function(resp){
+        if (window.dmcOk(resp)) { row.style.display = "none"; }
+        else { alert("Delete failed — the consultation was NOT removed. Please try again."); }
+      })
+      .fail(function(){ alert("Delete failed (network/server error) — the consultation was NOT removed."); });
 }
 
 function addconsult(button) {

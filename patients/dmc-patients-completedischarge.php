@@ -42,6 +42,8 @@ if( disdate=="" || disstatus=="" || disto==""  ){
 
 }
 else{
+    // W4: confirm closing the patient file (complete discharge) with the patient identity.
+    if (!window.dmcConfirm("Complete discharge (close the patient file)?\nThis finalizes the record and removes the patient from the active census.", <?php echo json_encode($patient['PNAME']); ?>, <?php echo json_encode($patient['MRN']); ?>)) { return false; }
 // alert("test");
 //  return false;
 button.disabled = true;
@@ -50,24 +52,29 @@ button.disabled = true;
           data = {id_modify:id_modify,disdate:disdate,disstatus:disstatus, disto:disto ,userid:userid };
         //  alert("not missing");
         
-            $.post('patients/dmc-patients-complete-discharge-submit.php', data, function(data){
-              
+            $.post('patients/dmc-patients-complete-discharge-submit.php', data)
+              .done(function(data){
                 $('#message').html(data);
-                // return false;
-              
-            location.reload();
-
-                setTimeout(function() {
-            button.disabled = false;
-            button.innerHTML = 'Discharge Patient'
-     }, 3000); // Simulate a delay of 2 seconds
-});
+                // W1: only reload (treat as done) when the server confirms success.
+                if (window.dmcOk(data)) {
+                  location.reload();
+                } else {
+                  button.disabled = false;
+                  button.innerHTML = 'Discharge Patient';
+                }
+              })
+              .fail(function(){
+                $('#message').html("<p style='color:red'>Complete discharge failed (server error). Please try again.</p>");
+                button.disabled = false;
+                button.innerHTML = 'Discharge Patient';
+              });
 }
 // alert(data);
 //This will submit your form.
         
 // alert(patientId);
 //   row.style.display = "none";
+  return false; // prevent native form submit; the AJAX flow drives navigation
   }
 
 
@@ -108,7 +115,7 @@ button.disabled = true;
 
 <div class="modal-footer" style="text-align: center;display: block;">
 <div color='green' style="color:forestgreen;" id="message"></div>
-<button type='submit' value='submit' class='btn btn-danger'  onclick="completedischargepatient(this)">Discharge Patient</button>
+<button type='submit' value='submit' class='btn btn-danger'  onclick="return completedischargepatient(this)">Discharge Patient</button>
 
 <a type="button" class="btn btn-default" style=" color: black; " data-bs-dismiss="modal">Close</a>
 

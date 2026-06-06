@@ -44,7 +44,8 @@ function dischargepatient(button) {
     document.getElementById("message").innerHTML = "<p style='color:red'>Fill All Please</p>";
     return false;
   } else {
-    
+    // W4: confirm the ICU discharge with the patient identity actually being submitted.
+    if (!window.dmcConfirm("ICU-discharge this patient?", pname_modify, mrn_modify)) { return false; }
     button.disabled = true;
     button.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"><span class="sr-only">Loading...</span></div>';
     data = {
@@ -63,15 +64,24 @@ function dischargepatient(button) {
       disto: disto,
       userid: userid
     };
-    $.post('patients/dmc-patients-icu-discharge-submit.php', data, function(data) {
-      $('#message').html(data);
-          setTimeout(function() {
-            button.disabled = false;
-            button.innerHTML = 'Discharge Patient'
-     }, 3000); // Simulate a delay of 2 seconds
-                          location.reload();
-    });
+    $.post('patients/dmc-patients-icu-discharge-submit.php', data)
+      .done(function(data) {
+        $('#message').html(data);
+        // W1: only reload (treat as done) when the server confirms success.
+        if (window.dmcOk(data)) {
+          location.reload();
+        } else {
+          button.disabled = false;
+          button.innerHTML = 'Discharge Patient';
+        }
+      })
+      .fail(function(){
+        $('#message').html("<p style='color:red'>Discharge failed (server error). The patient was NOT discharged. Please try again.</p>");
+        button.disabled = false;
+        button.innerHTML = 'Discharge Patient';
+      });
   }
+  return false; // prevent native form submit; the AJAX flow drives navigation
 }
 </script>
 
@@ -151,7 +161,7 @@ function dischargepatient(button) {
 
   <div class="modal-footer" style="text-align: center;display: block;">
     <div id="message" style="color: forestgreen;"></div>
-    <button type='submit' class='btn btn-danger' onclick="dischargepatient(this)">Discharge Patient</button>
+    <button type='submit' class='btn btn-danger' onclick="return dischargepatient(this)">Discharge Patient</button>
     <button type="button" class="btn btn-default" style="color: black;" data-bs-dismiss="modal">Close</button>
   </div>
 </form>

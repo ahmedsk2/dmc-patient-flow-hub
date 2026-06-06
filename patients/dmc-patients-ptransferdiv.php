@@ -39,6 +39,8 @@ $other_specialities = $result1->fetch_all(MYSQLI_ASSOC);
 
     <script type="text/javascript">
     function transferPtBtn(button) {
+        // W4: confirm transferring the patient off the current service.
+        if (!window.dmcConfirm("Transfer this patient to another specialty/consultant?", "", "")) { return; }
         // Disable the button and show loading spinner
         button.disabled = true;
         button.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"><span class="sr-only">Loading...</span></div>';

@@ -56,6 +56,14 @@ nationality_modify=="" || admdate_modify=="" || age_modify=="" || admfrom_modify
 
 }
 else{
+    // W1: editing here is intentional, but changing patient IDENTITY (MRN / name) is high-stakes — confirm it.
+    var ORIG_MRN  = <?php echo json_encode($patient['MRN']); ?>;
+    var ORIG_NAME = <?php echo json_encode($patient['PNAME']); ?>;
+    if (String(mrn_modify) !== String(ORIG_MRN) || String(pname_modify) !== String(ORIG_NAME)) {
+      if (!window.dmcConfirm("You are changing the patient identity (MRN / name). Save these changes?", pname_modify, mrn_modify)) {
+        return false;
+      }
+    }
           data = {id_modify:id_modify, bed_modify: bed_modify,primary_modify:primary_modify, mrn_modify: mrn_modify, age_modify:age_modify, gender_modify: gender_modify, pname_modify: pname_modify, nationality_modify: nationality_modify,
            admdate_modify:admdate_modify,admfrom_modify:admfrom_modify, admissiondiagnosis_modify:admissiondiagnosis_modify, current_location_modify:current_location_modify};
             // alert(mrn_modify);
@@ -63,22 +71,29 @@ else{
           button.disabled = true;
           button.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"><span class="sr-only">Loading...</span></div>';
 
-            $.post('patients/dmc-patients-modify.php', data, function(data){
-                // alert(admissiondiagnosis_modify);
-                // $('#pdetailsdiv').html(data);
-
-                     location.reload();
-                    setTimeout(function() {
-                            button.disabled = false;
-                            button.innerHTML = 'Update Patient'
-                    }, 3000); // Simulate a delay of 2 seconds
-});
+            $.post('patients/dmc-patients-modify.php', data)
+              .done(function(data){
+                // W1: only treat as saved when the server confirms success.
+                if (window.dmcOk(data)) {
+                  location.reload();
+                } else {
+                  document.getElementById("message111").innerHTML = "<p style='color:red'>Update failed — changes were NOT saved.</p>";
+                  button.disabled = false;
+                  button.innerHTML = 'Update Patient';
+                }
+              })
+              .fail(function(){
+                document.getElementById("message111").innerHTML = "<p style='color:red'>Update failed (server error) — changes were NOT saved.</p>";
+                button.disabled = false;
+                button.innerHTML = 'Update Patient';
+              });
 }
 // alert(data);
 //This will submit your form.
         
 // alert(patientId);
 //   row.style.display = "none";
+  return false; // prevent native form submit; the AJAX flow drives navigation
   }
 
 
@@ -181,7 +196,7 @@ if (is_array($decodedadmissiondx)){
 
 <div class="modal-footer" style="text-align: center;display: block;">
 <div color='green' style="color:forestgreen;" id="message111"></div>
-<button type='submit' value='submit' class='btn btn-success'  onclick="updatepatient(this)">Update Patient</button>
+<button type='submit' value='submit' class='btn btn-success'  onclick="return updatepatient(this)">Update Patient</button>
 
 <button type="button" class="btn btn-default" style=" color: black; " data-bs-dismiss="modal">Close</button>
 

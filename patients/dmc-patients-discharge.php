@@ -135,6 +135,8 @@ nationality_modify=="" || admdate=="" || age=="" || discahrge_type=="" || admfro
 
 }
 else{
+    // W4: confirm the discharge with the patient identity actually being submitted.
+    if (!window.dmcConfirm("Discharge this patient?", pname_modify, mrn_modify)) { return false; }
 // alert("test");
 //  return false;
           data = {id_modify:id_modify, bed_modify: bed_modify, mrn_modify: mrn_modify, gender_modify: gender_modify, age: age, pname_modify: pname_modify, nationality_modify: nationality_modify,
@@ -145,23 +147,29 @@ else{
          button.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"><span class="sr-only">Loading...</span></div>';
 
 
-            $.post('patients/dmc-patients-discharge-submit.php', data, function(data){
-              
+            $.post('patients/dmc-patients-discharge-submit.php', data)
+              .done(function(data){
                 $('#message').html(data);
-                           // Simulate an AJAX call to transfer the patient
-                setTimeout(function() {
-                        button.disabled = false;
-                        button.innerHTML = 'Discharge Patient'
-                }, 3000); // Simulate a delay of 2 seconds
-                            // return false;
-location.reload();
-});
+                // W1: only reload (treat as done) when the server confirms success.
+                if (window.dmcOk(data)) {
+                  location.reload();
+                } else {
+                  button.disabled = false;
+                  button.innerHTML = 'Discharge Patient';
+                }
+              })
+              .fail(function(){
+                $('#message').html("<p style='color:red'>Discharge failed (server error). The patient was NOT discharged. Please try again.</p>");
+                button.disabled = false;
+                button.innerHTML = 'Discharge Patient';
+              });
 }
 // alert(data);
 //This will submit your form.
         
 // alert(patientId);
 //   row.style.display = "none";
+  return false; // prevent native form submit; the AJAX flow drives navigation
   }
 
 
@@ -280,7 +288,7 @@ echo"
 
 <div class="modal-footer" style="text-align: center;display: block;">
 <div color='green' style="color:forestgreen;" id="message"></div>
-<button type='submit' value='submit' class='btn btn-danger'  onclick="dischargepatient(this)">Discharge Patient</button>
+<button type='submit' value='submit' class='btn btn-danger'  onclick="return dischargepatient(this)">Discharge Patient</button>
 
 <a type="button" class="btn btn-default" style=" color: black; " data-bs-dismiss="modal">Close</a>
 

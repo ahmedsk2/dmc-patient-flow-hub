@@ -626,18 +626,32 @@ function assignPatients(button) {
 }
 
 function icutransfer(button, value){
-  // var parent = $(this).parent('.eachcol').parent('.eachrow');
+  // W4: confirm the ICU transfer with the patient identity from the row.
+  var idy = window.dmcRowIdentity(button);
+  if (!window.dmcConfirm("Transfer this patient to ICU?", idy.name, idy.mrn)) { return false; }
+  var origHtml = button.innerHTML;
     // Disable the button and show loading spinner
     button.disabled = true;
     button.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"><span class="sr-only">Transfer...</span></div>';
   var patientid=value;
 var userid= <?php echo json_encode($user['member_id']); ?>;
 data = {patientid: patientid,userid:userid};
-$.post('newpatients/dmc-patients-icu-transfer.php', data, function(data){
-  // $('#message').html(data);
-
-location.reload();
-});
+$.post('newpatients/dmc-patients-icu-transfer.php', data)
+  .done(function(resp){
+    // W1: only reload (treat as done) when the server confirms success.
+    if (window.dmcOk(resp)) {
+      location.reload();
+    } else {
+      button.disabled = false;
+      button.innerHTML = origHtml;
+      alert("Transfer failed — please try again.");
+    }
+  })
+  .fail(function(){
+    button.disabled = false;
+    button.innerHTML = origHtml;
+    alert("Transfer failed (server error) — please try again.");
+  });
 
 }
 
@@ -649,20 +663,24 @@ function auto_grow(element) {
 
 
 function del(value){
-  if(!confirm("Do you really want to delete this patient?")) {
-    return false;
-  }
 var rowname= "row";
 rowname+=value;
 row = document.getElementById(rowname);
 
+  // W4: confirm with the patient identity; W1: only remove the row on confirmed success.
+  var idy = window.dmcRowIdentity(row);
+  if(!window.dmcConfirm("Permanently DELETE this patient record?", idy.name, idy.mrn)) {
+    return false;
+  }
+
     var id = value;
     data = {id: id};
-    $.post('patients/dmc-patient-delete.php', data, function(data){
-    // $(parent).html(data);
-  });
-  // location.reload();
-  row.style.display = "none";
+    $.post('patients/dmc-patient-delete.php', data)
+      .done(function(resp){
+        if (window.dmcOk(resp)) { row.style.display = "none"; }
+        else { alert("Delete failed — the record was NOT removed. Please try again."); }
+      })
+      .fail(function(){ alert("Delete failed (network/server error) — the record was NOT removed."); });
     }
 
 function admission(button) {
@@ -776,16 +794,30 @@ $(document).ready(function($) {
          
     
     var attribChanged = $(this).attr('name');
+
+    // W1: changing patient identity (MRN / name) is high-stakes — confirm, and revert if declined.
+    if (attribChanged === 'mrn' || attribChanged === 'name') {
+      var prevVal = $(this).data('prevVal');
+      var idLabel = (attribChanged === 'mrn') ? 'MRN' : 'patient name';
+      if (!confirm('Change ' + idLabel + ' from "' + (prevVal || '') + '" to "' + $(this).val() + '"?\n\nThis changes the patient record identity.')) {
+        $(this).val(prevVal);
+        return;
+      }
+    }
+
     data = {id1: id1, bed: bed, mrn: mrn,name: name, age:age, gender:gender, nationality,nationality, admfrom:admfrom,  admdate: admdate
       // , admfrom: admfrom
       , admissiondiagnosis:admissiondiagnosis,current_location:current_location, attribChanged: attribChanged};
-    $.post('newpatients/dmc-new-patients-update.php', data, function(data){
-      // $(parent).html(data);
-     
-    });
-    $(this).parent('.eachcol').css("backgroundColor", "#90EE90");
+    var cell = $(this).parent('.eachcol');
+    cell.css("backgroundColor", "#fff3cd"); // saving…
+    $.post('newpatients/dmc-new-patients-update.php', data)
+      .done(function(resp){ cell.css("backgroundColor", window.dmcOk(resp) ? "#90EE90" : "#f5a5a5"); })
+      .fail(function(){ cell.css("backgroundColor", "#f5a5a5"); });
 
   });
+
+  // W1: capture the pre-edit value so an MRN/name change can be confirmed or reverted.
+  $('.txtdata').on('focus', function(){ $(this).data('prevVal', $(this).val()); });
 });
 </script>
 

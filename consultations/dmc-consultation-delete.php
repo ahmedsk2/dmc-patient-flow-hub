@@ -11,13 +11,13 @@ $id = $_REQUEST['id'];
                 $stmt = $mysqli->prepare($sql);
                 $stmt->bind_param("i", $id);
                 if ($stmt->execute() === TRUE) {
-                  $message= "Record delete successfully";
+                  $message= "Record deleted successfully";
                   audit_log('consultation.delete','consultations',$id);
                 } else {
-                 $message= "Error deleting record: " . $mysqli->error;
+                 error_log("consultation.delete failed (id $id): " . $mysqli->error);
+                 $message= "Error deleting record";
                 }
 
-
-
-
+// Echo a machine-detectable status so the client only removes the row on confirmed success (W1).
+echo $message;
 ?>
