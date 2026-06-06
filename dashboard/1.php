@@ -4,37 +4,43 @@ require_once __DIR__ . '/../guard.php'; require_login();
 require_once '../dbconnect.php';
 
 function fetchDailyOverview($mysqli) {
+    // PERF: the original ran 31 full-table scans (one prepared SUM(CASE...) per day over all
+    // ~14.8k rows). Replace with two GROUP BY queries over a 31-day range (uses the ADMDATE /
+    // DISDATE indexes), then assemble the series in PHP. Same daily counts, ~instant.
+    $start = new DateTime();
+    $start->modify('-30 day');
+    $startStr = $start->format('Y-m-d');
+    $endStr   = (new DateTime())->format('Y-m-d');
+
+    $byDay = function ($col) use ($mysqli, $startStr, $endStr) {
+        $out = [];
+        $sql = "SELECT $col AS d, COUNT(*) AS c FROM picupatients
+                WHERE $col BETWEEN ? AND ? AND (current_location != 'ICU' OR current_location IS NULL)
+                GROUP BY $col";
+        if ($stmt = $mysqli->prepare($sql)) {
+            $stmt->bind_param("ss", $startStr, $endStr);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            while ($row = $res->fetch_assoc()) { $out[$row['d']] = (int) $row['c']; }
+            $stmt->close();
+        }
+        return $out;
+    };
+    $admByDay = $byDay('ADMDATE'); // $col is a fixed literal, not user input
+    $disByDay = $byDay('DISDATE');
+
     $dates = [];
     $admissions = [];
     $discharges = [];
-    $date = new DateTime();
-    $n = 0;
-
-    $stmt = $mysqli->prepare("
-        SELECT 
-            SUM(CASE WHEN ADMDATE = ? AND (current_location != 'ICU' OR current_location IS NULL) THEN 1 ELSE 0 END) as admissions,
-            SUM(CASE WHEN DISDATE = ? AND (current_location != 'ICU' OR current_location IS NULL) THEN 1 ELSE 0 END) as discharges
-        FROM picupatients
-    ");
-
-    while ($n < 31) {
-        $date1 = $date->format('Y-m-d');
-        $dates[] = $date1;
-        $stmt->bind_param("ss", $date1, $date1);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $row = $result->fetch_assoc();
-        $admissions[] = $row['admissions'];
-        $discharges[] = $row['discharges'];
-        $n++;
-        $date->modify("-1 day");
+    $cur = clone $start;
+    for ($n = 0; $n < 31; $n++) {
+        $d = $cur->format('Y-m-d');
+        $dates[]      = $d;
+        $admissions[] = $admByDay[$d] ?? 0;
+        $discharges[] = $disByDay[$d] ?? 0;
+        $cur->modify('+1 day');
     }
-
-    return [
-        'dates' => array_reverse($dates),
-        'admissions' => array_reverse($admissions),
-        'discharges' => array_reverse($discharges)
-    ];
+    return ['dates' => $dates, 'admissions' => $admissions, 'discharges' => $discharges];
 }
 
 function fetchCurrentPatients($mysqli) {
