@@ -18,7 +18,7 @@ _Last updated: 2026-06-06_
 | Review & planning (read-only) | 4 / 4 | ✅ complete |
 | Phase 0 — Containment | 3 ✅ · 1 🔄 · 3 ⏸️ ops | 🔄 in progress |
 | Phase 1 — Critical security & data integrity | 10 ✅ · 4 🔄 (of 16) | 🔄 in progress |
-| Phase 2 — Stabilize | 0 / 8 | not started |
+| Phase 2 — Stabilize | 2 ✅ · 1 🔄 (of 8) | 🔄 in progress |
 | Phase 3 — Refactor + UI/UX | 0 / 6 | not started |
 | Phase 4 — Re-platform (decision-gated) | 0 / 2 | not started |
 | Phase 5 — Nice-to-haves | 0 / 3 | not started |
@@ -26,6 +26,8 @@ _Last updated: 2026-06-06_
 ---
 
 ## Notes & decisions  _(newest first)_
+
+- **2026-06-06 — Batch 14 (Phase 2 data integrity: InnoDB + indexes + transactions, D1/D3/R2) DONE** (branch `renovation`). **Migration `03-innodb-and-indexes.sql`** converts the clinical/lookup tables **MyISAM→InnoDB** (main `picupatients` + staging + lookups) so multi-statement writes can be transactional, and adds the missing **hot-path indexes** (`picupatients` `MRN`(20)/`consultant_id`/`current_location`(10); `consultations` `consultant_id`/`MRN`/`signoff_date`/`consultation_date` — `ADMDATE`/`DISDATE` were already indexed). Wrapped the **three multi-step clinical writes** in `begin_transaction`/`commit`/`rollback` (a no-op on MyISAM, atomic once migration 03 runs): **ICU transfer** (INSERT+UPDATE), **specialty transfer** (both branches — new-service INSERT + old-record discharge UPDATE + optional ICU re-admission commit together, so a partial write can no longer duplicate the patient or drop them from the census), and the **old-patient confirm import**. The import fix also closes a **data-loss bug** — the staging `DELETE` previously ran even when the `INSERT` failed, losing the staged patient; now they commit together and the redirect fires once after the loop. DB errors are logged server-side, not echoed. ⏳ run migration 03 (after a backup) at deploy. ⬜ Still owed for D3: make the **stats queries sargable** (drop `MONTH()`/`YEAR()` wrapping on indexed date cols). Not runtime-tested.
 
 - **2026-06-06 — Batch 13 (server-side input validation, W3) DONE** (branch `renovation`). New `validate.php` (loaded centrally via `guard.php`) — dependency-free helpers `v_required` / `v_int_range` / `v_date_ymd` / `v_len` / `v_in` / `v_first`, each returning `''` when valid or a short message. Wired into **every patient write path**: **admission** (`dmc-patients-add.php` — gender enum, age 0–150, valid `YYYY-MM-DD` admission date, required identity/location/admitted-from); the **two inline list edits** (`dmc-patients-update.php` + `dmc-new-patients-update.php` — validate **only the changed field** via `attribChanged` so an unrelated edit is never blocked by other stored fields; reject → echo `Error:` → Batch-12 red flash + write skipped); the **three discharge submits** (date / status / destination / type); and **modify** (full record + added the previously-missing `audit_log('patient.modify')` — identity edits were unaudited). Conservative by design — rejects only clearly-invalid input and stays **permissive about MRN/name characters** (canonical MRN format is CLIN-09); does **not** enforce clinical business rules. **W-series (W1–W4) COMPLETE.** ⏸️ Deferred: light validation on consultation-add. Not runtime-tested.
 
@@ -99,9 +101,9 @@ _(Add new notes/decisions above this line as we go.)_
 - ✅ **Server-side + typed input validation** — `validate.php` helpers wired into admission, both inline edits (changed-field only), 3 discharge submits + modify (Batch 13) — (W3 / UX-03)
 
 ### Phase 2 — Stabilize & quick wins (P1/P2)
-- ⬜ Migrate **MyISAM → InnoDB** (utf8mb4) — (D1 / DB-01) — P1
-- ⬜ **Transactions** on multi-step clinical writes — (R2 / REL-01,08,09) — P2
-- ⬜ Add **indexes** + make stat queries **sargable** (no MONTH()/YEAR() on indexed cols) — (D3,P2 / DB-03,PERF-02) — P1
+- ✅ Migrate **MyISAM → InnoDB** — migration 03 converts picupatients/temp + lookups (Batch 14); ⏳ run at deploy. charset normalization (latin1/utf8mb3→utf8mb4) deferred (risky re-encode) — (D1 / DB-01)
+- ✅ **Transactions** on multi-step clinical writes — ICU transfer, specialty transfer (both branches), old-patient confirm import (Batch 14; also fixed an import data-loss bug) — (R2 / REL-01,08,09)
+- 🔄 Add **indexes** + make stat queries **sargable** — indexes added in migration 03 (Batch 14); ⬜ sargability (drop MONTH()/YEAR() on indexed date cols) still owed — (D3,P2 / DB-03,PERF-02) — P1
 - ⬜ **Soft-delete** + audit; restrict delete to Admin — (R4 / REL-05) — P2
 - ⬜ Backups + **schema-migrations** tooling — (R5 / REL-04) — P1
 - ⬜ Delete remaining **dead code/weight** — (X4 / SIMP-04,05) — P2
