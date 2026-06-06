@@ -29,6 +29,7 @@ if (isset($_REQUEST['patient_ids']) && is_array($_REQUEST['patient_ids']) && iss
             break; // Stop the loop if an error occurs
         }
     }
+    audit_log('patient.change_consultant','picupatients',null, ['new_consultant'=>$primary_modify ?? null]);
 
     $stmt->close();
 } else {

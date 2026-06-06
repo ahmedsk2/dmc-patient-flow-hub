@@ -41,6 +41,7 @@ require ('../dbconnect.php');
                 $stmt->bind_param("ssssssisiiss", $mrn_new, $current_location, $bed_new, $pname_new, $consultfrom_new, $consultdate_new, $age_new, $indication_new, $entered_by, $consultant_new, $other_indication, $consultation_to_service);
                 if ($stmt->execute() === TRUE) {
                     $message = "Record added successfully";
+                    audit_log('consultation.create','consultations',$mysqli->insert_id);
                   // $last_id = mysqli_insert_id($mysqli);
                   echo "<script language='javascript'>\n";
                   echo "window.location.href = 'dmc-new-consultation.php';";

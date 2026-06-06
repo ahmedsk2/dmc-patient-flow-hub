@@ -13,6 +13,8 @@ if (isset($_POST['reverse_discharge_btn'])) {
   $stmt->bind_param("i", $reverse_id);
   if (!$stmt->execute()) {
     echo("Error description: " . $mysqli -> error);
+  } else {
+    audit_log('patient.reverse_discharge','picupatients',$reverse_id);
   }
 }
  
@@ -35,6 +37,8 @@ $other_specialities = $result1 -> fetch_all(MYSQLI_ASSOC);
           $stmt->bind_param("sssii", $today, $today, $specialty_transfer, $user['member_id'], $transfer_id);
           if (!$stmt->execute()) {
             echo("Error description: " . $mysqli -> error);
+          } else {
+            audit_log('patient.transfer','picupatients',$transfer_id, ['to'=>$specialty_transfer]);
           }
           // keep icu admission under the same consultant if transferred to ICU
 
@@ -116,6 +120,7 @@ $other_specialities = $result1 -> fetch_all(MYSQLI_ASSOC);
 
             echo("Error description: " . $mysqli -> error);
           }else{
+            audit_log('patient.transfer','picupatients',$transfer_id, ['to'=>$specialty_transfer]);
             echo "<script language='javascript'>\n";
             echo "window.location.href = 'dmc-patients.php';";
             echo "</script>\n";

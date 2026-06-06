@@ -33,6 +33,7 @@ $disto = $_REQUEST['disto'];
               $stmt->bind_param("sssii", $disdate, $disstatus, $disto, $userid, $id);
               if ($stmt->execute() === TRUE) {
                 $message= "Record added successfully";
+                audit_log('patient.complete_discharge','picupatients',$id);
                 // $last_id = mysqli_insert_id($mysqli);
               } else {
                $message= "Error adding record: " . $mysqli->error;

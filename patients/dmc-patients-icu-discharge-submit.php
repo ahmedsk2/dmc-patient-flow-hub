@@ -51,6 +51,7 @@ $disto = $_REQUEST['disto'];
                 $stmt->bind_param("sssisssssssssii", $mrn_modify, $bed_modify, $pname_modify, $age, $gender_modify, $admfrom_modify, $nationality_modify, $admdate, $disdate, $disdate, $disstatus, $disto, $admissiondiagnosis, $userid, $id);
                 if ($stmt->execute() === TRUE) {
                   $message= "Record added successfully";
+                  audit_log('patient.icu_discharge','picupatients',$id);
                   // $last_id = mysqli_insert_id($mysqli);
                 } else {
                  $message= "Error adding record: " . $mysqli->error;

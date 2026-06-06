@@ -17,6 +17,7 @@
  */
 
 require_once __DIR__ . '/dbconnect.php'; // provides $mysqli (idempotent)
+require_once __DIR__ . '/audit.php';     // provides audit_log() (fail-safe)
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();

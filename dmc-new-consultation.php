@@ -42,6 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$stmt->execute()) {
                 echo "Error description: " . $mysqli->error;
             } else {
+                audit_log('consultation.signoff','consultations',$consultid);
                 echo "Query executed successfully.<br>";
                 echo "<script>window.location.href = 'dmc-new-consultation.php';</script>";
                 exit();

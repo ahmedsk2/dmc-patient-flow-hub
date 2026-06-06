@@ -17,7 +17,7 @@ _Last updated: 2026-06-06_
 |---|---|---|
 | Review & planning (read-only) | 4 / 4 | ✅ complete |
 | Phase 0 — Containment | 3 ✅ · 1 🔄 · 3 ⏸️ ops | 🔄 in progress |
-| Phase 1 — Critical security & data integrity | 3 ✅ · 6 🔄 (of 16) | 🔄 in progress |
+| Phase 1 — Critical security & data integrity | 4 ✅ · 6 🔄 (of 16) | 🔄 in progress |
 | Phase 2 — Stabilize | 0 / 8 | not started |
 | Phase 3 — Refactor + UI/UX | 0 / 6 | not started |
 | Phase 4 — Re-platform (decision-gated) | 0 / 2 | not started |
@@ -26,6 +26,8 @@ _Last updated: 2026-06-06_
 ---
 
 ## Notes & decisions  _(newest first)_
+
+- **2026-06-06 — Batch 8 (audit trail, R1) DONE** (branch `renovation`). Added a fail-safe `audit_log($action,$entity,$id,$details)` helper (`audit.php`, auto-included via `guard.php`/`sidebar.php`), backed by a new `audit_log` table (**migration `migrations/01-audit-log.sql`** — created `migrations/` + README; un-ignored `migrations/*.sql`). Wired **17 calls across 16 sites**: patient delete / discharge (ward medical + complete) / icu-discharge / complete-discharge / admit / transfer ×2 / reverse-discharge / change-consultant / old-patient import ×2; member update / delete; consultation create / delete / signoff — actor taken from the **server session** (closes the spoofable-audit gap SEC-22 for these actions). Fail-safe: if the table isn't applied yet it logs to `error_log` and never breaks the action. ⏳ **Run migration 01 at deploy.** Not runtime-tested.
 
 - **2026-06-06 — Batch 7 (session hardening + debug-leak removal) DONE** (branch `renovation`). `php.ini`: `session.cookie_httponly/secure/samesite=Lax` + `use_strict_mode` + `gc_maxlifetime=3600`, plus `display_errors=Off` / `log_errors=On`. `index.php`: `session_regenerate_id(true)` on successful login (fixation fix, SEC-23). Removed LIVE debug leaks (SEC-24): 5 `var_dump` in shuffle, `var_dump($patient)` (full PHI) in icu-transfer, the `$_POST`-dump block in the consultation sign-off handler, `error_log(print_r($_REQUEST))` in consultation-modify, and the forced `ini_set('display_errors',1)` in consultation-modify + send-reset-pass-by-admin (they overrode the php.ini hardening). **SameSite=Lax gives CSRF defense-in-depth ahead of full tokens.** `cookie_secure=1` requires the HTTPS deploy. Not runtime-tested.
 
@@ -80,7 +82,7 @@ _(Add new notes/decisions above this line as we go.)_
 - ✅ **Externalize secrets** from source — (S7 / SEC-16,17) — done (Batch 1; live rotation is the Phase 0 ops step)
 - 🔄 Add **security headers** — (S8 / SEC-27) — HSTS/nosniff/X-Frame-Options/Referrer-Policy added in `.htaccess` (Batch 1); **CSP deferred** until inline-JS/`eval` removed (S3/S10)
 - 🔄 Removed live `var_dump` / `$_POST`-dump / `error_log(print_r)` / forced `display_errors` leaks + set `display_errors=Off` (Batch 7, SEC-24); ⬜ replace **PHPExcel → PhpSpreadsheet** (SEC-25) — (S9 / SEC-24,25) — P1
-- ⬜ **Audit-log foundation** (actor from session, before/after) — (R1 / REL-02, SEC-22) — P1
+- ✅ **Audit log** — fail-safe `audit_log()` + `audit_log` table (migrations/01); wired into 16 clinical/account writes, actor from session (Batch 8) — (R1 / REL-02, SEC-22). ⏳ run migration 01 at deploy.
 - ⬜ Fix broken **assign-to-primary quote** (corrupts patient ID) — (W2 / UX-02) — P1
 - ⬜ **Confirmations** on discharge/transfer/delete/reverse (show name+MRN) — (W4 / UX-04) — P1
 - ⬜ **Trustworthy inline save** (read response; confirm identity-field edits) — (W1 / UX-01) — P1

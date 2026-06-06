@@ -22,6 +22,7 @@ if (isset($_POST['confirm_pt_btn'])) {
         $stmt->bind_param('i', $tempid);
         if ($stmt->execute() === TRUE) {
             $message = "Record transferred successfully";
+            audit_log('patient.import_confirm','picupatients',$tempid);
         } else {
             $message = "Error transferring record: " . $mysqli->error;
         }
@@ -70,6 +71,7 @@ if (isset($_POST['add_pt_btn'])) {
 
     if ($stmt->execute() === TRUE) {
         $message = "Record added successfully";
+        audit_log('patient.import_add','picupatients_temp',$mysqli->insert_id);
         echo "<script language='javascript'>\n";
         echo "window.location.href = 'dmc-old-patients.php';";
         echo "</script>\n";

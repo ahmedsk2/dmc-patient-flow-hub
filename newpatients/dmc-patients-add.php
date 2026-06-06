@@ -54,6 +54,7 @@ require_once ('../dbconnect.php');
                 $stmt->bind_param("ssssssssiss", $mrn_new, $current_location, $bed_new, $pname_new, $gender_new, $admfrom_new, $admdate, $nationality_new, $age_new, $admissiondiagnosis, $admitted_by);
                 if ($stmt->execute() === TRUE) {
                   array_push($errors,"Record added successfully");
+                  audit_log('patient.admit','picupatients',$mysqli->insert_id, ['mrn'=>$mrn_new]);
                   // $last_id = mysqli_insert_id($mysqli);
                   echo "<script language='javascript'>\n";
                   echo "window.location.href = 'dmc-new-admissions.php';";

@@ -18,6 +18,7 @@ $modifybox = $_REQUEST['modifybox'];
   
                 if ($mysqli->query($sql) === TRUE) {
                   $message= "Record updated successfully";
+                  audit_log('member.update','members',$id, ['position'=>$position,'active'=>$activate]);
                 } else {
                  $message= "Error updating record: " . $mysqli->error;
                 }

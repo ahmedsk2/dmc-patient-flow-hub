@@ -11,6 +11,7 @@ $id = $_REQUEST['id'];
                 $stmt->bind_param("i", $id);
                 if ($stmt->execute() === TRUE) {
                   $message= "Record delete successfully";
+                  audit_log('patient.delete','picupatients',$id);
                 } else {
                  $message= "Error deleting record: " . $mysqli->error;
                 }
