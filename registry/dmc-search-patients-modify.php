@@ -11,12 +11,19 @@ $id = $_REQUEST['id_modify'];
    $age_modify = $_REQUEST['age_modify']; 
    $nationality_modify=$_REQUEST['nationality_modify']; 
    
-   $admissiondiagnosis_modify1 = $_REQUEST['admissiondiagnosis_modify']; 
-   $admissiondiagnosis = json_encode($admissiondiagnosis_modify1); 
-   
-   
-  
-   
+   $admissiondiagnosis_modify1 = $_REQUEST['admissiondiagnosis_modify'];
+   $admissiondiagnosis = json_encode($admissiondiagnosis_modify1);
+
+   // W3: validate the edited patient record before persisting (client checks are bypassable).
+   $verr = v_first([
+       v_len($mrn_modify, 'MRN', 50),
+       v_len($pname_modify, 'Patient name', 100),
+       v_in($gender_modify, 'Gender', ['Male', 'Female']),
+       v_int_range($age_modify, 'Age', 0, 150),
+       v_required($nationality_modify, 'Nationality'),
+   ]);
+   if ($verr !== '') { echo "<a>Error: " . htmlspecialchars($verr, ENT_QUOTES, 'UTF-8') . "</a>"; exit; }
+
     $sql = "UPDATE  picupatients SET  MRN=?,BED=?, PNAME=?,gender=?,age=?,
     nationality=?, admissiondiagnosis=? WHERE ID=?";
 
@@ -29,7 +36,7 @@ $id = $_REQUEST['id_modify'];
                 $stmt->bind_param('ssssissi', $mrn_modify, $bed_modify, $pname_modify, $gender_modify, $age_modify, $nationality_modify, $admissiondiagnosis, $id);
                 if ($stmt->execute() === TRUE) {
                   $message= "Record added successfully";
-                  // $last_id = mysqli_insert_id($mysqli);
+                  audit_log('patient.modify','picupatients',$id, ['mrn'=>$mrn_modify,'via'=>'registry']);
                 } else {
                  error_log(__FILE__ . ": adding " . $mysqli->error); $message= "Error adding record.";
                 }

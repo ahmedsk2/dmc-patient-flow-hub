@@ -308,6 +308,7 @@ if ($subcount>=5 && $n_newpatients>0){
     
     }
 }
+audit_log('patients.shuffle','picupatients',null); // bulk auto-assignment run (actor from session)
 echo "<script language='javascript'>\n";
 echo "window.location.href = '../dmc-new-admissions.php';";
 echo "</script>\n";

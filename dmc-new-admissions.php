@@ -33,6 +33,7 @@ if (isset($_POST['assign_me_btn'])) {
           if (!$stmt->execute()) {
             error_log(__FILE__ . ": Error description: " . $mysqli -> error); echo "A database error occurred.";
           }else{
+            audit_log('patient.assign','picupatients',$patient_id, ['to'=>$user_id]);
             echo "<script language='javascript'>\n";
             echo "window.location.href = 'dmc-new-admissions.php';";
             echo "</script>\n";
@@ -60,6 +61,7 @@ if (isset($_POST['assign_to_consultant_btn'])) {
     if (!$stmt->execute()) {
       error_log(__FILE__ . ": Error description: " . $mysqli -> error); echo "A database error occurred.";
     }else{
+      audit_log('patient.assign','picupatients',$patient_id, ['to'=>$consultant_id,'new'=>1]);
       echo "<script language='javascript'>\n";
       echo "window.location.href = 'dmc-new-admissions.php';";
       echo "</script>\n";
@@ -73,6 +75,7 @@ if (isset($_POST['assign_to_consultant_btn'])) {
     if (!$stmt->execute()) {
       error_log(__FILE__ . ": Error description: " . $mysqli -> error); echo "A database error occurred.";
     }else{
+      audit_log('patient.assign','picupatients',$patient_id, ['to'=>$consultant_id]);
       echo "<script language='javascript'>\n";
       echo "window.location.href = 'dmc-new-admissions.php';";
       echo "</script>\n";

@@ -38,6 +38,7 @@ if ($verr !== '') { echo "Error: " . $verr; exit; }
                 $stmt->bind_param("ssssssi", $bed, $mrn, $name, $admdate, $longterm, $admissiondiagnosis, $id);
                 if ($stmt->execute() === TRUE) {
                   $message= "Record updated successfully";
+                  audit_log('patient.update','picupatients',$id, ['field'=>$attrib]);
                 } else {
                  error_log(__FILE__ . ": update " . $mysqli->error); $message= "Error updating record.";
                 }

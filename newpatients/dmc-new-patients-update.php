@@ -43,6 +43,7 @@ if ($verr !== '') { echo "Error: " . $verr; exit; }
                 $stmt->bind_param("sssssisssssi", $current_location, $bed, $mrn, $name, $admfrom, $age, $gender, $nationality, $admfrom, $admdate, $admissiondiagnosis, $id);
                 if ($stmt->execute() === TRUE) {
                   $message= "Record updated successfully";
+                  audit_log('patient.update','picupatients',$id, ['field'=>$attrib]);
                 } else {
                  error_log(__FILE__ . ": update " . $mysqli->error); $message= "Error updating record.";
                 }

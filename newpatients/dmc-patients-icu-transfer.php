@@ -46,7 +46,7 @@ $patient['current_location']='Ward';
    $ok = false;
  }
 
- if ($ok) { $mysqli->commit(); } else { $mysqli->rollback(); }
+ if ($ok) { $mysqli->commit(); audit_log('patient.icu_transfer','picupatients',$pid); } else { $mysqli->rollback(); }
 
 // Machine-detectable status so the caller only reloads on confirmed success (W1).
 echo $ok ? "Record transferred successfully" : "Error transferring record";
