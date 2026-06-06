@@ -117,6 +117,27 @@ if (!function_exists('require_patient_access')) {
     }
 }
 
+if (!function_exists('require_consultation_access')) {
+    // Object-level authorization for consultation actions (sign-off). Mirrors the UI gate:
+    // Admin, anyone with manage_patient, or the consultation's own consultant.
+    function require_consultation_access($consult_id) {
+        global $mysqli;
+        require_login();
+        $u = current_user();
+        if ($u && (int) $u['position'] === 0) { return; }
+        if ($u && (string) ($u['manage_patient'] ?? '') === '1') { return; }
+        $cid = (int) $consult_id;
+        if ($cid > 0 && $u && isset($mysqli) && ($stmt = $mysqli->prepare('SELECT consultant_id FROM consultations WHERE id = ?'))) {
+            $stmt->bind_param('i', $cid);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            if ($row && (int) $row['consultant_id'] === (int) $u['member_id']) { return; }
+        }
+        deny(403, 'Forbidden: you are not the consultant for this consultation.');
+    }
+}
+
 // --- CSRF helpers (csrf_token / csrf_field / csrf_verify) ---
 require_once __DIR__ . '/csrf.php';
 

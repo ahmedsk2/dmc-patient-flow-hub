@@ -30,26 +30,21 @@ if (!in_array($user['position'], $access_PICU_patients)) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['signoff_btn'])) {
         csrf_verify();
-        echo "Signoff button pressed.<br>";
-        
         if (isset($_POST['consultid'])) {
             $consultid = $_POST['consultid'];
-            echo "Consultation ID received: " . htmlspecialchars($consultid) . "<br>";
-            
+            require_consultation_access($consultid); // own consultation / Can-Manage / Admin only (S1)
+
             $query = "UPDATE consultations SET signoff_date=CURDATE() WHERE ID=?";
             $stmt = $mysqli->prepare($query);
             $stmt->bind_param('i', $consultid);
 
             if (!$stmt->execute()) {
-                error_log(__FILE__ . ": Error description: " . $mysqli->error); echo "A database error occurred.";
+                error_log(__FILE__ . ": consultation signoff failed: " . $mysqli->error); echo "A database error occurred.";
             } else {
                 audit_log('consultation.signoff','consultations',$consultid);
-                echo "Query executed successfully.<br>";
                 echo "<script>window.location.href = 'dmc-new-consultation.php';</script>";
                 exit();
             }
-        } else {
-            echo "Consultation ID not set.<br>";
         }
     }
     exit();  // Ensure this stops further processing
