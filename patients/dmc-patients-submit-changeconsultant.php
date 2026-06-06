@@ -1,4 +1,6 @@
-<?php 
+<?php
+require_once __DIR__ . '/../guard.php'; require_login();
+ 
 require_once ('../dbconnect.php');
 $response = ["success" => false, "message" => "Invalid input"];
 

@@ -17,7 +17,7 @@ _Last updated: 2026-06-06_
 |---|---|---|
 | Review & planning (read-only) | 4 / 4 | ✅ complete |
 | Phase 0 — Containment | 3 ✅ · 1 🔄 · 3 ⏸️ ops | 🔄 in progress |
-| Phase 1 — Critical security & data integrity | 0 / 15 | not started |
+| Phase 1 — Critical security & data integrity | 1 ✅ · 2 🔄 (of 16) | 🔄 in progress |
 | Phase 2 — Stabilize | 0 / 8 | not started |
 | Phase 3 — Refactor + UI/UX | 0 / 6 | not started |
 | Phase 4 — Re-platform (decision-gated) | 0 / 2 | not started |
@@ -26,6 +26,8 @@ _Last updated: 2026-06-06_
 ---
 
 ## Notes & decisions  _(newest first)_
+
+- **2026-06-06 — Batch 2 (central auth guard) DONE** (branch `renovation`). Added `guard.php` — central `require_login()` / `require_role()` / `require_capability()` (+ CSRF helpers, not yet enforced), session-based. Inserted it into **42 previously-unauthenticated endpoints**: clinical & AJAX handlers + dashboard fragments + `fetchicd10.php` → `require_login()`; user-management, registry, statistics, exports, deletes & old-patient import → `require_role([0])`. Made `dbconnect.php` idempotent (no double-connect). Closes the unauthenticated read/modify/delete + privilege-escalation class at the **authentication** level (SEC-01/02/04/07–12). ⬜ Next (Batch 3): fine-grained authorization (object ownership / "primary consultant", capability flags), the page files that run POST handlers **before** their role gate (`dmc-patients.php`, `dmc-old-patients.php`), and removing now-redundant `session_start()` calls. Not runtime-tested (no local PHP).
 
 - **2026-06-06 — Batch 1 (Phase 0, code side) DONE** on branch `renovation`. Externalized ALL secrets into git-ignored `config.local.php` (+ tracked `config.php` loader & `config.local.sample.php`); rewrote `dbconnect.php` & `DBController.php` to read config and stop leaking the raw DB error to clients; replaced hard-coded SMTP creds in the two forgot-password files; **deleted `reset-testcount.php` + `test-trans.php`**; deleted 7 `php_errorlog` files (~36 MB); hardened `.htaccess` (force-HTTPS, HSTS/nosniff/X-Frame-Options/Referrer-Policy, blocked `.sql/.md/.log/config.local.php/.git`). Verified: no hard-coded secret left in tracked source; no app code references the deleted files. ⏸️ **Ops follow-ups (you):** rotate DB + SMTP passwords, install TLS cert + deploy, set `display_errors=Off`, take a DB backup. _Not runtime-tested locally (no PHP CLI on this machine) — review on the PHP 8.3 server._
 
@@ -58,7 +60,7 @@ _(Add new notes/decisions above this line as we go.)_
 - ✅ Delete committed `php_errorlog` files (~36 MB removed) — (X1 / SIMP-01); ⏸️ also set `display_errors=Off` in server `php.ini` (the raw DB-error leak is already removed in code)
 
 ### Phase 1 — Critical security & data integrity (P1 — ~4-6 wks)
-- ⬜ **Central server-side auth guard** included by every endpoint (deny-by-default + ownership) — (S1 / SEC-01,04,07-11,20,21) — P1
+- 🔄 **Central server-side auth guard** — `guard.php` + **authentication enforced on all 42 action endpoints** (Batch 2); ⬜ fine-grained role/ownership + page-file handler-ordering = Batch 3 — (S1 / SEC-01,04,07-11,20,21) — P1
 - ⬜ **Re-confirm the real role/capability permission model** with team/clinicians (permissions.docx is dated) — (NEW) — P1
 - ⬜ Convert **all queries to prepared statements** via one DB helper — (S2,C2 / SEC-07-13) — P1
 - ⬜ **Encode all output** + remove `eval` + baseline CSP — (S3,S10 / SEC-18,26) — P1
@@ -116,4 +118,6 @@ _(Add new notes/decisions above this line as we go.)_
 ---
 
 ## Backlog / parking lot  _(add anything new here as we go)_
-- _(empty)_
+- Reorder POST/action handlers to run **after** the role gate in page files (`dmc-patients.php`, `dmc-old-patients.php`) — auth-check-order bug (SEC-20). [Batch 3]
+- Remove now-redundant `session_start()` calls in endpoints (guard.php already starts the session) — cosmetic warning cleanup.
+- Wire `csrf_field()`/`csrf_verify()` into all forms + AJAX once tokens are in place (S6).

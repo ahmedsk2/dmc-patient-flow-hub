@@ -1,4 +1,6 @@
-<?php 
+<?php
+require_once __DIR__ . '/../guard.php'; require_role([0]);
+ 
 require ('../dbconnect.php');
 date_default_timezone_set('Asia/Riyadh');
 

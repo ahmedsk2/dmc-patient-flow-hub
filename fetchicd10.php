@@ -1,4 +1,6 @@
-<?php 
+<?php
+require_once __DIR__ . '/guard.php'; require_login();
+ 
 // connect to database 
 require('dbconnect.php');
 

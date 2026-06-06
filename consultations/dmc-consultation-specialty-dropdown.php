@@ -1,4 +1,6 @@
-<?php 
+<?php
+require_once __DIR__ . '/../guard.php'; require_login();
+ 
 require ('../dbconnect.php');
 $consultation_to_service = $_REQUEST['consultation_to_service'];
 // echo $specialty_transfer;

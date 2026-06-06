@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../guard.php'; require_role([0]);
+
 session_start();
 require '../dbconnect.php';
 $today = date("Y-m-d");

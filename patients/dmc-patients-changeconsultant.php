@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../guard.php'; require_login();
+
 require_once ('../dbconnect.php');
 $consultant_id = $_REQUEST['bookId']; 
 $formationSQL = "SELECT * FROM picupatients WHERE DISDATE IS NULL AND consultant_id = ?";

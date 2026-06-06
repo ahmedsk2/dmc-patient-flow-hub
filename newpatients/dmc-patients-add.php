@@ -1,4 +1,6 @@
-<?php 
+<?php
+require_once __DIR__ . '/../guard.php'; require_login();
+ 
 require_once ('../dbconnect.php');
    $bed_new = $_REQUEST['bed_new']; 
    $mrn_new = trim($_REQUEST['mrn_new']);

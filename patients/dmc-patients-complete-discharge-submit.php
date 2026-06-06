@@ -1,4 +1,6 @@
-<?php 
+<?php
+require_once __DIR__ . '/../guard.php'; require_login();
+ 
 require_once ('../dbconnect.php');
 $id = $_REQUEST['id_modify']; 
 $userid = $_REQUEST['userid']; 

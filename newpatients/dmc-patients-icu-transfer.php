@@ -1,4 +1,6 @@
-<?php 
+<?php
+require_once __DIR__ . '/../guard.php'; require_login();
+ 
 require_once ('../dbconnect.php');
 $pid = $_REQUEST['patientid']; 
 $userid =$id = $_REQUEST['userid']; 

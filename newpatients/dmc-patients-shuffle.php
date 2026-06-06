@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../guard.php'; require_login();
+
 session_start();
 
 require_once "../authCookieSessionValidate.php";
