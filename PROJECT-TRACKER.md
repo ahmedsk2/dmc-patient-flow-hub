@@ -17,7 +17,7 @@ _Last updated: 2026-06-06_
 |---|---|---|
 | Review & planning (read-only) | 4 / 4 | ✅ complete |
 | Phase 0 — Containment | 3 ✅ · 1 🔄 · 3 ⏸️ ops | 🔄 in progress |
-| Phase 1 — Critical security & data integrity | 9 ✅ · 4 🔄 (of 16) | 🔄 in progress |
+| Phase 1 — Critical security & data integrity | 10 ✅ · 4 🔄 (of 16) | 🔄 in progress |
 | Phase 2 — Stabilize | 0 / 8 | not started |
 | Phase 3 — Refactor + UI/UX | 0 / 6 | not started |
 | Phase 4 — Re-platform (decision-gated) | 0 / 2 | not started |
@@ -26,6 +26,8 @@ _Last updated: 2026-06-06_
 ---
 
 ## Notes & decisions  _(newest first)_
+
+- **2026-06-06 — Batch 13 (server-side input validation, W3) DONE** (branch `renovation`). New `validate.php` (loaded centrally via `guard.php`) — dependency-free helpers `v_required` / `v_int_range` / `v_date_ymd` / `v_len` / `v_in` / `v_first`, each returning `''` when valid or a short message. Wired into **every patient write path**: **admission** (`dmc-patients-add.php` — gender enum, age 0–150, valid `YYYY-MM-DD` admission date, required identity/location/admitted-from); the **two inline list edits** (`dmc-patients-update.php` + `dmc-new-patients-update.php` — validate **only the changed field** via `attribChanged` so an unrelated edit is never blocked by other stored fields; reject → echo `Error:` → Batch-12 red flash + write skipped); the **three discharge submits** (date / status / destination / type); and **modify** (full record + added the previously-missing `audit_log('patient.modify')` — identity edits were unaudited). Conservative by design — rejects only clearly-invalid input and stays **permissive about MRN/name characters** (canonical MRN format is CLIN-09); does **not** enforce clinical business rules. **W-series (W1–W4) COMPLETE.** ⏸️ Deferred: light validation on consultation-add. Not runtime-tested.
 
 - **2026-06-06 — Batch 12 (patient-safety workflow correctness, W1/W2/W4) DONE** (branch `renovation`). Added three shared JS helpers in `footer.php` — `dmcConfirm(label,name,mrn)` (identity-bearing confirm), `dmcOk(resp)` (server-success check, matches `…successfully`), `dmcRowIdentity(el)` (best-effort name/MRN from the patient row/card). **W4 — confirmations:** every destructive/clinical action now confirms with the patient **name + MRN** before firing — ward/ICU/complete-file discharge, reverse-discharge, transfer, delete patient ×2, delete consultation, sign-off, undo-discharge, undo-sign-off, ward→ICU transfer. **W1 — trustworthy saves:** AJAX actions now read the response and only reload / hide the row on **confirmed success** (else show the error + re-enable the button); inline list edits flash green only on confirmed save (red on failure); **changing patient identity (MRN/name)** — inline or in the modify modal — prompts a confirm and reverts if declined; `dmc-patient-delete` / `dmc-consultation-delete` / `dmc-patients-icu-transfer` now echo an explicit status and **log DB errors server-side instead of leaking** them to the client. Switched the `type=submit` triggers (sign-off, undo-sign-off, all three discharges, modify) to `onclick="return fn(this)"` + terminal `return false` so a **cancelled confirm truly blocks** the native form submit. **W2:** fixed the unterminated `value='` quote in `newpatients/dmc-assign-to-primary.php` that corrupted the assigned patient ID. ⏸️ Deferred (additive, non-destructive — lower risk): confirmations on assign-to-consultant, auto-shuffle, old-patient add/confirm. Not runtime-tested.
 
@@ -94,7 +96,7 @@ _(Add new notes/decisions above this line as we go.)_
 - ✅ Fixed broken **assign-to-primary quote** (was corrupting the patient ID) — (W2 / UX-02) — Batch 12
 - ✅ **Confirmations** with patient name+MRN on discharge/transfer/delete/reverse/sign-off/undo — (W4 / UX-04) — Batch 12
 - ✅ **Trustworthy save** — response-checked AJAX (reload/hide only on success) + MRN/name identity-edit confirm & revert — (W1 / UX-01) — Batch 12
-- ⬜ **Server-side + typed input validation** (age/MRN/date) — (W3 / UX-03) — P1 ← next
+- ✅ **Server-side + typed input validation** — `validate.php` helpers wired into admission, both inline edits (changed-field only), 3 discharge submits + modify (Batch 13) — (W3 / UX-03)
 
 ### Phase 2 — Stabilize & quick wins (P1/P2)
 - ⬜ Migrate **MyISAM → InnoDB** (utf8mb4) — (D1 / DB-01) — P1
