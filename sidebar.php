@@ -3,6 +3,7 @@ session_start();
 require_once 'dbconnect.php';
 require_once __DIR__ . '/audit.php';
 require_once __DIR__ . '/csrf.php';
+require_once __DIR__ . '/guard.php'; // auth helpers (require_role / require_capability / require_patient_access) for page POST handlers
 require_once 'authCookieSessionValidate.php';
 date_default_timezone_set('Asia/Riyadh');
 $today = date("Y-m-d");

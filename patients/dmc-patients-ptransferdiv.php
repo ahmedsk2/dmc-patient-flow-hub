@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../guard.php'; require_role([0, 2, 3, 4]); // clinical roles only (no Observer)
+require_once __DIR__ . '/../guard.php'; require_role([0, 2, 3, 4]); require_patient_access($_REQUEST['myBookId1'] ?? 0); // owner / Can-Manage / Admin only
 
 require ('../dbconnect.php');
 $id = $_REQUEST['myBookId1']; 

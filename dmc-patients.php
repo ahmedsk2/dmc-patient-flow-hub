@@ -8,6 +8,7 @@ if ((isset($_POST['reverse_discharge_btn']) || isset($_POST['transfer_pt_btn']))
 if (isset($_POST['reverse_discharge_btn'])) {
   csrf_verify();
   $reverse_id = $_POST['reverse_id'];
+  require_patient_access($reverse_id); // owner / Can-Manage / Admin only (S1)
   $null = "NULL";
   $query = "UPDATE picupatients SET DISDATE=NULL, med_DISDATE=NULL , delay=NULL WHERE ID=?";
   $stmt = $mysqli->prepare($query);
@@ -30,6 +31,7 @@ $other_specialities = $result1 -> fetch_all(MYSQLI_ASSOC);
 
 
  $transfer_id = $_POST['id'];
+ require_patient_access($transfer_id); // owner / Can-Manage / Admin only (S1)
 
  $specialty_transfer = $_POST['specialty_transfer'];
   if ((array_search($specialty_transfer, array_column($other_specialities, 'specilaity')) !== false)){
