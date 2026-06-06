@@ -14,7 +14,6 @@ $stmt->execute();
 $result1 = $stmt->get_result();
 $patient = $result1 -> fetch_array(MYSQLI_ASSOC);
 
- var_dump($patient );
 
 $patient['consultant_id']= null;
 $patient['newassign']=null;

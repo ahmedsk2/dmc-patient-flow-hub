@@ -17,7 +17,7 @@ _Last updated: 2026-06-06_
 |---|---|---|
 | Review & planning (read-only) | 4 / 4 | ✅ complete |
 | Phase 0 — Containment | 3 ✅ · 1 🔄 · 3 ⏸️ ops | 🔄 in progress |
-| Phase 1 — Critical security & data integrity | 3 ✅ · 4 🔄 (of 16) | 🔄 in progress |
+| Phase 1 — Critical security & data integrity | 3 ✅ · 6 🔄 (of 16) | 🔄 in progress |
 | Phase 2 — Stabilize | 0 / 8 | not started |
 | Phase 3 — Refactor + UI/UX | 0 / 6 | not started |
 | Phase 4 — Re-platform (decision-gated) | 0 / 2 | not started |
@@ -26,6 +26,8 @@ _Last updated: 2026-06-06_
 ---
 
 ## Notes & decisions  _(newest first)_
+
+- **2026-06-06 — Batch 7 (session hardening + debug-leak removal) DONE** (branch `renovation`). `php.ini`: `session.cookie_httponly/secure/samesite=Lax` + `use_strict_mode` + `gc_maxlifetime=3600`, plus `display_errors=Off` / `log_errors=On`. `index.php`: `session_regenerate_id(true)` on successful login (fixation fix, SEC-23). Removed LIVE debug leaks (SEC-24): 5 `var_dump` in shuffle, `var_dump($patient)` (full PHI) in icu-transfer, the `$_POST`-dump block in the consultation sign-off handler, `error_log(print_r($_REQUEST))` in consultation-modify, and the forced `ini_set('display_errors',1)` in consultation-modify + send-reset-pass-by-admin (they overrode the php.ini hardening). **SameSite=Lax gives CSRF defense-in-depth ahead of full tokens.** `cookie_secure=1` requires the HTTPS deploy. Not runtime-tested.
 
 - **2026-06-06 — Batch 6 (XSS output encoding, S3) DONE** (branch `renovation`). Wrapped **~250+** unescaped output sinks (patient MRN/name/diagnosis/bed/dates, consultant names, reflected `$_GET`/`$_COOKIE` values) in `htmlspecialchars(ENT_QUOTES,'UTF-8')` for HTML contexts and `json_encode` for `<script>` contexts — across registry results, patient/consultation modals, the big list pages (dmc-patients/dmc-new-admissions/dmc-old-patients), search/48*/list pages, login/profile/control/errors. Verified: **no double-encoding**; known reflected sinks (login cookies, `errors.php`, reflected ids) now encoded. Conservatively LEFT (low-risk, accepted): a few `onclick='del(<id>)'`/`showfunction('<id>')` JS-call args embedding **integer** ID columns (can't carry a payload). **Deferred**: removing `eval()` in `dashboard.php` + a real **CSP** (need the inline-JS refactor — Phase 3). Minor: `htmlspecialchars(null)` on nullable columns emits a benign E_DEPRECATED on PHP 8.1+ (still returns ''; hidden by `display_errors=Off`; a future `h()` helper can add `?? ''`). Not runtime-tested.
 
@@ -74,10 +76,10 @@ _(Add new notes/decisions above this line as we go.)_
 - 🔄 **Encode all output** — ~250+ DB/request sinks wrapped (htmlspecialchars/json_encode) across all rendering files (Batch 6; SEC-18 done); ⬜ remove `eval` + baseline **CSP** deferred to Phase 3 (needs inline-JS refactor) — (S3,S10 / SEC-18,26) — P1
 - ✅ Block **privilege escalation** — `register.php` rejects position 0 + creates inactive accounts; user-mgmt admin-gated (Batches 2–3) — (S4 / SEC-02,03)
 - 🔄 Fix **password reset** — public SQLi removed + all account flows parameterized (Batch 3); ⬜ random single-use expiring **token redesign** (needs `password_resets` table) + widen `member_password` to varchar(255) — (S5 / SEC-13,14,30)
-- ⬜ **Session/cookie hardening** + **CSRF tokens** — (S6 / SEC-19,23) — P1
+- 🔄 **Session/cookie hardening** done — php.ini HttpOnly/Secure/SameSite=Lax/use_strict_mode + `session_regenerate_id` on login (Batch 7); ⬜ **CSRF tokens** still to wire — (S6 / SEC-19,23) — P1
 - ✅ **Externalize secrets** from source — (S7 / SEC-16,17) — done (Batch 1; live rotation is the Phase 0 ops step)
 - 🔄 Add **security headers** — (S8 / SEC-27) — HSTS/nosniff/X-Frame-Options/Referrer-Policy added in `.htaccess` (Batch 1); **CSP deferred** until inline-JS/`eval` removed (S3/S10)
-- ⬜ Remove debug/`var_dump`; replace **PHPExcel → PhpSpreadsheet** — (S9 / SEC-24,25) — P1
+- 🔄 Removed live `var_dump` / `$_POST`-dump / `error_log(print_r)` / forced `display_errors` leaks + set `display_errors=Off` (Batch 7, SEC-24); ⬜ replace **PHPExcel → PhpSpreadsheet** (SEC-25) — (S9 / SEC-24,25) — P1
 - ⬜ **Audit-log foundation** (actor from session, before/after) — (R1 / REL-02, SEC-22) — P1
 - ⬜ Fix broken **assign-to-primary quote** (corrupts patient ID) — (W2 / UX-02) — P1
 - ⬜ **Confirmations** on discharge/transfer/delete/reverse (show name+MRN) — (W4 / UX-04) — P1

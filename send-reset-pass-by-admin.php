@@ -1,7 +1,6 @@
 <?php 
 session_start();
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
+// production error handling is configured centrally (php.ini)
 // var_dump($_SESSION);
 require_once "authCookieSessionValidate.php";
 

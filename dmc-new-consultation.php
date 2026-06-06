@@ -28,12 +28,6 @@ if (!in_array($user['position'], $access_PICU_patients)) {
     exit();
 }
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    echo "Form submitted successfully.<br>";
-    // Debug: Output all POST data
-    echo "POST data:<br>";
-    foreach ($_POST as $key => $value) {
-        echo htmlspecialchars($key) . ": " . htmlspecialchars($value) . "<br>";
-    }
     if (isset($_POST['signoff_btn'])) {
         echo "Signoff button pressed.<br>";
         

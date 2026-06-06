@@ -36,6 +36,7 @@ if (!empty($_POST["login"])) {
 
     if ($isAuthenticated) {
         if ($active == 1) {
+            session_regenerate_id(true); // prevent session fixation: new id on login
             $_SESSION["member_id"] = $user[0]["member_id"];
             $_SESSION["position"] = $user[0]["position"];
             $_SESSION["name"] = $user[0]["member_name"];

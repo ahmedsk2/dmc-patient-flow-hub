@@ -1,9 +1,7 @@
 <?php
 require_once __DIR__ . '/../guard.php'; require_login();
  
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+// production error handling is configured centrally (php.ini: display_errors=Off, log_errors=On)
 
 require_once ('../dbconnect.php');
 
@@ -18,8 +16,7 @@ $other_indication_modify = $_REQUEST['other_indication_modify'] ?? '';
 $indication_modify1 = $_REQUEST['indication_modify'] ?? [];
 $indication_modify = json_encode($indication_modify1);
 
-// Log the received data for debugging
-error_log("Received data: " . print_r($_REQUEST, true));
+// (debug request logging removed - was leaking PHI to the error log)
 
 // Verify data before processing
 if (empty($id) || empty($bed_modify) || empty($mrn_modify) || empty($pname_modify) || empty($age_modify) || empty($current_location_modify) || empty($indication_modify)) {

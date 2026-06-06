@@ -180,13 +180,11 @@ while (($leastcount <= ($min_hospitalist-1)) && $n_newpatients > 0){
             // echo  $message;
         }
         // echo  "</br><strong> First Round </strong>";
-            var_dump($hospitalist_count);
 
         if ($n_newpatients <=0){
             break 2;
         }
     }
-var_dump($hospitalist_count);
     $leastcount = min($hospitalist_count);
     // echo $leastcount;
 }
@@ -214,7 +212,6 @@ if($leastcount >= $min_hospitalist && $n_newpatients>0){
                 // echo  "</br> Minimum count" .$leastcount;
             }
             // echo  "</br><strong> second Round </strong>";
-             var_dump($hospitalist_count);
             if ($n_newpatients==0){
                 break 2;
             }
@@ -273,7 +270,6 @@ if ($leastcount>=$max_hospitalist && $n_newpatients>0){
                     // echo  "</br> Minimum count" .$subcount;
                 }
                 // echo  "</br><strong> First Round </strong>";
-                            var_dump($subspeciality_count);
 
                 if ($n_newpatients <=0){
                     break 2;
@@ -306,7 +302,6 @@ if ($subcount>=5 && $n_newpatients>0){
                 // echo  "</br> Minimum count" .$leastcount;
                 // echo  $message;
 
-            var_dump($hospitalist_count);
             
         }
     
