@@ -28,6 +28,19 @@ _Last updated: 2026-06-06_
 
 ## Notes & decisions  _(newest first)_
 
+- **📍 2026-06-06 — CHECKPOINT (pushed to GitHub, PRIVATE).** Branch `renovation`, **Batches 1–20 complete**:
+  Phase 0 containment; Phase 1 critical security (central auth guard, prepared statements everywhere,
+  XSS output-encoding, CSRF tokens, session hardening, audit trail, secrets externalized, secure
+  reset tokens, server-side input validation); Phase-1 patient-safety **W1–W4** (identity confirmations,
+  trustworthy/response-aware saves, assign-quote fix); Phase 2 data-integrity (**InnoDB + indexes +
+  transactions**, migration 03; DB-error-leak removal; **PHP 8.3 mysqli** compatibility; global
+  uncaught-error safety net); security headers. **All committed; NOTHING runtime-tested** (no local PHP
+  — verify via [`DEPLOY.md`](DEPLOY.md)). **Never committed / not published:** `Demo.sql` (real PHI),
+  `config.local.php` (live creds), `php_errorlog` — git-ignored and verified absent from all history.
+  **Remaining work is blocked on your input** (CLIN-01…09 clinical definitions, permission model,
+  canonical "active patient" definition for de-dup, soft-delete policy, UI/UX overhaul, CSP/`eval`
+  removal) **or on runtime verification.** Two local branches: `main` (baseline) + `renovation` (the work).
+
 - **2026-06-06 — Batches 18–19 (safe-polish grind: error safety net + audit coverage) DONE** (branch `renovation`). **B18:** new `error-handler.php` (registered first thing in `config.php`) installs a `set_exception_handler` + fatal `register_shutdown_function` — uncaught exceptions / fatals now log server-side and return a generic message instead of a blank/half 500. Deliberately **no** `set_error_handler` (warnings keep PHP's normal logged-but-hidden path; avoids log-flooding + `@` surprises). **B19 (R1 audit completeness):** wired `audit_log()` into the writes that were previously untracked — both inline list edits (`patient.update {field}`), ward→ICU transfer (`patient.icu_transfer`), the three consultant-assignment paths (`patient.assign {to}`), the bulk shuffle (`patients.shuffle`), and the registry patient edit (`patient.modify {via:registry}`, which also gained the missing W3 validation). All on the success path, actor from session, fail-safe. Not runtime-tested.
 
 - **2026-06-06 — Batch 17: `DEPLOY.md` runbook added** — consolidated all deferred deploy steps (backup, credential rotation, `config.local.php`, migrations 01–03, TLS, `php.ini`, the PHP-8.3 mysqli note) + a per-feature smoke-test checklist. This is the path to runtime-verify the whole renovation (nothing has been tested locally).
