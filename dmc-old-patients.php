@@ -8,6 +8,7 @@ if ((isset($_POST['confirm_pt_btn']) || isset($_POST['add_pt_btn'])) && !in_arra
 }
 
 if (isset($_POST['confirm_pt_btn'])) {
+    csrf_verify();
     $formationSQL = "SELECT * FROM picupatients_temp";
     $result1 = $mysqli->query($formationSQL);
     $temppicupatints = $result1->fetch_all(MYSQLI_ASSOC);
@@ -42,6 +43,7 @@ if (isset($_POST['confirm_pt_btn'])) {
 }
 
 if (isset($_POST['add_pt_btn'])) {
+    csrf_verify();
     $mrn = $_POST['mrn'];
     $pname = $_POST['pname'];
     $admdate = $_POST['admdate'];
@@ -163,7 +165,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                 if ($user['add_new_patient'] == '1') {
                                     echo "<a class='btn btn-success' href='#admiting_modal' data-bs-toggle='modal' style='color: aliceblue; line-height: 2; padding: 0px 15px; margin-bottom: 2%;'>New Admission</a>";
                                     echo "
-                                    <form method='post' action='dmc-old-patients.php'>
+                                    <form method='post' action='dmc-old-patients.php'>".csrf_field()."
                                     <button type='submit' value='submit' name='confirm_pt_btn' class='btn btn-danger' style='color: aliceblue; line-height: 2; padding: 0px 15px; margin-bottom: 2%;' onclick='confirmpt(this)'>Confirm Patients</button>
                                     </form>";
                                 }
@@ -629,6 +631,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                 </div>
                 <div class="modal-body">
                     <form id="admitPatientForm" method="post" autocomplete="off" action="dmc-old-patients.php">
+                        <?php echo csrf_field(); ?>
                         <label>MRN</label>
                         <input class='txtdata' name='mrn' style='text-align: center;' required>
                         <label>Patient Name</label>

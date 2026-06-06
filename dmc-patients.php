@@ -6,6 +6,7 @@ if ((isset($_POST['reverse_discharge_btn']) || isset($_POST['transfer_pt_btn']))
     exit('Forbidden.');
 }
 if (isset($_POST['reverse_discharge_btn'])) {
+  csrf_verify();
   $reverse_id = $_POST['reverse_id'];
   $null = "NULL";
   $query = "UPDATE picupatients SET DISDATE=NULL, med_DISDATE=NULL , delay=NULL WHERE ID=?";
@@ -19,6 +20,7 @@ if (isset($_POST['reverse_discharge_btn'])) {
 }
  
 if (isset($_POST['transfer_pt_btn'])) {
+  csrf_verify();
   // receive all input values from the form
 
   
@@ -520,7 +522,7 @@ if ($result1) {
                                                         echo" <a  class='btn btn-danger'  href='#completedis_modal' data-bs-toggle='modal'  data-book-id='".htmlspecialchars($s['ID'], ENT_QUOTES, 'UTF-8')."'  style='color: aliceblue;line-height: 2;margin-top: 3%;padding: 0px 10%;width: 100%;'  id= 'discharge'>Complete Discharge</a>";
                                                         if ($user['modify_patient'] == '1'){
                                                         echo "
-                                                          <form method='post' action='dmc-patients.php'>
+                                                          <form method='post' action='dmc-patients.php'>".csrf_field()."
                                                           <input class='txtdata' type='hidden' name='reverse_id' value='".htmlspecialchars($s['ID'], ENT_QUOTES, 'UTF-8')."'>
                                                           <button type='button' value='submit' name='reverse_discharge_btn' class='btn btn-danger' style='color: aliceblue;line-height: 2;margin-top: 3%;padding: 0px 10%;width: 100%;' onclick='reversedischarge(this)'>Reverse Discharge</button>
                                                           </form>";

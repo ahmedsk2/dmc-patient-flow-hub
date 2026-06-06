@@ -29,6 +29,7 @@ if (!in_array($user['position'], $access_PICU_patients)) {
 }
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['signoff_btn'])) {
+        csrf_verify();
         echo "Signoff button pressed.<br>";
         
         if (isset($_POST['consultid'])) {
@@ -222,6 +223,7 @@ if (in_array($user['position'], $access_PICU_endorsement)) {
                                                     </div>
                                                     <?php if ($user['member_id'] == $consultation['consultant_id'] || $user['manage_patient'] == '1') { ?>
 <form method='post' name='signoff' action='dmc-new-consultation.php' id="signoff_form_<?= htmlspecialchars($consultation['id'], ENT_QUOTES, 'UTF-8') ?>">
+<?php echo csrf_field(); ?>
     <input type='hidden' name='consultid' value='<?= htmlspecialchars($consultation['id'], ENT_QUOTES, 'UTF-8') ?>'>
     <button type='submit' name='signoff_btn' class='btn btn-danger' style='color: aliceblue;line-height: 2;margin-top: 3%;padding: 0px 10%;width: 100%;' onclick='signOff(this)'>Sign Off</button>
 </form>

@@ -19,6 +19,7 @@ date_default_timezone_set('Asia/Riyadh');
 $today = date("Y-m-d");
 
 if (isset($_POST['undo_btn'])) {
+    csrf_verify();
     $consult_id = $_POST['consultid'];
     $query = "UPDATE consultations SET signoff_date= NULL WHERE ID=?";
     $stmt = $mysqli->prepare($query);
@@ -174,7 +175,7 @@ while ($row = $result1->fetch_assoc()) {
                                             echo "
                                                 </td>
                                                 <td style='padding: 0px 1%; text-align: center' class='eachcol actionbtn' scope='row'>
-                                                    <form method='post' name='undo' action='48consultation.php'>
+                                                    <form method='post' name='undo' action='48consultation.php'>".csrf_field()."
                                                         <input type='hidden' name='consultid' value='".htmlspecialchars($s['id'], ENT_QUOTES, 'UTF-8')."'>";
                                             if ($s['signoff_date'] == $today) {
                                                 echo "<button type='submit' value='submit' class='btn btn-warning' name='undo_btn' onclick='undoconsult(this)'>Undo Signoff</button>";

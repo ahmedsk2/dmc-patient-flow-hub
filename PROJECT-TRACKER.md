@@ -17,7 +17,7 @@ _Last updated: 2026-06-06_
 |---|---|---|
 | Review & planning (read-only) | 4 / 4 | ✅ complete |
 | Phase 0 — Containment | 3 ✅ · 1 🔄 · 3 ⏸️ ops | 🔄 in progress |
-| Phase 1 — Critical security & data integrity | 4 ✅ · 6 🔄 (of 16) | 🔄 in progress |
+| Phase 1 — Critical security & data integrity | 5 ✅ · 5 🔄 (of 16) | 🔄 in progress |
 | Phase 2 — Stabilize | 0 / 8 | not started |
 | Phase 3 — Refactor + UI/UX | 0 / 6 | not started |
 | Phase 4 — Re-platform (decision-gated) | 0 / 2 | not started |
@@ -26,6 +26,8 @@ _Last updated: 2026-06-06_
 ---
 
 ## Notes & decisions  _(newest first)_
+
+- **2026-06-06 — Batch 10 (CSRF tokens — part 2: real forms) DONE** (branch `renovation`). Added `csrf_field()` + `csrf_verify()` to every real `<form method=post>` flow: **account** — `index.php` (login), `register.php`, `change-password.php`, `reset-password.php`, `forget-password.php`→`forget-password-email.php`, `profile.php` (each got `csrf.php` include + field-in-form + verify-in-handler); **page** — `dmc-patients.php` (reverse-discharge + transfer; transfer field in `ptransferdiv` fragment), `dmc-old-patients.php` (confirm + add; add field in the admit modal), `dmc-new-consultation.php` (signoff), `48discharge.php`/`48consultation.php` (undo), `control.php` (limits/specialty/allied/indication forms). **Pairing verified by grep — every `csrf_verify()` has a reachable token (field for forms, header for AJAX); login confirmed (field + verify).** ⏸️ `search.php` undo handler has NO locatable form → left unguarded (SameSite-covered); GET-based actions (shuffle, admin-reset link) still need POST-conversion before token protection. **S6 (CSRF + session hardening) COMPLETE.** Not runtime-tested.
 
 - **2026-06-06 — Batch 9 (CSRF tokens — part 1: AJAX) DONE** (branch `renovation`). Added `csrf.php` (synchronizer-token helpers `csrf_token`/`csrf_field`/`csrf_verify`), included via `guard.php` + `sidebar.php`. `footer.php` now emits the token + a global jQuery `$(document).ajaxSend` hook attaching `X-CSRF-Token` to every non-GET AJAX request — so all `$.post` submits carry it with **no per-call edits**. Added `csrf_verify()` to the **16 AJAX submit endpoints** (patients/newpatients/consultations writes, registry modify, user update/delete). Verified footer coverage: every AJAX-making page includes `footer.php`; modal fragments inherit the parent page's `ajaxSend`. Render fragments (reads) + GET actions (shuffle, admin-reset link) intentionally NOT verified (GET state-changes noted for POST conversion). ⬜ **Batch 10**: real `<form method=post>` handlers (account + page) still need `csrf_field()` + `csrf_verify()`; SameSite=Lax covers them meanwhile. Not runtime-tested.
 
@@ -80,7 +82,7 @@ _(Add new notes/decisions above this line as we go.)_
 - 🔄 **Encode all output** — ~250+ DB/request sinks wrapped (htmlspecialchars/json_encode) across all rendering files (Batch 6; SEC-18 done); ⬜ remove `eval` + baseline **CSP** deferred to Phase 3 (needs inline-JS refactor) — (S3,S10 / SEC-18,26) — P1
 - ✅ Block **privilege escalation** — `register.php` rejects position 0 + creates inactive accounts; user-mgmt admin-gated (Batches 2–3) — (S4 / SEC-02,03)
 - 🔄 Fix **password reset** — public SQLi removed + all account flows parameterized (Batch 3); ⬜ random single-use expiring **token redesign** (needs `password_resets` table) + widen `member_password` to varchar(255) — (S5 / SEC-13,14,30)
-- 🔄 **Session hardening** done (Batch 7) + **CSRF**: csrf.php + global ajaxSend header + `csrf_verify()` on 16 AJAX submit endpoints (Batch 9); ⬜ `csrf_field()`+verify on real `<form>` handlers (account + dmc-patients/old-patients/new-consultation/search/48*/control) = Batch 10 — (S6 / SEC-19,23) — P1
+- ✅ **Session hardening** (B7) + **CSRF tokens** complete: csrf.php + global ajaxSend header + `csrf_verify()` on 16 AJAX endpoints (B9) + `csrf_field()`/verify on all real forms — account & page (B10); pairing grep-verified. ⏸️ `search.php` undo has no form (SameSite-covered); GET actions need POST-conversion. — (S6 / SEC-19,23)
 - ✅ **Externalize secrets** from source — (S7 / SEC-16,17) — done (Batch 1; live rotation is the Phase 0 ops step)
 - 🔄 Add **security headers** — (S8 / SEC-27) — HSTS/nosniff/X-Frame-Options/Referrer-Policy added in `.htaccess` (Batch 1); **CSP deferred** until inline-JS/`eval` removed (S3/S10)
 - 🔄 Removed live `var_dump` / `$_POST`-dump / `error_log(print_r)` / forced `display_errors` leaks + set `display_errors=Off` (Batch 7, SEC-24); ⬜ replace **PHPExcel → PhpSpreadsheet** (SEC-25) — (S9 / SEC-24,25) — P1

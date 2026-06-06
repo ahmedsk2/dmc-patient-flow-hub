@@ -2,6 +2,7 @@
 require "dbconnect.php";
 
 session_start();
+require_once __DIR__ . '/csrf.php';
 
 $username = "";
 $email = "";
@@ -10,6 +11,7 @@ $email = "";
 $errors = array();
 
 if (isset($_POST['reg_user'])) {
+    csrf_verify();
     // receive all input values from the form
     $username = trim($_POST['username'] ?? '');
     $full_name = trim($_POST['full_name'] ?? '');
@@ -106,6 +108,7 @@ if (isset($_POST['reg_user'])) {
       <p class="login-box-msg">Registration</p>
 
       <form method="post" autocomplete="off" action="register.php">
+        <?php echo csrf_field(); ?>
         <div class="form-group">
           <label>Username</label>
           <input type="text" name="username" class="form-control"  placeholder="Login Name" required>

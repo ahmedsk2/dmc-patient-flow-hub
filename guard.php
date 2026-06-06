@@ -11,9 +11,9 @@
  * established by index.php / sidebar.php at page load. Action endpoints only need to
  * confirm that session — they do not re-run the remember-me cookie bridge.
  *
- * NOTE: CSRF helpers below are defined but not yet enforced app-wide; csrf_verify()
- * will be wired into state-changing endpoints once tokens are present in every form
- * (plan item S6).
+ * CSRF helpers live in csrf.php (required below) and ARE enforced: csrf_verify() guards
+ * state-changing endpoints; the token rides the X-CSRF-Token header (footer ajaxSend) for
+ * AJAX and csrf_field() hidden inputs for real forms.
  */
 
 require_once __DIR__ . '/dbconnect.php'; // provides $mysqli (idempotent)

@@ -1,5 +1,6 @@
 <?php
 session_start();
+require_once __DIR__ . '/csrf.php';
 
 require ('dbconnect.php');
 if (!isset($_SESSION["member_id"])){
@@ -25,6 +26,7 @@ if (date('Y-m-d') > $expirydate || ($_GET['pass'] ?? '') == "true") {
 
   
 if (isset($_POST['change_pass'])) {
+  csrf_verify();
   // receive all input values from the form
   $oldpassword = $_POST['oldpassword'] ?? '';
   $password_1 = $_POST['password_1'] ?? '';
@@ -94,6 +96,7 @@ if (isset($_POST['change_pass'])) {
       <p class="login-box-msg">Change Password</p>
 
 <form method="post" autocomplete="off" action="change-password.php?pass=true">
+<?php echo csrf_field(); ?>
 
 <div class="input-group mb-3">
     <div class="col-5" style=" display: table-cell;">

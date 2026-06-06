@@ -51,6 +51,7 @@ function insertConsultationReason($mysqli, $reason) {
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['submitlimits'])) {
+        csrf_verify();
         if (!empty($_POST['min_hospitalist']) && !empty($_POST['max_hospitalist']) && !empty($_POST['min_sub']) && !empty($_POST['max_sub']) && !empty($_POST['short_los']) && !empty($_POST['long_los'])) {
             $data = [
                 'min_hospitalist' => $_POST['min_hospitalist'],
@@ -71,6 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 
     if (isset($_POST['submitspecialty'])) {
+        csrf_verify();
         if (!empty($_POST['specialty'])) {
             $speciality = $_POST['specialty'];
             if (insertSpeciality($mysqli, $speciality)) {
@@ -84,6 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 
     if (isset($_POST['submitother_specialities'])) {
+        csrf_verify();
         if (!empty($_POST['other_specialities'])) {
             $other_speciality = $_POST['other_specialities'];
             if (insertOtherSpeciality($mysqli, $other_speciality)) {
@@ -97,6 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 
     if (isset($_POST['submitindication'])) {
+        csrf_verify();
         if (!empty($_POST['indication_name'])) {
             $indication = $_POST['indication_name'];
             if (insertConsultationReason($mysqli, $indication)) {
@@ -195,7 +199,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                         </div>
                                     </div>
                                 </div>
-                                <button class="btn btn-info" type="submit" name="submitlimits" onclick='loading(this)'>Update</button>
+                                <?php echo csrf_field(); ?> <button class="btn btn-info" type="submit" name="submitlimits" onclick='loading(this)'>Update</button>
                             </form>
                         </div>
                     </div>
@@ -233,7 +237,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                     <label for="specialty">Specialty Name</label>
                                     <input class="form-control" type="text" id="specialty" name="specialty" required>
                                 </div>
-                                <button class="btn btn-info" type="submit" name="submitspecialty" onclick='loading(this)'>Add Specialty</button>
+                                <?php echo csrf_field(); ?> <button class="btn btn-info" type="submit" name="submitspecialty" onclick='loading(this)'>Add Specialty</button>
                             </form>
                         </div>
                     </div>
@@ -272,7 +276,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                     <label for="other_specialities">Allied Specialty Name</label>
                                     <input class="form-control" type="text" id="other_specialities" name="other_specialities" required>
                                 </div>
-                                <button class="btn btn-info" type="submit" name="submitother_specialities" onclick='loading(this)'>Add Allied Specialty</button>
+                                <?php echo csrf_field(); ?> <button class="btn btn-info" type="submit" name="submitother_specialities" onclick='loading(this)'>Add Allied Specialty</button>
                             </form>
                         </div>
                     </div>
@@ -313,7 +317,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                     <label for="indication_name">Indication Name</label>
                                     <input class="form-control" type="text" id="indication_name" name="indication_name" required>
                                 </div>
-                                <button class="btn btn-info" type="submit" name="submitindication" onclick='loading(this)'>Add Indication</button>
+                                <?php echo csrf_field(); ?> <button class="btn btn-info" type="submit" name="submitindication" onclick='loading(this)'>Add Indication</button>
                             </form>
                         </div>
                     </div>

@@ -1,5 +1,6 @@
 <?php 
 session_start();
+require_once __DIR__ . '/csrf.php';
 
 require_once "authCookieSessionValidate.php";
 
@@ -17,6 +18,7 @@ if(!$isLoggedIn) {
   $errors = array(); 
 
   if (isset($_POST['update_user'])) {
+      csrf_verify();
       // receive all input values from the form
       $username1 = trim($_POST['member_name'] ?? '');
       $full_name1 = trim($_POST['full_name'] ?? '');
@@ -127,6 +129,7 @@ if(!$isLoggedIn) {
               <!-- /.card-header -->
               <div class="card-body">
               <form method="post" autocomplete="off" action="profile.php">
+                <?php echo csrf_field(); ?>
                 <div class="row">
               
                   <div class="col-md-6">

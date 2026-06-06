@@ -1,5 +1,6 @@
 <?php
 session_start();
+require_once __DIR__ . '/csrf.php';
 
 require_once "Auth.php";
 require_once "Util.php";
@@ -15,6 +16,7 @@ if ($isLoggedIn) {
 }
 
 if (!empty($_POST["login"])) {
+    csrf_verify();
     $isAuthenticated = false;
 
     $username = $_POST["member_name"];
@@ -117,6 +119,7 @@ if (!empty($_POST["login"])) {
                 </div>
 
                 <form action="" method="post" id="frmLogin">
+                    <?php echo csrf_field(); ?>
                     <div class="input-group mb-3">
                         <input class="form-control" name="member_name" type="text" placeholder="Username" value="<?php if (isset($_COOKIE["member_login"])) {
                                                                                                                         echo htmlspecialchars($_COOKIE["member_login"], ENT_QUOTES, 'UTF-8');

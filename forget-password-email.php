@@ -1,3 +1,4 @@
+<?php require_once __DIR__ . '/csrf.php'; ?>
 <head>
   <title> Forget Password</title>
   <meta charset="utf-8">
@@ -35,6 +36,7 @@
 
       <?php
 if (isset($_POST['submit_email']) && $_POST['email']) {
+    csrf_verify();
     require('dbconnect.php');
 
     $email = $_POST['email'];

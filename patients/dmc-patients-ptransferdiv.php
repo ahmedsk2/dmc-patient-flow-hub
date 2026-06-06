@@ -14,6 +14,7 @@ $other_specialities = $result1->fetch_all(MYSQLI_ASSOC);
 ?>
 
     <form method="post" autocomplete="off" action="dmc-patients.php">
+    <?php echo csrf_field(); ?>
         <input type="hidden" name="id" value="<?php echo htmlspecialchars($id, ENT_QUOTES, 'UTF-8'); ?>">
         <label>Transfer To Specialty</label>
         <select class='select2_modify txtdata' style="width: 100%;" id='specialty_transfer' name='specialty_transfer' style='text-align: center;' required>

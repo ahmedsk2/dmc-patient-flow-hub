@@ -1,5 +1,6 @@
 <?php
 require('dbconnect.php');
+require_once __DIR__ . '/csrf.php';
 ?>
 
 <!DOCTYPE html>
@@ -41,6 +42,7 @@ require('dbconnect.php');
         <p>Enter <strong>Username</strong> or <strong>Email Address</strong> to send password reset link</p>
 
         <form method="post" action="forget-password-email.php">
+          <?php echo csrf_field(); ?>
           <div class="input-group mb-3">
             <input type="text" name="email" class="form-control" placeholder="Username or E-Mail" required autofocus>
             <div class="input-group-append">
