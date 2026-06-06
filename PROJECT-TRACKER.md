@@ -28,6 +28,8 @@ _Last updated: 2026-06-06_
 
 ## Notes & decisions  _(newest first)_
 
+- **🔐 2026-06-06 — SECURITY INCIDENT: exposed SMTP/DB creds in the pushed repo — REMEDIATED.** GitGuardian flagged SMTP credentials shortly after the first push. **Root cause:** the **baseline `main`** branch (the app *before* Batch 1 externalized secrets) still carried the original **hardcoded DB + SMTP passwords** in `dbconnect.php` / `DBController.php` / `forget-password-email.php` / `send-reset-pass-by-admin.php`; the baseline commit is the shared root of both branches, so those literals sat in history (they were never in `config.local.php`, which is why the earlier pre-push check looked clean). **Fix:** redacted all four literals (DB user/pass/name + SMTP pass → `***…_REMOVED***`) across **all 31 commits** with `git filter-repo --replace-text`; verified **0 occurrences** remain in any commit; **force-pushed** both branches (new tips: `main` `6c647a5`, `renovation` `69895a9`). Repo is PRIVATE (blast radius = repo collaborators + GitHub + GitGuardian, not the public internet). ⚠️ **STILL REQUIRED — ROTATE the DB and SMTP passwords now** (Phase-0 ops step, now urgent): redaction removes them from the repo but the values must be treated as compromised. Note: pre-rewrite commits dangle on GitHub until its GC — delete+recreate the repo if an absolute purge is needed.
+
 - **📍 2026-06-06 — CHECKPOINT (pushed to GitHub, PRIVATE).** Branch `renovation`, **Batches 1–20 complete**:
   Phase 0 containment; Phase 1 critical security (central auth guard, prepared statements everywhere,
   XSS output-encoding, CSRF tokens, session hardening, audit trail, secrets externalized, secure
