@@ -11,12 +11,12 @@ $errors = array();
 
 if (isset($_POST['reg_user'])) {
     // receive all input values from the form
-    $username = mysqli_real_escape_string($mysqli, $_POST['username']);
-    $full_name = mysqli_real_escape_string($mysqli, $_POST['full_name']);
-    $email = mysqli_real_escape_string($mysqli, $_POST['email']);
-    $password_1 = mysqli_real_escape_string($mysqli, $_POST['password_1']);
-    $password_2 = mysqli_real_escape_string($mysqli, $_POST['password_2']);
-    $position = mysqli_real_escape_string($mysqli, $_POST['position']);
+    $username = trim($_POST['username'] ?? '');
+    $full_name = trim($_POST['full_name'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $password_1 = $_POST['password_1'] ?? '';
+    $password_2 = $_POST['password_2'] ?? '';
+    $position = (int) ($_POST['position'] ?? 0);
 
     // form validation: ensure that the form is correctly filled
     if (empty($username)) {
@@ -31,17 +31,19 @@ if (isset($_POST['reg_user'])) {
     if (empty($password_1)) {
         array_push($errors, "Password is required");
     }
-    if (empty($position)) {
-        array_push($errors, "Position is required");
+    // Never allow self-registration as Admin (0); only known non-admin roles.
+    if (!in_array($position, [2, 3, 4, 5], true)) {
+        array_push($errors, "A valid position is required");
     }
     if ($password_1 != $password_2) {
         array_push($errors, "The two passwords do not match");
     }
 
     // check the database to make sure a user does not already exist with the same username and/or email
-    $user_check_query = "SELECT * FROM members WHERE member_name='$username' OR member_email='$email' LIMIT 1";
-    $result = mysqli_query($mysqli, $user_check_query);
-    $user = mysqli_fetch_assoc($result);
+    $chk = $mysqli->prepare("SELECT member_name, member_email FROM members WHERE member_name = ? OR member_email = ? LIMIT 1");
+    $chk->bind_param("ss", $username, $email);
+    $chk->execute();
+    $user = $chk->get_result()->fetch_assoc();
 
     if ($user) { // if user exists
         if ($user['member_name'] === $username) {
@@ -58,9 +60,9 @@ if (isset($_POST['reg_user'])) {
         $today = date("Y-m-d");
         $password = password_hash($password_1, PASSWORD_DEFAULT); // encrypt the password before saving in the database
 
-        $query = "INSERT INTO members (member_name, full_name, member_email, member_password, position, pass_exp_date) 
-                  VALUES('$username', '$full_name', '$email', '$password', '$position', '$today')";
-        mysqli_query($mysqli, $query);
+        $ins = $mysqli->prepare("INSERT INTO members (member_name, full_name, member_email, member_password, position, active, pass_exp_date) VALUES (?, ?, ?, ?, ?, 0, ?)");
+        $ins->bind_param("ssssis", $username, $full_name, $email, $password, $position, $today);
+        $ins->execute();
         $_SESSION['username'] = $username;
         $_SESSION['success'] = "You are now logged in";
         header('location: index.php?s=success');

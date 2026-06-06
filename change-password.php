@@ -5,13 +5,14 @@ require ('dbconnect.php');
 if (!isset($_SESSION["member_id"])){
   header('location: index.php');
 }
-$member_id = $_SESSION["member_id"];
-$errors = array(); 
+$member_id = (int) $_SESSION["member_id"];
+$errors = array();
 
 
-$formationSQL = "SELECT * FROM members WHERE member_id = '".$member_id."'";
-$result1 = $mysqli->query($formationSQL);
-$user = $result1 -> fetch_array(MYSQLI_ASSOC);
+$ps = $mysqli->prepare("SELECT * FROM members WHERE member_id = ?");
+$ps->bind_param("i", $member_id);
+$ps->execute();
+$user = $ps->get_result()->fetch_array(MYSQLI_ASSOC);
 
       $today=date("Y-m-d");
       $pass_date = $user["pass_exp_date"];
@@ -19,15 +20,15 @@ $user = $result1 -> fetch_array(MYSQLI_ASSOC);
 
       // echo date('Y-m-d');
       // echo $expirydate;
-if (date('Y-m-d') > $expirydate || $_GET['pass']=="true" ){
+if (date('Y-m-d') > $expirydate || ($_GET['pass'] ?? '') == "true") {
 
 
   
 if (isset($_POST['change_pass'])) {
   // receive all input values from the form
-  $oldpassword = mysqli_real_escape_string($mysqli, $_POST['oldpassword']);
-  $password_1 = mysqli_real_escape_string($mysqli, $_POST['password_1']);
-  $password_2 = mysqli_real_escape_string($mysqli, $_POST['password_2']);
+  $oldpassword = $_POST['oldpassword'] ?? '';
+  $password_1 = $_POST['password_1'] ?? '';
+  $password_2 = $_POST['password_2'] ?? '';
 
   // form validation: ensure that the form is correctly filled ...
   // by adding (array_push()) corresponding error unto $errors array
@@ -48,9 +49,9 @@ if (isset($_POST['change_pass'])) {
   if (count($errors) == 0) {
       $password =  password_hash($password_1, PASSWORD_DEFAULT);//encrypt the password before saving in the database
 
-      $query = "UPDATE members set  member_password='".$password."', pass_exp_date='".$today."' where member_id='".$member_id."'";
-      mysqli_query($mysqli, $query);
-      $_SESSION['username'] = $username;
+      $upd = $mysqli->prepare("UPDATE members SET member_password = ?, pass_exp_date = ? WHERE member_id = ?");
+      $upd->bind_param("ssi", $password, $today, $member_id);
+      $upd->execute();
       $_SESSION['success'] = "Password changed";
       header('location: index.php?s=changed');
   }

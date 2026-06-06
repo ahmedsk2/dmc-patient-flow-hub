@@ -18,10 +18,11 @@ if(!$isLoggedIn) {
 
   if (isset($_POST['update_user'])) {
       // receive all input values from the form
-      $username1 = mysqli_real_escape_string($mysqli, $_POST['member_name']);
-      $full_name1 = mysqli_real_escape_string($mysqli, $_POST['full_name']);
-      $email1 = mysqli_real_escape_string($mysqli, $_POST['member_email']);
-      $member_id1=mysqli_real_escape_string($mysqli, $_POST['member_id']);
+      $username1 = trim($_POST['member_name'] ?? '');
+      $full_name1 = trim($_POST['full_name'] ?? '');
+      $email1 = trim($_POST['member_email'] ?? '');
+      // IDOR fix: always act on the logged-in user, never a client-supplied id.
+      $member_id1 = (int) $_SESSION['member_id'];
       
       // form validation: ensure that the form is correctly filled ...
       // by adding (array_push()) corresponding error unto $errors array
@@ -32,9 +33,10 @@ if(!$isLoggedIn) {
     
       // first check the database to make sure 
       // a user does not already exist with the same username and/or email
-      $user_check_query = "SELECT * FROM members WHERE (member_name='".$username1."' OR member_email='".$email1."') AND (member_id != '".$member_id1."') LIMIT 1";
-      $result = mysqli_query($mysqli, $user_check_query);
-      $user2 = mysqli_fetch_assoc($result);
+      $chk = $mysqli->prepare("SELECT member_name, member_email FROM members WHERE (member_name = ? OR member_email = ?) AND member_id != ? LIMIT 1");
+      $chk->bind_param("ssi", $username1, $email1, $member_id1);
+      $chk->execute();
+      $user2 = $chk->get_result()->fetch_assoc();
       
       if ($user2) { // if user exists
         if ($user2['member_name'] === $username1) {
@@ -50,8 +52,9 @@ if(!$isLoggedIn) {
       // Finally, register user if there are no errors in the form
       if (count($errors) == 0) {
         
-          $query = "UPDATE members set member_name='".$username1."', full_name='".$full_name1."', member_email='".$email1."' where member_id='".$member_id1."'";
-          mysqli_query($mysqli, $query);
+          $upd = $mysqli->prepare("UPDATE members SET member_name = ?, full_name = ?, member_email = ? WHERE member_id = ?");
+          $upd->bind_param("sssi", $username1, $full_name1, $email1, $member_id1);
+          $upd->execute();
 
           // header('location: profile.php?s=success');
           echo "<script language='javascript'>\n";
@@ -79,10 +82,11 @@ if(!$isLoggedIn) {
   <div class="content-wrapper">
   
 	<?php
-  $user_id = $_SESSION["member_id"];
-  $formationSQL = "SELECT * FROM members WHERE member_id = '".$user_id."'";
-  $result1 = $mysqli->query($formationSQL);
-  $user1 = $result1 -> fetch_array(MYSQLI_ASSOC);
+  $user_id = (int) $_SESSION["member_id"];
+  $ps = $mysqli->prepare("SELECT * FROM members WHERE member_id = ?");
+  $ps->bind_param("i", $user_id);
+  $ps->execute();
+  $user1 = $ps->get_result()->fetch_array(MYSQLI_ASSOC);
 	?>
 
 

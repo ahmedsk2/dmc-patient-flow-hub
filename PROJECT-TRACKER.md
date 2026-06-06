@@ -17,7 +17,7 @@ _Last updated: 2026-06-06_
 |---|---|---|
 | Review & planning (read-only) | 4 / 4 | ✅ complete |
 | Phase 0 — Containment | 3 ✅ · 1 🔄 · 3 ⏸️ ops | 🔄 in progress |
-| Phase 1 — Critical security & data integrity | 1 ✅ · 2 🔄 (of 16) | 🔄 in progress |
+| Phase 1 — Critical security & data integrity | 2 ✅ · 4 🔄 (of 16) | 🔄 in progress |
 | Phase 2 — Stabilize | 0 / 8 | not started |
 | Phase 3 — Refactor + UI/UX | 0 / 6 | not started |
 | Phase 4 — Re-platform (decision-gated) | 0 / 2 | not started |
@@ -26,6 +26,8 @@ _Last updated: 2026-06-06_
 ---
 
 ## Notes & decisions  _(newest first)_
+
+- **2026-06-06 — Batch 3 (account-flow SQLi / IDOR / priv-esc) DONE** (branch `renovation`). Converted the auth/account cluster to **prepared statements** — `reset-password.php` (the *public* SQLi, SEC-13), `register.php`, `profile.php`, `change-password.php` (9 prepared statements total). Also: **`profile.php` IDOR fixed** (updates the *session* member, never a client-supplied `member_id` — SEC-21); **`register.php` privilege-escalation blocked** (rejects `position` 0, creates accounts `active=0` — SEC-03/S4); fixed reflected **XSS** on the public reset page (`htmlspecialchars` on `$link`/`$email`); removed password-escaping-before-hash bugs in reset/change-password (would have broken logins for passwords with quotes). ⬜ Still owed for S5: replace the `md5(member_email)/md5(password-hash)` reset token with a **random, single-use, expiring, hashed token** (needs a `password_resets` table migration). Not runtime-tested (no local PHP).
 
 - **2026-06-06 — Batch 2 (central auth guard) DONE** (branch `renovation`). Added `guard.php` — central `require_login()` / `require_role()` / `require_capability()` (+ CSRF helpers, not yet enforced), session-based. Inserted it into **42 previously-unauthenticated endpoints**: clinical & AJAX handlers + dashboard fragments + `fetchicd10.php` → `require_login()`; user-management, registry, statistics, exports, deletes & old-patient import → `require_role([0])`. Made `dbconnect.php` idempotent (no double-connect). Closes the unauthenticated read/modify/delete + privilege-escalation class at the **authentication** level (SEC-01/02/04/07–12). ⬜ Next (Batch 3): fine-grained authorization (object ownership / "primary consultant", capability flags), the page files that run POST handlers **before** their role gate (`dmc-patients.php`, `dmc-old-patients.php`), and removing now-redundant `session_start()` calls. Not runtime-tested (no local PHP).
 
@@ -62,10 +64,10 @@ _(Add new notes/decisions above this line as we go.)_
 ### Phase 1 — Critical security & data integrity (P1 — ~4-6 wks)
 - 🔄 **Central server-side auth guard** — `guard.php` + **authentication enforced on all 42 action endpoints** (Batch 2); ⬜ fine-grained role/ownership + page-file handler-ordering = Batch 3 — (S1 / SEC-01,04,07-11,20,21) — P1
 - ⬜ **Re-confirm the real role/capability permission model** with team/clinicians (permissions.docx is dated) — (NEW) — P1
-- ⬜ Convert **all queries to prepared statements** via one DB helper — (S2,C2 / SEC-07-13) — P1
+- 🔄 Convert **all queries to prepared statements** — account cluster (reset/register/profile/change-password) done (Batch 3); ⬜ clinical endpoints (patients/newpatients/consultations/registry/statistics) pending — (S2,C2 / SEC-07-13) — P1
 - ⬜ **Encode all output** + remove `eval` + baseline CSP — (S3,S10 / SEC-18,26) — P1
-- ⬜ Block **privilege escalation** (never accept client-supplied position/flags) — (S4 / SEC-02,03) — P1
-- ⬜ Fix **password reset** (random, single-use, hashed, expiring token) + widen hash column — (S5 / SEC-13,14,30) — P1
+- ✅ Block **privilege escalation** — `register.php` rejects position 0 + creates inactive accounts; user-mgmt admin-gated (Batches 2–3) — (S4 / SEC-02,03)
+- 🔄 Fix **password reset** — public SQLi removed + all account flows parameterized (Batch 3); ⬜ random single-use expiring **token redesign** (needs `password_resets` table) + widen `member_password` to varchar(255) — (S5 / SEC-13,14,30)
 - ⬜ **Session/cookie hardening** + **CSRF tokens** — (S6 / SEC-19,23) — P1
 - ✅ **Externalize secrets** from source — (S7 / SEC-16,17) — done (Batch 1; live rotation is the Phase 0 ops step)
 - 🔄 Add **security headers** — (S8 / SEC-27) — HSTS/nosniff/X-Frame-Options/Referrer-Policy added in `.htaccess` (Batch 1); **CSP deferred** until inline-JS/`eval` removed (S3/S10)

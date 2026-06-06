@@ -4,8 +4,8 @@ $errors = array();
 if (isset($_POST['reset_pass'])) {
   
   // receive all input values from the form
-  $password_11 = mysqli_real_escape_string($mysqli, $_POST['password_11']);
-  $password_22 = mysqli_real_escape_string($mysqli, $_POST['password_22']);
+  $password_11 = $_POST['password_11'] ?? '';
+  $password_22 = $_POST['password_22'] ?? '';
 
   // form validation: ensure that the form is correctly filled ...
   // by adding (array_push()) corresponding error unto $errors array
@@ -21,7 +21,9 @@ if (isset($_POST['reset_pass'])) {
       // $query = "UPDATE members set  member_password='".$password."', pass_exp_date='".$today."' where member_email='".$member_mail."'";
       
       // mysqli_query($mysqli, $query) or die(mysqli_error($mysqli));
-     if (!$mysqli->query("UPDATE members set  member_password='".$password."', pass_exp_date='".$today."' where md5(member_email)='".$member_mail."'")) {
+     $upd = $mysqli->prepare("UPDATE members SET member_password = ?, pass_exp_date = ? WHERE md5(member_email) = ?");
+     $upd->bind_param("sss", $password, $today, $member_mail);
+     if (!$upd->execute()) {
     $error="Error message: %s\n". $mysqli->error;
 } else {$error= "sucess";}
       $_SESSION['success'] = "Password changed";
@@ -40,8 +42,10 @@ if($_GET['key'] && $_GET['reset'])
   $pass=$_GET['reset'];
 
 
-$formationSQL = "SELECT member_email, member_password from members where md5(member_email)='$email' and md5(member_password)='$pass'";
-$select=$mysqli->query($formationSQL);
+$sel = $mysqli->prepare("SELECT member_email FROM members WHERE md5(member_email) = ? AND md5(member_password) = ?");
+$sel->bind_param("ss", $email, $pass);
+$sel->execute();
+$select = $sel->get_result();
 
 
 
@@ -92,9 +96,9 @@ $select=$mysqli->query($formationSQL);
   { 
     $link = "reset-password.php?key=".$email."&reset=".$pass;
     ?>
-<form method="post" autocomplete="off" action="<?php echo $link;?>">
+<form method="post" autocomplete="off" action="<?php echo htmlspecialchars($link, ENT_QUOTES, 'UTF-8');?>">
 
-<input type="hidden" name="email" value="<?php echo $email;?>" >
+<input type="hidden" name="email" value="<?php echo htmlspecialchars($email, ENT_QUOTES, 'UTF-8');?>" >
 
 <div class="input-group mb-3">
 
