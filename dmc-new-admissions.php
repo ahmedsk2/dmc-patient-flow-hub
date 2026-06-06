@@ -880,11 +880,11 @@ $(function() {
     data = {id1: id1, bed: bed, mrn: mrn,name: name, age:age, gender:gender, nationality,nationality, admfrom:admfrom,  admdate: admdate
       // , admfrom: admfrom
       , admissiondiagnosis:admissiondiagnosis,current_location:current_location, attribChanged: attribChanged};
-    $.post('newpatients/dmc-new-patients-update.php', data, function(data){
-      // $(parent).html(data);
-     
-    });
-    $(this).parent('.eachcol').css("backgroundColor", "#90EE90");
+    var cell = $(this).parent('.eachcol');
+    cell.css("backgroundColor", "#fff3cd"); // saving…
+    $.post('newpatients/dmc-new-patients-update.php', data)
+      .done(function(resp){ cell.css("backgroundColor", window.dmcOk(resp) ? "#90EE90" : "#f5a5a5"); })
+      .fail(function(){ cell.css("backgroundColor", "#f5a5a5"); });
     });
 });
 
