@@ -33,18 +33,18 @@ $other_specialities = $result1 -> fetch_all(MYSQLI_ASSOC);
 
  $specialty_transfer = $_POST['specialty_transfer'];
   if ((array_search($specialty_transfer, array_column($other_specialities, 'specilaity')) !== false)){
-    
+
+        // R2: discharge-to-other-specialty (and the optional ICU re-admission) must be atomic.
+        $mysqli->begin_transaction();
+        $ok = true;
+
         $query = "UPDATE  picupatients SET  DISDATE=?, med_DISDATE=?, MORTALITY='Alive', DISTO=?, 	trans_discharge='other transfer', trans_discharge_by=? WHERE ID=?";
           $stmt = $mysqli->prepare($query);
           $stmt->bind_param("sssii", $today, $today, $specialty_transfer, $user['member_id'], $transfer_id);
-          if (!$stmt->execute()) {
-            echo("Error description: " . $mysqli -> error);
-          } else {
-            audit_log('patient.transfer','picupatients',$transfer_id, ['to'=>$specialty_transfer]);
-          }
+          if (!$stmt->execute()) { error_log("transfer(other) UPDATE failed (id $transfer_id): " . $mysqli->error); $ok = false; }
           // keep icu admission under the same consultant if transferred to ICU
 
-          if ( $specialty_transfer == 'Intensive Care (ICU)'){
+          if ( $ok && $specialty_transfer == 'Intensive Care (ICU)'){
             $formationSQL = "SELECT * FROM picupatients WHERE ID=?";
             $stmt = $mysqli->prepare($formationSQL);
             $stmt->bind_param("i", $transfer_id);
@@ -57,21 +57,19 @@ $other_specialities = $result1 -> fetch_all(MYSQLI_ASSOC);
                   ?,?,?,?,?,
                   ?,?,'ICU',?) ";
 
-              //   mysqli_query($mysqli, $query);
-
                 $stmt = $mysqli->prepare($query);
                 $stmt->bind_param("sssssssiisi", $patient['MRN'], $patient['PNAME'], $today, $patient['admissiondiagnosis'], $patient['BED'], $patient['nationality'], $patient['gender'], $patient['consultant_id'], $patient['age'], $today, $user['member_id']);
-                if (!$stmt->execute()) {
-                  echo("Error description: " . $mysqli -> error);
-                }else{
-                  echo "<script language='javascript'>\n";
-                  echo "window.location.href = 'dmc-patients.php';";
-                  echo "</script>\n";
-                  
-                }
-
+                if (!$stmt->execute()) { error_log("transfer(other) ICU INSERT failed (id $transfer_id): " . $mysqli->error); $ok = false; }
           }
-        
+
+          if ($ok) {
+            $mysqli->commit();
+            audit_log('patient.transfer','picupatients',$transfer_id, ['to'=>$specialty_transfer]);
+            echo "<script language='javascript'>window.location.href = 'dmc-patients.php';</script>";
+          } else {
+            $mysqli->rollback();
+            echo "Error: the transfer could not be completed.";
+          }
   }
         else
     {
@@ -102,31 +100,34 @@ $other_specialities = $result1 -> fetch_all(MYSQLI_ASSOC);
     
 /// transfer to new doctor
 
+          // R2: create the new-service record and discharge the old one atomically — a partial
+          // write here would either duplicate the patient or drop them from the active census.
+          $mysqli->begin_transaction();
+          $ok = true;
+
           $query = "INSERT INTO picupatients (MRN, PNAME, ADMDATE, ADMFROM, admissiondiagnosis, BED, nationality, gender, consultant_id, age, newassign, assigned_on,admitted_by,current_location)
            VALUES (?,?,?,?,
            ?,?,?,?,?,
            ?,?,?,?, 'Ward') ";
 
-        //   mysqli_query($mysqli, $query);
-
           $stmt = $mysqli->prepare($query);
           $stmt->bind_param("ssssssssiissi", $patient['MRN'], $patient['PNAME'], $patient['ADMDATE'], $patient['ADMFROM'], $patient['admissiondiagnosis'], $patient['BED'], $patient['nationality'], $patient['gender'], $patient['consultant_id'], $patient['age'], $patient['newassign'], $patient['assigned_on'], $user['member_id']);
-          if (!$stmt->execute()) {
-            echo("Error description: " . $mysqli -> error);
+          if (!$stmt->execute()) { error_log("transfer INSERT failed (id $transfer_id): " . $mysqli->error); $ok = false; }
+
+          if ($ok) {
+            $query = "UPDATE  picupatients SET  DISDATE=?, med_DISDATE=?, MORTALITY='Alive', DISTO=?, trans_discharge='transfer to other speciality', trans_discharge_by=?  WHERE ID=?";
+            $stmt = $mysqli->prepare($query);
+            $stmt->bind_param("sssii", $today, $today, $specialty_transfer, $user['member_id'], $transfer_id);
+            if (!$stmt->execute()) { error_log("transfer UPDATE failed (id $transfer_id): " . $mysqli->error); $ok = false; }
           }
 
-          $query = "UPDATE  picupatients SET  DISDATE=?, med_DISDATE=?, MORTALITY='Alive', DISTO=?, trans_discharge='transfer to other speciality', trans_discharge_by=?  WHERE ID=?";
-          $stmt = $mysqli->prepare($query);
-          $stmt->bind_param("sssii", $today, $today, $specialty_transfer, $user['member_id'], $transfer_id);
-          if (!$stmt->execute()) {
-
-            echo("Error description: " . $mysqli -> error);
-          }else{
+          if ($ok) {
+            $mysqli->commit();
             audit_log('patient.transfer','picupatients',$transfer_id, ['to'=>$specialty_transfer]);
-            echo "<script language='javascript'>\n";
-            echo "window.location.href = 'dmc-patients.php';";
-            echo "</script>\n";
-            
+            echo "<script language='javascript'>window.location.href = 'dmc-patients.php';</script>";
+          } else {
+            $mysqli->rollback();
+            echo "Error: the transfer could not be completed.";
           }
         //   // header('location: PICU-patients.php');
     }

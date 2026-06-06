@@ -30,6 +30,7 @@ $patient['current_location']='Ward';
 //   mysqli_query($mysqli, $query);
 
  $ok = true;
+ $mysqli->begin_transaction(); // R2: the new ICU record + the old-record discharge must commit together
 
  $stmt = $mysqli->prepare($query);
  $stmt->bind_param("sssssisss", $patient['MRN'], $patient['PNAME'], $patient['ADMDATE'], $patient['admissiondiagnosis'], $patient['nationality'], $patient['gender'], $patient['age'], $patient['admitted_by'], $patient['current_location']);
@@ -44,6 +45,8 @@ $patient['current_location']='Ward';
    error_log("icu-transfer UPDATE failed (pid $pid): " . $mysqli->error);
    $ok = false;
  }
+
+ if ($ok) { $mysqli->commit(); } else { $mysqli->rollback(); }
 
 // Machine-detectable status so the caller only reloads on confirmed success (W1).
 echo $ok ? "Record transferred successfully" : "Error transferring record";

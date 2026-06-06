@@ -15,31 +15,42 @@ if (isset($_POST['confirm_pt_btn'])) {
 
     foreach ($temppicupatints as $t) {
         $tempid = $t['ID'];
+        // R2: copy into the live table and remove from staging atomically. Previously the DELETE
+        // ran even when the INSERT failed, which could LOSE the staged patient.
+        $mysqli->begin_transaction();
+        $ok = true;
+
         $sql = "INSERT INTO picupatients (MRN, PNAME, ADMDATE, DISDATE, ADMFROM, DISTO, MORTALITY, admissiondiagnosis, nationality, gender, age, consultant_id, trans_discharge, current_location, med_DISDATE, delay, longterm)
                 SELECT MRN, PNAME, ADMDATE, DISDATE, ADMFROM, DISTO, MORTALITY, admissiondiagnosis, nationality, gender, age, consultant_id, trans_discharge, current_location, med_DISDATE, delay, longterm
                 FROM picupatients_temp WHERE ID=?";
-
         $stmt = $mysqli->prepare($sql);
         $stmt->bind_param('i', $tempid);
-        if ($stmt->execute() === TRUE) {
-            $message = "Record transferred successfully";
-            audit_log('patient.import_confirm','picupatients',$tempid);
-        } else {
-            $message = "Error transferring record: " . $mysqli->error;
+        if ($stmt->execute() !== TRUE) {
+            error_log("import_confirm INSERT failed (tempid $tempid): " . $mysqli->error);
+            $ok = false;
         }
 
-        $sql = "DELETE FROM picupatients_temp WHERE ID=?";
-        $stmt = $mysqli->prepare($sql);
-        $stmt->bind_param('i', $tempid);
-        if ($stmt->execute() === TRUE) {
-            $message = "Record deleted successfully";
-            echo "<script language='javascript'>\n";
-            echo "window.location.href = 'dmc-old-patients.php';";
-            echo "</script>\n";
+        if ($ok) {
+            $sql = "DELETE FROM picupatients_temp WHERE ID=?";
+            $stmt = $mysqli->prepare($sql);
+            $stmt->bind_param('i', $tempid);
+            if ($stmt->execute() !== TRUE) {
+                error_log("import_confirm DELETE failed (tempid $tempid): " . $mysqli->error);
+                $ok = false;
+            }
+        }
+
+        if ($ok) {
+            $mysqli->commit();
+            audit_log('patient.import_confirm','picupatients',$tempid);
+            $message = "Record transferred successfully";
         } else {
-            $message = "Error deleting record: " . $mysqli->error;
+            $mysqli->rollback();
+            $message = "Error transferring record";
         }
     }
+    // Redirect once, after every staged patient has been processed.
+    echo "<script language='javascript'>window.location.href = 'dmc-old-patients.php';</script>";
 }
 
 if (isset($_POST['add_pt_btn'])) {
