@@ -24,6 +24,8 @@ RewriteRule ^(.*)$ https://www.dmc-im.com/$1 [L,R=301]
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
     # Disable the legacy, buggy XSS auditor (per current OWASP guidance).
     Header always set X-XSS-Protection "0"
+    # Drop browser features this app never uses (defense-in-depth).
+    Header always set Permissions-Policy "geolocation=(), camera=(), microphone=(), payment=(), usb=()"
     # Content-Security-Policy is intentionally NOT enabled yet: the app currently
     # relies on inline scripts/styles, eval() in dashboard.php, and external CDNs.
     # Add a strict policy only after those are removed (plan items S3/S10/U3), e.g.:
