@@ -7,6 +7,27 @@
 > read of the whole codebase plus the `Demo.sql` schema; the highest-severity security
 > claims were individually re-verified against source.
 
+> **🔧 RENOVATION STATUS (2026-06-06, branch `renovation`).** The register below is the *as-reviewed
+> baseline*. The renovation has since **resolved the systemic Critical/High security findings plus the
+> patient-safety & data-integrity items, all runtime-validated on PHP 8.3.28 + MySQL 8.4.7** against the
+> full ~14.8k-patient dataset: ROOT-1/ROOT-2 broken access control (central `guard.php` authentication
+> **+ server-side role / capability / object-ownership authorization**, S1), SQL injection → prepared
+> statements (S2), XSS output-encoding (S3), CSRF tokens (S6), session hardening (S6), audit trail (R1),
+> secrets externalized (S7), secure single-use reset tokens (S5), server-side input validation (W3),
+> patient-safety confirmations + response-aware saves (W1/W2/W4), MyISAM→InnoDB + indexes + transactions
+> (D1/D3/R2), DB-error-leak removal (C4), and a PHP-8.3 `mysqli_report` compatibility fix. Per-batch
+> resolution log: [`PROJECT-TRACKER.md`](PROJECT-TRACKER.md); deploy + smoke-test runbook:
+> [`DEPLOY.md`](DEPLOY.md). Nothing here was deployed — verify on the server via DEPLOY.md.
+>
+> **Still open / needs decisions** (tracker *Decisions needed*): statistics sargability + the
+> `MONTH(DISDATE)`/`YEAR(ADMDATE)` cross-column anomalies, and `dashboard/1.php` `fetchCurrentPatients`
+> (`JSON_CONTAINS LEFT JOIN tb_list` can **double-count TB patients** into the hospitalist/subs totals)
+> — **[NEEDS CLINICAL REVIEW]**; soft-delete (R4); CSP + removing `eval()` (needs the inline-JS
+> refactor); de-duplication on a canonical "active patient" definition; permission-model
+> re-confirmation; framework re-platform.
+
+---
+
 **Severity legend**
 - **Critical** — exploitable now with severe impact on patient data/safety; fix before anything else.
 - **High** — serious risk or near-certain harm; fix in the first hardening wave.
