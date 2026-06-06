@@ -17,7 +17,7 @@ _Last updated: 2026-06-06_
 |---|---|---|
 | Review & planning (read-only) | 4 / 4 | ✅ complete |
 | Phase 0 — Containment | 3 ✅ · 1 🔄 · 3 ⏸️ ops | 🔄 in progress |
-| Phase 1 — Critical security & data integrity | 6 ✅ · 4 🔄 (of 16) | 🔄 in progress |
+| Phase 1 — Critical security & data integrity | 9 ✅ · 4 🔄 (of 16) | 🔄 in progress |
 | Phase 2 — Stabilize | 0 / 8 | not started |
 | Phase 3 — Refactor + UI/UX | 0 / 6 | not started |
 | Phase 4 — Re-platform (decision-gated) | 0 / 2 | not started |
@@ -26,6 +26,8 @@ _Last updated: 2026-06-06_
 ---
 
 ## Notes & decisions  _(newest first)_
+
+- **2026-06-06 — Batch 12 (patient-safety workflow correctness, W1/W2/W4) DONE** (branch `renovation`). Added three shared JS helpers in `footer.php` — `dmcConfirm(label,name,mrn)` (identity-bearing confirm), `dmcOk(resp)` (server-success check, matches `…successfully`), `dmcRowIdentity(el)` (best-effort name/MRN from the patient row/card). **W4 — confirmations:** every destructive/clinical action now confirms with the patient **name + MRN** before firing — ward/ICU/complete-file discharge, reverse-discharge, transfer, delete patient ×2, delete consultation, sign-off, undo-discharge, undo-sign-off, ward→ICU transfer. **W1 — trustworthy saves:** AJAX actions now read the response and only reload / hide the row on **confirmed success** (else show the error + re-enable the button); inline list edits flash green only on confirmed save (red on failure); **changing patient identity (MRN/name)** — inline or in the modify modal — prompts a confirm and reverts if declined; `dmc-patient-delete` / `dmc-consultation-delete` / `dmc-patients-icu-transfer` now echo an explicit status and **log DB errors server-side instead of leaking** them to the client. Switched the `type=submit` triggers (sign-off, undo-sign-off, all three discharges, modify) to `onclick="return fn(this)"` + terminal `return false` so a **cancelled confirm truly blocks** the native form submit. **W2:** fixed the unterminated `value='` quote in `newpatients/dmc-assign-to-primary.php` that corrupted the assigned patient ID. ⏸️ Deferred (additive, non-destructive — lower risk): confirmations on assign-to-consultant, auto-shuffle, old-patient add/confirm. Not runtime-tested.
 
 - **2026-06-06 — Batch 11 (secure password-reset tokens, S5 + SEC-30) DONE** (branch `renovation`). Replaced the deterministic `md5(member_email)` + `md5(password-hash)` reset "token" (non-expiring, reusable, derivable from a leaked hash) with a **random 256-bit, single-use, 1-hour token, SHA-256-hashed at rest**. New `reset_tokens.php` (`password_reset_create` / `lookup` / `consume`) + **migration `migrations/02-password-resets.sql`** (`password_resets` table + widen `members.member_password` → `varchar(255)` so a future Argon2id hash is not truncated, SEC-30). `reset-password.php` now consumes `?token=` via a prepared `UPDATE` keyed on `member_id` and marks the token used on success; `forget-password-email.php` + `send-reset-pass-by-admin.php` issue the random token and email an **https** reset URL. Grep confirms the old `md5`/`?key=`/`&reset=` scheme now survives only in the review docs. **S5 COMPLETE.** ⏳ run migration 02 at deploy. Not runtime-tested. _(Still deferred: `send-reset-pass-by-admin.php` is reached by a GET link from `control.php` — convert to POST + CSRF in the GET→POST cleanup; admin-position gate covers it meanwhile.)_
 
@@ -89,10 +91,10 @@ _(Add new notes/decisions above this line as we go.)_
 - 🔄 Add **security headers** — (S8 / SEC-27) — HSTS/nosniff/X-Frame-Options/Referrer-Policy added in `.htaccess` (Batch 1); **CSP deferred** until inline-JS/`eval` removed (S3/S10)
 - 🔄 Removed live `var_dump` / `$_POST`-dump / `error_log(print_r)` / forced `display_errors` leaks + set `display_errors=Off` (Batch 7, SEC-24); ⬜ replace **PHPExcel → PhpSpreadsheet** (SEC-25) — (S9 / SEC-24,25) — P1
 - ✅ **Audit log** — fail-safe `audit_log()` + `audit_log` table (migrations/01); wired into 16 clinical/account writes, actor from session (Batch 8) — (R1 / REL-02, SEC-22). ⏳ run migration 01 at deploy.
-- ⬜ Fix broken **assign-to-primary quote** (corrupts patient ID) — (W2 / UX-02) — P1
-- ⬜ **Confirmations** on discharge/transfer/delete/reverse (show name+MRN) — (W4 / UX-04) — P1
-- ⬜ **Trustworthy inline save** (read response; confirm identity-field edits) — (W1 / UX-01) — P1
-- ⬜ **Server-side + typed input validation** (age/MRN/date) — (W3 / UX-03) — P1
+- ✅ Fixed broken **assign-to-primary quote** (was corrupting the patient ID) — (W2 / UX-02) — Batch 12
+- ✅ **Confirmations** with patient name+MRN on discharge/transfer/delete/reverse/sign-off/undo — (W4 / UX-04) — Batch 12
+- ✅ **Trustworthy save** — response-checked AJAX (reload/hide only on success) + MRN/name identity-edit confirm & revert — (W1 / UX-01) — Batch 12
+- ⬜ **Server-side + typed input validation** (age/MRN/date) — (W3 / UX-03) — P1 ← next
 
 ### Phase 2 — Stabilize & quick wins (P1/P2)
 - ⬜ Migrate **MyISAM → InnoDB** (utf8mb4) — (D1 / DB-01) — P1
