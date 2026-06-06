@@ -17,7 +17,7 @@ _Last updated: 2026-06-06_
 |---|---|---|
 | Review & planning (read-only) | 4 / 4 | ✅ complete |
 | Phase 0 — Containment | 3 ✅ · 1 🔄 · 3 ⏸️ ops | 🔄 in progress |
-| Phase 1 — Critical security & data integrity | 5 ✅ · 5 🔄 (of 16) | 🔄 in progress |
+| Phase 1 — Critical security & data integrity | 6 ✅ · 4 🔄 (of 16) | 🔄 in progress |
 | Phase 2 — Stabilize | 0 / 8 | not started |
 | Phase 3 — Refactor + UI/UX | 0 / 6 | not started |
 | Phase 4 — Re-platform (decision-gated) | 0 / 2 | not started |
@@ -26,6 +26,8 @@ _Last updated: 2026-06-06_
 ---
 
 ## Notes & decisions  _(newest first)_
+
+- **2026-06-06 — Batch 11 (secure password-reset tokens, S5 + SEC-30) DONE** (branch `renovation`). Replaced the deterministic `md5(member_email)` + `md5(password-hash)` reset "token" (non-expiring, reusable, derivable from a leaked hash) with a **random 256-bit, single-use, 1-hour token, SHA-256-hashed at rest**. New `reset_tokens.php` (`password_reset_create` / `lookup` / `consume`) + **migration `migrations/02-password-resets.sql`** (`password_resets` table + widen `members.member_password` → `varchar(255)` so a future Argon2id hash is not truncated, SEC-30). `reset-password.php` now consumes `?token=` via a prepared `UPDATE` keyed on `member_id` and marks the token used on success; `forget-password-email.php` + `send-reset-pass-by-admin.php` issue the random token and email an **https** reset URL. Grep confirms the old `md5`/`?key=`/`&reset=` scheme now survives only in the review docs. **S5 COMPLETE.** ⏳ run migration 02 at deploy. Not runtime-tested. _(Still deferred: `send-reset-pass-by-admin.php` is reached by a GET link from `control.php` — convert to POST + CSRF in the GET→POST cleanup; admin-position gate covers it meanwhile.)_
 
 - **2026-06-06 — Batch 10 (CSRF tokens — part 2: real forms) DONE** (branch `renovation`). Added `csrf_field()` + `csrf_verify()` to every real `<form method=post>` flow: **account** — `index.php` (login), `register.php`, `change-password.php`, `reset-password.php`, `forget-password.php`→`forget-password-email.php`, `profile.php` (each got `csrf.php` include + field-in-form + verify-in-handler); **page** — `dmc-patients.php` (reverse-discharge + transfer; transfer field in `ptransferdiv` fragment), `dmc-old-patients.php` (confirm + add; add field in the admit modal), `dmc-new-consultation.php` (signoff), `48discharge.php`/`48consultation.php` (undo), `control.php` (limits/specialty/allied/indication forms). **Pairing verified by grep — every `csrf_verify()` has a reachable token (field for forms, header for AJAX); login confirmed (field + verify).** ⏸️ `search.php` undo handler has NO locatable form → left unguarded (SameSite-covered); GET-based actions (shuffle, admin-reset link) still need POST-conversion before token protection. **S6 (CSRF + session hardening) COMPLETE.** Not runtime-tested.
 
@@ -81,7 +83,7 @@ _(Add new notes/decisions above this line as we go.)_
 - ✅ Convert **all queries to prepared statements** — account cluster (Batch 3) + all subdir endpoints (Batch 4) + all page files (Batch 5). Repo-wide grep confirms **0 executed interpolated queries** remain. (S2,C2 / SEC-07-13). ⏳ needs runtime test on server.
 - 🔄 **Encode all output** — ~250+ DB/request sinks wrapped (htmlspecialchars/json_encode) across all rendering files (Batch 6; SEC-18 done); ⬜ remove `eval` + baseline **CSP** deferred to Phase 3 (needs inline-JS refactor) — (S3,S10 / SEC-18,26) — P1
 - ✅ Block **privilege escalation** — `register.php` rejects position 0 + creates inactive accounts; user-mgmt admin-gated (Batches 2–3) — (S4 / SEC-02,03)
-- 🔄 Fix **password reset** — public SQLi removed + all account flows parameterized (Batch 3); ⬜ random single-use expiring **token redesign** (needs `password_resets` table) + widen `member_password` to varchar(255) — (S5 / SEC-13,14,30)
+- ✅ Fix **password reset** — public SQLi removed + account flows parameterized (Batch 3); random single-use 1-hour **token redesign** (`reset_tokens.php` + migration 02 `password_resets`, SHA-256-hashed at rest) + widened `member_password` → varchar(255) (Batch 11) — (S5 / SEC-13,14,30). ⏳ run migration 02 at deploy.
 - ✅ **Session hardening** (B7) + **CSRF tokens** complete: csrf.php + global ajaxSend header + `csrf_verify()` on 16 AJAX endpoints (B9) + `csrf_field()`/verify on all real forms — account & page (B10); pairing grep-verified. ⏸️ `search.php` undo has no form (SameSite-covered); GET actions need POST-conversion. — (S6 / SEC-19,23)
 - ✅ **Externalize secrets** from source — (S7 / SEC-16,17) — done (Batch 1; live rotation is the Phase 0 ops step)
 - 🔄 Add **security headers** — (S8 / SEC-27) — HSTS/nosniff/X-Frame-Options/Referrer-Policy added in `.htaccess` (Batch 1); **CSP deferred** until inline-JS/`eval` removed (S3/S10)
