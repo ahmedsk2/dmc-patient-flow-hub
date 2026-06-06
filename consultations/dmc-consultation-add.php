@@ -25,10 +25,19 @@ require ('../dbconnect.php');
    $consultant_new = $_REQUEST['consultant_new']; 
 
    if(isset($_REQUEST['consultation_to_service'])){
-   $consultation_to_service = $_REQUEST['consultation_to_service']; 
+   $consultation_to_service = $_REQUEST['consultation_to_service'];
   }
 
-  
+  // W3: validate the new consultation input (client checks are bypassable). Require the patient
+  // identity; validate age/date only when provided (the schema allows them to be null).
+  $verr = v_first([
+      v_len($mrn_new, 'MRN', 50),
+      v_len($pname_new, 'Patient name', 100),
+      ($age_new === '' || $age_new === null) ? '' : v_int_range($age_new, 'Age', 0, 150),
+      ($consultdate_new === '' || $consultdate_new === null) ? '' : v_date_ymd($consultdate_new, 'Consultation date'),
+  ]);
+  if ($verr !== '') { echo "Error: " . htmlspecialchars($verr, ENT_QUOTES, 'UTF-8'); exit; }
+
     $sql = "INSERT INTO consultations SET  MRN=?,current_location=?,BED=?, PNAME=?,
     consultation_from=?,consultation_date=?,age=?
     , indication=?, entered_by_id=?, consultant_id=?, other_ind=?, consultation_to_service=?";
