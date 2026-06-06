@@ -27,8 +27,10 @@ if (isset($_POST['assign_me_btn'])) {
  $patient_id = $_POST['patientid'];
  $user_id = $_POST['userid'];
  
-          $query = "UPDATE  picupatients SET consultant_id='".$user_id."', newassign='1', assigned_on='".$today."' WHERE ID='".$patient_id."'";
-          if (!$mysqli -> query( $query)) {
+          $query = "UPDATE  picupatients SET consultant_id=?, newassign='1', assigned_on=? WHERE ID=?";
+          $stmt = $mysqli->prepare($query);
+          $stmt->bind_param('isi', $user_id, $today, $patient_id);
+          if (!$stmt->execute()) {
             echo("Error description: " . $mysqli -> error);
           }else{
             echo "<script language='javascript'>\n";
@@ -52,8 +54,10 @@ if (isset($_POST['assign_to_consultant_btn'])) {
  
   if (isset($_POST['newpt'])){
 
-    $query = "UPDATE  picupatients SET consultant_id='".$consultant_id."', newassign='1', assigned_on='".$today."' WHERE ID='".$patient_id."'";
-    if (!$mysqli -> query( $query)) {
+    $query = "UPDATE  picupatients SET consultant_id=?, newassign='1', assigned_on=? WHERE ID=?";
+    $stmt = $mysqli->prepare($query);
+    $stmt->bind_param('isi', $consultant_id, $today, $patient_id);
+    if (!$stmt->execute()) {
       echo("Error description: " . $mysqli -> error);
     }else{
       echo "<script language='javascript'>\n";
@@ -63,8 +67,10 @@ if (isset($_POST['assign_to_consultant_btn'])) {
     }
   //   // header('location: PICU-patients.php');
   }else{
-    $query = "UPDATE  picupatients SET consultant_id='".$consultant_id."' WHERE ID='".$patient_id."'";
-    if (!$mysqli -> query( $query)) {
+    $query = "UPDATE  picupatients SET consultant_id=? WHERE ID=?";
+    $stmt = $mysqli->prepare($query);
+    $stmt->bind_param('ii', $consultant_id, $patient_id);
+    if (!$stmt->execute()) {
       echo("Error description: " . $mysqli -> error);
     }else{
       echo "<script language='javascript'>\n";

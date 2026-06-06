@@ -5,10 +5,14 @@ $userid = $user['member_id'];
 
 if (in_array($user['position'], $access_PICU_endorsement)) {
     $formationSQL = "SELECT member_id, full_name FROM members WHERE position = '3'";
+    $result1 = $mysqli->query($formationSQL);
 } else {
-    $formationSQL = "SELECT member_id, full_name FROM members WHERE member_id = $userid";
+    $formationSQL = "SELECT member_id, full_name FROM members WHERE member_id = ?";
+    $stmt = $mysqli->prepare($formationSQL);
+    $stmt->bind_param('i', $userid);
+    $stmt->execute();
+    $result1 = $stmt->get_result();
 }
-$result1 = $mysqli->query($formationSQL);
 $consultants = $result1->fetch_all(MYSQLI_ASSOC);
 
 if (!in_array($user['position'], $access_PICU_patients)) {
@@ -37,9 +41,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $consultid = $_POST['consultid'];
             echo "Consultation ID received: " . htmlspecialchars($consultid) . "<br>";
             
-            $query = "UPDATE consultations SET signoff_date=CURDATE() WHERE ID='$consultid'";
-            
-            if (!$mysqli->query($query)) {
+            $query = "UPDATE consultations SET signoff_date=CURDATE() WHERE ID=?";
+            $stmt = $mysqli->prepare($query);
+            $stmt->bind_param('i', $consultid);
+
+            if (!$stmt->execute()) {
                 echo "Error description: " . $mysqli->error;
             } else {
                 echo "Query executed successfully.<br>";

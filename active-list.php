@@ -217,12 +217,26 @@ foreach ($activepicupatients as $patient) {
           }, []);
 
           $conditions = [];
+          $params = [];
+          $types = '';
           foreach ($activepicupatients as $s) {
-              $conditions[] = "(ID < '" . $s['ID'] . "' AND MRN = '" . $s['MRN'] . "' AND DISDATE + INTERVAL 3 DAY >= '" . $s['ADMDATE'] . "')";
+              $conditions[] = "(ID < ? AND MRN = ? AND DISDATE + INTERVAL 3 DAY >= ?)";
+              $params[] = $s['ID'];
+              $params[] = $s['MRN'];
+              $params[] = $s['ADMDATE'];
+              $types .= 'iss';
           }
 
-$formationSQL = "SELECT DISTINCT MRN FROM picupatients WHERE (" . implode(' OR ', $conditions) . ") AND (trans_discharge = 'discharge from ICU' OR trans_discharge = 'discharge from ward' OR trans_discharge IS NULL)";
-          $result1 = $mysqli->query($formationSQL);
+          $result1 = false;
+          if (!empty($conditions)) {
+              $formationSQL = "SELECT DISTINCT MRN FROM picupatients WHERE (" . implode(' OR ', $conditions) . ") AND (trans_discharge = 'discharge from ICU' OR trans_discharge = 'discharge from ward' OR trans_discharge IS NULL)";
+              $stmt = $mysqli->prepare($formationSQL);
+              if ($stmt) {
+                  $stmt->bind_param($types, ...$params);
+                  $stmt->execute();
+                  $result1 = $stmt->get_result();
+              }
+          }
 
           $recent = [];
           if ($result1) {

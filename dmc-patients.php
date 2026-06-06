@@ -1,10 +1,17 @@
 <?php
 require_once 'sidebar.php';
+// SEC-20: the POST action handlers below run before the page's role gate, so enforce it here.
+if ((isset($_POST['reverse_discharge_btn']) || isset($_POST['transfer_pt_btn'])) && !in_array($user['position'], $access_PICU_patients)) {
+    http_response_code(403);
+    exit('Forbidden.');
+}
 if (isset($_POST['reverse_discharge_btn'])) {
   $reverse_id = $_POST['reverse_id'];
   $null = "NULL";
-  $query = "UPDATE picupatients SET DISDATE=$null, med_DISDATE=$null , delay=$null WHERE ID='".$reverse_id."'";
-  if (!$mysqli -> query( $query)) {
+  $query = "UPDATE picupatients SET DISDATE=NULL, med_DISDATE=NULL , delay=NULL WHERE ID=?";
+  $stmt = $mysqli->prepare($query);
+  $stmt->bind_param("i", $reverse_id);
+  if (!$stmt->execute()) {
     echo("Error description: " . $mysqli -> error);
   }
 }
@@ -23,25 +30,32 @@ $other_specialities = $result1 -> fetch_all(MYSQLI_ASSOC);
  $specialty_transfer = $_POST['specialty_transfer'];
   if ((array_search($specialty_transfer, array_column($other_specialities, 'specilaity')) !== false)){
     
-        $query = "UPDATE  picupatients SET  DISDATE='".$today."', med_DISDATE='".$today."', MORTALITY='Alive', DISTO='".$specialty_transfer."', 	trans_discharge='other transfer', trans_discharge_by='".$user['member_id']."' WHERE ID='".$transfer_id."'";
-          if (!$mysqli -> query( $query)) {
+        $query = "UPDATE  picupatients SET  DISDATE=?, med_DISDATE=?, MORTALITY='Alive', DISTO=?, 	trans_discharge='other transfer', trans_discharge_by=? WHERE ID=?";
+          $stmt = $mysqli->prepare($query);
+          $stmt->bind_param("sssii", $today, $today, $specialty_transfer, $user['member_id'], $transfer_id);
+          if (!$stmt->execute()) {
             echo("Error description: " . $mysqli -> error);
           }
           // keep icu admission under the same consultant if transferred to ICU
 
           if ( $specialty_transfer == 'Intensive Care (ICU)'){
-            $formationSQL = "SELECT * FROM picupatients WHERE ID='".$transfer_id."'";
-            $result1 = $mysqli->query($formationSQL);
+            $formationSQL = "SELECT * FROM picupatients WHERE ID=?";
+            $stmt = $mysqli->prepare($formationSQL);
+            $stmt->bind_param("i", $transfer_id);
+            $stmt->execute();
+            $result1 = $stmt->get_result();
             $patient = $result1 -> fetch_array(MYSQLI_ASSOC);
 
                   $query = "INSERT INTO picupatients (MRN, PNAME, ADMDATE, ADMFROM, admissiondiagnosis, BED, nationality, gender, consultant_id, age, assigned_on, current_location,admitted_by)
-                  VALUES ('".$patient['MRN']."','".$patient['PNAME']."','".$today."','Ward',
-                  '".$patient['admissiondiagnosis']."','".$patient['BED']."','".$patient['nationality']."','".$patient['gender']."','".$patient['consultant_id']."',
-                  '".$patient['age']."','".$today."','ICU','".$user['member_id']."') ";
-      
+                  VALUES (?,?,?,'Ward',
+                  ?,?,?,?,?,
+                  ?,?,'ICU',?) ";
+
               //   mysqli_query($mysqli, $query);
-      
-                if (!$mysqli -> query( $query)) {
+
+                $stmt = $mysqli->prepare($query);
+                $stmt->bind_param("sssssssiisi", $patient['MRN'], $patient['PNAME'], $today, $patient['admissiondiagnosis'], $patient['BED'], $patient['nationality'], $patient['gender'], $patient['consultant_id'], $patient['age'], $today, $user['member_id']);
+                if (!$stmt->execute()) {
                   echo("Error description: " . $mysqli -> error);
                 }else{
                   echo "<script language='javascript'>\n";
@@ -56,15 +70,21 @@ $other_specialities = $result1 -> fetch_all(MYSQLI_ASSOC);
         else
     {
           $specialty_id = $_POST['specialty_transfer'];
-          $formationSQL = "SELECT * FROM speciality WHERE id='".$specialty_id."'";
-          $result1 = $mysqli->query($formationSQL);
+          $formationSQL = "SELECT * FROM speciality WHERE id=?";
+          $stmt = $mysqli->prepare($formationSQL);
+          $stmt->bind_param("i", $specialty_id);
+          $stmt->execute();
+          $result1 = $stmt->get_result();
           $specialty_tran= $result1 -> fetch_array(MYSQLI_ASSOC);
 
          $specialty_transfer =  $specialty_tran['specilaity'];
          $constulant_transfer =  $_POST['constulant_transfer'];
 
-         $formationSQL = "SELECT * FROM picupatients WHERE ID='".$transfer_id."'";
-         $result1 = $mysqli->query($formationSQL);
+         $formationSQL = "SELECT * FROM picupatients WHERE ID=?";
+         $stmt = $mysqli->prepare($formationSQL);
+         $stmt->bind_param("i", $transfer_id);
+         $stmt->execute();
+         $result1 = $stmt->get_result();
          $patient = $result1 -> fetch_array(MYSQLI_ASSOC);
         
         //  var_dump($patient );
@@ -77,19 +97,23 @@ $other_specialities = $result1 -> fetch_all(MYSQLI_ASSOC);
 /// transfer to new doctor
 
           $query = "INSERT INTO picupatients (MRN, PNAME, ADMDATE, ADMFROM, admissiondiagnosis, BED, nationality, gender, consultant_id, age, newassign, assigned_on,admitted_by,current_location)
-           VALUES ('".$patient['MRN']."','".$patient['PNAME']."','".$patient['ADMDATE']."','".$patient['ADMFROM']."',
-           '".$patient['admissiondiagnosis']."','".$patient['BED']."','".$patient['nationality']."','".$patient['gender']."','".$patient['consultant_id']."',
-           '".$patient['age']."','".$patient['newassign']."','".$patient['assigned_on']."','".$user['member_id']."', 'Ward') ";
+           VALUES (?,?,?,?,
+           ?,?,?,?,?,
+           ?,?,?,?, 'Ward') ";
 
         //   mysqli_query($mysqli, $query);
 
-          if (!$mysqli -> query( $query)) {
+          $stmt = $mysqli->prepare($query);
+          $stmt->bind_param("ssssssssiissi", $patient['MRN'], $patient['PNAME'], $patient['ADMDATE'], $patient['ADMFROM'], $patient['admissiondiagnosis'], $patient['BED'], $patient['nationality'], $patient['gender'], $patient['consultant_id'], $patient['age'], $patient['newassign'], $patient['assigned_on'], $user['member_id']);
+          if (!$stmt->execute()) {
             echo("Error description: " . $mysqli -> error);
           }
 
-          $query = "UPDATE  picupatients SET  DISDATE='".$today."', med_DISDATE='".$today."', MORTALITY='Alive', DISTO='".$specialty_transfer."', trans_discharge='transfer to other speciality', trans_discharge_by='".$user['member_id']."'  WHERE ID='".$transfer_id."'";
-          if (!$mysqli -> query( $query)) {
-            
+          $query = "UPDATE  picupatients SET  DISDATE=?, med_DISDATE=?, MORTALITY='Alive', DISTO=?, trans_discharge='transfer to other speciality', trans_discharge_by=?  WHERE ID=?";
+          $stmt = $mysqli->prepare($query);
+          $stmt->bind_param("sssii", $today, $today, $specialty_transfer, $user['member_id'], $transfer_id);
+          if (!$stmt->execute()) {
+
             echo("Error description: " . $mysqli -> error);
           }else{
             echo "<script language='javascript'>\n";
@@ -149,8 +173,11 @@ if (in_array($user['position'],$access_PICU_endorsement)){
   $result1 = $mysqli->query($formationSQL);
   $consultants = $result1 -> fetch_all(MYSQLI_ASSOC);
 }else{
-    $formationSQL = "SELECT * FROM members WHERE member_id = $userid";
-		$result1 = $mysqli->query($formationSQL);
+    $formationSQL = "SELECT * FROM members WHERE member_id = ?";
+		$stmt = $mysqli->prepare($formationSQL);
+		$stmt->bind_param("i", $userid);
+		$stmt->execute();
+		$result1 = $stmt->get_result();
 		$consultants = $result1 -> fetch_all(MYSQLI_ASSOC);
 
   }
@@ -215,14 +242,26 @@ while ($row = $icd10_result->fetch_assoc()) {
   
 //find readmissions
 $conditions = [];
+$readmit_types = "";
+$readmit_params = [];
 foreach ($activepicupatints as $s) {
     // Collecting conditions for each patient
-    $conditions[] = "(ID < '" . $s['ID'] . "' AND MRN = '" . $s['MRN'] . "' AND DISDATE + INTERVAL 3 DAY >= '" . $s['ADMDATE'] . "')";
+    $conditions[] = "(ID < ? AND MRN = ? AND DISDATE + INTERVAL 3 DAY >= ?)";
+    $readmit_types .= "iss";
+    $readmit_params[] = $s['ID'];
+    $readmit_params[] = $s['MRN'];
+    $readmit_params[] = $s['ADMDATE'];
 }
 
 // Constructing a single query
-$formationSQL = "SELECT DISTINCT MRN FROM picupatients WHERE (" . implode(' OR ', $conditions) . ") AND (trans_discharge = 'discharge from ICU' or trans_discharge='discharge from ward' or trans_discharge IS NULL)";
-$result1 = $mysqli->query($formationSQL);
+$result1 = false;
+if (!empty($conditions)) {
+    $formationSQL = "SELECT DISTINCT MRN FROM picupatients WHERE (" . implode(' OR ', $conditions) . ") AND (trans_discharge = 'discharge from ICU' or trans_discharge='discharge from ward' or trans_discharge IS NULL)";
+    $stmt = $mysqli->prepare($formationSQL);
+    $stmt->bind_param($readmit_types, ...$readmit_params);
+    $stmt->execute();
+    $result1 = $stmt->get_result();
+}
 
 $recent = [];
 if ($result1) {

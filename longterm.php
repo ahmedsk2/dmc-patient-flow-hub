@@ -36,6 +36,8 @@ require ('dbconnect.php');
 
        $shortlos=$settings['short_los'];
        $longlos=$settings['long_los'];
+
+       $icd10Stmt = $mysqli->prepare("SELECT * FROM icd10 WHERE id=?");
      ?>
    
   <!-- Content Wrapper. Contains page content -->
@@ -177,8 +179,9 @@ require ('dbconnect.php');
                                                         
                                                         foreach($decodedadmissiondx as $key => $value)
                                                   {
-                                                    $formationSQL = "SELECT * FROM icd10 WHERE id='".$value."'";
-                                                    $result1 = $mysqli->query($formationSQL);
+                                                    $icd10Stmt->bind_param("s", $value);
+                                                    $icd10Stmt->execute();
+                                                    $result1 = $icd10Stmt->get_result();
                                                     $dxlist = $result1 -> fetch_array(MYSQLI_ASSOC);
                                                      
                                                 

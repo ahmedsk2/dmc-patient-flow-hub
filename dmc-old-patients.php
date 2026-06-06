@@ -1,6 +1,12 @@
 <?php
 require_once 'sidebar.php';
 
+// SEC-20: the import handlers below run before the page's Admin gate, so enforce it here.
+if ((isset($_POST['confirm_pt_btn']) || isset($_POST['add_pt_btn'])) && !in_array($user['position'], $access_PICU_control)) {
+    http_response_code(403);
+    exit('Forbidden.');
+}
+
 if (isset($_POST['confirm_pt_btn'])) {
     $formationSQL = "SELECT * FROM picupatients_temp";
     $result1 = $mysqli->query($formationSQL);
@@ -9,17 +15,21 @@ if (isset($_POST['confirm_pt_btn'])) {
     foreach ($temppicupatints as $t) {
         $tempid = $t['ID'];
         $sql = "INSERT INTO picupatients (MRN, PNAME, ADMDATE, DISDATE, ADMFROM, DISTO, MORTALITY, admissiondiagnosis, nationality, gender, age, consultant_id, trans_discharge, current_location, med_DISDATE, delay, longterm)
-                SELECT MRN, PNAME, ADMDATE, DISDATE, ADMFROM, DISTO, MORTALITY, admissiondiagnosis, nationality, gender, age, consultant_id, trans_discharge, current_location, med_DISDATE, delay, longterm 
-                FROM picupatients_temp WHERE ID='" . $tempid . "'";
+                SELECT MRN, PNAME, ADMDATE, DISDATE, ADMFROM, DISTO, MORTALITY, admissiondiagnosis, nationality, gender, age, consultant_id, trans_discharge, current_location, med_DISDATE, delay, longterm
+                FROM picupatients_temp WHERE ID=?";
 
-        if ($mysqli->query($sql) === TRUE) {
+        $stmt = $mysqli->prepare($sql);
+        $stmt->bind_param('i', $tempid);
+        if ($stmt->execute() === TRUE) {
             $message = "Record transferred successfully";
         } else {
             $message = "Error transferring record: " . $mysqli->error;
         }
 
-        $sql = "DELETE FROM picupatients_temp WHERE ID='" . $tempid . "'";
-        if ($mysqli->query($sql) === TRUE) {
+        $sql = "DELETE FROM picupatients_temp WHERE ID=?";
+        $stmt = $mysqli->prepare($sql);
+        $stmt->bind_param('i', $tempid);
+        if ($stmt->execute() === TRUE) {
             $message = "Record deleted successfully";
             echo "<script language='javascript'>\n";
             echo "window.location.href = 'dmc-old-patients.php';";
@@ -49,12 +59,16 @@ if (isset($_POST['add_pt_btn'])) {
     $delay = $_POST['delay'];
     $longterm = $_POST['longterm'];
 
-    $sql = "INSERT INTO picupatients_temp SET MRN='$mrn', PNAME='$pname', ADMDATE=" . ($admdate == NULL ? "NULL" : "'$admdate'") . ",
-            DISDATE=" . ($disdate == NULL ? "NULL" : "'$disdate'") . ", ADMFROM='$admfrom', DISTO='$disto', MORTALITY='$mortality', 
-            admissiondiagnosis='$admissiondiagnosis', nationality='$nationality', gender='$gender', age='$age', consultant_id='$consultant_id', 
-            trans_discharge='$trans_discharge', current_location='$current_location', med_DISDATE='$med_disdate', delay='$delay', longterm='$longterm'";
+    $admdate = ($admdate == NULL ? NULL : $admdate);
+    $disdate = ($disdate == NULL ? NULL : $disdate);
+    $sql = "INSERT INTO picupatients_temp SET MRN=?, PNAME=?, ADMDATE=?,
+            DISDATE=?, ADMFROM=?, DISTO=?, MORTALITY=?,
+            admissiondiagnosis=?, nationality=?, gender=?, age=?, consultant_id=?,
+            trans_discharge=?, current_location=?, med_DISDATE=?, delay=?, longterm=?";
+    $stmt = $mysqli->prepare($sql);
+    $stmt->bind_param('ssssssssssiisssss', $mrn, $pname, $admdate, $disdate, $admfrom, $disto, $mortality, $admissiondiagnosis, $nationality, $gender, $age, $consultant_id, $trans_discharge, $current_location, $med_disdate, $delay, $longterm);
 
-    if ($mysqli->query($sql) === TRUE) {
+    if ($stmt->execute() === TRUE) {
         $message = "Record added successfully";
         echo "<script language='javascript'>\n";
         echo "window.location.href = 'dmc-old-patients.php';";
@@ -158,8 +172,11 @@ if (!in_array($user['position'], $access_PICU_control)) {
                             <div class="row">
                                 <?php
                                 foreach ($temppicupatints as $s) {
-                                    $formationSQL = "SELECT * FROM picupatients WHERE DISDATE + INTERVAL 3 DAY > NOW() AND trans_discharge IS NULL AND MRN='" . $s['MRN'] . "' LIMIT 1";
-                                    $result1 = $mysqli->query($formationSQL);
+                                    $formationSQL = "SELECT * FROM picupatients WHERE DISDATE + INTERVAL 3 DAY > NOW() AND trans_discharge IS NULL AND MRN=? LIMIT 1";
+                                    $stmt = $mysqli->prepare($formationSQL);
+                                    $stmt->bind_param('s', $s['MRN']);
+                                    $stmt->execute();
+                                    $result1 = $stmt->get_result();
                                     $recentadmission = $result1->fetch_all(MYSQLI_ASSOC);
 
                                     $decodedadmissiondx = json_decode($s['admissiondiagnosis']);
@@ -257,8 +274,11 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                     <td style='width: 50%;'>
                                                         <label style='text-align: center; margin-bottom: 0px;'>Admitted By</label>";
                                     $mem_id = $s['admitted_by'];
-                                    $formationSQL = "SELECT * FROM members WHERE member_id='" . $mem_id . "'";
-                                    $result1 = $mysqli->query($formationSQL);
+                                    $formationSQL = "SELECT * FROM members WHERE member_id=?";
+                                    $stmt = $mysqli->prepare($formationSQL);
+                                    $stmt->bind_param('i', $mem_id);
+                                    $stmt->execute();
+                                    $result1 = $stmt->get_result();
                                     $doctor = $result1->fetch_array(MYSQLI_ASSOC);
 
                                     echo "<p style='text-align: center; margin-bottom: 0px;'>" . $doctor['full_name'] . "</p>
@@ -297,8 +317,11 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                             <ul style='list-style-position: inside; margin: 1% 0% 1%;'>";
                                     if (is_array($decodedadmissiondx)) {
                                         foreach ($decodedadmissiondx as $key => $value) {
-                                            $formationSQL = "SELECT * FROM icd10 WHERE id='" . $value . "'";
-                                            $result1 = $mysqli->query($formationSQL);
+                                            $formationSQL = "SELECT * FROM icd10 WHERE id=?";
+                                            $stmt = $mysqli->prepare($formationSQL);
+                                            $stmt->bind_param('s', $value);
+                                            $stmt->execute();
+                                            $result1 = $stmt->get_result();
                                             $dxlist = $result1->fetch_array(MYSQLI_ASSOC);
                                             echo '<li>' . $dxlist['name'] . '</li>';
                                         }
@@ -307,8 +330,11 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                         <div style='margin: 1%;'>
                                             <label style='text-align: center; margin-bottom: 0px;'>Primary Consultant</label>";
                                     $con_id = $s['consultant_id'];
-                                    $formationSQL = "SELECT * FROM members WHERE member_id='" . $con_id . "'";
-                                    $result1 = $mysqli->query($formationSQL);
+                                    $formationSQL = "SELECT * FROM members WHERE member_id=?";
+                                    $stmt = $mysqli->prepare($formationSQL);
+                                    $stmt->bind_param('i', $con_id);
+                                    $stmt->execute();
+                                    $result1 = $stmt->get_result();
                                     $doctor1 = $result1->fetch_array(MYSQLI_ASSOC);
                                     if ($doctor1) {
                                         echo "<p style='text-align: center; margin-bottom: 0px;'>" . $doctor1['full_name'] . "</p>";
@@ -329,8 +355,11 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                         <td style='width: 50%;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Discharged By</label>";
                                         $mem_id2 = $s['trans_discharge_by'];
-                                        $formationSQL = "SELECT * FROM members WHERE member_id='" . $mem_id2 . "'";
-                                        $result1 = $mysqli->query($formationSQL);
+                                        $formationSQL = "SELECT * FROM members WHERE member_id=?";
+                                        $stmt = $mysqli->prepare($formationSQL);
+                                        $stmt->bind_param('i', $mem_id2);
+                                        $stmt->execute();
+                                        $result1 = $stmt->get_result();
                                         $doctor2 = $result1->fetch_array(MYSQLI_ASSOC);
 
                                         echo "<p style='text-align: center; margin-bottom: 0px;'>" . $doctor2['full_name'] . "</p>
@@ -364,8 +393,11 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                         <td style='width: 50%;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Discharged By</label>";
                                         $mem_id2 = $s['trans_discharge_by'];
-                                        $formationSQL = "SELECT * FROM members WHERE member_id='" . $mem_id2 . "'";
-                                        $result1 = $mysqli->query($formationSQL);
+                                        $formationSQL = "SELECT * FROM members WHERE member_id=?";
+                                        $stmt = $mysqli->prepare($formationSQL);
+                                        $stmt->bind_param('i', $mem_id2);
+                                        $stmt->execute();
+                                        $result1 = $stmt->get_result();
                                         $doctor2 = $result1->fetch_array(MYSQLI_ASSOC);
 
                                         echo "<p style='text-align: center; margin-bottom: 0px;'>" . $doctor2['full_name'] . "</p>
@@ -415,8 +447,11 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                         <td style='width: 50%;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Transfer By</label>";
                                         $mem_id2 = $s['trans_discharge_by'];
-                                        $formationSQL = "SELECT * FROM members WHERE member_id='" . $mem_id2 . "'";
-                                        $result1 = $mysqli->query($formationSQL);
+                                        $formationSQL = "SELECT * FROM members WHERE member_id=?";
+                                        $stmt = $mysqli->prepare($formationSQL);
+                                        $stmt->bind_param('i', $mem_id2);
+                                        $stmt->execute();
+                                        $result1 = $stmt->get_result();
                                         $doctor2 = $result1->fetch_array(MYSQLI_ASSOC);
 
                                         echo "<p style='text-align: center; margin-bottom: 0px;'>" . $doctor2['full_name'] . "</p>
@@ -454,8 +489,11 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                     <td style='width: 50%;'>
                                                         <label style='text-align: center; margin-bottom: 0px;'>Transfer By</label>";
                                         $mem_id2 = $s['trans_discharge_by'];
-                                        $formationSQL = "SELECT * FROM members WHERE member_id='" . $mem_id2 . "'";
-                                        $result1 = $mysqli->query($formationSQL);
+                                        $formationSQL = "SELECT * FROM members WHERE member_id=?";
+                                        $stmt = $mysqli->prepare($formationSQL);
+                                        $stmt->bind_param('i', $mem_id2);
+                                        $stmt->execute();
+                                        $result1 = $stmt->get_result();
                                         $doctor2 = $result1->fetch_array(MYSQLI_ASSOC);
 
                                         echo "<p style='text-align: center; margin-bottom: 0px;'>" . $doctor2['full_name'] . "</p>
@@ -489,8 +527,11 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                         <td style='width: 50%;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Discharged By</label>";
                                         $mem_id2 = $s['trans_discharge_by'];
-                                        $formationSQL = "SELECT * FROM members WHERE member_id='" . $mem_id2 . "'";
-                                        $result1 = $mysqli->query($formationSQL);
+                                        $formationSQL = "SELECT * FROM members WHERE member_id=?";
+                                        $stmt = $mysqli->prepare($formationSQL);
+                                        $stmt->bind_param('i', $mem_id2);
+                                        $stmt->execute();
+                                        $result1 = $stmt->get_result();
                                         $doctor2 = $result1->fetch_array(MYSQLI_ASSOC);
 
                                         echo "<p style='text-align: center; margin-bottom: 0px;'>" . $doctor2['full_name'] . "</p>
@@ -524,8 +565,11 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                         <td style='width: 50%;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Transfer By</label>";
                                         $mem_id2 = $s['trans_discharge_by'];
-                                        $formationSQL = "SELECT * FROM members WHERE member_id='" . $mem_id2 . "'";
-                                        $result1 = $mysqli->query($formationSQL);
+                                        $formationSQL = "SELECT * FROM members WHERE member_id=?";
+                                        $stmt = $mysqli->prepare($formationSQL);
+                                        $stmt->bind_param('i', $mem_id2);
+                                        $stmt->execute();
+                                        $result1 = $stmt->get_result();
                                         $doctor2 = $result1->fetch_array(MYSQLI_ASSOC);
 
                                         echo "<p style='text-align: center; margin-bottom: 0px;'>" . $doctor2['full_name'] . "</p>

@@ -31,8 +31,10 @@ if (isset($_POST['undo_btn'])) {
 /// if dscharge date = today... or yesterday
 
 
-$query = "UPDATE  picupatients SET DISDATE= NULL, med_DISDATE= NULL, MORTALITY= NULL, DISTO= NULL, trans_discharge= NULL, trans_discharge_by= NULL WHERE ID='".$patient_id."'";
-          if (!$mysqli -> query( $query)) {
+$query = "UPDATE  picupatients SET DISDATE= NULL, med_DISDATE= NULL, MORTALITY= NULL, DISTO= NULL, trans_discharge= NULL, trans_discharge_by= NULL WHERE ID=?";
+          $stmt = $mysqli->prepare($query);
+          $stmt->bind_param("i", $patient_id);
+          if (!$stmt->execute()) {
             echo("Error description: " . $mysqli -> error);
           } else {
            
@@ -361,8 +363,11 @@ font-size: medium;color: red;
                             
                             foreach ($consultant as $c){
                                 $id=$c['consultant_id'];
-                                $formationSQL =  "SELECT * FROM members WHERE member_id = '".$id."'";
-                                $result1 = $mysqli->query($formationSQL);
+                                $formationSQL =  "SELECT * FROM members WHERE member_id = ?";
+                                $stmt = $mysqli->prepare($formationSQL);
+                                $stmt->bind_param("i", $id);
+                                $stmt->execute();
+                                $result1 = $stmt->get_result();
                                 $name = $result1 -> fetch_array(MYSQLI_ASSOC);
 
                                 echo  "<option value=".$name['member_id'].">".$name['full_name']."</option>";
@@ -546,8 +551,11 @@ font-size: medium;color: red;
             
             foreach ($consultant as $c){
                 $id=$c['consultant_id'];
-                $formationSQL =  "SELECT * FROM members WHERE member_id = '".$id."'";
-                $result1 = $mysqli->query($formationSQL);
+                $formationSQL =  "SELECT * FROM members WHERE member_id = ?";
+                $stmt = $mysqli->prepare($formationSQL);
+                $stmt->bind_param("i", $id);
+                $stmt->execute();
+                $result1 = $stmt->get_result();
                 $name = $result1 -> fetch_array(MYSQLI_ASSOC);
 
                 echo  "<option value=".$name['member_id'].">".$name['full_name']."</option>";

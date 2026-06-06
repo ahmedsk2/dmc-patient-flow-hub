@@ -20,8 +20,10 @@ $today = date("Y-m-d");
 
 if (isset($_POST['undo_btn'])) {
     $consult_id = $_POST['consultid'];
-    $query = "UPDATE consultations SET signoff_date= NULL WHERE ID='$consult_id'";
-    if (!$mysqli->query($query)) {
+    $query = "UPDATE consultations SET signoff_date= NULL WHERE ID=?";
+    $stmt = $mysqli->prepare($query);
+    $stmt->bind_param("i", $consult_id);
+    if (!$stmt->execute()) {
         echo "Error description: " . $mysqli->error;
     } else {
         echo "<script>window.location.href = '48consultation.php';</script>";
@@ -30,8 +32,11 @@ if (isset($_POST['undo_btn'])) {
 
 $today = date("Y-m-d");
 
-$formationSQL = "SELECT * FROM consultations WHERE signoff_date + INTERVAL 1 DAY >= '$today'";
-$result1 = $mysqli->query($formationSQL);
+$formationSQL = "SELECT * FROM consultations WHERE signoff_date + INTERVAL 1 DAY >= ?";
+$stmt = $mysqli->prepare($formationSQL);
+$stmt->bind_param("s", $today);
+$stmt->execute();
+$result1 = $stmt->get_result();
 $olspatints = $result1->fetch_all(MYSQLI_ASSOC);
 
 $formationSQL = "SELECT * FROM members WHERE position = '3'";

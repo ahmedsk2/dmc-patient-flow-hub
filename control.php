@@ -405,8 +405,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                                     <td class='eachcol activate'>
                                                         <?php
                                                            if ($member['active'] == 1){
-                                                                $formationSQL = "SELECT * FROM picupatients WHERE DISDATE IS NULL AND consultant_id='".$member['member_id']."' ";
-                                                                $result1 = $mysqli->query($formationSQL);
+                                                                $stmt = $mysqli->prepare("SELECT * FROM picupatients WHERE DISDATE IS NULL AND consultant_id=? ");
+                                                                $stmt->bind_param("i", $member['member_id']);
+                                                                $stmt->execute();
+                                                                $result1 = $stmt->get_result();
                                                                 $pcount = mysqli_num_rows($result1);
                                                                 if ($pcount !== 0 || $member['on_service'] == 1 || $member['assign_access'] == 1 || $member['add_new_patient'] == 1 || $member['manage_patient'] == 1 || $member['modify_patient'] == 1) {
                                                                     echo "<input style='width: auto;' type='checkbox' name='activate' value='1' checked disabled>";

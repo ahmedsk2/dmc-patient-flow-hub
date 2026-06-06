@@ -30,8 +30,10 @@ if (isset($_POST['undo_btn'])) {
  $patient_id = $_POST['patientid'];
 
 /// if dscharge date = today... or yesterday
-$query = "UPDATE  picupatients SET DISDATE= NULL, med_DISDATE= NULL, MORTALITY= NULL, DISTO= NULL, trans_discharge= NULL, trans_discharge_by= NULL WHERE ID='".$patient_id."'";
-          if (!$mysqli -> query( $query)) {
+$query = "UPDATE  picupatients SET DISDATE= NULL, med_DISDATE= NULL, MORTALITY= NULL, DISTO= NULL, trans_discharge= NULL, trans_discharge_by= NULL WHERE ID=?";
+          $stmt = $mysqli->prepare($query);
+          $stmt->bind_param("i", $patient_id);
+          if (!$stmt->execute()) {
             echo("Error description: " . $mysqli -> error);
           } else {
            
@@ -45,8 +47,11 @@ $query = "UPDATE  picupatients SET DISDATE= NULL, med_DISDATE= NULL, MORTALITY= 
 ?>
 
 <?php
-   		$formationSQL = "SELECT * FROM picupatients WHERE DISDATE + INTERVAL 1 DAY >= '$today'";
-$result1 = $mysqli->query($formationSQL);
+   		$formationSQL = "SELECT * FROM picupatients WHERE DISDATE + INTERVAL 1 DAY >= ?";
+$stmt = $mysqli->prepare($formationSQL);
+$stmt->bind_param("s", $today);
+$stmt->execute();
+$result1 = $stmt->get_result();
 $olspatints = $result1->fetch_all(MYSQLI_ASSOC);
 
 $formationSQL = "SELECT * FROM countries";
