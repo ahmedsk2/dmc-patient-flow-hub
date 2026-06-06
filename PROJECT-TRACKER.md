@@ -18,7 +18,7 @@ _Last updated: 2026-06-06_
 | Review & planning (read-only) | 4 / 4 | ✅ complete |
 | Phase 0 — Containment | 3 ✅ · 1 🔄 · 3 ⏸️ ops | 🔄 in progress |
 | Phase 1 — Critical security & data integrity | 10 ✅ · 4 🔄 (of 16) | 🔄 in progress |
-| Phase 2 — Stabilize | 2 ✅ · 1 🔄 (of 8) | 🔄 in progress |
+| Phase 2 — Stabilize | 3 ✅ · 1 🔄 (of 8) | 🔄 in progress |
 | Phase 3 — Refactor + UI/UX | 0 / 6 | not started |
 | Phase 4 — Re-platform (decision-gated) | 0 / 2 | not started |
 | Phase 5 — Nice-to-haves | 0 / 3 | not started |
@@ -26,6 +26,10 @@ _Last updated: 2026-06-06_
 ---
 
 ## Notes & decisions  _(newest first)_
+
+- **2026-06-06 — Batch 15 (no DB-error leaks to clients, C4) DONE** (branch `renovation`). Swept **~25 endpoints** (via 4 parallel sub-agents, non-overlapping file sets) to stop echoing/dying with `$mysqli->error` / `$stmt->error`; each now logs the real error server-side (`error_log(__FILE__ . …)`) and returns a generic message. Covers the public auth files (`forget-password-email`, `send-reset-pass-by-admin`, `reset-password`), registry search/diagnosis, the patient write/discharge/transfer/shuffle handlers, consultation add/modify, and user-management. Success (`…successfully`) strings + all SQL/control-flow untouched, so the Batch-12 response-aware UI still works. Grep-verified: no `echo`/`die`/`print`/`$message`/`$response` path concatenates `->error` anymore. ⏸️ A single formal error-handler/exception layer remains a Phase-3 nicety. Not runtime-tested.
+
+- **2026-06-06 — ⏸️ BLOCKED items surfaced (need your input before they can be done safely):** (1) **Statistics sargability/correctness (D3/PERF-02)** — the stats queries wrap indexed dates in `MONTH()/YEAR()`, and many mix `MONTH(DISDATE)` with `YEAR(ADMDATE)` (a cross-column predicate that looks like a latent clinical-logic bug). Rewriting them would change clinical numbers, so this needs the **CLIN answers** (LOS window, what each KPI should count). (2) **Server-side object-ownership / fine-grained authz (S1 remainder)** — endpoints enforce login but not "only this patient's consultant/`manage_patient` may modify" (IDOR); the correct rule is the **dated permission-model** question. (3) **De-duplication / one "active patient" definition (X2/CLIN-08)**, **soft-delete semantics (R4)**, **UI/UX overhaul + CSP/eval removal (Phase 3)** — design/clinical decisions. See *Decisions needed* below.
 
 - **2026-06-06 — Batch 14 (Phase 2 data integrity: InnoDB + indexes + transactions, D1/D3/R2) DONE** (branch `renovation`). **Migration `03-innodb-and-indexes.sql`** converts the clinical/lookup tables **MyISAM→InnoDB** (main `picupatients` + staging + lookups) so multi-statement writes can be transactional, and adds the missing **hot-path indexes** (`picupatients` `MRN`(20)/`consultant_id`/`current_location`(10); `consultations` `consultant_id`/`MRN`/`signoff_date`/`consultation_date` — `ADMDATE`/`DISDATE` were already indexed). Wrapped the **three multi-step clinical writes** in `begin_transaction`/`commit`/`rollback` (a no-op on MyISAM, atomic once migration 03 runs): **ICU transfer** (INSERT+UPDATE), **specialty transfer** (both branches — new-service INSERT + old-record discharge UPDATE + optional ICU re-admission commit together, so a partial write can no longer duplicate the patient or drop them from the census), and the **old-patient confirm import**. The import fix also closes a **data-loss bug** — the staging `DELETE` previously ran even when the `INSERT` failed, losing the staged patient; now they commit together and the redirect fires once after the loop. DB errors are logged server-side, not echoed. ⏳ run migration 03 (after a backup) at deploy. ⬜ Still owed for D3: make the **stats queries sargable** (drop `MONTH()`/`YEAR()` wrapping on indexed date cols). Not runtime-tested.
 
@@ -107,7 +111,7 @@ _(Add new notes/decisions above this line as we go.)_
 - ⬜ **Soft-delete** + audit; restrict delete to Admin — (R4 / REL-05) — P2
 - ⬜ Backups + **schema-migrations** tooling — (R5 / REL-04) — P1
 - ⬜ Delete remaining **dead code/weight** — (X4 / SIMP-04,05) — P2
-- ⬜ **Central error handling** (no raw `die()`/error echo) — (C4 / ARCH-05) — P2
+- ✅ **No DB-error leaks to clients** — ~25 endpoints now log `$mysqli`/`$stmt->error` server-side + show a generic message (Batch 15); a single formal error-handler layer is a Phase-3 nicety — (C4 / ARCH-05)
 - ⬜ Status **color+icon+contrast** a11y safety fix — (U1 / UI-01,02) — P1/P2
 
 ### Phase 3 — Refactor + UI/UX overhaul (P2/P3)
