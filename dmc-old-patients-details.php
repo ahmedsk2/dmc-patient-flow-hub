@@ -6,9 +6,10 @@ require ('dbconnect.php');
    $id = $_REQUEST['bookId']; 
 
 
-   $formationSQL = "SELECT * FROM picupatients_temp WHERE ID='".$id."'";
-   $result1 = $mysqli->query($formationSQL);
-   $patient = $result1 -> fetch_array(MYSQLI_ASSOC);
+   $stmt = $mysqli->prepare("SELECT * FROM picupatients_temp WHERE ID = ?");
+   $stmt->bind_param("i", $id);
+   $stmt->execute();
+   $patient = $stmt->get_result()->fetch_array(MYSQLI_ASSOC);
 
    $formationSQL = "SELECT * FROM countries";
    $result1 = $mysqli->query($formationSQL);

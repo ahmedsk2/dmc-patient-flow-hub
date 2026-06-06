@@ -43,18 +43,20 @@ $disto = $_REQUEST['disto'];
 if (strcmp($discahrge_type,'medical') == 0){ //still in
 
 
-  $sql = "UPDATE  picupatients SET  MRN='".$mrn_modify."',BED='".$bed_modify."', PNAME='".$pname_modify."', age='".$age."', gender='".$gender_modify."',
-  ADMFROM='".$admfrom_modify."',nationality='".$nationality_modify."'
-  ,ADMDATE=" . ($admdate==NULL ? "NULL" : "'".$admdate."'") . "
-    ,med_DISDATE='".$disdate."',MORTALITY='".$disstatus."',delay='".$disto."' 
-  , admissiondiagnosis='".$admissiondiagnosis."', trans_discharge_by='".$userid."'  WHERE ID='".$id."'";
- 
+  $sql = "UPDATE  picupatients SET  MRN=?,BED=?, PNAME=?, age=?, gender=?,
+  ADMFROM=?,nationality=?
+  ,ADMDATE=?
+    ,med_DISDATE=?,MORTALITY=?,delay=?
+  , admissiondiagnosis=?, trans_discharge_by=?  WHERE ID=?";
+
 
 
 //  $sql = "INSERT INTO picupatients (BED) VALUES ('$bed')";
 
 
-              if ($mysqli->query($sql) === TRUE) {
+              $stmt = $mysqli->prepare($sql);
+              $stmt->bind_param("sssissssssssii", $mrn_modify, $bed_modify, $pname_modify, $age, $gender_modify, $admfrom_modify, $nationality_modify, $admdate, $disdate, $disstatus, $disto, $admissiondiagnosis, $userid, $id);
+              if ($stmt->execute() === TRUE) {
                 $message= "Record added successfully";
                 // $last_id = mysqli_insert_id($mysqli);
               } else {
@@ -65,18 +67,20 @@ if (strcmp($discahrge_type,'medical') == 0){ //still in
 echo "<a>".$message."</a>";
 
 }else{
-  $sql = "UPDATE  picupatients SET  MRN='".$mrn_modify."',BED='".$bed_modify."', PNAME='".$pname_modify."', age='".$age."', gender='".$gender_modify."',
-  ADMFROM='".$admfrom_modify."',nationality='".$nationality_modify."'
-  ,ADMDATE=" . ($admdate==NULL ? "NULL" : "'".$admdate."'") . "
-    ,DISDATE='".$disdate."',med_DISDATE='".$disdate."',MORTALITY='".$disstatus."',DISTO='".$disto."' 
-  , admissiondiagnosis='".$admissiondiagnosis."', trans_discharge='discharge from ward', trans_discharge_by='".$userid."'  WHERE ID='".$id."'";
- 
+  $sql = "UPDATE  picupatients SET  MRN=?,BED=?, PNAME=?, age=?, gender=?,
+  ADMFROM=?,nationality=?
+  ,ADMDATE=?
+    ,DISDATE=?,med_DISDATE=?,MORTALITY=?,DISTO=?
+  , admissiondiagnosis=?, trans_discharge='discharge from ward', trans_discharge_by=?  WHERE ID=?";
+
 
 
 //  $sql = "INSERT INTO picupatients (BED) VALUES ('$bed')";
 
 
-              if ($mysqli->query($sql) === TRUE) {
+              $stmt = $mysqli->prepare($sql);
+              $stmt->bind_param("sssisssssssssii", $mrn_modify, $bed_modify, $pname_modify, $age, $gender_modify, $admfrom_modify, $nationality_modify, $admdate, $disdate, $disdate, $disstatus, $disto, $admissiondiagnosis, $userid, $id);
+              if ($stmt->execute() === TRUE) {
                 $message= "Record added successfully";
                 // $last_id = mysqli_insert_id($mysqli);
               } else {

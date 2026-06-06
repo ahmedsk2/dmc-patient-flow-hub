@@ -13,8 +13,11 @@ $other_specialities = $result1 -> fetch_all(MYSQLI_ASSOC);
 if((array_search($consultation_to_service, array_column($other_specialities, 'specilaity')) !== false)){
 }else{
 
-$formationSQL = "SELECT * FROM members WHERE specialty_id = $consultation_to_service AND on_service = '1'";
-$result1 = $mysqli->query($formationSQL);
+$formationSQL = "SELECT * FROM members WHERE specialty_id = ? AND on_service = '1'";
+$stmt = $mysqli->prepare($formationSQL);
+$stmt->bind_param("i", $consultation_to_service);
+$stmt->execute();
+$result1 = $stmt->get_result();
 $consultant = $result1 -> fetch_all(MYSQLI_ASSOC);
 
 // var_dump($consultant);

@@ -16,15 +16,17 @@ $id = $_REQUEST['id_modify'];
    
   
    
-    $sql = "UPDATE  picupatients SET  MRN='".$mrn_modify."',BED='".$bed_modify."', PNAME='".$pname_modify."',gender='".$gender_modify."',age='".$age_modify."',
-    nationality='".$nationality_modify."', admissiondiagnosis='".$admissiondiagnosis."' WHERE ID='".$id."'";
-   
+    $sql = "UPDATE  picupatients SET  MRN=?,BED=?, PNAME=?,gender=?,age=?,
+    nationality=?, admissiondiagnosis=? WHERE ID=?";
+
 
 
 //  $sql = "INSERT INTO picupatients (BED) VALUES ('$bed')";
 
-  
-                if ($mysqli->query($sql) === TRUE) {
+
+                $stmt = $mysqli->prepare($sql);
+                $stmt->bind_param('ssssissi', $mrn_modify, $bed_modify, $pname_modify, $gender_modify, $age_modify, $nationality_modify, $admissiondiagnosis, $id);
+                if ($stmt->execute() === TRUE) {
                   $message= "Record added successfully";
                   // $last_id = mysqli_insert_id($mysqli);
                 } else {

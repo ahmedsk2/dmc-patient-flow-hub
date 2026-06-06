@@ -60,8 +60,11 @@ switch ($kpi){
                   
                     foreach($consultants as $c){
 
-                    $formationSQL = "SELECT ADMDATE, DISDATE FROM picupatients WHERE MONTH(DISDATE) = '".$month."' AND YEAR(DISDATE) = '".$ydate1."' AND consultant_id='".$c['member_id']."' AND (current_location != 'ICU' or current_location is null)";
-                    $result1 = $mysqli->query($formationSQL);
+                    $formationSQL = "SELECT ADMDATE, DISDATE FROM picupatients WHERE MONTH(DISDATE) = ? AND YEAR(DISDATE) = ? AND consultant_id=? AND (current_location != 'ICU' or current_location is null)";
+                    $stmt = $mysqli->prepare($formationSQL);
+                    $stmt->bind_param('iii', $month, $ydate1, $c['member_id']);
+                    $stmt->execute();
+                    $result1 = $stmt->get_result();
                     $dates = $result1 -> fetch_all(MYSQLI_ASSOC);
 
                 
@@ -107,8 +110,11 @@ switch ($kpi){
                 // by type of discharge
                 foreach($consultants as $c){
 
-                    $formationSQL = "SELECT ADMDATE, DISDATE FROM picupatients WHERE QUARTER(DISDATE) = '".$quarter."' AND YEAR(DISDATE) = '".$ydate1."' AND consultant_id='".$c['member_id']."' AND (current_location != 'ICU' or current_location is null)";
-                    $result1 = $mysqli->query($formationSQL);
+                    $formationSQL = "SELECT ADMDATE, DISDATE FROM picupatients WHERE QUARTER(DISDATE) = ? AND YEAR(DISDATE) = ? AND consultant_id=? AND (current_location != 'ICU' or current_location is null)";
+                    $stmt = $mysqli->prepare($formationSQL);
+                    $stmt->bind_param('iii', $quarter, $ydate1, $c['member_id']);
+                    $stmt->execute();
+                    $result1 = $stmt->get_result();
                     $dates = $result1 -> fetch_all(MYSQLI_ASSOC);
 
                 
@@ -156,9 +162,12 @@ switch ($kpi){
                   $formationSQL = "
                       SELECT consultant_id, ID, MRN, ADMDATE
                       FROM picupatients
-                      WHERE MONTH(ADMDATE) = '$month' AND YEAR(ADMDATE) = '$ydate1'
+                      WHERE MONTH(ADMDATE) = ? AND YEAR(ADMDATE) = ?
                   ";
-                  $result1 = $mysqli->query($formationSQL);
+                  $stmt = $mysqli->prepare($formationSQL);
+                  $stmt->bind_param('ii', $month, $ydate1);
+                  $stmt->execute();
+                  $result1 = $stmt->get_result();
                   $admitted_patients = $result1->fetch_all(MYSQLI_ASSOC);
 
                   $readmissions = [];
@@ -232,17 +241,23 @@ switch ($kpi){
                     /////////////////////
                         // readmissions
                     //////////////////////////
-                    $formationSQL = "SELECT consultant_id,ID, MRN, ADMDATE FROM picupatients WHERE QUARTER(ADMDATE) = '".$quarter."' AND YEAR(ADMDATE) = '".$ydate1."'";
-                    $result1 = $mysqli->query($formationSQL);
+                    $formationSQL = "SELECT consultant_id,ID, MRN, ADMDATE FROM picupatients WHERE QUARTER(ADMDATE) = ? AND YEAR(ADMDATE) = ?";
+                    $stmt = $mysqli->prepare($formationSQL);
+                    $stmt->bind_param('ii', $quarter, $ydate1);
+                    $stmt->execute();
+                    $result1 = $stmt->get_result();
                     $admitted_patients = $result1 -> fetch_all(MYSQLI_ASSOC);
 
                     $readmission_count=0;
                     // echo $date1 ."</br>";
+                    $formationSQL = "SELECT * FROM picupatients WHERE DISDATE + INTERVAL 3 DAY >=? AND ID < ?  AND MRN=? AND (trans_discharge = 'discharge from ICU' or trans_discharge='discharge from ward' or trans_discharge IS NULL) LIMIT 1";
+                    $stmt = $mysqli->prepare($formationSQL);
                     foreach ($admitted_patients as $s){
-                    $formationSQL = "SELECT * FROM picupatients WHERE DISDATE + INTERVAL 3 DAY >='".$s['ADMDATE']."' AND ID < '".$s['ID']."'  AND MRN='".$s['MRN']."' AND (trans_discharge = 'discharge from ICU' or trans_discharge='discharge from ward' or trans_discharge IS NULL) LIMIT 1";
-                    $result1 = $mysqli->query($formationSQL);
+                    $stmt->bind_param('sis', $s['ADMDATE'], $s['ID'], $s['MRN']);
+                    $stmt->execute();
+                    $result1 = $stmt->get_result();
                     $recentadmission = $result1 -> fetch_array(MYSQLI_ASSOC);
-                    
+
                    if ($c['member_id'] == $recentadmission['consultant_id']){
                     $readmission_count=$readmission_count+1;
                     // var_dump($recentadmission);
@@ -272,20 +287,32 @@ switch ($kpi){
                 $chart_title="Admissions / Consultations for "  .$s_date;
                 // var_dump($consultants);
                 foreach($consultants as $c){
-                    $formationSQL = "SELECT * FROM picupatients WHERE ADMDATE = '".$s_date."'  AND consultant_id='".$c['member_id']."' AND (current_location != 'ICU' or current_location is null)";
-                    $result1 = $mysqli->query($formationSQL);
+                    $formationSQL = "SELECT * FROM picupatients WHERE ADMDATE = ?  AND consultant_id=? AND (current_location != 'ICU' or current_location is null)";
+                    $stmt = $mysqli->prepare($formationSQL);
+                    $stmt->bind_param('si', $s_date, $c['member_id']);
+                    $stmt->execute();
+                    $result1 = $stmt->get_result();
                     $admittedpcount = mysqli_num_rows($result1);
 
-                    $formationSQL = "SELECT * FROM picupatients WHERE DISDATE = '".$s_date."' AND consultant_id='".$c['member_id']."' AND (current_location != 'ICU' or current_location is null)";
-                    $result1 = $mysqli->query($formationSQL);
+                    $formationSQL = "SELECT * FROM picupatients WHERE DISDATE = ? AND consultant_id=? AND (current_location != 'ICU' or current_location is null)";
+                    $stmt = $mysqli->prepare($formationSQL);
+                    $stmt->bind_param('si', $s_date, $c['member_id']);
+                    $stmt->execute();
+                    $result1 = $stmt->get_result();
                     $dischargedpcount = mysqli_num_rows($result1);
-                    
-                    $formationSQL = "SELECT * FROM consultations WHERE consultation_date = '".$s_date."'  AND consultant_id='".$c['member_id']."' ";
-                    $result1 = $mysqli->query($formationSQL);
+
+                    $formationSQL = "SELECT * FROM consultations WHERE consultation_date = ?  AND consultant_id=? ";
+                    $stmt = $mysqli->prepare($formationSQL);
+                    $stmt->bind_param('si', $s_date, $c['member_id']);
+                    $stmt->execute();
+                    $result1 = $stmt->get_result();
                     $newconsultscount = mysqli_num_rows($result1);
-            
-                    $formationSQL = "SELECT * FROM consultations WHERE signoff_date = '".$s_date."'  AND consultant_id='".$c['member_id']."' ";
-                    $result1 = $mysqli->query($formationSQL);
+
+                    $formationSQL = "SELECT * FROM consultations WHERE signoff_date = ?  AND consultant_id=? ";
+                    $stmt = $mysqli->prepare($formationSQL);
+                    $stmt->bind_param('si', $s_date, $c['member_id']);
+                    $stmt->execute();
+                    $result1 = $stmt->get_result();
                     $signedoffcount = mysqli_num_rows($result1);
             
                     array_push($label,$c['full_name']);
@@ -300,19 +327,31 @@ switch ($kpi){
                                  
                     $chart_title="Admissions / Consultations for " . $mdate1_name . " " . $ydate1; 
                     foreach($consultants as $c){
-                        $formationSQL = "SELECT * FROM picupatients WHERE MONTH(ADMDATE) = '".$month."' AND YEAR(ADMDATE) = '".$ydate1."' AND consultant_id='".$c['member_id']."' AND (current_location != 'ICU' or current_location is null)";
-                        $result1 = $mysqli->query($formationSQL);
+                        $formationSQL = "SELECT * FROM picupatients WHERE MONTH(ADMDATE) = ? AND YEAR(ADMDATE) = ? AND consultant_id=? AND (current_location != 'ICU' or current_location is null)";
+                        $stmt = $mysqli->prepare($formationSQL);
+                        $stmt->bind_param('iii', $month, $ydate1, $c['member_id']);
+                        $stmt->execute();
+                        $result1 = $stmt->get_result();
                         $admittedpcount = mysqli_num_rows($result1);
-                        $formationSQL = "SELECT * FROM picupatients WHERE MONTH(DISDATE) = '".$month."' AND YEAR(DISDATE) = '".$ydate1."' AND consultant_id='".$c['member_id']."' AND (current_location != 'ICU' or current_location is null)";
-                        $result1 = $mysqli->query($formationSQL);
+                        $formationSQL = "SELECT * FROM picupatients WHERE MONTH(DISDATE) = ? AND YEAR(DISDATE) = ? AND consultant_id=? AND (current_location != 'ICU' or current_location is null)";
+                        $stmt = $mysqli->prepare($formationSQL);
+                        $stmt->bind_param('iii', $month, $ydate1, $c['member_id']);
+                        $stmt->execute();
+                        $result1 = $stmt->get_result();
                         $dischargedpcount = mysqli_num_rows($result1);
-                        
-                        $formationSQL = "SELECT * FROM consultations WHERE MONTH(consultation_date) = '".$month."' AND YEAR(consultation_date) = '".$ydate1."'  AND consultant_id='".$c['member_id']."' ";
-                        $result1 = $mysqli->query($formationSQL);
+
+                        $formationSQL = "SELECT * FROM consultations WHERE MONTH(consultation_date) = ? AND YEAR(consultation_date) = ?  AND consultant_id=? ";
+                        $stmt = $mysqli->prepare($formationSQL);
+                        $stmt->bind_param('iii', $month, $ydate1, $c['member_id']);
+                        $stmt->execute();
+                        $result1 = $stmt->get_result();
                         $newconsultscount = mysqli_num_rows($result1);
-                
-                        $formationSQL = "SELECT * FROM consultations WHERE MONTH(signoff_date) = '".$month."' AND YEAR(signoff_date) = '".$ydate1."'  AND consultant_id='".$c['member_id']."' ";
-                        $result1 = $mysqli->query($formationSQL);
+
+                        $formationSQL = "SELECT * FROM consultations WHERE MONTH(signoff_date) = ? AND YEAR(signoff_date) = ?  AND consultant_id=? ";
+                        $stmt = $mysqli->prepare($formationSQL);
+                        $stmt->bind_param('iii', $month, $ydate1, $c['member_id']);
+                        $stmt->execute();
+                        $result1 = $stmt->get_result();
                         $signedoffcount = mysqli_num_rows($result1);
                 
                         array_push($label,$c['full_name']);
@@ -343,19 +382,31 @@ switch ($kpi){
       
               
                     foreach($consultants as $c){
-                        $formationSQL = "SELECT * FROM picupatients WHERE QUARTER(ADMDATE) = '".$quarter."' AND YEAR(ADMDATE) = '".$ydate1."' AND consultant_id='".$c['member_id']."' AND (current_location != 'ICU' or current_location is null)";
-                        $result1 = $mysqli->query($formationSQL);
+                        $formationSQL = "SELECT * FROM picupatients WHERE QUARTER(ADMDATE) = ? AND YEAR(ADMDATE) = ? AND consultant_id=? AND (current_location != 'ICU' or current_location is null)";
+                        $stmt = $mysqli->prepare($formationSQL);
+                        $stmt->bind_param('iii', $quarter, $ydate1, $c['member_id']);
+                        $stmt->execute();
+                        $result1 = $stmt->get_result();
                         $admittedpcount = mysqli_num_rows($result1);
-                        $formationSQL = "SELECT * FROM picupatients WHERE QUARTER(DISDATE) = '".$quarter."' AND YEAR(DISDATE) = '".$ydate1."' AND consultant_id='".$c['member_id']."' AND (current_location != 'ICU' or current_location is null)";
-                        $result1 = $mysqli->query($formationSQL);
+                        $formationSQL = "SELECT * FROM picupatients WHERE QUARTER(DISDATE) = ? AND YEAR(DISDATE) = ? AND consultant_id=? AND (current_location != 'ICU' or current_location is null)";
+                        $stmt = $mysqli->prepare($formationSQL);
+                        $stmt->bind_param('iii', $quarter, $ydate1, $c['member_id']);
+                        $stmt->execute();
+                        $result1 = $stmt->get_result();
                         $dischargedpcount = mysqli_num_rows($result1);
-                        
-                        $formationSQL = "SELECT * FROM consultations WHERE QUARTER(consultation_date) = '".$quarter."' AND YEAR(consultation_date) = '".$ydate1."'  AND consultant_id='".$c['member_id']."' ";
-                        $result1 = $mysqli->query($formationSQL);
+
+                        $formationSQL = "SELECT * FROM consultations WHERE QUARTER(consultation_date) = ? AND YEAR(consultation_date) = ?  AND consultant_id=? ";
+                        $stmt = $mysqli->prepare($formationSQL);
+                        $stmt->bind_param('iii', $quarter, $ydate1, $c['member_id']);
+                        $stmt->execute();
+                        $result1 = $stmt->get_result();
                         $newconsultscount = mysqli_num_rows($result1);
-                
-                        $formationSQL = "SELECT * FROM consultations WHERE QUARTER(signoff_date) = '".$quarter."' AND YEAR(signoff_date) = '".$ydate1."'  AND consultant_id='".$c['member_id']."' ";
-                        $result1 = $mysqli->query($formationSQL);
+
+                        $formationSQL = "SELECT * FROM consultations WHERE QUARTER(signoff_date) = ? AND YEAR(signoff_date) = ?  AND consultant_id=? ";
+                        $stmt = $mysqli->prepare($formationSQL);
+                        $stmt->bind_param('iii', $quarter, $ydate1, $c['member_id']);
+                        $stmt->execute();
+                        $result1 = $stmt->get_result();
                         $signedoffcount = mysqli_num_rows($result1);
                 
                         array_push($label,$c['full_name']);

@@ -25,11 +25,13 @@ if (!empty($admdate1)){
   
 
 
- $sql = "UPDATE picupatients SET current_location='".$current_location."',BED='".$bed."',MRN='".$mrn."', PNAME='".$name."',  ADMFROM='".$admfrom."',age='".$age."',gender='".$gender."',nationality='".$nationality."',ADMFROM='".$admfrom."',
- ADMDATE=" . ($admdate==NULL ? "NULL" : "'".$admdate."'") . "
- , admissiondiagnosis='".$admissiondiagnosis."' WHERE ID='".$id."'";
-  
-                if ($mysqli->query($sql) === TRUE) {
+ $sql = "UPDATE picupatients SET current_location=?,BED=?,MRN=?, PNAME=?,  ADMFROM=?,age=?,gender=?,nationality=?,ADMFROM=?,
+ ADMDATE=?
+ , admissiondiagnosis=? WHERE ID=?";
+
+                $stmt = $mysqli->prepare($sql);
+                $stmt->bind_param("sssssisssssi", $current_location, $bed, $mrn, $name, $admfrom, $age, $gender, $nationality, $admfrom, $admdate, $admissiondiagnosis, $id);
+                if ($stmt->execute() === TRUE) {
                   $message= "Record updated successfully";
                 } else {
                  $message= "Error updating record: " . $mysqli->error;

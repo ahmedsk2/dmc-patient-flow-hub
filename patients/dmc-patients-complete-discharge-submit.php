@@ -20,16 +20,18 @@ $disto = $_REQUEST['disto'];
 
 // echo $discahrge_type;
 
-  $sql = "UPDATE  picupatients SET 
-    DISDATE='".$disdate."',MORTALITY='".$disstatus."',DISTO='".$disto."' 
-  ,trans_discharge='discharge from ward', trans_discharge_by='".$userid."'  WHERE ID='".$id."'";
- 
+  $sql = "UPDATE  picupatients SET
+    DISDATE=?,MORTALITY=?,DISTO=?
+  ,trans_discharge='discharge from ward', trans_discharge_by=?  WHERE ID=?";
+
 
 
 //  $sql = "INSERT INTO picupatients (BED) VALUES ('$bed')";
 
 
-              if ($mysqli->query($sql) === TRUE) {
+              $stmt = $mysqli->prepare($sql);
+              $stmt->bind_param("sssii", $disdate, $disstatus, $disto, $userid, $id);
+              if ($stmt->execute() === TRUE) {
                 $message= "Record added successfully";
                 // $last_id = mysqli_insert_id($mysqli);
               } else {

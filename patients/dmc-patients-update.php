@@ -21,11 +21,13 @@ if (!empty($admdate1)){
   
 
 
- $sql = "UPDATE picupatients SET BED='".$bed."',MRN='".$mrn."', PNAME='".$name."',
- ADMDATE=" . ($admdate==NULL ? "NULL" : "'".$admdate."'") . ", longterm='".$longterm."'
- , admissiondiagnosis='".$admissiondiagnosis."' WHERE ID='".$id."'";
-  
-                if ($mysqli->query($sql) === TRUE) {
+ $sql = "UPDATE picupatients SET BED=?,MRN=?, PNAME=?,
+ ADMDATE=?, longterm=?
+ , admissiondiagnosis=? WHERE ID=?";
+
+                $stmt = $mysqli->prepare($sql);
+                $stmt->bind_param("ssssssi", $bed, $mrn, $name, $admdate, $longterm, $admissiondiagnosis, $id);
+                if ($stmt->execute() === TRUE) {
                   $message= "Record updated successfully";
                 } else {
                  $message= "Error updating record: " . $mysqli->error;

@@ -28,16 +28,18 @@ require ('../dbconnect.php');
   }
 
   
-    $sql = "INSERT INTO consultations SET  MRN='".$mrn_new."',current_location='".$current_location."',BED='".$bed_new."', PNAME='".$pname_new."',
-    consultation_from='".$consultfrom_new."',consultation_date=" . ($consultdate_new==NULL ? "NULL" : "'".$consultdate_new."'") . ",age='".$age_new."'
-    , indication='".$indication_new."', entered_by_id='".$entered_by."', consultant_id='".$consultant_new."', other_ind='".$other_indication."', consultation_to_service='".$consultation_to_service."'";
-  
+    $sql = "INSERT INTO consultations SET  MRN=?,current_location=?,BED=?, PNAME=?,
+    consultation_from=?,consultation_date=?,age=?
+    , indication=?, entered_by_id=?, consultant_id=?, other_ind=?, consultation_to_service=?";
+
 
 
 //  $sql = "INSERT INTO picupatients (BED) VALUES ('$bed')";
 
-  
-                if ($mysqli->query($sql) === TRUE) {
+
+                $stmt = $mysqli->prepare($sql);
+                $stmt->bind_param("ssssssisiiss", $mrn_new, $current_location, $bed_new, $pname_new, $consultfrom_new, $consultdate_new, $age_new, $indication_new, $entered_by, $consultant_new, $other_indication, $consultation_to_service);
+                if ($stmt->execute() === TRUE) {
                     $message = "Record added successfully";
                   // $last_id = mysqli_insert_id($mysqli);
                   echo "<script language='javascript'>\n";

@@ -5,58 +5,68 @@ require ('../dbconnect.php');
 date_default_timezone_set('Asia/Riyadh');
 
     $q = "SELECT * FROM consultations WHERE MRN IS NOT NULL";
+            $conds = []; $types = ''; $params = [];
 
             if(isset($_REQUEST['mrn_consultation']) && !empty($_REQUEST['mrn_consultation'])){
-                $q .= " AND MRN='".$_REQUEST['mrn_consultation']."'";
+                $conds[] = "MRN=?"; $types .= 's'; $params[] = $_REQUEST['mrn_consultation'];
             }
 
             if(isset($_REQUEST['beforedate_consultation']) && !empty($_REQUEST['beforedate_consultation']) && !empty($_REQUEST['afterdate_consultation']) && !empty($_REQUEST['afterdate_consultation'])){
-                $q .= " AND (consultation_date BETWEEN '".$_REQUEST['beforedate_consultation']."' AND '".$_REQUEST['afterdate_consultation']."')";
+                $conds[] = "(consultation_date BETWEEN ? AND ?)"; $types .= 'ss'; $params[] = $_REQUEST['beforedate_consultation']; $params[] = $_REQUEST['afterdate_consultation'];
             }
 
             if(isset($_REQUEST['consultation_from']) && !empty($_REQUEST['consultation_from'])){
-                $q .= " AND consultation_from='".$_REQUEST['consultation_from']."'";
+                $conds[] = "consultation_from=?"; $types .= 's'; $params[] = $_REQUEST['consultation_from'];
                 // echo $_REQUEST['consultation_from'];
             }
 
             if(isset($_REQUEST['consultation_to_service']) && !empty($_REQUEST['consultation_to_service'])){
-                $q .= " AND consultation_to_service='".$_REQUEST['consultation_to_service']."'";
+                $conds[] = "consultation_to_service=?"; $types .= 's'; $params[] = $_REQUEST['consultation_to_service'];
             }
 
             if(isset($_REQUEST['agerange1_consultation']) && !empty($_REQUEST['agerange1_consultation']) && !empty($_REQUEST['agerange2_consultation']) && !empty($_REQUEST['agerange2_consultation'])){
-                $q .= " AND (age BETWEEN '".$_REQUEST['agerange1_consultation']."' AND '".$_REQUEST['agerange2_consultation']."')";
+                $conds[] = "(age BETWEEN ? AND ?)"; $types .= 'ii'; $params[] = $_REQUEST['agerange1_consultation']; $params[] = $_REQUEST['agerange2_consultation'];
             }
 
             if(isset($_REQUEST['consultant_consultations']) && !empty($_REQUEST['consultant_consultations'])){
-                $q .= " AND consultant_id='".$_REQUEST['consultant_consultations']."'";
+                $conds[] = "consultant_id=?"; $types .= 'i'; $params[] = $_REQUEST['consultant_consultations'];
             }
 
-            
+
             if(isset($_REQUEST['signoff']) && !empty($_REQUEST['signoff'])){
-                $q .= " AND signoff_date IS NOT NULL";
+                $conds[] = "signoff_date IS NOT NULL";
             }
 
             if(isset($_REQUEST['indications']) && !empty($_REQUEST['indications']) && is_array($_REQUEST['indications'])){
-               
+
                 // var_dump($_REQUEST['indications']);
                 $ddx = $_REQUEST['indications'];
                 $ddxcodewd= json_encode($ddx);
                 // var_dump($ddxcodewd);
                 if ($_REQUEST['indcondition'] == 'or'){
-                $q .= " AND JSON_OVERLAPS(indication, '$ddxcodewd')";
+                $conds[] = "JSON_OVERLAPS(indication, ?)"; $types .= 's'; $params[] = $ddxcodewd;
                 }elseif ($_REQUEST['indcondition'] == 'and'){
-                $q .= " AND JSON_CONTAINS(indication, '$ddxcodewd')";
+                $conds[] = "JSON_CONTAINS(indication, ?)"; $types .= 's'; $params[] = $ddxcodewd;
                 }
             }
+
+if ($conds) { $q .= " AND " . implode(" AND ", $conds); }
+
 // Count total results
 $count_q = "SELECT COUNT(*) as total FROM ($q) as subquery";
-$count_result = $mysqli->query($count_q);
+$count_stmt = $mysqli->prepare($count_q);
+if ($types !== '') { $count_stmt->bind_param($types, ...$params); }
+$count_stmt->execute();
+$count_result = $count_stmt->get_result();
 $total_results = $count_result->fetch_assoc()['total'];
 
 // Add LIMIT and OFFSET for pagination
 $q .= " LIMIT 250";
 
-$result1 = $mysqli->query($q);
+$stmt = $mysqli->prepare($q);
+if ($types !== '') { $stmt->bind_param($types, ...$params); }
+$stmt->execute();
+$result1 = $stmt->get_result();
 $searchresults = $result1 -> fetch_all(MYSQLI_ASSOC);
 // var_dump ($searchresults);
 
@@ -190,8 +200,11 @@ Results Found: ".$total_results." and showing ".count($searchresults)."
                                              
                                               <label style='text-align: center;margin-bottom: 0px;'>Consultant Covering</label>";
                                               $con_id= $s['consultant_id'];
-                                              $formationSQL = "SELECT * FROM members WHERE member_id='".$con_id."'";
-                                               $result1 = $mysqli->query($formationSQL);
+                                              $formationSQL = "SELECT * FROM members WHERE member_id=?";
+                                               $stmt = $mysqli->prepare($formationSQL);
+                                               $stmt->bind_param('i', $con_id);
+                                               $stmt->execute();
+                                               $result1 = $stmt->get_result();
                                                $doctor1 = $result1 -> fetch_array(MYSQLI_ASSOC);
                                                 if ($doctor1){
                                               echo"

@@ -5,8 +5,11 @@ require_once ('../dbconnect.php');
  $id = $_REQUEST['bookId']; 
 
 
-   $formationSQL = "SELECT * FROM consultations WHERE id='".$id."'";
-   $result1 = $mysqli->query($formationSQL);
+   $formationSQL = "SELECT * FROM consultations WHERE id=?";
+   $stmt = $mysqli->prepare($formationSQL);
+   $stmt->bind_param("i", $id);
+   $stmt->execute();
+   $result1 = $stmt->get_result();
    $patient = $result1 -> fetch_array(MYSQLI_ASSOC);
 
    $formationSQL = "SELECT * FROM countries";

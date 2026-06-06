@@ -26,92 +26,95 @@ require ('../dbconnect.php');
 date_default_timezone_set('Asia/Riyadh');
 
     $q = "SELECT * FROM picupatients WHERE ADMDATE IS NOT NULL";
+            $conds = []; $types = ''; $params = [];
 
             if(isset($_REQUEST['mrn']) && !empty($_REQUEST['mrn'])){
-                $q .= " AND MRN='".$_REQUEST['mrn']."'";
+                $conds[] = "MRN=?"; $types .= 's'; $params[] = $_REQUEST['mrn'];
             }
 
             if(isset($_REQUEST['beforedate']) && !empty($_REQUEST['beforedate']) && !empty($_REQUEST['afterdate']) && !empty($_REQUEST['afterdate'])){
-                $q .= " AND (ADMDATE BETWEEN '".$_REQUEST['beforedate']."' AND '".$_REQUEST['afterdate']."')";
+                $conds[] = "(ADMDATE BETWEEN ? AND ?)"; $types .= 'ss'; $params[] = $_REQUEST['beforedate']; $params[] = $_REQUEST['afterdate'];
             }
 
             if(isset($_REQUEST['admfrom']) && !empty($_REQUEST['admfrom'])){
-                $q .= " AND ADMFROM='".$_REQUEST['admfrom']."'";
+                $conds[] = "ADMFROM=?"; $types .= 's'; $params[] = $_REQUEST['admfrom'];
             }
 
             if(isset($_REQUEST['current_location']) && !empty($_REQUEST['current_location'])){
-              $q .= " AND current_location='".$_REQUEST['current_location']."'";
+              $conds[] = "current_location=?"; $types .= 's'; $params[] = $_REQUEST['current_location'];
           }
 
             if(isset($_REQUEST['dischargedto']) && !empty($_REQUEST['dischargedto'])){
-                $q .= " AND DISTO='".$_REQUEST['dischargedto']."'";
+                $conds[] = "DISTO=?"; $types .= 's'; $params[] = $_REQUEST['dischargedto'];
             }
 
             if(isset($_REQUEST['agerange1']) && !empty($_REQUEST['agerange1']) && !empty($_REQUEST['agerange2']) && !empty($_REQUEST['agerange2'])){
-                $q .= " AND (age BETWEEN '".$_REQUEST['agerange1']."' AND '".$_REQUEST['agerange2']."')";
+                $conds[] = "(age BETWEEN ? AND ?)"; $types .= 'ii'; $params[] = $_REQUEST['agerange1']; $params[] = $_REQUEST['agerange2'];
             }
 
             if(isset($_REQUEST['consultant']) && !empty($_REQUEST['consultant'])){
-                $q .= " AND consultant_id='".$_REQUEST['consultant']."'";
+                $conds[] = "consultant_id=?"; $types .= 'i'; $params[] = $_REQUEST['consultant'];
             }
 
             if(isset($_REQUEST['gender']) && !empty($_REQUEST['gender'])){
-                $q .= " AND gender='".$_REQUEST['gender']."'";
+                $conds[] = "gender=?"; $types .= 's'; $params[] = $_REQUEST['gender'];
             }
 
             if(isset($_REQUEST['mortality']) && !empty($_REQUEST['mortality'])){
-                $q .= " AND MORTALITY='".$_REQUEST['mortality']."'";
+                $conds[] = "MORTALITY=?"; $types .= 's'; $params[] = $_REQUEST['mortality'];
             }
 
             if(isset($_REQUEST['nationality']) && !empty($_REQUEST['nationality'])){
-                $q .= " AND nationality='".$_REQUEST['nationality']."'";
+                $conds[] = "nationality=?"; $types .= 's'; $params[] = $_REQUEST['nationality'];
             }
 
             if(isset($_REQUEST['delay']) && !empty($_REQUEST['delay'])){
-                $q .= " AND delay='".$_REQUEST['delay']."'";
+                $conds[] = "delay=?"; $types .= 's'; $params[] = $_REQUEST['delay'];
             }
 
             if(isset($_REQUEST['longterm']) && !empty($_REQUEST['longterm'])){
-                $q .= " AND longterm='".$_REQUEST['longterm']."'";
+                $conds[] = "longterm=?"; $types .= 's'; $params[] = $_REQUEST['longterm'];
             }
-            
+
             if(isset($_REQUEST['only']) && !empty($_REQUEST['only'])){
-                $q .= " AND DISDATE IS NOT NULL";
+                $conds[] = "DISDATE IS NOT NULL";
             }
 
             if(isset($_REQUEST['admissiondiagnosis']) && !empty($_REQUEST['admissiondiagnosis']) && is_array($_REQUEST['admissiondiagnosis'])){
-               
+
                 // echo"ahmed";
                 $ddx = $_REQUEST['admissiondiagnosis'];
                 $ddxcodewd= json_encode($ddx);
                 if ($_REQUEST['dxcondition'] == 'or'){
                         //  $q .= " AND JSON_OVERLAPS(admissiondiagnosis, '$ddxcodewd')";
-                      $q .= " AND (";
-                      $numItems = count($ddx);
-                      $i = 0;
+                      $orParts = [];
                       foreach ($ddx as $d){
-                        if(++$i === $numItems) {
-                        $q .= "JSON_CONTAINS(admissiondiagnosis, '[\"$d\"]')";
-                        }else{
-                        $q .= "JSON_CONTAINS(admissiondiagnosis, '[\"$d\"]') OR ";
-                        }
+                        $orParts[] = "JSON_CONTAINS(admissiondiagnosis, ?)"; $types .= 's'; $params[] = '["' . $d . '"]';
                       }
-                      $q .= ")";
+                      $conds[] = "(" . implode(" OR ", $orParts) . ")";
                 }elseif ($_REQUEST['dxcondition'] == 'and'){
-                      $q .= " AND JSON_CONTAINS(admissiondiagnosis, '$ddxcodewd')";
+                      $conds[] = "JSON_CONTAINS(admissiondiagnosis, ?)"; $types .= 's'; $params[] = $ddxcodewd;
                 }
             }
+
+if ($conds) { $q .= " AND " . implode(" AND ", $conds); }
 // echo $q;
 
 // Count total results
 $count_q = "SELECT COUNT(*) as total FROM ($q) as subquery";
-$count_result = $mysqli->query($count_q);
+$count_stmt = $mysqli->prepare($count_q);
+if ($types !== '') { $count_stmt->bind_param($types, ...$params); }
+$count_stmt->execute();
+$count_result = $count_stmt->get_result();
 $total_results = $count_result->fetch_assoc()['total'];
 
 // Add LIMIT and OFFSET for pagination
 $q .= " LIMIT 250";
 
-$result1 = $mysqli->query($q);
+$stmt = $mysqli->prepare($q);
+if ($types !== '') { $stmt->bind_param($types, ...$params); }
+$stmt->execute();
+$result1 = $stmt->get_result();
 $searchresults = $result1 -> fetch_all(MYSQLI_ASSOC);
 // var_dump ($searchresults);
 
@@ -153,8 +156,11 @@ while ($row = $memberResult->fetch_assoc()) {
                                                     
 
 
-                                                      $formationSQL = "SELECT * FROM picupatients WHERE DISDATE + INTERVAL 3 DAY >='".$s['ADMDATE']."' AND ID <'".$s['ID']."' AND MRN='".$s['MRN']."' AND (trans_discharge = 'discharge from ICU' or trans_discharge='discharge from ward' or trans_discharge IS NULL) LIMIT 1";
-                                                      $result1 = $mysqli->query($formationSQL);
+                                                      $formationSQL = "SELECT * FROM picupatients WHERE DISDATE + INTERVAL 3 DAY >=? AND ID <? AND MRN=? AND (trans_discharge = 'discharge from ICU' or trans_discharge='discharge from ward' or trans_discharge IS NULL) LIMIT 1";
+                                                      $stmt = $mysqli->prepare($formationSQL);
+                                                      $stmt->bind_param('sis', $s['ADMDATE'], $s['ID'], $s['MRN']);
+                                                      $stmt->execute();
+                                                      $result1 = $stmt->get_result();
                                                         $recentadmission = $result1 -> fetch_all(MYSQLI_ASSOC);
                                                         // var_dump($recentadmission);
                                                                   // searching for readmissions

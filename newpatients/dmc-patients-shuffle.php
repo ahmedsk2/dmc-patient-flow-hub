@@ -46,8 +46,10 @@ $max_subs= $settings['max_subs'];
 
 /// resetting new labeling
 // $sql = "UPDATE picupatients SET newassign= Null,  consultant_id = Null limit 25";
-$sql = "UPDATE picupatients SET newassign= Null WHERE assigned_on != '".$today."'";
-        if ($mysqli->query($sql) === TRUE) {
+$sql = "UPDATE picupatients SET newassign= Null WHERE assigned_on != ?";
+        $stmt = $mysqli->prepare($sql);
+        $stmt->bind_param("s", $today);
+        if ($stmt->execute() === TRUE) {
             $message= "New labeling Rest done";
           } else {
            $message= "Error New labeling Rest: " . $mysqli->error;
@@ -82,8 +84,10 @@ while ($n_new_icu_patients > 0){
     foreach ($hospitalist as $h){
 
     $n_new_icu_patients--;
-    $sql = "UPDATE picupatients SET consultant_id='".$h['member_id']."', newassign='1', assigned_on='".$today."' WHERE DISDATE IS NULL AND current_location = 'ICU' AND consultant_id IS NULL Limit 1";
-    if ($mysqli->query($sql) === TRUE) {
+    $sql = "UPDATE picupatients SET consultant_id=?, newassign='1', assigned_on=? WHERE DISDATE IS NULL AND current_location = 'ICU' AND consultant_id IS NULL Limit 1";
+    $stmt = $mysqli->prepare($sql);
+    $stmt->bind_param("is", $h['member_id'], $today);
+    if ($stmt->execute() === TRUE) {
         $message= "</br> ICU Records Record updated successfully </br>";
     } else {
     $message= "Error updating record: " . $mysqli->error;
@@ -162,8 +166,10 @@ while (($leastcount <= ($min_hospitalist-1)) && $n_newpatients > 0){
         if ($hc < $min_hospitalist){
             $hospitalist_count[$key]++;
             $n_newpatients--;
-            $sql = "UPDATE picupatients SET consultant_id='".$key."',newassign='1', assigned_on='".$today."' WHERE DISDATE IS NULL AND consultant_id IS NULL Limit 1";
-            if ($mysqli->query($sql) === TRUE) {
+            $sql = "UPDATE picupatients SET consultant_id=?,newassign='1', assigned_on=? WHERE DISDATE IS NULL AND consultant_id IS NULL Limit 1";
+            $stmt = $mysqli->prepare($sql);
+            $stmt->bind_param("is", $key, $today);
+            if ($stmt->execute() === TRUE) {
                 $message= "</br> First Round ( fill all hospitalist with less than 8 patients ): Record updated successfully </br>";
             } else {
             $message= "Error updating record: " . $mysqli->error;
@@ -195,8 +201,10 @@ if($leastcount >= $min_hospitalist && $n_newpatients>0){
             if ($hc < $max_hospitalist){
                 $hospitalist_count[$key]++;
                 $n_newpatients--;
-                $sql = "UPDATE picupatients SET consultant_id='".$key."',newassign='1', assigned_on='".$today."' WHERE DISDATE IS NULL AND consultant_id IS NULL Limit 1";
-                if ($mysqli->query($sql) === TRUE) {
+                $sql = "UPDATE picupatients SET consultant_id=?,newassign='1', assigned_on=? WHERE DISDATE IS NULL AND consultant_id IS NULL Limit 1";
+                $stmt = $mysqli->prepare($sql);
+                $stmt->bind_param("is", $key, $today);
+                if ($stmt->execute() === TRUE) {
                     $message= "</br> second Round ( all hospitalist have 8 patients or more ): Record updated successfully </br>";
                 } else {
                 $message= "Error updating record: " . $mysqli->error;
@@ -252,8 +260,10 @@ if ($leastcount>=$max_hospitalist && $n_newpatients>0){
                 if ($hc < $max_subs){
                     $subspeciality_count[$key]++;
                     $n_newpatients--;
-                    $sql = "UPDATE picupatients SET consultant_id='".$key."',newassign='1', assigned_on='".$today."' WHERE DISDATE IS NULL AND consultant_id IS NULL Limit 1";
-                    if ($mysqli->query($sql) === TRUE) {
+                    $sql = "UPDATE picupatients SET consultant_id=?,newassign='1', assigned_on=? WHERE DISDATE IS NULL AND consultant_id IS NULL Limit 1";
+                    $stmt = $mysqli->prepare($sql);
+                    $stmt->bind_param("is", $key, $today);
+                    if ($stmt->execute() === TRUE) {
                         $message= "</br> third round ( all hospitalist have 15 and fill subspeciality with less than 5 ): Record updated successfully </br>";
                     } else {
                     $message= "Error updating record: " . $mysqli->error;
@@ -283,8 +293,10 @@ if ($subcount>=5 && $n_newpatients>0){
             
                 $hospitalist_count[$key]++;
                 $n_newpatients--;
-                $sql = "UPDATE picupatients SET consultant_id='".$key."',newassign='1', assigned_on='".$today."' WHERE DISDATE IS NULL AND consultant_id IS NULL Limit 1";
-                if ($mysqli->query($sql) === TRUE) {
+                $sql = "UPDATE picupatients SET consultant_id=?,newassign='1', assigned_on=? WHERE DISDATE IS NULL AND consultant_id IS NULL Limit 1";
+                $stmt = $mysqli->prepare($sql);
+                $stmt->bind_param("is", $key, $today);
+                if ($stmt->execute() === TRUE) {
                     $message= "</br> Last round (Give extra to hospitalist as subs already have 5 ): Record updated successfully </br>";
                 } else {
                 $message= "Error updating record: " . $mysqli->error;

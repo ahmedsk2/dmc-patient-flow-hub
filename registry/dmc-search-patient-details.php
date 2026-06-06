@@ -6,8 +6,11 @@ require ('../dbconnect.php');
    $id = $_REQUEST['bookId']; 
 
 
-   $formationSQL = "SELECT * FROM picupatients WHERE ID='".$id."'";
-   $result1 = $mysqli->query($formationSQL);
+   $formationSQL = "SELECT * FROM picupatients WHERE ID=?";
+   $stmt = $mysqli->prepare($formationSQL);
+   $stmt->bind_param('i', $id);
+   $stmt->execute();
+   $result1 = $stmt->get_result();
    $patient = $result1 -> fetch_array(MYSQLI_ASSOC);
 
    $formationSQL = "SELECT * FROM countries";
@@ -109,11 +112,14 @@ $decodedadmissiondx=json_decode($patient['admissiondiagnosis']);
 <?php
 
 if (is_array($decodedadmissiondx)){
-        
+
+        $formationSQL = "SELECT * FROM icd10 WHERE id=?";
+        $stmt = $mysqli->prepare($formationSQL);
         foreach($decodedadmissiondx as $key => $value)
   {
-    $formationSQL = "SELECT * FROM icd10 WHERE id='".$value."'";
-		$result1 = $mysqli->query($formationSQL);
+    $stmt->bind_param('s', $value);
+		$stmt->execute();
+		$result1 = $stmt->get_result();
 		$dxlist = $result1 -> fetch_array(MYSQLI_ASSOC);
       // $selected = in_array($key, $decodedP) ? 'selected ' : '';
 

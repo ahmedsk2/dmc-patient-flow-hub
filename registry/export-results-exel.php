@@ -22,12 +22,16 @@ include('../vendor/PHPExcel.php');
 
 
 date_default_timezone_set('Asia/Riyadh');
+$types = ''; $params = [];
 if(isset($_POST['search_keyword_btn'])){
-                    
+
                 $keyword=$_REQUEST['keyword'];
 
-                $icd10q = "SELECT * FROM icd10 WHERE name like '%$keyword%'";
-                $result1 = $mysqli->query($icd10q);
+                $icd10q = "SELECT * FROM icd10 WHERE name like CONCAT('%', ?, '%')";
+                $icd10stmt = $mysqli->prepare($icd10q);
+                $icd10stmt->bind_param('s', $keyword);
+                $icd10stmt->execute();
+                $result1 = $icd10stmt->get_result();
                 $icd10list = $result1 -> fetch_all(MYSQLI_ASSOC);
 
                 // var_dump($icd10list);
@@ -40,109 +44,109 @@ if(isset($_POST['search_keyword_btn'])){
 
                     $q = "SELECT * FROM picupatients WHERE ADMDATE IS NOT NULL";
 
-                        
-                            
+
+
                                 // echo"ahmed";
-                            
-                            
+
+
                                     $q .= " AND (";
                                     $numItems = count($icd10list);
                                     $i = 0;
                                     foreach ($icd10list as $d){
                                         $dd=$d['id'];
                                         if(++$i === $numItems) {
-                                        $q .= "JSON_CONTAINS(admissiondiagnosis, '[\"$dd\"]')";
+                                        $q .= "JSON_CONTAINS(admissiondiagnosis, ?)"; $types .= 's'; $params[] = '["' . $dd . '"]';
                                         }else{
-                                        $q .= "JSON_CONTAINS(admissiondiagnosis, '[\"$dd\"]') OR ";
+                                        $q .= "JSON_CONTAINS(admissiondiagnosis, ?) OR "; $types .= 's'; $params[] = '["' . $dd . '"]';
                                         }
                                     }
                                     $q .= ")";
-                            
-                        
+
+
                 }
 }else if(isset($_POST["search_btn"])){
 
         $q = "SELECT * FROM picupatients WHERE ADMDATE IS NOT NULL";
+                $conds = [];
 
                 if(isset($_REQUEST['mrn']) && !empty($_REQUEST['mrn'])){
-                    $q .= " AND MRN='".$_REQUEST['mrn']."'";
+                    $conds[] = "MRN=?"; $types .= 's'; $params[] = $_REQUEST['mrn'];
                 }
 
                 if(isset($_REQUEST['beforedate']) && !empty($_REQUEST['beforedate']) && !empty($_REQUEST['afterdate']) && !empty($_REQUEST['afterdate'])){
-                    $q .= " AND (ADMDATE BETWEEN '".$_REQUEST['beforedate']."' AND '".$_REQUEST['afterdate']."')";
+                    $conds[] = "(ADMDATE BETWEEN ? AND ?)"; $types .= 'ss'; $params[] = $_REQUEST['beforedate']; $params[] = $_REQUEST['afterdate'];
                 }
 
                 if(isset($_REQUEST['admfrom']) && !empty($_REQUEST['admfrom'])){
-                    $q .= " AND ADMFROM='".$_REQUEST['admfrom']."'";
+                    $conds[] = "ADMFROM=?"; $types .= 's'; $params[] = $_REQUEST['admfrom'];
                 }
 
                 if(isset($_REQUEST['current_location']) && !empty($_REQUEST['current_location'])){
-                $q .= " AND current_location='".$_REQUEST['current_location']."'";
+                $conds[] = "current_location=?"; $types .= 's'; $params[] = $_REQUEST['current_location'];
             }
 
                 if(isset($_REQUEST['dischargedto']) && !empty($_REQUEST['dischargedto'])){
-                    $q .= " AND DISTO='".$_REQUEST['dischargedto']."'";
+                    $conds[] = "DISTO=?"; $types .= 's'; $params[] = $_REQUEST['dischargedto'];
                 }
 
                 if(isset($_REQUEST['agerange1']) && !empty($_REQUEST['agerange1']) && !empty($_REQUEST['agerange2']) && !empty($_REQUEST['agerange2'])){
-                    $q .= " AND (age BETWEEN '".$_REQUEST['agerange1']."' AND '".$_REQUEST['agerange2']."')";
+                    $conds[] = "(age BETWEEN ? AND ?)"; $types .= 'ii'; $params[] = $_REQUEST['agerange1']; $params[] = $_REQUEST['agerange2'];
                 }
 
                 if(isset($_REQUEST['consultant']) && !empty($_REQUEST['consultant'])){
-                    $q .= " AND consultant_id='".$_REQUEST['consultant']."'";
+                    $conds[] = "consultant_id=?"; $types .= 'i'; $params[] = $_REQUEST['consultant'];
                 }
 
                 if(isset($_REQUEST['gender']) && !empty($_REQUEST['gender'])){
-                    $q .= " AND gender='".$_REQUEST['gender']."'";
+                    $conds[] = "gender=?"; $types .= 's'; $params[] = $_REQUEST['gender'];
                 }
 
                 if(isset($_REQUEST['mortality']) && !empty($_REQUEST['mortality'])){
-                    $q .= " AND MORTALITY='".$_REQUEST['mortality']."'";
+                    $conds[] = "MORTALITY=?"; $types .= 's'; $params[] = $_REQUEST['mortality'];
                 }
 
                 if(isset($_REQUEST['nationality']) && !empty($_REQUEST['nationality'])){
-                    $q .= " AND nationality='".$_REQUEST['nationality']."'";
+                    $conds[] = "nationality=?"; $types .= 's'; $params[] = $_REQUEST['nationality'];
                 }
 
                 if(isset($_REQUEST['delay']) && !empty($_REQUEST['delay'])){
-                    $q .= " AND delay='".$_REQUEST['delay']."'";
+                    $conds[] = "delay=?"; $types .= 's'; $params[] = $_REQUEST['delay'];
                 }
 
                 if(isset($_REQUEST['longterm']) && !empty($_REQUEST['longterm'])){
-                    $q .= " AND longterm='".$_REQUEST['longterm']."'";
+                    $conds[] = "longterm=?"; $types .= 's'; $params[] = $_REQUEST['longterm'];
                 }
-                
+
                 if(isset($_REQUEST['only']) && !empty($_REQUEST['only'])){
-                    $q .= " AND DISDATE IS NOT NULL";
+                    $conds[] = "DISDATE IS NOT NULL";
                 }
 
                 if(isset($_REQUEST['admissiondiagnosis']) && !empty($_REQUEST['admissiondiagnosis']) && is_array($_REQUEST['admissiondiagnosis'])){
-                
+
                     // echo"ahmed";
                     $ddx = $_REQUEST['admissiondiagnosis'];
                     $ddxcodewd= json_encode($ddx);
                     if ($_REQUEST['dxcondition'] == 'or'){
                             //  $q .= " AND JSON_OVERLAPS(admissiondiagnosis, '$ddxcodewd')";
-                        $q .= " AND (";
-                        $numItems = count($ddx);
-                        $i = 0;
+                        $orParts = [];
                         foreach ($ddx as $d){
-                            if(++$i === $numItems) {
-                            $q .= "JSON_CONTAINS(admissiondiagnosis, '[\"$d\"]')";
-                            }else{
-                            $q .= "JSON_CONTAINS(admissiondiagnosis, '[\"$d\"]') OR ";
-                            }
+                            $orParts[] = "JSON_CONTAINS(admissiondiagnosis, ?)"; $types .= 's'; $params[] = '["' . $d . '"]';
                         }
-                        $q .= ")";
+                        $conds[] = "(" . implode(" OR ", $orParts) . ")";
                     }elseif ($_REQUEST['dxcondition'] == 'and'){
-                        $q .= " AND JSON_CONTAINS(admissiondiagnosis, '$ddxcodewd')";
+                        $conds[] = "JSON_CONTAINS(admissiondiagnosis, ?)"; $types .= 's'; $params[] = $ddxcodewd;
                     }
                 }
+
+                if ($conds) { $q .= " AND " . implode(" AND ", $conds); }
     // echo $q;
 }
 
 $items = array();
-$result = $mysqli->query($q);
+$stmt = $mysqli->prepare($q);
+if ($types !== '') { $stmt->bind_param($types, ...$params); }
+$stmt->execute();
+$result = $stmt->get_result();
 $export="";
 
 
@@ -278,13 +282,16 @@ while($row  =   $result->fetch_assoc()){
  
  $decodedadmissiondx=json_decode($row['admissiondiagnosis']);
  if (is_array($decodedadmissiondx)){
-    $diagnosis="";                                 
+    $diagnosis="";
+    $formationSQL = "SELECT * FROM icd10 WHERE id=?";
+    $dxstmt = $mysqli->prepare($formationSQL);
     foreach($decodedadmissiondx as $key => $value)
 {
-$formationSQL = "SELECT * FROM icd10 WHERE id='".$value."'";
-$result1 = $mysqli->query($formationSQL);
+$dxstmt->bind_param('s', $value);
+$dxstmt->execute();
+$result1 = $dxstmt->get_result();
 $dxlist = $result1 -> fetch_array(MYSQLI_ASSOC);
- 
+
 
 $diagnosis .=  $dxlist['name']. '  ||  ';
 }}
@@ -300,8 +307,11 @@ $diagnosis .=  $dxlist['name']. '  ||  ';
 
     
  $con_id= $row['consultant_id'];
- $formationSQL = "SELECT * FROM members WHERE member_id='".$con_id."'";
- $result1 = $mysqli->query($formationSQL);
+ $formationSQL = "SELECT * FROM members WHERE member_id=?";
+ $constmt = $mysqli->prepare($formationSQL);
+ $constmt->bind_param('i', $con_id);
+ $constmt->execute();
+ $result1 = $constmt->get_result();
  $doctor1 = $result1 -> fetch_array(MYSQLI_ASSOC);
  $doctorname="";
     if ($doctor1){

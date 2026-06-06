@@ -41,20 +41,18 @@ if (isset($_GET['export']) && $_GET['export'] === '1') {
 
     // 2) Build WHERE identical to page (no LIMIT)
     $where = "p.ADMDATE IS NOT NULL";
+    $types = ''; $params = [];
 
     if ($from !== '' && $valid_date($from)) {
-        $from_esc = $mysqli->real_escape_string($from);
-        $where .= " AND p.ADMDATE >= '{$from_esc}'";
+        $where .= " AND p.ADMDATE >= ?"; $types .= 's'; $params[] = $from;
     }
     if ($to !== '' && $valid_date($to)) {
-        $to_esc = $mysqli->real_escape_string($to);
-        $where .= " AND p.ADMDATE <= '{$to_esc}'";
+        $where .= " AND p.ADMDATE <= ?"; $types .= 's'; $params[] = $to;
     }
 
     $jsonParts = [];
     foreach ($icd10_ids as $id) {
-        $id_esc = $mysqli->real_escape_string($id);
-        $jsonParts[] = "JSON_CONTAINS(p.admissiondiagnosis, '[\"{$id_esc}\"]')";
+        $jsonParts[] = "JSON_CONTAINS(p.admissiondiagnosis, ?)"; $types .= 's'; $params[] = '["' . (string)$id . '"]';
     }
     $where .= " AND (" . implode(' OR ', $jsonParts) . ")";
 
@@ -71,11 +69,14 @@ if (isset($_GET['export']) && $_GET['export'] === '1') {
     }
 
     // Query rows
-    if (!$rs = $mysqli->query($q)) {
+    if (!$stmt = $mysqli->prepare($q)) {
         header('Content-Type: text/plain; charset=utf-8');
         echo "Query error: " . $mysqli->error;
         exit;
     }
+    if ($types !== '') { $stmt->bind_param($types, ...$params); }
+    $stmt->execute();
+    $rs = $stmt->get_result();
 
     // CSV headers
     $filename = "patients_export_" . date('Ymd_His') . ".csv";
@@ -203,23 +204,21 @@ if (count($icd10_ids) > 0) {
 
     // base WHERE
     $where = "p.ADMDATE IS NOT NULL";
+    $types = ''; $params = [];
 
     // date range (supports any combo: both, from-only, to-only)
     if ($from !== '' && $valid_date($from)) {
-        $from_esc = $mysqli->real_escape_string($from);
-        $where .= " AND p.ADMDATE >= '{$from_esc}'";
+        $where .= " AND p.ADMDATE >= ?"; $types .= 's'; $params[] = $from;
     }
     if ($to !== '' && $valid_date($to)) {
-        $to_esc = $mysqli->real_escape_string($to);
-        $where .= " AND p.ADMDATE <= '{$to_esc}'";
+        $where .= " AND p.ADMDATE <= ?"; $types .= 's'; $params[] = $to;
     }
 
     // JSON_CONTAINS OR chain
     $jsonParts = [];
     foreach ($icd10_ids as $id) {
         // store as string in JSON (your original code used '["$dd"]')
-        $id_esc = $mysqli->real_escape_string((string)$id);
-        $jsonParts[] = "JSON_CONTAINS(p.admissiondiagnosis, '[\"{$id_esc}\"]')";
+        $jsonParts[] = "JSON_CONTAINS(p.admissiondiagnosis, ?)"; $types .= 's'; $params[] = '["' . (string)$id . '"]';
     }
     if (!empty($jsonParts)) {
         $where .= " AND (" . implode(" OR ", $jsonParts) . ")";
@@ -230,15 +229,21 @@ if (count($icd10_ids) > 0) {
     $count_q = "SELECT COUNT(*) AS total FROM picupatients p WHERE {$where}";
 
     // Count
-    if (!$count_result = $mysqli->query($count_q)) {
+    if (!$count_stmt = $mysqli->prepare($count_q)) {
         die("Count error: " . $mysqli->error);
     }
+    if ($types !== '') { $count_stmt->bind_param($types, ...$params); }
+    $count_stmt->execute();
+    $count_result = $count_stmt->get_result();
     $total_results = (int)$count_result->fetch_assoc()['total'];
 
     // Fetch rows
-    if (!$result1 = $mysqli->query($q)) {
+    if (!$stmt = $mysqli->prepare($q)) {
         die("Query error: " . $mysqli->error);
     }
+    if ($types !== '') { $stmt->bind_param($types, ...$params); }
+    $stmt->execute();
+    $result1 = $stmt->get_result();
     $searchresults = $result1->fetch_all(MYSQLI_ASSOC);
 
     // Lookups you use later
@@ -292,8 +297,11 @@ echo"
                          
 
 
-                                                      $formationSQL = "SELECT * FROM picupatients WHERE DISDATE + INTERVAL 3 DAY >='".$s['ADMDATE']."' AND ID <'".$s['ID']."' AND MRN='".$s['MRN']."' AND (trans_discharge = 'discharge from ICU' or trans_discharge='discharge from ward' or trans_discharge IS NULL) LIMIT 1";
-                                                      $result1 = $mysqli->query($formationSQL);
+                                                      $formationSQL = "SELECT * FROM picupatients WHERE DISDATE + INTERVAL 3 DAY >=? AND ID <? AND MRN=? AND (trans_discharge = 'discharge from ICU' or trans_discharge='discharge from ward' or trans_discharge IS NULL) LIMIT 1";
+                                                      $stmt = $mysqli->prepare($formationSQL);
+                                                      $stmt->bind_param('sis', $s['ADMDATE'], $s['ID'], $s['MRN']);
+                                                      $stmt->execute();
+                                                      $result1 = $stmt->get_result();
                                                         $recentadmission = $result1 -> fetch_all(MYSQLI_ASSOC);
                                                         // var_dump($recentadmission);
 

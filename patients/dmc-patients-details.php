@@ -1,12 +1,14 @@
 <?php
+require_once __DIR__ . '/../guard.php'; require_login();
 
 require_once ('../dbconnect.php');
-   $id = $_REQUEST['bookId']; 
+   $id = $_REQUEST['bookId'];
 
 
-   $formationSQL = "SELECT * FROM picupatients WHERE ID='".$id."'";
-   $result1 = $mysqli->query($formationSQL);
-   $patient = $result1 -> fetch_array(MYSQLI_ASSOC);
+   $stmt = $mysqli->prepare("SELECT * FROM picupatients WHERE ID = ?");
+   $stmt->bind_param("i", $id);
+   $stmt->execute();
+   $patient = $stmt->get_result()->fetch_array(MYSQLI_ASSOC);
 
    $formationSQL = "SELECT * FROM countries";
    $result1 = $mysqli->query($formationSQL);
@@ -82,7 +84,7 @@ else{
 
 </script>
 <form autocomplete="off">
-<input type="hidden" id='id_modify' value='<?php echo $id; ?>'>
+<input type="hidden" id='id_modify' value='<?php echo htmlspecialchars($id, ENT_QUOTES, 'UTF-8'); ?>'>
 <label>Bed Number</label>
 <input class='txtdata' id='bed_modify' value='<?php echo $patient['BED']; ?>' style='text-align: center;' required>
 <label>Patient Location</label>
@@ -163,9 +165,10 @@ if (is_array($decodedadmissiondx)){
         
         foreach($decodedadmissiondx as $key => $value)
   {
-    $formationSQL = "SELECT * FROM icd10 WHERE id='".$value."'";
-		$result1 = $mysqli->query($formationSQL);
-		$dxlist = $result1 -> fetch_array(MYSQLI_ASSOC);
+    $dxstmt = $mysqli->prepare("SELECT * FROM icd10 WHERE id = ?");
+		$dxstmt->bind_param("s", $value);
+		$dxstmt->execute();
+		$dxlist = $dxstmt->get_result()->fetch_array(MYSQLI_ASSOC);
       // $selected = in_array($key, $decodedP) ? 'selected ' : '';
 
       echo '<option selected value="' . $dxlist['id'] . '">'.  $dxlist['name']. '</option>';
