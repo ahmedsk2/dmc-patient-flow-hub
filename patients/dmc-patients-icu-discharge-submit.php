@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../guard.php'; require_login();
+csrf_verify();
  
 require ('../dbconnect.php');
 $id = $_REQUEST['id_modify']; 

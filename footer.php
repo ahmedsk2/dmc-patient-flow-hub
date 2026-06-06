@@ -1,4 +1,5 @@
 
+<?php require_once __DIR__ . '/csrf.php'; ?>
   <!-- Main Footer -->
   <footer class="main-footer">
   <strong>Designed by <a href="mailto: ahmedsk2@gmail.com">Dr. Ahmed Al-Khalifah</a> and <a href="mailto: alih6234@gmail.com">Dr. Ali Al-Saeed</a></strong>
@@ -13,6 +14,18 @@
 
    <!-- jQuery -->
   <script src="vendor/jquery-3.7.1.min.js"></script>
+  <!-- CSRF: attach the synchronizer token to every state-changing AJAX request -->
+  <script>
+    window.DMC_CSRF = <?php echo json_encode(csrf_token()); ?>;
+    if (window.jQuery) {
+      $(document).ajaxSend(function (e, xhr, settings) {
+        var m = (settings.type || 'GET').toUpperCase();
+        if (m !== 'GET' && m !== 'HEAD' && m !== 'OPTIONS') {
+          xhr.setRequestHeader('X-CSRF-Token', window.DMC_CSRF);
+        }
+      });
+    }
+  </script>
 
   <!-- AdminLTE App -->
 <script src="dist/js/adminlte.js"></script>
