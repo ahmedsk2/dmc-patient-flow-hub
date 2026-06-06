@@ -3,7 +3,8 @@
 > **Living project-management doc.** Notes + to-dos for the DMC patient-flow renovation,
 > updated as we go until we reach the final product. Companion to
 > [`RENOVATION-PLAN.md`](RENOVATION-PLAN.md) (the roadmap & rationale),
-> [`REVIEW-FINDINGS.md`](REVIEW-FINDINGS.md) (finding IDs), [`CLAUDE.md`](CLAUDE.md) (architecture).
+> [`REVIEW-FINDINGS.md`](REVIEW-FINDINGS.md) (finding IDs), [`CLAUDE.md`](CLAUDE.md) (architecture),
+> and [`DEPLOY.md`](DEPLOY.md) (the at-deploy runbook + smoke-test checklist).
 
 **Status key:** ⬜ to-do · 🔄 in progress · ✅ done · ⏸️ blocked / awaiting decision
 **Convention:** each to-do is one line — `status — action — (plan item / finding IDs) — priority`.
@@ -26,6 +27,8 @@ _Last updated: 2026-06-06_
 ---
 
 ## Notes & decisions  _(newest first)_
+
+- **2026-06-06 — Batch 16 (PHP 8.3 mysqli compatibility) DONE** (branch `renovation`). `dbconnect.php` now calls **`mysqli_report(MYSQLI_REPORT_OFF)`** before connecting. PHP 8.1+ defaults mysqli to *throw* `mysqli_sql_exception` on error; this codebase is written for the classic *return-false / check `->error`* style and relies on it for the graceful `$message` paths **and** the Batch-14 transaction rollback guards. Without this, on PHP 8.3 every DB error would surface as an uncaught exception (blank 500 under `display_errors=Off`) and rollbacks would not fire. Legacy-compatible fix; a try/catch + exception migration is a later-phase modernization. **⚠️ Important for the PHP 8.3 deploy.** Not runtime-tested.
 
 - **2026-06-06 — Batch 15 (no DB-error leaks to clients, C4) DONE** (branch `renovation`). Swept **~25 endpoints** (via 4 parallel sub-agents, non-overlapping file sets) to stop echoing/dying with `$mysqli->error` / `$stmt->error`; each now logs the real error server-side (`error_log(__FILE__ . …)`) and returns a generic message. Covers the public auth files (`forget-password-email`, `send-reset-pass-by-admin`, `reset-password`), registry search/diagnosis, the patient write/discharge/transfer/shuffle handlers, consultation add/modify, and user-management. Success (`…successfully`) strings + all SQL/control-flow untouched, so the Batch-12 response-aware UI still works. Grep-verified: no `echo`/`die`/`print`/`$message`/`$response` path concatenates `->error` anymore. ⏸️ A single formal error-handler/exception layer remains a Phase-3 nicety. Not runtime-tested.
 
