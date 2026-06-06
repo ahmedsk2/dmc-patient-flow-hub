@@ -39,7 +39,8 @@ _Last updated: 2026-06-06_
   `config.local.php` (live creds), `php_errorlog` — git-ignored and verified absent from all history.
   **Remaining work is blocked on your input** (CLIN-01…09 clinical definitions, permission model,
   canonical "active patient" definition for de-dup, soft-delete policy, UI/UX overhaul, CSP/`eval`
-  removal) **or on runtime verification.** Two local branches: `main` (baseline) + `renovation` (the work).
+  removal) **or on runtime verification.** Pushed to **https://github.com/ahmedsk2/dmc-patient-flow-hub**
+  (PRIVATE; default branch `main` = baseline, `renovation` = the work — open a PR `renovation → main` to review the full diff).
 
 - **2026-06-06 — Batches 18–19 (safe-polish grind: error safety net + audit coverage) DONE** (branch `renovation`). **B18:** new `error-handler.php` (registered first thing in `config.php`) installs a `set_exception_handler` + fatal `register_shutdown_function` — uncaught exceptions / fatals now log server-side and return a generic message instead of a blank/half 500. Deliberately **no** `set_error_handler` (warnings keep PHP's normal logged-but-hidden path; avoids log-flooding + `@` surprises). **B19 (R1 audit completeness):** wired `audit_log()` into the writes that were previously untracked — both inline list edits (`patient.update {field}`), ward→ICU transfer (`patient.icu_transfer`), the three consultant-assignment paths (`patient.assign {to}`), the bulk shuffle (`patients.shuffle`), and the registry patient edit (`patient.modify {via:registry}`, which also gained the missing W3 validation). All on the success path, actor from session, fail-safe. Not runtime-tested.
 
