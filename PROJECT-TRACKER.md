@@ -18,7 +18,7 @@ _Last updated: 2026-06-06_
 |---|---|---|
 | Review & planning (read-only) | 4 / 4 | ✅ complete |
 | Phase 0 — Containment | 3 ✅ · 1 🔄 · 3 ⏸️ ops | 🔄 in progress |
-| Phase 1 — Critical security & data integrity | 10 ✅ · 4 🔄 (of 16) | 🔄 in progress |
+| Phase 1 — Critical security & data integrity | 11 ✅ · 3 🔄 (of 16) | 🔄 in progress |
 | Phase 2 — Stabilize | 3 ✅ · 1 🔄 (of 8) | 🔄 in progress |
 | Phase 3 — Refactor + UI/UX | 0 / 6 | not started |
 | Phase 4 — Re-platform (decision-gated) | 0 / 2 | not started |
@@ -27,6 +27,8 @@ _Last updated: 2026-06-06_
 ---
 
 ## Notes & decisions  _(newest first)_
+
+- **✅ 2026-06-06 — Batches 23–26 (perf + S1 server-side authorization; all runtime-tested on WAMP) DONE.** **B23:** `dashboard/1.php` 30-day overview **2.2s → 1.0s** (31 full-table scans → 2 indexed `GROUP BY`). **B24–26 — closes S1 ("authorization is cosmetic" / IDOR):** clinical action endpoints **and** page handlers now enforce server-side exactly what the UI showed — clinical roles only `[0,2,3,4]` (no Observer); capability flags 1:1 with the buttons (`add_new_patient` → admission/ICU-admit, `assign_access` → shuffle/assign-to-primary, `modify_patient` → modify modal); and **object-level ownership** via new `require_patient_access()` / `require_consultation_access()` (Admin OR Can-Manage OR the patient's own consultant) on ward/ICU/complete discharge, transfer, reverse-discharge, and consultation sign-off. `sidebar.php` now loads `guard.php` so page handlers share the helpers (all `function_exists`-guarded; no behavior change). **Runtime matrix verified:** Observer → 403 on all writes; Resident w/o flags → 403 on admission/modify/others'-discharge but 200 on inline-edit; Resident *as the patient's consultant* → 200 on discharge; Admin → 200 throughout; all 13 main pages still 200; all 86 files lint clean. Also removed leftover sign-off debug echoes.
 
 - **✅ 2026-06-06 — RUNTIME-VALIDATED on local WAMP (PHP 8.3.28 + MySQL 8.4.7, full 14.8k-patient DB).** Imported `Demo.sql`, ran **migrations 01–03 clean** (picupatients→InnoDB + all 5 indexes; `audit_log`/`password_resets` created; `member_password`→varchar(255)). Served via `php -S` with a seeded test admin. **All 86 PHP files lint clean on 8.3.** Passed end-to-end: bootstrap (config→error-handler→dbconnect `mysqli_report(OFF)`→csrf→session); **login** (CSRF + bcrypt `password_verify` + `session_regenerate_id` + pass-expiry); **auth guard** (unauth action → 302 to login); **CSRF guard** (missing token → 419; valid token accepted); prepared SELECT/UPDATE on real data; **W3 validation** (invalid MRN → rejected, no DB write); **audit_log** write (actor from session, correct details). **Perf:** `dmc-patients.php` 0.33s on 14.8k rows; **fixed `dashboard/3.php` 70.8s → 0.14s** (Batch 21, byte-identical output — the JSON_CONTAINS×icd10 cross-join). ⬜ Remaining to verify: `dashboard/1.php` 2.2s (31-day loop, minor perf); the clinical **UI/JS layer** (W1/W4 confirmation dialogs, response-aware saves) is best exercised in a browser; discharge/transfer **transactions** not yet driven end-to-end. Stats sargability/cross-column items still await clinical sign-off.
 
@@ -113,7 +115,7 @@ _(Add new notes/decisions above this line as we go.)_
 - ✅ Delete committed `php_errorlog` files (~36 MB removed) — (X1 / SIMP-01); ⏸️ also set `display_errors=Off` in server `php.ini` (the raw DB-error leak is already removed in code)
 
 ### Phase 1 — Critical security & data integrity (P1 — ~4-6 wks)
-- 🔄 **Central server-side auth guard** — `guard.php` + **authentication enforced on all 42 action endpoints** (Batch 2); ⬜ fine-grained role/ownership + page-file handler-ordering = Batch 3 — (S1 / SEC-01,04,07-11,20,21) — P1
+- ✅ **Central server-side auth guard + fine-grained authorization** — `guard.php` authn on all 42 action endpoints (Batch 2); **role + capability + object-ownership enforcement** server-side on clinical writes/renderers and page handlers (Batches 24–26): clinical roles `[0,2,3,4]`, capability flags 1:1 with the UI, and `require_patient_access()`/`require_consultation_access()` (Admin/Can-Manage/own-consultant) on discharge/transfer/reverse/sign-off. Runtime-tested role matrix. — (S1 / SEC-01,04,07-11,20,21)
 - ⬜ **Re-confirm the real role/capability permission model** with team/clinicians (permissions.docx is dated) — (NEW) — P1
 - ✅ Convert **all queries to prepared statements** — account cluster (Batch 3) + all subdir endpoints (Batch 4) + all page files (Batch 5). Repo-wide grep confirms **0 executed interpolated queries** remain. (S2,C2 / SEC-07-13). ⏳ needs runtime test on server.
 - 🔄 **Encode all output** — ~250+ DB/request sinks wrapped (htmlspecialchars/json_encode) across all rendering files (Batch 6; SEC-18 done); ⬜ remove `eval` + baseline **CSP** deferred to Phase 3 (needs inline-JS refactor) — (S3,S10 / SEC-18,26) — P1
