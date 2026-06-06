@@ -12,6 +12,9 @@
  * and update config.local.php (or the environment) — never hard-code them here.
  */
 
+// 0) Global uncaught-exception / fatal safety net (registered as early as possible).
+require_once __DIR__ . '/error-handler.php';
+
 // 1) Local overrides (git-ignored). May define the DB_*/SMTP_* constants directly.
 $__local = __DIR__ . '/config.local.php';
 if (is_file($__local)) {
