@@ -89,7 +89,7 @@ if (isset($_POST['add_pt_btn'])) {
         echo "window.location.href = 'dmc-old-patients.php';";
         echo "</script>\n";
     } else {
-        $message = "Error adding record: " . $mysqli->error;
+        error_log(__FILE__ . ": adding record " . $mysqli->error); $message = "Error adding record.";
     }
 
     echo "<a>" . $message . "</a>";

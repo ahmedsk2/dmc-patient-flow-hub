@@ -25,7 +25,7 @@ if (isset($_POST['undo_btn'])) {
     $stmt = $mysqli->prepare($query);
     $stmt->bind_param("i", $consult_id);
     if (!$stmt->execute()) {
-        echo "Error description: " . $mysqli->error;
+        error_log(__FILE__ . ": Error description: " . $mysqli->error); echo "A database error occurred.";
     } else {
         echo "<script>window.location.href = '48consultation.php';</script>";
     }

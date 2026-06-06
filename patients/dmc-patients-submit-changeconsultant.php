@@ -14,7 +14,7 @@ if (isset($_REQUEST['patient_ids']) && is_array($_REQUEST['patient_ids']) && iss
     $stmt = $mysqli->prepare($sql);
 
     if (!$stmt) {
-        $response["message"] = "Error preparing statement: " . $mysqli->error;
+        error_log(__FILE__ . ": prepare failed " . $mysqli->error); $response["message"] = "A database error occurred.";
         echo json_encode($response);
         exit;
     }
@@ -26,7 +26,7 @@ if (isset($_REQUEST['patient_ids']) && is_array($_REQUEST['patient_ids']) && iss
             $response["success"] = true;
             $response["message"] = "Record updated successfully";
         } else {
-            $response["message"] = "Error updating record: " . $stmt->error;
+            error_log(__FILE__ . ": update " . $stmt->error); $response["message"] = "Error updating record.";
             break; // Stop the loop if an error occurs
         }
     }

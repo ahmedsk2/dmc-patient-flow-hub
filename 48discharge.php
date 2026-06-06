@@ -35,9 +35,9 @@ $query = "UPDATE  picupatients SET DISDATE= NULL, med_DISDATE= NULL, MORTALITY= 
           $stmt = $mysqli->prepare($query);
           $stmt->bind_param("i", $patient_id);
           if (!$stmt->execute()) {
-            echo("Error description: " . $mysqli -> error);
+            error_log(__FILE__ . ": Error description: " . $mysqli -> error); echo "A database error occurred.";
           } else {
-           
+
             echo "<script language='javascript'>\n";
             echo "window.location.href = '48discharge.php';";
             echo "</script>\n";

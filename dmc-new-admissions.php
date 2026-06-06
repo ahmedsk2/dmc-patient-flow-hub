@@ -31,7 +31,7 @@ if (isset($_POST['assign_me_btn'])) {
           $stmt = $mysqli->prepare($query);
           $stmt->bind_param('isi', $user_id, $today, $patient_id);
           if (!$stmt->execute()) {
-            echo("Error description: " . $mysqli -> error);
+            error_log(__FILE__ . ": Error description: " . $mysqli -> error); echo "A database error occurred.";
           }else{
             echo "<script language='javascript'>\n";
             echo "window.location.href = 'dmc-new-admissions.php';";
@@ -58,7 +58,7 @@ if (isset($_POST['assign_to_consultant_btn'])) {
     $stmt = $mysqli->prepare($query);
     $stmt->bind_param('isi', $consultant_id, $today, $patient_id);
     if (!$stmt->execute()) {
-      echo("Error description: " . $mysqli -> error);
+      error_log(__FILE__ . ": Error description: " . $mysqli -> error); echo "A database error occurred.";
     }else{
       echo "<script language='javascript'>\n";
       echo "window.location.href = 'dmc-new-admissions.php';";
@@ -71,7 +71,7 @@ if (isset($_POST['assign_to_consultant_btn'])) {
     $stmt = $mysqli->prepare($query);
     $stmt->bind_param('ii', $consultant_id, $patient_id);
     if (!$stmt->execute()) {
-      echo("Error description: " . $mysqli -> error);
+      error_log(__FILE__ . ": Error description: " . $mysqli -> error); echo "A database error occurred.";
     }else{
       echo "<script language='javascript'>\n";
       echo "window.location.href = 'dmc-new-admissions.php';";

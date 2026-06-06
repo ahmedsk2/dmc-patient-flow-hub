@@ -52,7 +52,7 @@ $sql = "UPDATE picupatients SET newassign= Null WHERE assigned_on != ?";
         if ($stmt->execute() === TRUE) {
             $message= "New labeling Rest done";
           } else {
-           $message= "Error New labeling Rest: " . $mysqli->error;
+           error_log(__FILE__ . ": New labeling Rest " . $mysqli->error); $message= "Error New labeling Rest.";
           }
 
 // select hospitalists only and on service
@@ -90,7 +90,7 @@ while ($n_new_icu_patients > 0){
     if ($stmt->execute() === TRUE) {
         $message= "</br> ICU Records Record updated successfully </br>";
     } else {
-    $message= "Error updating record: " . $mysqli->error;
+    error_log(__FILE__ . ": update " . $mysqli->error); $message= "Error updating record.";
     }
       echo "$message";
     echo "new ICU ramining" . $n_new_icu_patients;
@@ -172,7 +172,7 @@ while (($leastcount <= ($min_hospitalist-1)) && $n_newpatients > 0){
             if ($stmt->execute() === TRUE) {
                 $message= "</br> First Round ( fill all hospitalist with less than 8 patients ): Record updated successfully </br>";
             } else {
-            $message= "Error updating record: " . $mysqli->error;
+            error_log(__FILE__ . ": update " . $mysqli->error); $message= "Error updating record.";
             }
               echo "$message";
             echo "</br>new ramining" . $n_newpatients;
@@ -205,7 +205,7 @@ if($leastcount >= $min_hospitalist && $n_newpatients>0){
                 if ($stmt->execute() === TRUE) {
                     $message= "</br> second Round ( all hospitalist have 8 patients or more ): Record updated successfully </br>";
                 } else {
-                $message= "Error updating record: " . $mysqli->error;
+                error_log(__FILE__ . ": update " . $mysqli->error); $message= "Error updating record.";
                 }
                   echo "$message";
                 // echo "</br>new ramining" . $n_newpatients;
@@ -263,7 +263,7 @@ if ($leastcount>=$max_hospitalist && $n_newpatients>0){
                     if ($stmt->execute() === TRUE) {
                         $message= "</br> third round ( all hospitalist have 15 and fill subspeciality with less than 5 ): Record updated successfully </br>";
                     } else {
-                    $message= "Error updating record: " . $mysqli->error;
+                    error_log(__FILE__ . ": update " . $mysqli->error); $message= "Error updating record.";
                     }
                       echo "$message";
                     // echo "</br>new ramining" . $n_newpatients;
@@ -295,7 +295,7 @@ if ($subcount>=5 && $n_newpatients>0){
                 if ($stmt->execute() === TRUE) {
                     $message= "</br> Last round (Give extra to hospitalist as subs already have 5 ): Record updated successfully </br>";
                 } else {
-                $message= "Error updating record: " . $mysqli->error;
+                error_log(__FILE__ . ": update " . $mysqli->error); $message= "Error updating record.";
                 }
                   echo "$message";
                 // echo "</br>new ramining" . $n_newpatients;

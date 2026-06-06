@@ -61,12 +61,12 @@ if ($stmt) {
                   echo "window.location.href = 'dmc-new-consultation.php';";
                   echo "</script>\n";
     } else {
-        $message = "Error updating record: " . $stmt->error;
+        error_log(__FILE__ . ": update " . $stmt->error); $message = "Error updating record.";
         error_log($message);
     }
     $stmt->close();
 } else {
-    $message = "Error preparing statement: " . $mysqli->error;
+    error_log(__FILE__ . ": prepare failed " . $mysqli->error); $message = "A database error occurred.";
     error_log($message);
 }
 

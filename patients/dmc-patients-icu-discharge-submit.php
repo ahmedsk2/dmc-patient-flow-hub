@@ -63,7 +63,7 @@ if ($verr !== '') { echo "<a>Error: " . htmlspecialchars($verr, ENT_QUOTES, 'UTF
                   audit_log('patient.icu_discharge','picupatients',$id);
                   // $last_id = mysqli_insert_id($mysqli);
                 } else {
-                 $message= "Error adding record: " . $mysqli->error;
+                 error_log(__FILE__ . ": add " . $mysqli->error); $message= "Error adding record.";
                 }
 
                 // echo  $message;

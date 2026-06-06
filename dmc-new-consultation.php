@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->bind_param('i', $consultid);
 
             if (!$stmt->execute()) {
-                echo "Error description: " . $mysqli->error;
+                error_log(__FILE__ . ": Error description: " . $mysqli->error); echo "A database error occurred.";
             } else {
                 audit_log('consultation.signoff','consultations',$consultid);
                 echo "Query executed successfully.<br>";

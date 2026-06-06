@@ -13,7 +13,7 @@ if (isset($_POST['reverse_discharge_btn'])) {
   $stmt = $mysqli->prepare($query);
   $stmt->bind_param("i", $reverse_id);
   if (!$stmt->execute()) {
-    echo("Error description: " . $mysqli -> error);
+    error_log(__FILE__ . ": Error description: " . $mysqli -> error); echo "A database error occurred.";
   } else {
     audit_log('patient.reverse_discharge','picupatients',$reverse_id);
   }

@@ -31,7 +31,7 @@ if (isset($_POST['reset_pass'])) {
      $upd = $mysqli->prepare("UPDATE members SET member_password = ?, pass_exp_date = ? WHERE member_id = ?");
      $upd->bind_param("ssi", $password, $today, $member_id_reset);
      if (!$upd->execute()) {
-    $error="Error message: %s\n". $mysqli->error;
+    error_log(__FILE__ . ": password reset update " . $mysqli->error); $error = "A database error occurred.";
 } else {$error= "sucess"; password_reset_consume($reset_row['id']);}
       $_SESSION['success'] = "Password changed";
       //  echo "ahmed";

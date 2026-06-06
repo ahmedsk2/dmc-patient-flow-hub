@@ -48,7 +48,7 @@ require ('../dbconnect.php');
                   echo "window.location.href = 'dmc-new-consultation.php';";
                   echo "</script>\n";
                 } else {
-                    $message= "Error adding record: " . $mysqli->error;
+                    error_log(__FILE__ . ": adding " . $mysqli->error); $message= "Error adding record.";
                 }
    
                 echo  $message;

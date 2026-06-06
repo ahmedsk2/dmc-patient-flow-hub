@@ -50,7 +50,7 @@ $formationSQL = "SELECT member_id, member_email FROM members WHERE member_email 
 
         if ($stmt === false) {
             // Handle errors with preparing the statement
-            die("Error preparing statement: " . $mysqli->error);
+            error_log(__FILE__ . ": Error preparing statement: " . $mysqli->error); die("A database error occurred. Please try again later.");
         }
 
         // Bind the email parameter
@@ -106,7 +106,7 @@ $mail->Body = 'Click on this link to reset your password: '.$link.'<br>Or copy t
             }
         } else {
             // Handle execution error
-            die("Error executing query: " . $stmt->error);
+            error_log(__FILE__ . ": Error executing query: " . $stmt->error); die("A database error occurred. Please try again later.");
         }
 
         // Close the statement

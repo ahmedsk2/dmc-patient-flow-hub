@@ -54,7 +54,7 @@ $id = $_REQUEST['id_modify'];
                   audit_log('patient.modify','picupatients',$id, ['mrn'=>$mrn_modify]);
                   // $last_id = mysqli_insert_id($mysqli);
                 } else {
-                 $message= "Error adding record: " . $mysqli->error;
+                 error_log(__FILE__ . ": add " . $mysqli->error); $message= "Error adding record.";
                 }
 
                 // echo  $message;

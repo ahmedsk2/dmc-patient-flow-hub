@@ -72,7 +72,7 @@ if (strcmp($discahrge_type,'medical') == 0){ //still in
                 audit_log('patient.discharge','picupatients',$id, ['type'=>'medical']);
                 // $last_id = mysqli_insert_id($mysqli);
               } else {
-               $message= "Error adding record: " . $mysqli->error;
+               error_log(__FILE__ . ": add " . $mysqli->error); $message= "Error adding record.";
               }
 
               // echo  $message;
@@ -97,7 +97,7 @@ echo "<a>".$message."</a>";
                 audit_log('patient.discharge','picupatients',$id, ['type'=>'complete']);
                 // $last_id = mysqli_insert_id($mysqli);
               } else {
-               $message= "Error adding record: " . $mysqli->error;
+               error_log(__FILE__ . ": add " . $mysqli->error); $message= "Error adding record.";
               }
 
               // echo  $message;

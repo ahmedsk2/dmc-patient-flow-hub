@@ -21,7 +21,7 @@ $modifybox = $_REQUEST['modifybox'];
                   $message= "Record updated successfully";
                   audit_log('member.update','members',$id, ['position'=>$position,'active'=>$activate]);
                 } else {
-                 $message= "Error updating record: " . $mysqli->error;
+                 error_log(__FILE__ . ": updating record " . $mysqli->error); $message= "Error updating record.";
                 }
 
 echo "

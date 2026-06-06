@@ -28,7 +28,7 @@ if (isset($_GET['export']) && $_GET['export'] === '1') {
             $stmt->close();
         } else {
             header('Content-Type: text/plain; charset=utf-8');
-            echo "Error preparing ICD10 query: " . $mysqli->error;
+            error_log(__FILE__ . ": Error preparing ICD10 query: " . $mysqli->error); echo "A database error occurred.";
             exit;
         }
     }
@@ -71,7 +71,7 @@ if (isset($_GET['export']) && $_GET['export'] === '1') {
     // Query rows
     if (!$stmt = $mysqli->prepare($q)) {
         header('Content-Type: text/plain; charset=utf-8');
-        echo "Query error: " . $mysqli->error;
+        error_log(__FILE__ . ": Query error: " . $mysqli->error); echo "A database error occurred.";
         exit;
     }
     if ($types !== '') { $stmt->bind_param($types, ...$params); }
@@ -192,7 +192,7 @@ if ($keyword !== '') {
         }
         $stmt->close();
     } else {
-        die("Error preparing ICD10 query: " . $mysqli->error);
+        error_log(__FILE__ . ": Error preparing ICD10 query: " . $mysqli->error); die("A database error occurred. Please try again later.");
     }
 }
 
@@ -230,7 +230,7 @@ if (count($icd10_ids) > 0) {
 
     // Count
     if (!$count_stmt = $mysqli->prepare($count_q)) {
-        die("Count error: " . $mysqli->error);
+        error_log(__FILE__ . ": Count error: " . $mysqli->error); die("A database error occurred. Please try again later.");
     }
     if ($types !== '') { $count_stmt->bind_param($types, ...$params); }
     $count_stmt->execute();
@@ -239,7 +239,7 @@ if (count($icd10_ids) > 0) {
 
     // Fetch rows
     if (!$stmt = $mysqli->prepare($q)) {
-        die("Query error: " . $mysqli->error);
+        error_log(__FILE__ . ": Query error: " . $mysqli->error); die("A database error occurred. Please try again later.");
     }
     if ($types !== '') { $stmt->bind_param($types, ...$params); }
     $stmt->execute();

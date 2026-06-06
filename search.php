@@ -35,9 +35,9 @@ $query = "UPDATE  picupatients SET DISDATE= NULL, med_DISDATE= NULL, MORTALITY= 
           $stmt = $mysqli->prepare($query);
           $stmt->bind_param("i", $patient_id);
           if (!$stmt->execute()) {
-            echo("Error description: " . $mysqli -> error);
+            error_log(__FILE__ . ": Error description: " . $mysqli -> error); echo "A database error occurred.";
           } else {
-           
+
             echo "<script language='javascript'>\n";
             echo "window.location.href = 'dmc-patients.php';";
             echo "</script>\n";
@@ -508,7 +508,7 @@ font-size: medium;color: red;
                 $result1 = $mysqli->query($formationSQL);
 
                 if (!$result1) {
-                    die("Error executing query: " . $mysqli->error);
+                    error_log(__FILE__ . ": Error executing query: " . $mysqli->error); die("A database error occurred. Please try again later.");
                 }
 
                 while ($row = $result1->fetch_array(MYSQLI_ASSOC)) {

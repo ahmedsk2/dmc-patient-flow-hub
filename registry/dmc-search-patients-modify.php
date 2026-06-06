@@ -31,7 +31,7 @@ $id = $_REQUEST['id_modify'];
                   $message= "Record added successfully";
                   // $last_id = mysqli_insert_id($mysqli);
                 } else {
-                 $message= "Error adding record: " . $mysqli->error;
+                 error_log(__FILE__ . ": adding " . $mysqli->error); $message= "Error adding record.";
                 }
 
                 // echo  $message;

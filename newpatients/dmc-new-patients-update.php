@@ -44,7 +44,7 @@ if ($verr !== '') { echo "Error: " . $verr; exit; }
                 if ($stmt->execute() === TRUE) {
                   $message= "Record updated successfully";
                 } else {
-                 $message= "Error updating record: " . $mysqli->error;
+                 error_log(__FILE__ . ": update " . $mysqli->error); $message= "Error updating record.";
                 }
 
 echo 

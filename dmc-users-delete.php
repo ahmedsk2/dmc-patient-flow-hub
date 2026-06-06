@@ -12,7 +12,7 @@ $id = $_REQUEST['id'];
                   $message= "Record delete successfully";
                   audit_log('member.delete','members',$id);
                 } else {
-                 $message= "Error deleting record: " . $mysqli->error;
+                 error_log(__FILE__ . ": deleting record " . $mysqli->error); $message= "Error deleting record.";
                 }
 
 

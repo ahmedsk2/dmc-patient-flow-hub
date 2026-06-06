@@ -74,7 +74,7 @@ require_once ('../dbconnect.php');
                   echo "window.location.href = 'dmc-new-admissions.php';";
                   echo "</script>\n";
                 } else {
-                  array_push($errors, "Error adding record: " . $mysqli->error);
+                  error_log(__FILE__ . ": admit " . $mysqli->error); array_push($errors, "Error adding record.");
                 }
     } else{
 
