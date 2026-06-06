@@ -1,0 +1,71 @@
+<?php
+require ('../dbconnect.php');
+$id = $_REQUEST['myBookId1']; 
+
+$formationSQL = "SELECT * FROM speciality";
+$result1 = $mysqli->query($formationSQL);
+$speciality = $result1->fetch_all(MYSQLI_ASSOC);
+
+$formationSQL = "SELECT * FROM other_specialities";
+$result1 = $mysqli->query($formationSQL);
+$other_specialities = $result1->fetch_all(MYSQLI_ASSOC);
+?>
+
+    <form method="post" autocomplete="off" action="dmc-patients.php">
+        <input type="hidden" name="id" value="<?php echo $id; ?>">
+        <label>Transfer To Specialty</label>
+        <select class='select2_modify txtdata' style="width: 100%;" id='specialty_transfer' name='specialty_transfer' style='text-align: center;' required>
+            <option selected disabled> Select</option>
+            <?php
+            foreach ($speciality as $spec) {
+                echo "<option value='".$spec['id']."'>".$spec['specilaity']."</option>";
+            }
+            foreach ($other_specialities as $ospec) {
+                echo "<option value='".$ospec['specilaity']."'>".$ospec['specilaity']."</option>";
+            }
+            ?>
+        </select>
+        <div id="dropdown" style="display: none; margin-top:2%;">
+            <select class='select2_modify txtdata' id='constulant_transfer' name='constulant_transfer' style='text-align: center;' required> </select>
+        </div>
+        <div class="modal-footer" style="text-align: center; display: block;">
+            <button type='button' value='submit' class='btn btn-success' name='transfer_pt_btn' onclick='transferPtBtn(this)'>Transfer Patient</button>
+            <button type="button" class="btn btn-default" style="color: black;" data-bs-dismiss="modal">Close</button>
+        </div>
+    </form>
+
+    <script type="text/javascript">
+    function transferPtBtn(button) {
+        // Disable the button and show loading spinner
+        button.disabled = true;
+        button.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"><span class="sr-only">Loading...</span></div>';
+        // Create a hidden input with the same name as the button to include it in the form submission
+        var hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = button.name;
+        hiddenInput.value = button.value;
+        button.form.appendChild(hiddenInput);
+
+        // Allow the form to be submitted
+        button.form.submit();
+    }
+
+    $(document).ready(function() {
+        $('.select2_modify').select2({
+            placeholder: "Select",
+                  placeholder: 'Select',
+      width: '100%',
+      dropdownParent: $("#transfer_modal")
+        });
+
+        $('.txtdata').on('change', function() {
+            var specialty_transfer = document.getElementById("specialty_transfer").value;
+            document.getElementById("dropdown").style.display = "block";
+            var data = {specialty_transfer: specialty_transfer};
+            $.post('patients/dmc-specialty-transfer-dropdown.php', data, function(data) {
+                $("#dropdown").html(data);
+            });
+        });
+    });
+    </script>
+

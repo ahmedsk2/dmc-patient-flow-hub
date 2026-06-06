@@ -1,0 +1,30 @@
+# --- Secrets: never commit ---
+config.local.php
+.env
+.env.*
+
+# --- PHI / database dumps: never commit ---
+Demo.sql
+*.sql
+*.sql.gz
+
+# --- Runtime logs ---
+php_errorlog
+**/php_errorlog
+*.log
+
+# --- Large third-party libs & generated assets (kept on disk, not tracked) ---
+vendor/
+dist/
+css/svgs/
+css/webfonts/
+css/sprites/
+css/less/
+css/scss/
+css/metadata/
+work-orderes/
+
+# --- OS / editor cruft ---
+Thumbs.db
+.DS_Store
+*.swp
