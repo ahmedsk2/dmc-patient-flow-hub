@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/csrf.php';
+require_once __DIR__ . '/reset_tokens.php';
   require ('dbconnect.php');
 $errors = array(); 
 if (isset($_POST['reset_pass'])) {
@@ -18,16 +19,20 @@ if (isset($_POST['reset_pass'])) {
 
     if (count($errors) == 0) {
       $password =  password_hash($password_22, PASSWORD_DEFAULT);//encrypt the password before saving in the database
-      $member_mail=$_POST['email'];
+      $reset_row = password_reset_lookup($_POST['token'] ?? '');
        $today=date("Y-m-d");
       // $query = "UPDATE members set  member_password='".$password."', pass_exp_date='".$today."' where member_email='".$member_mail."'";
       
       // mysqli_query($mysqli, $query) or die(mysqli_error($mysqli));
-     $upd = $mysqli->prepare("UPDATE members SET member_password = ?, pass_exp_date = ? WHERE md5(member_email) = ?");
-     $upd->bind_param("sss", $password, $today, $member_mail);
+     if (!$reset_row) {
+       header('location: index.php'); exit;
+     }
+     $member_id_reset = (int) $reset_row['member_id'];
+     $upd = $mysqli->prepare("UPDATE members SET member_password = ?, pass_exp_date = ? WHERE member_id = ?");
+     $upd->bind_param("ssi", $password, $today, $member_id_reset);
      if (!$upd->execute()) {
     $error="Error message: %s\n". $mysqli->error;
-} else {$error= "sucess";}
+} else {$error= "sucess"; password_reset_consume($reset_row['id']);}
       $_SESSION['success'] = "Password changed";
       //  echo "ahmed";
       header('location: index.php?s=changed');
@@ -38,16 +43,13 @@ if (isset($_POST['reset_pass'])) {
   // Finally, register user if there are no errors in the form
   
 
-if($_GET['key'] && $_GET['reset'])
+if (!empty($_GET['token']))
 {
-  $email=$_GET['key'];
-  $pass=$_GET['reset'];
+  $token = $_GET['token'];
+  $reset_row = password_reset_lookup($token);
 
 
-$sel = $mysqli->prepare("SELECT member_email FROM members WHERE md5(member_email) = ? AND md5(member_password) = ?");
-$sel->bind_param("ss", $email, $pass);
-$sel->execute();
-$select = $sel->get_result();
+// token already validated above into $reset_row
 
 
 
@@ -94,14 +96,14 @@ $select = $sel->get_result();
       <p class="login-box-msg">Reset Password</p>
       
       <?php
-      if(mysqli_num_rows($select)==1)
-  { 
-    $link = "reset-password.php?key=".$email."&reset=".$pass;
+      if(!empty($reset_row))
+  {
+    $link = "reset-password.php?token=".$token;
     ?>
 <form method="post" autocomplete="off" action="<?php echo htmlspecialchars($link, ENT_QUOTES, 'UTF-8');?>">
 <?php echo csrf_field(); ?>
 
-<input type="hidden" name="email" value="<?php echo htmlspecialchars($email, ENT_QUOTES, 'UTF-8');?>" >
+<input type="hidden" name="token" value="<?php echo htmlspecialchars($token, ENT_QUOTES, 'UTF-8');?>" >
 
 <div class="input-group mb-3">
 

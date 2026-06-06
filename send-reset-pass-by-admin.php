@@ -23,12 +23,13 @@ $access_PICU_control=[0];
         }
 
             require('dbconnect.php');
+            require_once __DIR__ . '/reset_tokens.php';
 
            $email = $_GET['email'];
 
 
                 // Prepare the SQL statement with placeholders
-        $formationSQL = "SELECT member_email, member_password FROM members WHERE member_email = ? OR member_name = ?";
+        $formationSQL = "SELECT member_id, member_email FROM members WHERE member_email = ? OR member_name = ?";
 
                 $stmt = $mysqli->prepare($formationSQL);
 
@@ -49,10 +50,10 @@ $access_PICU_control=[0];
         // var_dump($row);
         // echo $row['member_email']."</br>"."</br>";
         // echo $row['member_password']."</br>"."</br>";
-        $email=$row['member_email'];
-          $email1=md5($row['member_email']);
-          $pass=md5($row['member_password']);
-            $link="<a href='www.dmc-im.com/reset-password.php?key=".$email1."&reset=".$pass."'>Click To Reset password</a>";
+        $email = $row['member_email'];
+          $reset_token = password_reset_create($row['member_id']);
+          $reset_url = "https://www.dmc-im.com/reset-password.php?token=" . $reset_token;
+            $link = "<a href='".$reset_url."'>Click To Reset password</a>";
 
 
             require 'vendor/PHPMailer/src/Exception.php';
@@ -74,7 +75,7 @@ $access_PICU_control=[0];
             $mail->AddAddress($email, '');
             $mail->Subject  =  'DMC System: Reset Password';
             $mail->IsHTML(true);
-        $mail->Body = 'Click on this link to reset your password: <a href="'.$link.'">'.$link.'</a><br>Or copy the following link to your browser:<br>www.dmc-im.com/reset-password.php?key='.$email1.'&reset='.$pass;
+        $mail->Body = 'Click on this link to reset your password: '.$link.'<br>Or copy the following link to your browser:<br>'.$reset_url;
             
            if ($mail->Send()) {
                   $_SESSION['message'] = 'Reset message sent to "'.$email.'"';

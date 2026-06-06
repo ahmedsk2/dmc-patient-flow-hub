@@ -8,6 +8,7 @@ Run these SQL files **once each, in numeric order**, against the DMC database
 | # | File | Purpose | Required by |
 |---|------|---------|-------------|
 | 01 | `01-audit-log.sql` | `audit_log` table — who changed/deleted what, when | Batch 8 (audit trail, REL-02) |
+| 02 | `02-password-resets.sql` | `password_resets` table + widen `members.member_password` to varchar(255) | Batch 11 (secure reset tokens, SEC-14/30) |
 
 > Until a migration is applied, the related feature degrades gracefully:
 > `audit_log()` is fail-safe (it logs to the PHP error log and never breaks the
