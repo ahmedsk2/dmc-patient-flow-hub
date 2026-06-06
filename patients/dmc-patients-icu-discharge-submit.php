@@ -34,7 +34,15 @@ if (!empty($disdate1)){
 
 $disstatus = $_REQUEST['disstatus']; 
 
-$disto = $_REQUEST['disto']; 
+$disto = $_REQUEST['disto'];
+
+// W3: validate the discharge-specific inputs (defense-in-depth; client checks are bypassable).
+$verr = v_first([
+    v_date_ymd($disdate, 'Discharge date'),
+    v_required($disstatus, 'Status at discharge'),
+    v_required($disto, 'Discharged to'),
+]);
+if ($verr !== '') { echo "<a>Error: " . htmlspecialchars($verr, ENT_QUOTES, 'UTF-8') . "</a>"; exit; }
 
 
     $sql = "UPDATE  picupatients SET  MRN=?,BED=?, PNAME=?, age=?, gender=?,

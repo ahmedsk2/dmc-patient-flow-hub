@@ -21,9 +21,18 @@ if (!empty($admdate1)){
     $admdate=null;
   }
 
-  $admissiondiagnosis1 = $_REQUEST['admissiondiagnosis']; 
-  $admissiondiagnosis = json_encode($admissiondiagnosis1); 
-  
+  $admissiondiagnosis1 = $_REQUEST['admissiondiagnosis'];
+  $admissiondiagnosis = json_encode($admissiondiagnosis1);
+
+// W3: validate only the field that actually changed (avoids blocking edits on unchanged data).
+$attrib = $_REQUEST['attribChanged'] ?? '';
+$verr = '';
+if ($attrib === 'mrn')         { $verr = v_len($mrn, 'MRN', 50); }
+elseif ($attrib === 'name')    { $verr = v_len($name, 'Patient name', 100); }
+elseif ($attrib === 'age')     { $verr = v_int_range($age, 'Age', 0, 150); }
+elseif ($attrib === 'gender')  { $verr = v_in($gender, 'Gender', ['Male', 'Female']); }
+elseif ($attrib === 'admdate') { $verr = v_date_ymd($admdate, 'Admission date'); }
+if ($verr !== '') { echo "Error: " . $verr; exit; }
 
 
  $sql = "UPDATE picupatients SET current_location=?,BED=?,MRN=?, PNAME=?,  ADMFROM=?,age=?,gender=?,nationality=?,ADMFROM=?,

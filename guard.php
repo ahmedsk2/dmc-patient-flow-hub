@@ -96,3 +96,6 @@ if (!function_exists('require_capability')) {
 
 // --- CSRF helpers (csrf_token / csrf_field / csrf_verify) ---
 require_once __DIR__ . '/csrf.php';
+
+// --- Input validation helpers (v_required / v_int_range / v_date_ymd / v_len / v_in / v_first) ---
+require_once __DIR__ . '/validate.php';

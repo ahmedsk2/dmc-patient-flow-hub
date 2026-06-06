@@ -31,7 +31,20 @@ require_once ('../dbconnect.php');
    $result = $stmt->get_result();
    $patient = mysqli_fetch_assoc($result);
    
-   $errors = array(); 
+   $errors = array();
+
+   // W3: server-side validation of the new admission input (client checks are bypassable).
+   $verr = v_first([
+       v_len($mrn_new, 'MRN', 50),
+       v_len($pname_new, 'Patient name', 100),
+       v_in($gender_new, 'Gender', ['Male', 'Female']),
+       v_int_range($age_new, 'Age', 0, 150),
+       v_required($nationality_new, 'Nationality'),
+       v_required($admfrom_new, 'Admitted from'),
+       v_required($current_location, 'Patient location'),
+       v_date_ymd($admdate, 'Admission date'),
+   ]);
+   if ($verr !== '') { array_push($errors, $verr); }
 
    if ($patient) { // if user exists
      if ($patient['MRN'] === $mrn_new) {
