@@ -77,15 +77,12 @@ $email=$row['member_email'];
     // enable SMTP authentication
     $mail->SMTPAuth = true;                  
     // GMAIL username
-    $mail->Username = "info@dmc-im.com";
-    // GMAIL password
-    $mail->Password = "***REMOVED-23***";
-    $mail->SMTPSecure = "tls";  
-    // sets GMAIL as the SMTP server
-    $mail->Host = "mail.dmc-im.com";
-    // set the SMTP port for the GMAIL server
-    $mail->Port = "587";
-    $mail->From='info@dmc-im.com';
+    $mail->Username = SMTP_USER;
+    $mail->Password = SMTP_PASS;
+    $mail->SMTPSecure = SMTP_SECURE;
+    $mail->Host = SMTP_HOST;
+    $mail->Port = SMTP_PORT;
+    $mail->From = SMTP_FROM;
     $mail->FromName='DMC Help Disk';
     $mail->AddAddress($email, '');
     $mail->Subject  =  'DMC System: Reset Password';

@@ -16,7 +16,7 @@ _Last updated: 2026-06-06_
 | Phase | Done / Total | State |
 |---|---|---|
 | Review & planning (read-only) | 4 / 4 | ✅ complete |
-| Phase 0 — Containment | 0 / 7 | not started |
+| Phase 0 — Containment | 3 ✅ · 1 🔄 · 3 ⏸️ ops | 🔄 in progress |
 | Phase 1 — Critical security & data integrity | 0 / 15 | not started |
 | Phase 2 — Stabilize | 0 / 8 | not started |
 | Phase 3 — Refactor + UI/UX | 0 / 6 | not started |
@@ -26,6 +26,8 @@ _Last updated: 2026-06-06_
 ---
 
 ## Notes & decisions  _(newest first)_
+
+- **2026-06-06 — Batch 1 (Phase 0, code side) DONE** on branch `renovation`. Externalized ALL secrets into git-ignored `config.local.php` (+ tracked `config.php` loader & `config.local.sample.php`); rewrote `dbconnect.php` & `DBController.php` to read config and stop leaking the raw DB error to clients; replaced hard-coded SMTP creds in the two forgot-password files; **deleted `reset-testcount.php` + `test-trans.php`**; deleted 7 `php_errorlog` files (~36 MB); hardened `.htaccess` (force-HTTPS, HSTS/nosniff/X-Frame-Options/Referrer-Policy, blocked `.sql/.md/.log/config.local.php/.git`). Verified: no hard-coded secret left in tracked source; no app code references the deleted files. ⏸️ **Ops follow-ups (you):** rotate DB + SMTP passwords, install TLS cert + deploy, set `display_errors=Off`, take a DB backup. _Not runtime-tested locally (no PHP CLI on this machine) — review on the PHP 8.3 server._
 
 - **2026-06-06 — `permissions.docx` is DATED (per maintainer).** Do **not** treat its
   permission matrix as ground truth. The intended role/capability model must be
@@ -46,14 +48,14 @@ _(Add new notes/decisions above this line as we go.)_
 
 ## To-dos
 
-### Phase 0 — Emergency containment (P0 — do now, mostly ops)
-- ⬜ Rotate the **DB password** (treat as compromised) — (S7 / SEC-16) — P0
-- ⬜ Rotate the **SMTP password** — (S7 / SEC-17) — P0
-- ⬜ **Delete `reset-testcount.php`** from prod — (S9 / SEC-05) — P0
-- ⬜ **Delete `test-trans.php`** from prod — (S9 / SEC-06) — P0
-- ⬜ **Force HTTPS** (redirect 80→443) and/or restrict app to intranet/VPN — (S8 / SEC-15) — P0
-- ⬜ Take a **verified, restorable DB backup** — (R5 / REL-04) — P0
-- ⬜ Delete committed `php_errorlog` files (~37 MB) + set `display_errors = Off` — (X1 / SIMP-01, SEC-24) — P0
+### Phase 0 — Emergency containment (P0)
+- ⏸️ Rotate the **DB password** on the server (treat as compromised) — (S7 / SEC-16) — _ops: you; code no longer holds it — update `config.local.php`/env after rotating_
+- ⏸️ Rotate the **SMTP password** on the mail server — (S7 / SEC-17) — _ops: you_
+- ✅ **Delete `reset-testcount.php`** — (S9 / SEC-05) — done (Batch 1; removed from repo)
+- ✅ **Delete `test-trans.php`** — (S9 / SEC-06) — done (Batch 1)
+- 🔄 **Force HTTPS + security headers** — (S8 / SEC-15,27) — `.htaccess` updated (Batch 1); ⏸️ needs TLS cert + deploy by you
+- ⏸️ Take a **verified, restorable DB backup** — (R5 / REL-04) — _ops: you, before deploy_
+- ✅ Delete committed `php_errorlog` files (~36 MB removed) — (X1 / SIMP-01); ⏸️ also set `display_errors=Off` in server `php.ini` (the raw DB-error leak is already removed in code)
 
 ### Phase 1 — Critical security & data integrity (P1 — ~4-6 wks)
 - ⬜ **Central server-side auth guard** included by every endpoint (deny-by-default + ownership) — (S1 / SEC-01,04,07-11,20,21) — P1
@@ -63,8 +65,8 @@ _(Add new notes/decisions above this line as we go.)_
 - ⬜ Block **privilege escalation** (never accept client-supplied position/flags) — (S4 / SEC-02,03) — P1
 - ⬜ Fix **password reset** (random, single-use, hashed, expiring token) + widen hash column — (S5 / SEC-13,14,30) — P1
 - ⬜ **Session/cookie hardening** + **CSRF tokens** — (S6 / SEC-19,23) — P1
-- ⬜ **Externalize secrets** from source (env/secret store) — (S7 / SEC-16,17) — P1
-- ⬜ Add **security headers** (HSTS/CSP/XFO/nosniff/Referrer-Policy) — (S8 / SEC-27) — P1
+- ✅ **Externalize secrets** from source — (S7 / SEC-16,17) — done (Batch 1; live rotation is the Phase 0 ops step)
+- 🔄 Add **security headers** — (S8 / SEC-27) — HSTS/nosniff/X-Frame-Options/Referrer-Policy added in `.htaccess` (Batch 1); **CSP deferred** until inline-JS/`eval` removed (S3/S10)
 - ⬜ Remove debug/`var_dump`; replace **PHPExcel → PhpSpreadsheet** — (S9 / SEC-24,25) — P1
 - ⬜ **Audit-log foundation** (actor from session, before/after) — (R1 / REL-02, SEC-22) — P1
 - ⬜ Fix broken **assign-to-primary quote** (corrupts patient ID) — (W2 / UX-02) — P1

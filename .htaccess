@@ -1,8 +1,41 @@
+# === DMC .htaccess ===
+# IMPORTANT: deploy the HTTPS redirect + HSTS below ONLY after a valid TLS
+# certificate is installed for the domain, otherwise the site becomes unreachable.
+
 SetEnv PHPRC /home/customer/www/dmc-im.com/public_html/php.ini
-RewriteEngine On
-RewriteCond %{HTTP_HOST} ^dmc-im.com [NC]
-RewriteRule ^(.*)$ http://www.dmc-im.com/$1 [L,R=301]
 AddHandler application/x-httpd-php83 .php .php5 .php4 .php3
+
+RewriteEngine On
+
+# Force HTTPS (requires a working TLS certificate).
+RewriteCond %{HTTPS} !=on
+RewriteRule ^(.*)$ https://www.dmc-im.com/$1 [L,R=301]
+
+# Canonicalize apex -> www (over HTTPS).
+RewriteCond %{HTTP_HOST} ^dmc-im\.com [NC]
+RewriteRule ^(.*)$ https://www.dmc-im.com/$1 [L,R=301]
+
+# --- Security response headers ---
+<IfModule mod_headers.c>
+    # HSTS only takes effect over HTTPS; safe to leave enabled once TLS works.
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    # Disable the legacy, buggy XSS auditor (per current OWASP guidance).
+    Header always set X-XSS-Protection "0"
+    # Content-Security-Policy is intentionally NOT enabled yet: the app currently
+    # relies on inline scripts/styles, eval() in dashboard.php, and external CDNs.
+    # Add a strict policy only after those are removed (plan items S3/S10/U3), e.g.:
+    # Header always set Content-Security-Policy "default-src 'self'; object-src 'none'; frame-ancestors 'self'; base-uri 'self'"
+</IfModule>
+
+# --- Block direct web access to sensitive files ---
+<FilesMatch "(?i)(\.(sql|md|log|gitignore|docx)$|^php_errorlog$|^config\.local\.php$|^\.env)">
+    Require all denied
+</FilesMatch>
+# Hide the .git directory if it is ever present in the web root.
+RedirectMatch 404 (?i)/\.git
 
 <IfModule mod_expires.c>
     ExpiresActive on

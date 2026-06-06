@@ -1,17 +1,12 @@
 <?php
+require_once __DIR__ . '/config.php';
 
-// Database connection details
-$dbhost = 'localhost';
-$dbuser = '***REMOVED-21***';
-$dbpass = '***REMOVED-21***';
-$dbname = '***DB_NAME_REMOVED***';
+// Shared mysqli connection used across the application.
+$mysqli = @new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 
-// Connect to the database
-$mysqli = new mysqli($dbhost, $dbuser, $dbpass, $dbname);
-
-// Check connection
-if ($mysqli->connect_error) {
-    die("Connection failed: " . $mysqli->connect_error);
+if ($mysqli->connect_errno) {
+    // Log the real error server-side; never leak connection details to the client.
+    error_log('DMC DB connect error: ' . $mysqli->connect_error);
+    http_response_code(500);
+    die('Service temporarily unavailable. Please try again later.');
 }
-
-?>
