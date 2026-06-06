@@ -135,9 +135,9 @@ if(!$isLoggedIn) {
                                 <label>Login Name</label>
                             </div>
                             <div class="col-8">
-                            <input type="hidden" name="member_id" value="<?php echo $user1['member_id']  ?>">
+                            <input type="hidden" name="member_id" value="<?php echo htmlspecialchars($user1['member_id'], ENT_QUOTES, 'UTF-8')  ?>">
 
-                            <input type="text" name="member_name" value="<?php echo $user1['member_name']  ?>" placeholder="Login Name" >
+                            <input type="text" name="member_name" value="<?php echo htmlspecialchars($user1['member_name'], ENT_QUOTES, 'UTF-8')  ?>" placeholder="Login Name" >
                             </div>
                         </div>
                   </div>
@@ -148,7 +148,7 @@ if(!$isLoggedIn) {
                                 <label>Full / Display Name </label>
                             </div>
                             <div class="col-8">
-                            <input type="text" name="full_name" value="<?php echo $user1['full_name']  ?>" placeholder="Login Name" >
+                            <input type="text" name="full_name" value="<?php echo htmlspecialchars($user1['full_name'], ENT_QUOTES, 'UTF-8')  ?>" placeholder="Login Name" >
                             </div>
                         </div>
                   </div>
@@ -159,7 +159,7 @@ if(!$isLoggedIn) {
                                 <label>E-Mail </label>
                             </div>
                             <div class="col-8">
-                            <input type="text" name="member_email" value="<?php echo $user1['member_email']  ?>" placeholder="Login Name" >
+                            <input type="text" name="member_email" value="<?php echo htmlspecialchars($user1['member_email'], ENT_QUOTES, 'UTF-8')  ?>" placeholder="Login Name" >
                             </div>
                         </div>
                   </div>

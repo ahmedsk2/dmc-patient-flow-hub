@@ -190,7 +190,7 @@ while ($row = $icd10_result->fetch_assoc()) {
            ?>
             <div class="card">
               <div  class="card-header">
-                <h3 class="card-title"><i class="fas fa-user-tie text-info"></i> New Admissions List: <?php echo $total; ?> Patient</h3>
+                <h3 class="card-title"><i class="fas fa-user-tie text-info"></i> New Admissions List: <?php echo htmlspecialchars($total, ENT_QUOTES, 'UTF-8'); ?> Patient</h3>
                 <div id="addbtn" class='eachrow' style='  float: right; text-align: center;'>
                   <?php
                   if ($user['add_new_patient']== '1'){
@@ -230,7 +230,7 @@ while ($row = $icd10_result->fetch_assoc()) {
                                             // echo $a;
                                             echo "<div class='card'>
                                             <div class='card-header'>
-                                            ".date('l', strtotime($a))." admissions (".$a."):
+                                            ".date('l', strtotime($a))." admissions (".htmlspecialchars($a, ENT_QUOTES, 'UTF-8')."):
                                           </div>
                                           <div class='card-body row'>
                                           ";
@@ -242,33 +242,33 @@ while ($row = $icd10_result->fetch_assoc()) {
                                                   
                                           
                                                     
-                                                    echo"  
+                                                    echo"
                                                     <div class='col-sm-3'>
-                                                    <div class='eachrow card'  style='text-align: center;' id='row".$s['ID']."'>
+                                                    <div class='eachrow card'  style='text-align: center;' id='row".htmlspecialchars($s['ID'], ENT_QUOTES, 'UTF-8')."'>
                                                     <div style='  margin: 2%; display: none; ' class='eachcol id'  scope='row' >
-                                                   
-                                                    <input class='txtdata' type='hidden' name='id' id='id' value='".$s['ID']."' style='text-align: center;width: 85%;' >
-                                                   
+
+                                                    <input class='txtdata' type='hidden' name='id' id='id' value='".htmlspecialchars($s['ID'], ENT_QUOTES, 'UTF-8')."' style='text-align: center;width: 85%;' >
+
                                                     </div>
                                                     <div style='  margin: 2%; display: inline; ' class='eachcol bed card-header'  scope='row' >
                                                     ";
                                                     if (in_array($user['position'],$access_PICU_control)){
-                                                    echo "<a  type='button' class='btn-tool'  style='display: contents;'   onclick='del(".$s['ID'].")'><i class='fa fa-trash'></i>  </a>";
+                                                    echo "<a  type='button' class='btn-tool'  style='display: contents;'   onclick='del(".$s['ID'].")'><i class='fa fa-trash'></i>  </a>"; // [NEEDS REVIEW] line 256: $s['ID'] used inside onclick JS call argument
                                                     }
 
 
                                                 echo"
                                                     <label style=' text-align: center;margin-bottom: 0px;'>Admit In</label>
                                                     <select class='txtdata' id='current_location' style='width: 100%; padding: 4px;text-align: center;' required>
-                                                    <option selected value='".$s['current_location']."'> ".$s['current_location']."</option>
+                                                    <option selected value='".htmlspecialchars($s['current_location'], ENT_QUOTES, 'UTF-8')."'> ".htmlspecialchars($s['current_location'], ENT_QUOTES, 'UTF-8')."</option>
                                                     <option value='Ward'>Ward</option>
                                                     <option value='ICU'>ICU</option>
                                                     <option value='ER'>ER</option>
                                                     </select>
 
-                                               
-                                                    <label style='text-align: center;margin-bottom: 0px;'>Bed</label>  
-                                                    <input class='txtdata' name='bed' placeholder='Bed Number' value='".$s['BED']."' style='text-align: center;' >
+
+                                                    <label style='text-align: center;margin-bottom: 0px;'>Bed</label>
+                                                    <input class='txtdata' name='bed' placeholder='Bed Number' value='".htmlspecialchars($s['BED'], ENT_QUOTES, 'UTF-8')."' style='text-align: center;' >
                                                       
                                                      
                                                       </div>
@@ -278,28 +278,28 @@ while ($row = $icd10_result->fetch_assoc()) {
                                                       ";
                                                       if (in_array($user['position'],$access_PICU_control)){
                                                         echo"
-                                                        <input class='txtdata' name='mrn' value='".$s['MRN']."' style='text-align: center;'>";
+                                                        <input class='txtdata' name='mrn' value='".htmlspecialchars($s['MRN'], ENT_QUOTES, 'UTF-8')."' style='text-align: center;'>";
                                                       }else{
                                                         echo"
-                                                        <input class='txtdata' name='mrn' value='".$s['MRN']."' style='text-align: center;' disabled>";
+                                                        <input class='txtdata' name='mrn' value='".htmlspecialchars($s['MRN'], ENT_QUOTES, 'UTF-8')."' style='text-align: center;' disabled>";
                                                       }
                                                         echo"
                                                       </div>
 
                                                       <div style='  margin: 2%; display: inline; ' class='eachcol name'>
                                                       <label style='text-align: center;margin-bottom: 0px;'>Patient Name</label>
-                                                      <input class='txtdata'  name='name' value='".$s['PNAME']."' style='text-align: center;'>
+                                                      <input class='txtdata'  name='name' value='".htmlspecialchars($s['PNAME'], ENT_QUOTES, 'UTF-8')."' style='text-align: center;'>
                                                       </div>
-                                                
+
                                                       <div style='  margin: 2%; display: inline; ' class='eachcol age'>
                                                       <label style='text-align: center;margin-bottom: 0px;'>Age</label>
-                                                      <input class='txtdata' name='age' value='".$s['age']."' style='text-align: center;'>
+                                                      <input class='txtdata' name='age' value='".htmlspecialchars($s['age'], ENT_QUOTES, 'UTF-8')."' style='text-align: center;'>
                                                       </div>
                                                       
                                                       <div style='  margin: 2%; display: inline; ' class='eachcol gender'>
                                                       <label style='text-align: center;margin-bottom: 0px;'>Gender</label>
                                                       <select class='txtdata' id='gender' style='text-align: center; width: 100%; padding: 4px;' required>
-                                                      <option selected value='".$s['gender']."'> ".$s['gender']."</option>
+                                                      <option selected value='".htmlspecialchars($s['gender'], ENT_QUOTES, 'UTF-8')."'> ".htmlspecialchars($s['gender'], ENT_QUOTES, 'UTF-8')."</option>
                                                       <option value='Male'>Male</option>
                                                       <option value='Female'>Female</option>
                                                       <option value='Unknown'>Unknown</option>
@@ -310,11 +310,11 @@ while ($row = $icd10_result->fetch_assoc()) {
                                                   <label style='text-align: center;margin-bottom: 0px;'>Nationality</label>
                                                       <select class='nationality_update txtdata' required>
 
-                                                    <option selected value='".$s['nationality']."'> ".$s['nationality']."</option>";
-                                                   
+                                                    <option selected value='".htmlspecialchars($s['nationality'], ENT_QUOTES, 'UTF-8')."'> ".htmlspecialchars($s['nationality'], ENT_QUOTES, 'UTF-8')."</option>";
+
                                                     foreach($countries as $country){
                                                         echo"
-                                                        <option value='".$country['name']."'>".$country['name']."</option>";
+                                                        <option value='".htmlspecialchars($country['name'], ENT_QUOTES, 'UTF-8')."'>".htmlspecialchars($country['name'], ENT_QUOTES, 'UTF-8')."</option>";
                                                     }
                                                     echo"
                                                     </select>
@@ -326,11 +326,11 @@ while ($row = $icd10_result->fetch_assoc()) {
                                                     ";
                                                     if (in_array($user['position'],$access_PICU_control)){
                                                       echo"
-                                                      <input type='text' onfocus='(this.type='date')' class='txtdata' name='admdate'  id='datepicker' value='".$s['ADMDATE']."' style='text-align: center;padding: 0px;' readonly>";
+                                                      <input type='text' onfocus='(this.type='date')' class='txtdata' name='admdate'  id='datepicker' value='".htmlspecialchars($s['ADMDATE'], ENT_QUOTES, 'UTF-8')."' style='text-align: center;padding: 0px;' readonly>";
                                                     }else{
                                                       echo"
-                                                      <input type='text' onfocus='(this.type='date')' class='txtdata' name='admdate'  id='datepicker' value='".$s['ADMDATE']."' style='text-align: center;padding: 0px;' disabled readonly>";
-                                               
+                                                      <input type='text' onfocus='(this.type='date')' class='txtdata' name='admdate'  id='datepicker' value='".htmlspecialchars($s['ADMDATE'], ENT_QUOTES, 'UTF-8')."' style='text-align: center;padding: 0px;' disabled readonly>";
+
                                                     }
                                                       
                                                       
@@ -339,7 +339,7 @@ while ($row = $icd10_result->fetch_assoc()) {
                                                       <div style='  margin: 2%; display: inline; ' class='eachcol admfrom'>
                                                       <label style='text-align: center;margin-bottom: 0px;'>Admission From</label>
                                                       <select class='txtdata' id ='admfrom' style='width: 100%;text-align: center;padding: 4px;' required>
-                                                    <option selected value='".$s['ADMFROM']."'> ".$s['ADMFROM']."</option>
+                                                    <option selected value='".htmlspecialchars($s['ADMFROM'], ENT_QUOTES, 'UTF-8')."'> ".htmlspecialchars($s['ADMFROM'], ENT_QUOTES, 'UTF-8')."</option>
                                                     <option value='ER'>ER</option>
                                                     <option value='ICU'>ICU</option>
                                                     <option value='OPD'>OPD</option>
@@ -358,7 +358,7 @@ while ($row = $icd10_result->fetch_assoc()) {
                                                         if (is_array($decodedadmissiondx)) {
                                                           foreach ($decodedadmissiondx as $value) {
                                                               if (isset($icd10_names[$value])) {
-                                                                  echo '<option selected value="' . $value . '">' . $icd10_names[$value] . '</option>';
+                                                                  echo '<option selected value="' . htmlspecialchars($value, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($icd10_names[$value], ENT_QUOTES, 'UTF-8') . '</option>';
                                                               }
                                                           }
                                                       }
@@ -382,7 +382,7 @@ while ($row = $icd10_result->fetch_assoc()) {
                                                           if ($user['assign_access']== '1'){
 
                                                             echo "
-                                                            <a class='btn btn-danger'  href='#assignprimary_modal' data-bs-toggle='modal'  data-book-id='".$s['ID']."'  style='color: aliceblue;line-height: 2;margin-top: 3%;padding: 0px 10%;width: 100%;'  id= 'assignprimary'>Assign To Primary</a>";
+                                                            <a class='btn btn-danger'  href='#assignprimary_modal' data-bs-toggle='modal'  data-book-id='".htmlspecialchars($s['ID'], ENT_QUOTES, 'UTF-8')."'  style='color: aliceblue;line-height: 2;margin-top: 3%;padding: 0px 10%;width: 100%;'  id= 'assignprimary'>Assign To Primary</a>";
                                                               }
                                                       echo "</div >
                                                       </div>
@@ -489,7 +489,7 @@ while ($row = $icd10_result->fetch_assoc()) {
          <?php   
         foreach($countries as $country)
             echo"
-            <option value='".$country['name']."'>".$country['name']."</option>";
+            <option value='".htmlspecialchars($country['name'], ENT_QUOTES, 'UTF-8')."'>".htmlspecialchars($country['name'], ENT_QUOTES, 'UTF-8')."</option>";
           ?>
     
   </select>
@@ -564,13 +564,13 @@ while ($row = $icd10_result->fetch_assoc()) {
               ";
     foreach ($icupatients as $icu){
       echo "<tr class='eachrow'>
-            <td style='  border-bottom: solid 1px darkgray;padding: 0px 1%;text-align: center'>".$icu['MRN']."</td>
-            <td style='  border-bottom: solid 1px darkgray;padding: 0px 1%;text-align: center'>".$icu['BED']."</td>
-            <td style='  border-bottom: solid 1px darkgray;padding: 0px 1%;text-align: center'>".$icu['PNAME']."</td>
+            <td style='  border-bottom: solid 1px darkgray;padding: 0px 1%;text-align: center'>".htmlspecialchars($icu['MRN'], ENT_QUOTES, 'UTF-8')."</td>
+            <td style='  border-bottom: solid 1px darkgray;padding: 0px 1%;text-align: center'>".htmlspecialchars($icu['BED'], ENT_QUOTES, 'UTF-8')."</td>
+            <td style='  border-bottom: solid 1px darkgray;padding: 0px 1%;text-align: center'>".htmlspecialchars($icu['PNAME'], ENT_QUOTES, 'UTF-8')."</td>
             <td class='eachcol' style='  border-bottom: solid 1px darkgray;padding: 0px 1%;text-align: center'>
           <button class='btn btn-success' onclick='icutransfer(this, " . $icu['ID'] . ")' style='color: aliceblue;line-height: 2;margin-top: 3%;margin-bottom: 3%;padding: 0px 10%;width: 100%;' id='Transfer'>Transfer</button>
             </td>
-            </tr>";
+            </tr>"; // [NEEDS REVIEW] line 571: $icu['ID'] used inside onclick JS call argument
 
     }
     echo"
@@ -631,7 +631,7 @@ function icutransfer(button, value){
     button.disabled = true;
     button.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"><span class="sr-only">Transfer...</span></div>';
   var patientid=value;
-var userid= <?php echo $user['member_id']; ?>;
+var userid= <?php echo json_encode($user['member_id']); ?>;
 data = {patientid: patientid,userid:userid};
 $.post('newpatients/dmc-patients-icu-transfer.php', data, function(data){
   // $('#message').html(data);
@@ -680,7 +680,7 @@ age_new=document.getElementById('age_new').value;
 admdate_new=document.getElementById('admdate_new').value;
 admfrom_new=document.getElementById('admfrom_new').value;
 current_location_new=document.getElementById('current_location_new').value;
-admitted_by=<?php echo $user['member_id']; ?>;
+admitted_by=<?php echo json_encode($user['member_id']); ?>;
 var checked = document.querySelectorAll('#admissiondiagnosis_new :checked');
 var admissiondiagnosis_new = [...checked].map(option => option.value);
 var parent = document.getElementById('messsssage');

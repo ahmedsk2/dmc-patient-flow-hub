@@ -28,7 +28,7 @@ id_modify=document.getElementById('id_modify').value;
 var disdate=document.getElementById('disdate').value;
 var disstatus=document.getElementById('disstatus').value;
 var disto=document.getElementById('disto').value;
-var userid=<?php echo $userid; ?>;
+var userid=<?php echo json_encode($userid); ?>;
 // alert (discahrge_type);
 
 if( disdate=="" || disstatus=="" || disto==""  ){
@@ -74,7 +74,7 @@ button.disabled = true;
 </script>
 
 <form autocomplete="off">
-<input type="hidden" id='id_modify' value='<?php echo $id; ?>'>
+<input type="hidden" id='id_modify' value='<?php echo htmlspecialchars($id, ENT_QUOTES, 'UTF-8'); ?>'>
 
 
 </select>

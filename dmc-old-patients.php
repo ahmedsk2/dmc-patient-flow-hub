@@ -197,7 +197,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                     }
 
                                     echo "<div class='col-sm-4'>
-                                            <div class='eachrow card' id='row" . $s['ID'] . "'>
+                                            <div class='eachrow card' id='row" . htmlspecialchars($s['ID'], ENT_QUOTES, 'UTF-8') . "'>
                                                 <div style='margin: 1%; text-align: center; display: inline;' class='eachcol bed card-header' scope='row'>";
                                     if ($s['newassign'] == '1' AND $s['assigned_on'] == $today) {
                                         echo "<p style='color: red; display: contents;'><strong>New</strong></p>";
@@ -230,9 +230,9 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                     } elseif ($s['med_DISDATE'] && $s['DISDATE'] && $s['trans_discharge'] == 'Transfer from ICU') {
                                         echo "<label style='text-align: center; margin-bottom: 0px;'>Transferred back from ICU</label>";
                                     } else {
-                                        echo "<label style='text-align: center; margin-bottom: 0px;'>Admitted In " . $s['current_location'] . " Bed #</label>
-                                            <input disabled class='txtdata' name='bed' placeholder='Bed Number' value='" . $s['BED'] . "' style='text-align: center;'>
-                                            <input disabled class='txtdata' type='hidden' name='id' id='id' value='" . $s['ID'] . "' style='text-align: center; width: 85%;'>";
+                                        echo "<label style='text-align: center; margin-bottom: 0px;'>Admitted In " . htmlspecialchars($s['current_location'], ENT_QUOTES, 'UTF-8') . " Bed #</label>
+                                            <input disabled class='txtdata' name='bed' placeholder='Bed Number' value='" . htmlspecialchars($s['BED'], ENT_QUOTES, 'UTF-8') . "' style='text-align: center;'>
+                                            <input disabled class='txtdata' type='hidden' name='id' id='id' value='" . htmlspecialchars($s['ID'], ENT_QUOTES, 'UTF-8') . "' style='text-align: center; width: 85%;'>";
                                     }
 
                                     echo "</div>
@@ -241,11 +241,11 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                 <tr>
                                                     <td style='width: 50%; border-right: solid 0.5px;'>
                                                         <label style='text-align: center; margin-bottom: 0px;'>MRN</label>
-                                                        <p style='text-align: center;'>" . $s['MRN'] . "</p>
+                                                        <p style='text-align: center;'>" . htmlspecialchars($s['MRN'], ENT_QUOTES, 'UTF-8') . "</p>
                                                     </td>
                                                     <td style='width: 50%;'>
                                                         <label style='text-align: center; margin-bottom: 0px;'>Age</label>
-                                                        <p style='text-align: center;'>" . $s['age'] . "</p>
+                                                        <p style='text-align: center;'>" . htmlspecialchars($s['age'], ENT_QUOTES, 'UTF-8') . "</p>
                                                     </td>
                                                 </tr>
                                             </table>
@@ -255,11 +255,11 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                 <tr>
                                                     <td style='width: 50%; border-right: solid 0.5px;'>
                                                         <label style='text-align: center; margin-bottom: 0px;'>Patient Name</label>
-                                                        <p style='text-align: center;'>" . $s['PNAME'] . "</p>
+                                                        <p style='text-align: center;'>" . htmlspecialchars($s['PNAME'], ENT_QUOTES, 'UTF-8') . "</p>
                                                     </td>
                                                     <td style='width: 50%;'>
                                                         <label style='text-align: center; margin-bottom: 0px;'>Gender</label>
-                                                        <p style='text-align: center;'>" . $s['gender'] . "</p>
+                                                        <p style='text-align: center;'>" . htmlspecialchars($s['gender'], ENT_QUOTES, 'UTF-8') . "</p>
                                                     </td>
                                                 </tr>
                                             </table>
@@ -269,7 +269,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                 <tr>
                                                     <td style='width: 50%; border-right: solid 0.5px;'>
                                                         <label style='text-align: center; margin-bottom: 0px;'>Admission From</label>
-                                                        <p style='text-align: center; margin-bottom: 0px;'>" . $s['ADMFROM'] . "</p>
+                                                        <p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($s['ADMFROM'], ENT_QUOTES, 'UTF-8') . "</p>
                                                     </td>
                                                     <td style='width: 50%;'>
                                                         <label style='text-align: center; margin-bottom: 0px;'>Admitted By</label>";
@@ -281,18 +281,18 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                     $result1 = $stmt->get_result();
                                     $doctor = $result1->fetch_array(MYSQLI_ASSOC);
 
-                                    echo "<p style='text-align: center; margin-bottom: 0px;'>" . $doctor['full_name'] . "</p>
+                                    echo "<p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($doctor['full_name'], ENT_QUOTES, 'UTF-8') . "</p>
                                                     </td>
                                                 </tr>
                                             </table>
                                         </div>
                                         <div style='margin: 1%;' class='eachcol admdate' scope='row'>
                                             <label style='text-align: center; margin-bottom: 0px;'>Admission Date</label>
-                                            <p style='text-align: center;'>" . $s['ADMDATE'] . "</p>
+                                            <p style='text-align: center;'>" . htmlspecialchars($s['ADMDATE'], ENT_QUOTES, 'UTF-8') . "</p>
                                         </div>
                                         <div style='margin: 1%;' class='eachcol admdate' scope='row'>
                                             <label style='text-align: center; margin-bottom: 0px;'>Nationality</label>
-                                            <p style='text-align: center;'>" . $s['nationality'] . "</p>
+                                            <p style='text-align: center;'>" . htmlspecialchars($s['nationality'], ENT_QUOTES, 'UTF-8') . "</p>
                                         </div>";
 
                                     if ($s['current_location'] == 'ICU') {
@@ -308,7 +308,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                             echo "<div style='margin: 1%; background: #fff3cd;' class='eachcol admdate' scope='row'>";
                                         }
 
-                                        echo "<label style='text-align: center; margin-bottom: 0px;'>Duration of Admission: " . $LOS . " Days</label>
+                                        echo "<label style='text-align: center; margin-bottom: 0px;'>Duration of Admission: " . htmlspecialchars($LOS, ENT_QUOTES, 'UTF-8') . " Days</label>
                                               </div>";
                                     }
 
@@ -323,7 +323,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                             $stmt->execute();
                                             $result1 = $stmt->get_result();
                                             $dxlist = $result1->fetch_array(MYSQLI_ASSOC);
-                                            echo '<li>' . $dxlist['name'] . '</li>';
+                                            echo '<li>' . htmlspecialchars($dxlist['name'], ENT_QUOTES, 'UTF-8') . '</li>';
                                         }
                                     }
                                     echo "</ul></div>
@@ -337,7 +337,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                     $result1 = $stmt->get_result();
                                     $doctor1 = $result1->fetch_array(MYSQLI_ASSOC);
                                     if ($doctor1) {
-                                        echo "<p style='text-align: center; margin-bottom: 0px;'>" . $doctor1['full_name'] . "</p>";
+                                        echo "<p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($doctor1['full_name'], ENT_QUOTES, 'UTF-8') . "</p>";
                                     } else {
                                         echo "<p style='text-align: center; margin-bottom: 0px;'>Not Assigned Yet</p>";
                                     }
@@ -350,7 +350,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                     <tr>
                                                         <td style='width: 50%; border-right: solid 0.5px;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Discharge Status</label>
-                                                            <p style='text-align: center; margin-bottom: 0px;'>" . $s['MORTALITY'] . "</p>
+                                                            <p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($s['MORTALITY'], ENT_QUOTES, 'UTF-8') ."</p>
                                                         </td>
                                                         <td style='width: 50%;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Discharged By</label>";
@@ -362,7 +362,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                         $result1 = $stmt->get_result();
                                         $doctor2 = $result1->fetch_array(MYSQLI_ASSOC);
 
-                                        echo "<p style='text-align: center; margin-bottom: 0px;'>" . $doctor2['full_name'] . "</p>
+                                        echo "<p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($doctor2['full_name'], ENT_QUOTES, 'UTF-8') ."</p>
                                                         </td>
                                                     </tr>
                                                 </table>
@@ -372,11 +372,11 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                     <tr>
                                                         <td style='width: 50%; border-right: solid 0.5px;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Discharge Date</label>
-                                                            <p style='text-align: center; margin-bottom: 0px;'>" . $s['med_DISDATE'] . "</p>
+                                                            <p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($s['med_DISDATE'], ENT_QUOTES, 'UTF-8') ."</p>
                                                         </td>
                                                         <td style='width: 50%;'>
                                                             <label style='text-align: center; margin-bottom: 0px; color: red;'>Delay Due To</label>
-                                                            <p style='text-align: center; margin-bottom: 0px;'>" . $s['delay'] . "</p>
+                                                            <p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($s['delay'], ENT_QUOTES, 'UTF-8') ."</p>
                                                         </td>
                                                     </tr>
                                                 </table>
@@ -388,7 +388,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                     <tr>
                                                         <td style='width: 50%; border-right: solid 0.5px;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Discharge Status</label>
-                                                            <p style='text-align: center; margin-bottom: 0px;'>" . $s['MORTALITY'] . "</p>
+                                                            <p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($s['MORTALITY'], ENT_QUOTES, 'UTF-8') ."</p>
                                                         </td>
                                                         <td style='width: 50%;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Discharged By</label>";
@@ -400,7 +400,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                         $result1 = $stmt->get_result();
                                         $doctor2 = $result1->fetch_array(MYSQLI_ASSOC);
 
-                                        echo "<p style='text-align: center; margin-bottom: 0px;'>" . $doctor2['full_name'] . "</p>
+                                        echo "<p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($doctor2['full_name'], ENT_QUOTES, 'UTF-8') ."</p>
                                                         </td>
                                                     </tr>
                                                 </table>
@@ -410,11 +410,11 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                     <tr>
                                                         <td style='width: 50%; border-right: solid 0.5px;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Discharge Date</label>
-                                                            <p style='text-align: center; margin-bottom: 0px;'>" . $s['med_DISDATE'] . "</p>
+                                                            <p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($s['med_DISDATE'], ENT_QUOTES, 'UTF-8') ."</p>
                                                         </td>
                                                         <td style='width: 50%;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Discharged To</label>
-                                                            <p style='text-align: center; margin-bottom: 0px;'>" . $s['DISTO'] . "</p>
+                                                            <p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($s['DISTO'], ENT_QUOTES, 'UTF-8') ."</p>
                                                         </td>
                                                     </tr>
                                                 </table>
@@ -425,11 +425,11 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                         <tr>
                                                             <td style='width: 50%; border-right: solid 0.5px;'>
                                                                 <label style='text-align: center; margin-bottom: 0px; color: red;'>File Closed At</label>
-                                                                <p style='text-align: center; margin-bottom: 0px;'>" . $s['DISDATE'] . "</p>
+                                                                <p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($s['DISDATE'], ENT_QUOTES, 'UTF-8') ."</p>
                                                             </td>
                                                             <td style='width: 50%;'>
                                                                 <label style='text-align: center; margin-bottom: 0px; color: red;'>Delay Due To</label>
-                                                                <p style='text-align: center; margin-bottom: 0px;'>" . $s['delay'] . "</p>
+                                                                <p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($s['delay'], ENT_QUOTES, 'UTF-8') ."</p>
                                                             </td>
                                                         </tr>
                                                     </table>
@@ -442,7 +442,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                     <tr>
                                                         <td style='width: 50%; border-right: solid 0.5px;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Transfer Status</label>
-                                                            <p style='text-align: center; margin-bottom: 0px;'>" . $s['MORTALITY'] . "</p>
+                                                            <p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($s['MORTALITY'], ENT_QUOTES, 'UTF-8') ."</p>
                                                         </td>
                                                         <td style='width: 50%;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Transfer By</label>";
@@ -454,7 +454,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                         $result1 = $stmt->get_result();
                                         $doctor2 = $result1->fetch_array(MYSQLI_ASSOC);
 
-                                        echo "<p style='text-align: center; margin-bottom: 0px;'>" . $doctor2['full_name'] . "</p>
+                                        echo "<p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($doctor2['full_name'], ENT_QUOTES, 'UTF-8') ."</p>
                                                         </td>
                                                     </tr>
                                                 </table>
@@ -464,11 +464,11 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                     <tr>
                                                         <td style='width: 50%; border-right: solid 0.5px;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Transfer At</label>
-                                                            <p style='text-align: center; margin-bottom: 0px;'>" . $s['med_DISDATE'] . "</p>
+                                                            <p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($s['med_DISDATE'], ENT_QUOTES, 'UTF-8') ."</p>
                                                         </td>
                                                         <td style='width: 50%;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Transfer To</label>
-                                                            <p style='text-align: center; margin-bottom: 0px;'>" . $s['DISTO'] . "</p>
+                                                            <p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($s['DISTO'], ENT_QUOTES, 'UTF-8') ."</p>
                                                         </td>
                                                     </tr>
                                                 </table>
@@ -484,7 +484,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                 <tr>
                                                     <td style='width: 50%; border-right: solid 0.5px;'>
                                                         <label style='text-align: center; margin-bottom: 0px;'>Transfer Status</label>
-                                                        <p style='text-align: center; margin-bottom: 0px;'>" . $s['MORTALITY'] . "</p>
+                                                        <p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($s['MORTALITY'], ENT_QUOTES, 'UTF-8') ."</p>
                                                     </td>
                                                     <td style='width: 50%;'>
                                                         <label style='text-align: center; margin-bottom: 0px;'>Transfer By</label>";
@@ -496,7 +496,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                         $result1 = $stmt->get_result();
                                         $doctor2 = $result1->fetch_array(MYSQLI_ASSOC);
 
-                                        echo "<p style='text-align: center; margin-bottom: 0px;'>" . $doctor2['full_name'] . "</p>
+                                        echo "<p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($doctor2['full_name'], ENT_QUOTES, 'UTF-8') ."</p>
                                                     </td>
                                                 </tr>
                                               </table>
@@ -506,11 +506,11 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                     <tr>
                                                         <td style='width: 50%; border-right: solid 0.5px;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Transfer At</label>
-                                                            <p style='text-align: center; margin-bottom: 0px;'>" . $s['med_DISDATE'] . "</p>
+                                                            <p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($s['med_DISDATE'], ENT_QUOTES, 'UTF-8') ."</p>
                                                         </td>
                                                         <td style='width: 50%;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Transfer To</label>
-                                                            <p style='text-align: center; margin-bottom: 0px;'>" . $s['DISTO'] . "</p>
+                                                            <p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($s['DISTO'], ENT_QUOTES, 'UTF-8') ."</p>
                                                         </td>
                                                     </tr>
                                                 </table>
@@ -522,7 +522,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                     <tr>
                                                         <td style='width: 50%; border-right: solid 0.5px;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Discharge Status</label>
-                                                            <p style='text-align: center; margin-bottom: 0px;'>" . $s['MORTALITY'] . "</p>
+                                                            <p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($s['MORTALITY'], ENT_QUOTES, 'UTF-8') ."</p>
                                                         </td>
                                                         <td style='width: 50%;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Discharged By</label>";
@@ -534,7 +534,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                         $result1 = $stmt->get_result();
                                         $doctor2 = $result1->fetch_array(MYSQLI_ASSOC);
 
-                                        echo "<p style='text-align: center; margin-bottom: 0px;'>" . $doctor2['full_name'] . "</p>
+                                        echo "<p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($doctor2['full_name'], ENT_QUOTES, 'UTF-8') ."</p>
                                                     </td>
                                                 </tr>
                                               </table>
@@ -544,11 +544,11 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                     <tr>
                                                         <td style='width: 50%; border-right: solid 0.5px;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Discharged At</label>
-                                                            <p style='text-align: center; margin-bottom: 0px;'>" . $s['med_DISDATE'] . "</p>
+                                                            <p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($s['med_DISDATE'], ENT_QUOTES, 'UTF-8') ."</p>
                                                         </td>
                                                         <td style='width: 50%;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Discharged To</label>
-                                                            <p style='text-align: center; margin-bottom: 0px;'>" . $s['DISTO'] . "</p>
+                                                            <p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($s['DISTO'], ENT_QUOTES, 'UTF-8') ."</p>
                                                         </td>
                                                     </tr>
                                                 </table>
@@ -560,7 +560,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                     <tr>
                                                         <td style='width: 50%; border-right: solid 0.5px;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Transfer Status</label>
-                                                            <p style='text-align: center; margin-bottom: 0px;'>" . $s['MORTALITY'] . "</p>
+                                                            <p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($s['MORTALITY'], ENT_QUOTES, 'UTF-8') ."</p>
                                                         </td>
                                                         <td style='width: 50%;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Transfer By</label>";
@@ -572,7 +572,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                         $result1 = $stmt->get_result();
                                         $doctor2 = $result1->fetch_array(MYSQLI_ASSOC);
 
-                                        echo "<p style='text-align: center; margin-bottom: 0px;'>" . $doctor2['full_name'] . "</p>
+                                        echo "<p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($doctor2['full_name'], ENT_QUOTES, 'UTF-8') ."</p>
                                                     </td>
                                                 </tr>
                                               </table>
@@ -582,11 +582,11 @@ if (!in_array($user['position'], $access_PICU_control)) {
                                                     <tr>
                                                         <td style='width: 50%; border-right: solid 0.5px;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Transfer At</label>
-                                                            <p style='text-align: center; margin-bottom: 0px;'>" . $s['med_DISDATE'] . "</p>
+                                                            <p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($s['med_DISDATE'], ENT_QUOTES, 'UTF-8') ."</p>
                                                         </td>
                                                         <td style='width: 50%;'>
                                                             <label style='text-align: center; margin-bottom: 0px;'>Transfer To</label>
-                                                            <p style='text-align: center; margin-bottom: 0px;'>" . $s['DISTO'] . "</p>
+                                                            <p style='text-align: center; margin-bottom: 0px;'>" . htmlspecialchars($s['DISTO'], ENT_QUOTES, 'UTF-8') ."</p>
                                                         </td>
                                                     </tr>
                                                 </table>
@@ -642,7 +642,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                         <select class='select2 txtdata' name='nationality' style="width: 100%; text-align: center; padding: 4px;" required>
                             <?php
                             foreach ($countries as $country)
-                                echo "<option value='" . $country['name'] . "'>" . $country['name'] . "</option>";
+                                echo "<option value='" . htmlspecialchars($country['name'], ENT_QUOTES, 'UTF-8') . "'>" . htmlspecialchars($country['name'], ENT_QUOTES, 'UTF-8') . "</option>";
                             ?>
                         </select>
                         <label>Admission Date</label>
@@ -664,7 +664,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                             $consultant = $result1->fetch_all(MYSQLI_ASSOC);
 
                             foreach ($consultant as $con) {
-                                echo "<option value='" . $con['member_id'] . "'>" . $con['full_name'] . "</option>";
+                                echo "<option value='" . htmlspecialchars($con['member_id'], ENT_QUOTES, 'UTF-8') . "'>" . htmlspecialchars($con['full_name'], ENT_QUOTES, 'UTF-8') . "</option>";
                             }
                             ?>
                         </select>
@@ -679,7 +679,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                             $current_location = $result1->fetch_all(MYSQLI_ASSOC);
 
                             foreach ($current_location as $a) {
-                                echo "<option value='" . $a['current_location'] . "'>" . $a['current_location'] . "</option>";
+                                echo "<option value='" . htmlspecialchars($a['current_location'], ENT_QUOTES, 'UTF-8') . "'>" . htmlspecialchars($a['current_location'], ENT_QUOTES, 'UTF-8') . "</option>";
                             }
                             ?>
                         </select>
@@ -691,7 +691,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                             $longterm = $result1->fetch_all(MYSQLI_ASSOC);
 
                             foreach ($longterm as $a) {
-                                echo "<option value='" . $a['longterm'] . "'>" . $a['longterm'] . "</option>";
+                                echo "<option value='" . htmlspecialchars($a['longterm'], ENT_QUOTES, 'UTF-8') . "'>" . htmlspecialchars($a['longterm'], ENT_QUOTES, 'UTF-8') . "</option>";
                             }
                             ?>
                         </select>
@@ -703,7 +703,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                             $trans_discharge = $result1->fetch_all(MYSQLI_ASSOC);
 
                             foreach ($trans_discharge as $a) {
-                                echo "<option value='" . $a['trans_discharge'] . "'>" . $a['trans_discharge'] . "</option>";
+                                echo "<option value='" . htmlspecialchars($a['trans_discharge'], ENT_QUOTES, 'UTF-8') . "'>" . htmlspecialchars($a['trans_discharge'], ENT_QUOTES, 'UTF-8') . "</option>";
                             }
                             ?>
                         </select>
@@ -719,7 +719,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                             $delay = $result1->fetch_all(MYSQLI_ASSOC);
 
                             foreach ($delay as $a) {
-                                echo "<option value='" . $a['delay'] . "'>" . $a['delay'] . "</option>";
+                                echo "<option value='" . htmlspecialchars($a['delay'], ENT_QUOTES, 'UTF-8') . "'>" . htmlspecialchars($a['delay'], ENT_QUOTES, 'UTF-8') . "</option>";
                             }
                             ?>
                         </select>
@@ -731,7 +731,7 @@ if (!in_array($user['position'], $access_PICU_control)) {
                             $disto = $result1->fetch_all(MYSQLI_ASSOC);
 
                             foreach ($disto as $a) {
-                                echo "<option value='" . $a['DISTO'] . "'>" . $a['DISTO'] . "</option>";
+                                echo "<option value='" . htmlspecialchars($a['DISTO'], ENT_QUOTES, 'UTF-8') . "'>" . htmlspecialchars($a['DISTO'], ENT_QUOTES, 'UTF-8') . "</option>";
                             }
                             ?>
                         </select>

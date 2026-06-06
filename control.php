@@ -167,31 +167,31 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                     <div class="col-6">
                                         <div class="form-group">
                                             <label for="min_hospitalist">Minimum Patients for Hospitalist</label>
-                                            <input class="form-control" type="text" id="min_hospitalist" name="min_hospitalist" value="<?= $settings['min_hospitalist'] ?>" required>
+                                            <input class="form-control" type="text" id="min_hospitalist" name="min_hospitalist" value="<?= htmlspecialchars($settings['min_hospitalist'], ENT_QUOTES, 'UTF-8') ?>" required>
                                         </div>
                                         <div class="form-group">
                                             <label for="max_hospitalist">Maximum Patients for Hospitalist</label>
-                                            <input class="form-control" type="text" id="max_hospitalist" name="max_hospitalist" value="<?= $settings['max_hospitalist'] ?>" required>
+                                            <input class="form-control" type="text" id="max_hospitalist" name="max_hospitalist" value="<?= htmlspecialchars($settings['max_hospitalist'], ENT_QUOTES, 'UTF-8') ?>" required>
                                         </div>
                                     </div>
                                     <div class="col-6">
                                         <div class="form-group">
                                             <label for="min_sub">Minimum Patients for Subspeciality</label>
-                                            <input class="form-control" type="text" id="min_sub" name="min_sub" value="<?= $settings['min_subs'] ?>" required>
+                                            <input class="form-control" type="text" id="min_sub" name="min_sub" value="<?= htmlspecialchars($settings['min_subs'], ENT_QUOTES, 'UTF-8') ?>" required>
                                         </div>
                                         <div class="form-group">
                                             <label for="max_sub">Maximum Patients for Subspeciality</label>
-                                            <input class="form-control" type="text" id="max_sub" name="max_sub" value="<?= $settings['max_subs'] ?>" required>
+                                            <input class="form-control" type="text" id="max_sub" name="max_sub" value="<?= htmlspecialchars($settings['max_subs'], ENT_QUOTES, 'UTF-8') ?>" required>
                                         </div>
                                     </div>
                                     <div class="col-12">
                                         <div class="form-group">
                                             <label for="short_los">Short Duration of Admission Less Than</label>
-                                            <input class="form-control" type="text" id="short_los" name="short_los" value="<?= $settings['short_los'] ?>" required>
+                                            <input class="form-control" type="text" id="short_los" name="short_los" value="<?= htmlspecialchars($settings['short_los'], ENT_QUOTES, 'UTF-8') ?>" required>
                                         </div>
                                         <div class="form-group">
                                             <label for="long_los">Long Duration of Admission More Than</label>
-                                            <input class="form-control" type="text" id="long_los" name="long_los" value="<?= $settings['long_los'] ?>" required>
+                                            <input class="form-control" type="text" id="long_los" name="long_los" value="<?= htmlspecialchars($settings['long_los'], ENT_QUOTES, 'UTF-8') ?>" required>
                                         </div>
                                     </div>
                                 </div>
@@ -221,7 +221,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                       foreach($speciality as $ss)
                                 {
                               
-                                    echo '<li>'.  $ss['specilaity']. '</li>';
+                                    echo '<li>'.  htmlspecialchars($ss['specilaity'], ENT_QUOTES, 'UTF-8'). '</li>';
                                 }
            
                                     
@@ -259,7 +259,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                       foreach($other_specialities as $ss)
                                 {
                               
-                                    echo '<li>'.  $ss['specilaity']. '</li>';
+                                    echo '<li>'.  htmlspecialchars($ss['specilaity'], ENT_QUOTES, 'UTF-8'). '</li>';
                                 }
            
                                     
@@ -300,7 +300,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                       foreach($indications as $ind)
                                 {
                               
-                                    echo '<li>'.  $ind['consultation_reason']. '</li>';
+                                    echo '<li>'.  htmlspecialchars($ind['consultation_reason'], ENT_QUOTES, 'UTF-8'). '</li>';
                                 }
            
                                     
@@ -354,29 +354,29 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                         foreach ($members as $member):
                                             if ($member['active'] == '1'):
                                                 ?>
-                                                <tr class='eachrow' id='row<?= $member['member_id'] ?>'>
+                                                <tr class='eachrow' id='row<?= htmlspecialchars($member['member_id'], ENT_QUOTES, 'UTF-8') ?>'>
                                                     <td class='eachcol full_name'>
-                                                        <input class='txtdata' name='full_name' value='<?= $member['full_name'] ?>' style='text-align: center;'>
-                                                        <input type='hidden' name='member_id' value='<?= $member['member_id'] ?>'>
-                                                        <p style='display:none;'><?= $member['full_name'] ?></p>
+                                                        <input class='txtdata' name='full_name' value='<?= htmlspecialchars($member['full_name'], ENT_QUOTES, 'UTF-8') ?>' style='text-align: center;'>
+                                                        <input type='hidden' name='member_id' value='<?= htmlspecialchars($member['member_id'], ENT_QUOTES, 'UTF-8') ?>'>
+                                                        <p style='display:none;'><?= htmlspecialchars($member['full_name'], ENT_QUOTES, 'UTF-8') ?></p>
                                                         <?php
                                                         foreach ($positions as $position) {
                                                             if ($member['position'] == $position['id']) {
-                                                                echo "<p style='display:none;'>{$position['position']}</p>";
+                                                                echo "<p style='display:none;'>" . htmlspecialchars($position['position'], ENT_QUOTES, 'UTF-8') . "</p>";
                                                             }
                                                         }
                                                         foreach ($specialities as $speciality) {
                                                             if ($member['specialty_id'] == $speciality['id']) {
-                                                                echo "<p style='display:none;'>{$speciality['specilaity']}</p>";
+                                                                echo "<p style='display:none;'>" . htmlspecialchars($speciality['specilaity'], ENT_QUOTES, 'UTF-8') . "</p>";
                                                             }
                                                         }
                                                         ?>
                                                     </td>
-                                                    <td class='eachcol member_name'><p><?= $member['member_name'] ?></p></td>
+                                                    <td class='eachcol member_name'><p><?= htmlspecialchars($member['member_name'], ENT_QUOTES, 'UTF-8') ?></p></td>
                                                     <td class='eachcol member_email'>
-                                                        <p><?= $member['member_email'] ?></p>
+                                                        <p><?= htmlspecialchars($member['member_email'], ENT_QUOTES, 'UTF-8') ?></p>
                                                         <?php if (in_array($user['position'], $access_PICU_control)): ?>
-                                                            <a href="send-reset-pass-by-admin.php?email=<?= $member['member_email'] ?>">Send Reset Password Email</a>
+                                                            <a href="send-reset-pass-by-admin.php?email=<?= rawurlencode($member['member_email']) ?>">Send Reset Password Email</a>
                                                         <?php endif; ?>
                                                     </td>
                                                     <td class='eachcol position'>
@@ -384,7 +384,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                                             <?php
                                                             foreach ($positions as $position) {
                                                                 $selected = ($member['position'] == $position['id']) ? 'selected' : '';
-                                                                echo "<option value='{$position['id']}' {$selected}>{$position['position']}</option>";
+                                                                echo "<option value='" . htmlspecialchars($position['id'], ENT_QUOTES, 'UTF-8') . "' {$selected}>" . htmlspecialchars($position['position'], ENT_QUOTES, 'UTF-8') . "</option>";
                                                             }
                                                             ?>
                                                             <option value="0" <?= ($member['position'] == '0') ? 'selected' : '' ?>>Administrator</option>
@@ -396,7 +396,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                                                 <?php
                                                                 foreach ($specialities as $speciality) {
                                                                     $selected = ($member['specialty_id'] == $speciality['id']) ? 'selected' : '';
-                                                                    echo "<option value='{$speciality['id']}' {$selected}>{$speciality['specilaity']}</option>";
+                                                                    echo "<option value='" . htmlspecialchars($speciality['id'], ENT_QUOTES, 'UTF-8') . "' {$selected}>" . htmlspecialchars($speciality['specilaity'], ENT_QUOTES, 'UTF-8') . "</option>";
                                                                 }
                                                                 ?>
                                                             </select>
@@ -479,29 +479,29 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                         foreach ($members as $member):
                                             if ($member['active'] != '1'):
                                                 ?>
-                                                <tr class='eachrow' id='row<?= $member['member_id'] ?>'>
+                                                <tr class='eachrow' id='row<?= htmlspecialchars($member['member_id'], ENT_QUOTES, 'UTF-8') ?>'>
                                                     <td class='eachcol full_name'>
-                                                        <input class='txtdata' name='full_name' value='<?= $member['full_name'] ?>' style='text-align: center;'>
-                                                        <input type='hidden' name='member_id' value='<?= $member['member_id'] ?>'>
-                                                        <p style='display:none;'><?= $member['full_name'] ?></p>
+                                                        <input class='txtdata' name='full_name' value='<?= htmlspecialchars($member['full_name'], ENT_QUOTES, 'UTF-8') ?>' style='text-align: center;'>
+                                                        <input type='hidden' name='member_id' value='<?= htmlspecialchars($member['member_id'], ENT_QUOTES, 'UTF-8') ?>'>
+                                                        <p style='display:none;'><?= htmlspecialchars($member['full_name'], ENT_QUOTES, 'UTF-8') ?></p>
                                                         <?php
                                                         foreach ($positions as $position) {
                                                             if ($member['position'] == $position['id']) {
-                                                                echo "<p style='display:none;'>{$position['position']}</p>";
+                                                                echo "<p style='display:none;'>" . htmlspecialchars($position['position'], ENT_QUOTES, 'UTF-8') . "</p>";
                                                             }
                                                         }
                                                         foreach ($specialities as $speciality) {
                                                             if ($member['specialty_id'] == $speciality['id']) {
-                                                                echo "<p style='display:none;'>{$speciality['specilaity']}</p>";
+                                                                echo "<p style='display:none;'>" . htmlspecialchars($speciality['specilaity'], ENT_QUOTES, 'UTF-8') . "</p>";
                                                             }
                                                         }
                                                         ?>
                                                     </td>
-                                                    <td class='eachcol member_name'><p><?= $member['member_name'] ?></p></td>
+                                                    <td class='eachcol member_name'><p><?= htmlspecialchars($member['member_name'], ENT_QUOTES, 'UTF-8') ?></p></td>
                                                     <td class='eachcol member_email'>
-                                                        <p><?= $member['member_email'] ?></p>
+                                                        <p><?= htmlspecialchars($member['member_email'], ENT_QUOTES, 'UTF-8') ?></p>
                                                         <?php if (in_array($user['position'], $access_PICU_control)): ?>
-                                                            <a href="send-reset-pass-by-admin.php?email=<?= $member['member_email'] ?>">Send Reset Password Email</a>
+                                                            <a href="send-reset-pass-by-admin.php?email=<?= rawurlencode($member['member_email']) ?>">Send Reset Password Email</a>
                                                         <?php endif; ?>
                                                     </td>
                                                     <td class='eachcol position'>
@@ -509,7 +509,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                                             <?php
                                                             foreach ($positions as $position) {
                                                                 $selected = ($member['position'] == $position['id']) ? 'selected' : '';
-                                                                echo "<option value='{$position['id']}' {$selected}>{$position['position']}</option>";
+                                                                echo "<option value='" . htmlspecialchars($position['id'], ENT_QUOTES, 'UTF-8') . "' {$selected}>" . htmlspecialchars($position['position'], ENT_QUOTES, 'UTF-8') . "</option>";
                                                             }
                                                             ?>
                                                             <option value="0" <?= ($member['position'] == '0') ? 'selected' : '' ?>>Administrator</option>
@@ -521,7 +521,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                                                 <?php
                                                                 foreach ($specialities as $speciality) {
                                                                     $selected = ($member['specialty_id'] == $speciality['id']) ? 'selected' : '';
-                                                                    echo "<option value='{$speciality['id']}' {$selected}>{$speciality['specilaity']}</option>";
+                                                                    echo "<option value='" . htmlspecialchars($speciality['id'], ENT_QUOTES, 'UTF-8') . "' {$selected}>" . htmlspecialchars($speciality['specilaity'], ENT_QUOTES, 'UTF-8') . "</option>";
                                                                 }
                                                                 ?>
                                                             </select>

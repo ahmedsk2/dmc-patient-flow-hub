@@ -106,8 +106,8 @@ admfrom_modify=document.getElementById('admfrom_modify').value;
 
 var checked = document.querySelectorAll('#admissiondiagnosis_modify :checked');
 var admissiondiagnosis_modify = [...checked].map(option => option.value);
-var userid=<?php echo $userid; ?>;
-   
+var userid=<?php echo json_encode($userid); ?>;
+
 var disdate=document.getElementById('disdate').value;
 var disstatus=document.getElementById('disstatus').value;
 var disto=document.getElementById('disto').value;
@@ -168,39 +168,39 @@ location.reload();
 </script>
 
 <form autocomplete="off">
-<input type="hidden" id='id_modify' value='<?php echo $id; ?>'>
+<input type="hidden" id='id_modify' value='<?php echo htmlspecialchars($id, ENT_QUOTES, 'UTF-8'); ?>'>
 <label>Bed Number</label>
-<input class='txtdata' id='bed_modify' value='<?php echo $patient['BED']; ?>' style='text-align: center;' required>
+<input class='txtdata' id='bed_modify' value='<?php echo htmlspecialchars($patient['BED'], ENT_QUOTES, 'UTF-8'); ?>' style='text-align: center;' required>
 <label>MRNs</label>
-<input class='txtdata' id='mrn_modify' value='<?php echo $patient['MRN']; ?>' style='text-align: center;' required>
+<input class='txtdata' id='mrn_modify' value='<?php echo htmlspecialchars($patient['MRN'], ENT_QUOTES, 'UTF-8'); ?>' style='text-align: center;' required>
 <label>Patient Name</label>
-<input class='txtdata' id='pname_modify' value='<?php echo $patient['PNAME']; ?>' style='text-align: center;' required>
+<input class='txtdata' id='pname_modify' value='<?php echo htmlspecialchars($patient['PNAME'], ENT_QUOTES, 'UTF-8'); ?>' style='text-align: center;' required>
 <label>Age</label>
-<input class='txtdata' id='age_modify' value='<?php echo $patient['age']; ?>' style='text-align: center;' required>
+<input class='txtdata' id='age_modify' value='<?php echo htmlspecialchars($patient['age'], ENT_QUOTES, 'UTF-8'); ?>' style='text-align: center;' required>
 <label>Gender</label>
 <select class='txtdata' id='gender_modify' style="width: 100%;text-align: center;padding: 4px;" required>
-<option selected value='<?php echo $patient['gender']; ?>'> <?php echo $patient['gender']; ?></option>
+<option selected value='<?php echo htmlspecialchars($patient['gender'], ENT_QUOTES, 'UTF-8'); ?>'> <?php echo htmlspecialchars($patient['gender'], ENT_QUOTES, 'UTF-8'); ?></option>
 <option value='Male'>Male</option>
 <option value='Female'>Female</option>
 </select>
 <label>Nationality</label>
 <select class='select2_discharge txtdata' id='nationality_modify' style='text-align: center;' required>
-<option selected value='<?php echo $patient['nationality']; ?>'> <?php echo $patient['nationality']; ?></option>
- <?php  
+<option selected value='<?php echo htmlspecialchars($patient['nationality'], ENT_QUOTES, 'UTF-8'); ?>'> <?php echo htmlspecialchars($patient['nationality'], ENT_QUOTES, 'UTF-8'); ?></option>
+ <?php
 
 foreach($countries as $country)
     echo"
-    <option value='".$country['name']."'>".$country['name']."</option>";
+    <option value='".htmlspecialchars($country['name'], ENT_QUOTES, 'UTF-8')."'>".htmlspecialchars($country['name'], ENT_QUOTES, 'UTF-8')."</option>";
   ?>
 
 </select>
 <label>Admittion date</label>
-<input value='<?php echo $patient['ADMDATE']; ?>' class='txtdata' id ="admdate_modify"  data-date-format="DD-MM-YYYY" type="text"  name='admdate' style="text-align: center;padding: 0px;" required disabled>
+<input value='<?php echo htmlspecialchars($patient['ADMDATE'], ENT_QUOTES, 'UTF-8'); ?>' class='txtdata' id ="admdate_modify"  data-date-format="DD-MM-YYYY" type="text"  name='admdate' style="text-align: center;padding: 0px;" required disabled>
 
 
 <label>Admitted from</label>
 <select class='txtdata' id ="admfrom_modify" style="width: 100%;text-align: center;padding: 4px;" required>
-<option selected value='<?php echo $patient['ADMFROM']; ?>'><?php echo $patient['ADMFROM']; ?></option>
+<option selected value='<?php echo htmlspecialchars($patient['ADMFROM'], ENT_QUOTES, 'UTF-8'); ?>'><?php echo htmlspecialchars($patient['ADMFROM'], ENT_QUOTES, 'UTF-8'); ?></option>
 <option value='ER'>ER</option>
 <option value='ICU'>ICU</option>
 <option value='OPD'>OPD</option>
@@ -231,7 +231,7 @@ if (is_array($decodedadmissiondx)){
 		$dxlist = $result1 -> fetch_array(MYSQLI_ASSOC);
      
 
-      echo '<option selected value="' . $dxlist['id'] . '">'.  $dxlist['name']. '</option>';
+      echo '<option selected value="' . htmlspecialchars($dxlist['id'], ENT_QUOTES, 'UTF-8') . '">'.  htmlspecialchars($dxlist['name'], ENT_QUOTES, 'UTF-8'). '</option>';
   }}
 echo"
   </select>";

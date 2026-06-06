@@ -110,7 +110,7 @@ while ($row = $result1->fetch_assoc()) {
                     ?>
                     <div class="card">
                         <div class="card-header">
-                            <h3 class="card-title"><i class="fas fa-user-tie text-info"></i> Dr. <?php echo $consultant['full_name']; ?> consultations List</h3>
+                            <h3 class="card-title"><i class="fas fa-user-tie text-info"></i> Dr. <?php echo htmlspecialchars($consultant['full_name'], ENT_QUOTES, 'UTF-8'); ?> consultations List</h3>
                             <div id="addbtn" class="eachrow" style="float: right;"></div>
                         </div>
                         <!-- /.card-header -->
@@ -135,39 +135,39 @@ while ($row = $result1->fetch_assoc()) {
                                         if ($s['consultant_id'] == $consultant['member_id']) {
                                             $decodedIndications = json_decode($s['indication']);
                                             echo "
-                                            <tr class='eachrow' id='row".$s['id']."'>
+                                            <tr class='eachrow' id='row".htmlspecialchars($s['id'], ENT_QUOTES, 'UTF-8')."'>
                                                 <td style='padding: 0px 1%; text-align: center' class='eachcol mrn'>
-                                                    <p>".$s['MRN']."</p>
+                                                    <p>".htmlspecialchars($s['MRN'], ENT_QUOTES, 'UTF-8')."</p>
                                                 </td>
                                                 <td style='padding: 0px 1%; text-align: center' class='eachcol name'>
-                                                    <p>".$s['PNAME']."</p>
+                                                    <p>".htmlspecialchars($s['PNAME'], ENT_QUOTES, 'UTF-8')."</p>
                                                 </td>
                                                 <td style='padding: 0px 1%; text-align: center' class='eachcol AGE' scope='row'>
-                                                    <p>".$s['age']."</p>
+                                                    <p>".htmlspecialchars($s['age'], ENT_QUOTES, 'UTF-8')."</p>
                                                 </td>
                                                 <td style='padding: 0px 1%;' class='eachcol indications'>
                                                     <ul style='list-style-position: inside; margin: 1% 0% 1%;'>";
                                             if (is_array($decodedIndications)) {
                                                 foreach ($decodedIndications as $value) {
-                                                    echo "<li>" . $consultationReasons[$value] . "</li>";
+                                                    echo "<li>" . htmlspecialchars($consultationReasons[$value], ENT_QUOTES, 'UTF-8') . "</li>";
                                                 }
                                             }
                                             echo "
                                                     </ul>
                                                 </td>
                                                 <td style='padding: 0px 1%; text-align: center' class='eachcol condate' scope='row'>
-                                                    <p>".$s['consultation_date']."</p>
+                                                    <p>".htmlspecialchars($s['consultation_date'], ENT_QUOTES, 'UTF-8')."</p>
                                                 </td>
                                                 <td style='padding: 0px 1%; text-align: center' class='eachcol conby' scope='row'>
-                                                    <p>".$s['consultation_from']."</p>
+                                                    <p>".htmlspecialchars($s['consultation_from'], ENT_QUOTES, 'UTF-8')."</p>
                                                 </td>
                                                 <td style='padding: 0px 1%; text-align: center' class='eachcol singoffdate' scope='row'>
-                                                    <p>".$s['signoff_date']."</p>
+                                                    <p>".htmlspecialchars($s['signoff_date'], ENT_QUOTES, 'UTF-8')."</p>
                                                 </td>
                                                 <td style='padding: 0px 1%; text-align: center' class='eachcol enteredby' scope='row'>";
                                             $mem_id = $s['entered_by_id'];
                                             if (isset($members[$mem_id])) {
-                                                echo "<p>" . $members[$mem_id] . "</p>";
+                                                echo "<p>" . htmlspecialchars($members[$mem_id], ENT_QUOTES, 'UTF-8') . "</p>";
                                             } else {
                                                 echo "<p>Unknown member</p>";
                                             }
@@ -175,7 +175,7 @@ while ($row = $result1->fetch_assoc()) {
                                                 </td>
                                                 <td style='padding: 0px 1%; text-align: center' class='eachcol actionbtn' scope='row'>
                                                     <form method='post' name='undo' action='48consultation.php'>
-                                                        <input type='hidden' name='consultid' value='".$s['id']."'>";
+                                                        <input type='hidden' name='consultid' value='".htmlspecialchars($s['id'], ENT_QUOTES, 'UTF-8')."'>";
                                             if ($s['signoff_date'] == $today) {
                                                 echo "<button type='submit' value='submit' class='btn btn-warning' name='undo_btn' onclick='undoconsult(this)'>Undo Signoff</button>";
                                             }

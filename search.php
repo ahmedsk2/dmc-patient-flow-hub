@@ -229,7 +229,7 @@ font-size: medium;color: red;
 
                         foreach($countries as $country)
                             echo"
-                            <option value='".$country['name']."'>".$country['name']."</option>";
+                            <option value='".htmlspecialchars($country['name'], ENT_QUOTES, 'UTF-8')."'>".htmlspecialchars($country['name'], ENT_QUOTES, 'UTF-8')."</option>";
                         ?>
                     
                     </select>
@@ -258,7 +258,7 @@ font-size: medium;color: red;
                             $admfrom = $result1 -> fetch_all(MYSQLI_ASSOC);
                             
                             foreach ($admfrom as $a){
-                                echo  "<option value=".$a['ADMFROM'].">".$a['ADMFROM']."</option>";
+                                echo  "<option value=".htmlspecialchars($a['ADMFROM'], ENT_QUOTES, 'UTF-8').">".htmlspecialchars($a['ADMFROM'], ENT_QUOTES, 'UTF-8')."</option>";
                             }
                         ?>
                     </select>
@@ -275,7 +275,7 @@ font-size: medium;color: red;
                             $current_location = $result1 -> fetch_all(MYSQLI_ASSOC);
                             
                             foreach ($current_location as $a){
-                                echo  "<option value=".$a['current_location'].">".$a['current_location']."</option>";
+                                echo  "<option value=".htmlspecialchars($a['current_location'], ENT_QUOTES, 'UTF-8').">".htmlspecialchars($a['current_location'], ENT_QUOTES, 'UTF-8')."</option>";
                             }
                         ?>
                     </select>
@@ -311,7 +311,7 @@ font-size: medium;color: red;
                             $disto = $result1 -> fetch_all(MYSQLI_ASSOC);
                             
                             foreach ($disto as $d){
-                                echo  "<option value=".$d['DISTO'].">".$d['DISTO']."</option>";
+                                echo  "<option value=".htmlspecialchars($d['DISTO'], ENT_QUOTES, 'UTF-8').">".htmlspecialchars($d['DISTO'], ENT_QUOTES, 'UTF-8')."</option>";
                             }
                         ?>
                     </select> 
@@ -328,7 +328,7 @@ font-size: medium;color: red;
                             $delay = $result1 -> fetch_all(MYSQLI_ASSOC);
                             
                             foreach ($delay as $d){
-                                echo  "<option value=".$d['delay'].">".$d['delay']."</option>";
+                                echo  "<option value=".htmlspecialchars($d['delay'], ENT_QUOTES, 'UTF-8').">".htmlspecialchars($d['delay'], ENT_QUOTES, 'UTF-8')."</option>";
                             }
                         ?>
                     </select> 
@@ -345,7 +345,7 @@ font-size: medium;color: red;
                             $mortality = $result1 -> fetch_all(MYSQLI_ASSOC);
                             
                             foreach ($mortality as $m){
-                                echo  "<option value=".$m['MORTALITY'].">".$m['MORTALITY']."</option>";
+                                echo  "<option value=".htmlspecialchars($m['MORTALITY'], ENT_QUOTES, 'UTF-8').">".htmlspecialchars($m['MORTALITY'], ENT_QUOTES, 'UTF-8')."</option>";
                             }
                         ?>
                     </select>
@@ -370,10 +370,10 @@ font-size: medium;color: red;
                                 $result1 = $stmt->get_result();
                                 $name = $result1 -> fetch_array(MYSQLI_ASSOC);
 
-                                echo  "<option value=".$name['member_id'].">".$name['full_name']."</option>";
+                                echo  "<option value=".htmlspecialchars($name['member_id'], ENT_QUOTES, 'UTF-8').">".htmlspecialchars($name['full_name'], ENT_QUOTES, 'UTF-8')."</option>";
                             }
                         ?>
-                    </select> 
+                    </select>
                 </div>
                 <div class="col-sm-3" style="text-align: center;">
 
@@ -442,7 +442,7 @@ font-size: medium;color: red;
                     $consultation_reason = $result1 -> fetch_all(MYSQLI_ASSOC);
                     
                     foreach ($consultation_reason as $a){
-                        echo  "<option value=".$a['id'].">".$a['consultation_reason']."</option>";
+                        echo  "<option value=".htmlspecialchars($a['id'], ENT_QUOTES, 'UTF-8').">".htmlspecialchars($a['consultation_reason'], ENT_QUOTES, 'UTF-8')."</option>";
                     }
                 ?>
 
@@ -478,7 +478,7 @@ font-size: medium;color: red;
                             $consultation_from = $result1 -> fetch_all(MYSQLI_ASSOC);
                             
                             foreach ($consultation_from as $a){
-                                echo  "<option value='".$a['consultation_from']."'>".$a['consultation_from']."</option>";
+                                echo  "<option value='".htmlspecialchars($a['consultation_from'], ENT_QUOTES, 'UTF-8')."'>".htmlspecialchars($a['consultation_from'], ENT_QUOTES, 'UTF-8')."</option>";
                             }
                         ?>
                     </select>
@@ -521,12 +521,12 @@ font-size: medium;color: red;
                   $service = $a['consultation_to_service'];
                   if (is_numeric($service)) {
                       if (isset($specialities[$service])) {
-                          echo "<option value='$service'>".$specialities[$service]."</option>";
+                          echo "<option value='".htmlspecialchars($service, ENT_QUOTES, 'UTF-8')."'>".htmlspecialchars($specialities[$service], ENT_QUOTES, 'UTF-8')."</option>";
                       } else {
-                          echo "<option value='$service'>".$service."</option>";
+                          echo "<option value='".htmlspecialchars($service, ENT_QUOTES, 'UTF-8')."'>".htmlspecialchars($service, ENT_QUOTES, 'UTF-8')."</option>";
                       }
                   } else {
-                      echo "<option value='$service'>".$service."</option>";
+                      echo "<option value='".htmlspecialchars($service, ENT_QUOTES, 'UTF-8')."'>".htmlspecialchars($service, ENT_QUOTES, 'UTF-8')."</option>";
                   }
               }
         ?>
@@ -558,12 +558,12 @@ font-size: medium;color: red;
                 $result1 = $stmt->get_result();
                 $name = $result1 -> fetch_array(MYSQLI_ASSOC);
 
-                echo  "<option value=".$name['member_id'].">".$name['full_name']."</option>";
+                echo  "<option value=".htmlspecialchars($name['member_id'], ENT_QUOTES, 'UTF-8').">".htmlspecialchars($name['full_name'], ENT_QUOTES, 'UTF-8')."</option>";
             }
         ?>
-    </select> 
+    </select>
 
-                  
+
 
 
                    

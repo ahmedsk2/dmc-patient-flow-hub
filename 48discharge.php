@@ -144,7 +144,7 @@ while ($row = $result1->fetch_array(MYSQLI_ASSOC)) {
 
             <div class="card">
               <div  class="card-header">
-                <h3 class="card-title"><i class="fas fa-user-tie text-info"></i> Dr. <?php echo $consultant['full_name'];  ?> Patient List</h3>
+                <h3 class="card-title"><i class="fas fa-user-tie text-info"></i> Dr. <?php echo htmlspecialchars($consultant['full_name'], ENT_QUOTES, 'UTF-8');  ?> Patient List</h3>
                 <div id="addbtn" class='eachrow' style=' float: right; '>
   
                 <!-- <a  class='btn btn-success'  href='#admiting_modal' data-toggle='modal'  style='color: aliceblue; line-height: 2;padding: 0px 15px;'>Add New Patient</a> -->
@@ -199,20 +199,20 @@ while ($row = $result1->fetch_array(MYSQLI_ASSOC)) {
                                                       
                                                     echo"  
                                                    
-                                                    <tr class='eachrow'  id='row".$s['ID']."'>
-                                                    
-                                                    
-                                                      
+                                                    <tr class='eachrow'  id='row".htmlspecialchars($s['ID'], ENT_QUOTES, 'UTF-8')."'>
+
+
+
                                                       <td style='  padding: 0px 1%;text-align: center' class='eachcol mrn' >
-                                                      <p>".$s['MRN']."</p>
+                                                      <p>".htmlspecialchars($s['MRN'], ENT_QUOTES, 'UTF-8')."</p>
                                                       </td>
 
                                                       <td style='  padding: 0px 1%;text-align: center' class='eachcol name'>
-                                                      <p>".$s['PNAME']."</p>
+                                                      <p>".htmlspecialchars($s['PNAME'], ENT_QUOTES, 'UTF-8')."</p>
                                                       </td>
-                                            
+
                                                       <td style='  padding: 0px 1%;text-align: center' class='eachcol admdate'  scope='row' >
-                                                      <p>".$s['ADMDATE']."</p>
+                                                      <p>".htmlspecialchars($s['ADMDATE'], ENT_QUOTES, 'UTF-8')."</p>
                                                       </td>";
 
                                                       if ($LOS < $shortlos){
@@ -225,7 +225,7 @@ while ($row = $result1->fetch_array(MYSQLI_ASSOC)) {
                                                     
 
                                                       echo"
-                                                      <p>".$LOS."</p>
+                                                      <p>".htmlspecialchars($LOS, ENT_QUOTES, 'UTF-8')."</p>
                                                       </td>
                                                       ";
                                                    
@@ -236,7 +236,7 @@ while ($row = $result1->fetch_array(MYSQLI_ASSOC)) {
                                                 
                                                     if (is_array($decodedadmissiondx)) {
                                                 foreach ($decodedadmissiondx as $value) {
-                                                    echo "<li>" . $icd10[$value] . "</li>";
+                                                    echo "<li>" . htmlspecialchars($icd10[$value], ENT_QUOTES, 'UTF-8') . "</li>";
                                                 }
                                             }
 
@@ -246,7 +246,7 @@ while ($row = $result1->fetch_array(MYSQLI_ASSOC)) {
                                                    <td style='  padding: 0px 1%;text-align: center' class='eachcol madmby' >";
                                                    $mem_id= $s['admitted_by'];
                                             if (isset($members[$mem_id])) {
-                                                echo "<p>" . $members[$mem_id] . "</p>";
+                                                echo "<p>" . htmlspecialchars($members[$mem_id], ENT_QUOTES, 'UTF-8') . "</p>";
                                             } else {
                                                 echo "<p>Unknown member</p>";
                                             }
@@ -256,24 +256,24 @@ while ($row = $result1->fetch_array(MYSQLI_ASSOC)) {
                                                  <td style='  padding: 0px 1%;text-align: center' class='eachcol madmby' >";
                                                  $mem_id= $s['trans_discharge_by'];
                                              if (isset($members[$mem_id])) {
-                                                echo "<p>" . $members[$mem_id] . "</p>";
+                                                echo "<p>" . htmlspecialchars($members[$mem_id], ENT_QUOTES, 'UTF-8') . "</p>";
                                             } else {
                                                 echo "<p>Unknown member</p>";
                                             }
                                             echo"
                                                </td>
                                                 <td style='  padding: 0px 1%;text-align: center' class='eachcol admdate'  scope='row' >
-                                               <p>".$s['trans_discharge']."</p>
+                                               <p>".htmlspecialchars($s['trans_discharge'], ENT_QUOTES, 'UTF-8')."</p>
                                                </td>
                                                 <td style='  padding: 0px 1%;text-align: center' class='eachcol admdate'  scope='row' >
-                                               <p>".$s['DISTO']."</p>
+                                               <p>".htmlspecialchars($s['DISTO'], ENT_QUOTES, 'UTF-8')."</p>
                                                </td>
                                                <td style='  padding: 0px 1%;text-align: center' class='eachcol admdate'  scope='row' >
-                                               <p>".$s['DISDATE']."</p>
+                                               <p>".htmlspecialchars($s['DISDATE'], ENT_QUOTES, 'UTF-8')."</p>
                                                </td>
                                                <td style='  padding: 0px 1%;text-align: center' class='eachcol admdate'  scope='row' >
                                                <form method='post' name='undo' action='48discharge.php'>
-                                               <input type='hidden' name='patientid' value='".$s['ID']."'>";
+                                               <input type='hidden' name='patientid' value='".htmlspecialchars($s['ID'], ENT_QUOTES, 'UTF-8')."'>";
                                                if ($s['DISDATE'] == $today) {
                                                echo "<button type='button'  value='submit' class='btn btn-warning' name='undo_btn' onclick='undodischarge(this)'>Undo Discharge</button>";
                                               }

@@ -17,7 +17,7 @@ _Last updated: 2026-06-06_
 |---|---|---|
 | Review & planning (read-only) | 4 / 4 | ✅ complete |
 | Phase 0 — Containment | 3 ✅ · 1 🔄 · 3 ⏸️ ops | 🔄 in progress |
-| Phase 1 — Critical security & data integrity | 3 ✅ · 3 🔄 (of 16) | 🔄 in progress |
+| Phase 1 — Critical security & data integrity | 3 ✅ · 4 🔄 (of 16) | 🔄 in progress |
 | Phase 2 — Stabilize | 0 / 8 | not started |
 | Phase 3 — Refactor + UI/UX | 0 / 6 | not started |
 | Phase 4 — Re-platform (decision-gated) | 0 / 2 | not started |
@@ -26,6 +26,8 @@ _Last updated: 2026-06-06_
 ---
 
 ## Notes & decisions  _(newest first)_
+
+- **2026-06-06 — Batch 6 (XSS output encoding, S3) DONE** (branch `renovation`). Wrapped **~250+** unescaped output sinks (patient MRN/name/diagnosis/bed/dates, consultant names, reflected `$_GET`/`$_COOKIE` values) in `htmlspecialchars(ENT_QUOTES,'UTF-8')` for HTML contexts and `json_encode` for `<script>` contexts — across registry results, patient/consultation modals, the big list pages (dmc-patients/dmc-new-admissions/dmc-old-patients), search/48*/list pages, login/profile/control/errors. Verified: **no double-encoding**; known reflected sinks (login cookies, `errors.php`, reflected ids) now encoded. Conservatively LEFT (low-risk, accepted): a few `onclick='del(<id>)'`/`showfunction('<id>')` JS-call args embedding **integer** ID columns (can't carry a payload). **Deferred**: removing `eval()` in `dashboard.php` + a real **CSP** (need the inline-JS refactor — Phase 3). Minor: `htmlspecialchars(null)` on nullable columns emits a benign E_DEPRECATED on PHP 8.1+ (still returns ''; hidden by `display_errors=Off`; a future `h()` helper can add `?? ''`). Not runtime-tested.
 
 - **2026-06-06 — Batch 5 (page-file SQLi + handler-ordering) DONE** (branch `renovation`). Converted the remaining string-built queries in the big page files to prepared statements via 5 parallel agents + review: `dmc-patients.php` (reverse-discharge, both transfer INSERTs 11/13 cols, readmission OR-list), `dmc-old-patients.php` (17-col import INSERT + confirm INSERT…SELECT + DELETE), `dmc-new-admissions.php` (assign handlers), `dmc-new-consultation.php` (signoff), `search.php`/`48discharge.php`/`48consultation.php` (undo handlers), and the list/admin pages (readmission + icd10 loops; control.php's one string query). **Verified**: repo-wide grep for executed interpolated SQL = 0 matches; hand-checked the 17-col import bind (17=17=17). **Also fixed SEC-20**: `dmc-patients.php` & `dmc-old-patients.php` now enforce their role gate *before* the POST action handlers run. **S2 (prepared statements) is now COMPLETE across the app.** Not runtime-tested (no local PHP) — verify on the PHP 8.3 server before deploy. Remaining SQLi-adjacent: the dead role-filter at `dmc-new-consultation.php:~95` (everyone sees all consultations) is a latent *logic* bug, not SQLi — noted for the clinical-logic pass.
 
@@ -69,7 +71,7 @@ _(Add new notes/decisions above this line as we go.)_
 - 🔄 **Central server-side auth guard** — `guard.php` + **authentication enforced on all 42 action endpoints** (Batch 2); ⬜ fine-grained role/ownership + page-file handler-ordering = Batch 3 — (S1 / SEC-01,04,07-11,20,21) — P1
 - ⬜ **Re-confirm the real role/capability permission model** with team/clinicians (permissions.docx is dated) — (NEW) — P1
 - ✅ Convert **all queries to prepared statements** — account cluster (Batch 3) + all subdir endpoints (Batch 4) + all page files (Batch 5). Repo-wide grep confirms **0 executed interpolated queries** remain. (S2,C2 / SEC-07-13). ⏳ needs runtime test on server.
-- ⬜ **Encode all output** + remove `eval` + baseline CSP — (S3,S10 / SEC-18,26) — P1
+- 🔄 **Encode all output** — ~250+ DB/request sinks wrapped (htmlspecialchars/json_encode) across all rendering files (Batch 6; SEC-18 done); ⬜ remove `eval` + baseline **CSP** deferred to Phase 3 (needs inline-JS refactor) — (S3,S10 / SEC-18,26) — P1
 - ✅ Block **privilege escalation** — `register.php` rejects position 0 + creates inactive accounts; user-mgmt admin-gated (Batches 2–3) — (S4 / SEC-02,03)
 - 🔄 Fix **password reset** — public SQLi removed + all account flows parameterized (Batch 3); ⬜ random single-use expiring **token redesign** (needs `password_resets` table) + widen `member_password` to varchar(255) — (S5 / SEC-13,14,30)
 - ⬜ **Session/cookie hardening** + **CSRF tokens** — (S6 / SEC-19,23) — P1

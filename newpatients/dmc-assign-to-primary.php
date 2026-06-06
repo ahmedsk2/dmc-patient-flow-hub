@@ -9,7 +9,7 @@ require_once ('../dbconnect.php');
 ?>
 
 <form autocomplete='off' id='assignconsultant' method='POST' action='dmc-new-admissions.php'>
-<input class='txtdata' type='hidden' name='patientid1' value='<?php echo $id; ?> style='text-align: center;' required>
+<input class='txtdata' type='hidden' name='patientid1' value='<?php echo htmlspecialchars($id, ENT_QUOTES, 'UTF-8'); ?> style='text-align: center;' required>
 
 
 <label>Primary Consultant</label>
@@ -21,7 +21,7 @@ $result1 = $mysqli->query($formationSQL);
 $consultant = $result1 -> fetch_all(MYSQLI_ASSOC);
 
 foreach ($consultant as $con){
-  echo "<option value='".$con['member_id']."'>".$con['full_name']."</option>";
+  echo "<option value='".htmlspecialchars($con['member_id'], ENT_QUOTES, 'UTF-8')."'>".htmlspecialchars($con['full_name'], ENT_QUOTES, 'UTF-8')."</option>";
 }
 ?>
 

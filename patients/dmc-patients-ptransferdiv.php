@@ -14,16 +14,16 @@ $other_specialities = $result1->fetch_all(MYSQLI_ASSOC);
 ?>
 
     <form method="post" autocomplete="off" action="dmc-patients.php">
-        <input type="hidden" name="id" value="<?php echo $id; ?>">
+        <input type="hidden" name="id" value="<?php echo htmlspecialchars($id, ENT_QUOTES, 'UTF-8'); ?>">
         <label>Transfer To Specialty</label>
         <select class='select2_modify txtdata' style="width: 100%;" id='specialty_transfer' name='specialty_transfer' style='text-align: center;' required>
             <option selected disabled> Select</option>
             <?php
             foreach ($speciality as $spec) {
-                echo "<option value='".$spec['id']."'>".$spec['specilaity']."</option>";
+                echo "<option value='".htmlspecialchars($spec['id'], ENT_QUOTES, 'UTF-8')."'>".htmlspecialchars($spec['specilaity'], ENT_QUOTES, 'UTF-8')."</option>";
             }
             foreach ($other_specialities as $ospec) {
-                echo "<option value='".$ospec['specilaity']."'>".$ospec['specilaity']."</option>";
+                echo "<option value='".htmlspecialchars($ospec['specilaity'], ENT_QUOTES, 'UTF-8')."'>".htmlspecialchars($ospec['specilaity'], ENT_QUOTES, 'UTF-8')."</option>";
             }
             ?>
         </select>

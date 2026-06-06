@@ -23,19 +23,19 @@ require_once ('../dbconnect.php');
  <form autocomplete="off">
         <label>Consultation Location</label>
         <select class='' id='current_location_modify' style='width: 100%; padding: 4px;text-align: center;' required>
-        <option selected value='<?php echo $patient['current_location']; ?>'> <?php echo $patient['current_location']; ?></option>
+        <option selected value='<?php echo htmlspecialchars($patient['current_location'], ENT_QUOTES, 'UTF-8'); ?>'> <?php echo htmlspecialchars($patient['current_location'], ENT_QUOTES, 'UTF-8'); ?></option>
       <option value='Ward'>Ward</option>
       <option value='ICU'>ICU</option>
       <option value='ER'>ER</option>
     </select>
         <label>Bed Number</label>
-        <input class='' id='bed_modify' value='<?php echo $patient['BED']; ?>' style='text-align: center;' required>
+        <input class='' id='bed_modify' value='<?php echo htmlspecialchars($patient['BED'], ENT_QUOTES, 'UTF-8'); ?>' style='text-align: center;' required>
         <label>MRNs</label>
-        <input class='' id='mrn_modify' value='<?php echo $patient['MRN']; ?>' style='text-align: center;' required>
+        <input class='' id='mrn_modify' value='<?php echo htmlspecialchars($patient['MRN'], ENT_QUOTES, 'UTF-8'); ?>' style='text-align: center;' required>
         <label>Patient Name</label>
-        <input class=''  id='pname_modify' value='<?php echo $patient['PNAME']; ?>' style='text-align: center;' required>
+        <input class=''  id='pname_modify' value='<?php echo htmlspecialchars($patient['PNAME'], ENT_QUOTES, 'UTF-8'); ?>' style='text-align: center;' required>
         <label>Age</label>
-        <input class='' id='age_modify' style='text-align: center;' value='<?php echo $patient['age']; ?>' required>
+        <input class='' id='age_modify' style='text-align: center;' value='<?php echo htmlspecialchars($patient['age'], ENT_QUOTES, 'UTF-8'); ?>' required>
         
     <label>Consultation Indication</label>
     <select class='select22' style='width: 100%;'  oninput='auto_grow(this)'  multiple='multiple' id='indication_modify' required>
@@ -54,7 +54,7 @@ $selectedIndications = is_array($decodedIndications) ? $decodedIndications : [];
 // Display the options with selected ones marked
 foreach ($consultationReasons as $reason) {
     $selected = in_array($reason['id'], $selectedIndications) ? 'selected' : '';
-    echo '<option ' . $selected . ' value="' . $reason['id'] . '">' . $reason['consultation_reason'] . '</option>';
+    echo '<option ' . $selected . ' value="' . htmlspecialchars($reason['id'], ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($reason['consultation_reason'], ENT_QUOTES, 'UTF-8') . '</option>';
 }
 ?>
 </select>
@@ -62,7 +62,7 @@ foreach ($consultationReasons as $reason) {
 
 <div id="other1" style="margin-top:2%;">
 <label>Write Indications</label>
-<input class='' value='<?php echo $patient['other_ind']; ?>' id='other_indication_modify' style='text-align: center;'>
+<input class='' value='<?php echo htmlspecialchars($patient['other_ind'], ENT_QUOTES, 'UTF-8'); ?>' id='other_indication_modify' style='text-align: center;'>
     </div>
 
 
@@ -83,7 +83,7 @@ foreach ($consultationReasons as $reason) {
 
 <script type="text/javascript">
 function modifyconsult(button) {
-    var id = '<?php echo $id; ?>';
+    var id = <?php echo json_encode($id); ?>;
     var bed_modify = document.getElementById('bed_modify').value;
     var mrn_modify = document.getElementById('mrn_modify').value;
     var pname_modify = document.getElementById('pname_modify').value;

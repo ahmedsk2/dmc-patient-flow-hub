@@ -89,7 +89,7 @@ require ('dbconnect.php');
 
             <div class="card">
               <div  class="card-header">
-                <h3 class="card-title"><i class="fas fa-user-tie text-info"></i> Dr. <?php echo $consultant['full_name'];  ?> Patient List</h3>
+                <h3 class="card-title"><i class="fas fa-user-tie text-info"></i> Dr. <?php echo htmlspecialchars($consultant['full_name'], ENT_QUOTES, 'UTF-8');  ?> Patient List</h3>
                 <div id="addbtn" class='eachrow' style=' float: right; '>
   
                 <!-- <a  class='btn btn-success'  href='#admiting_modal' data-toggle='modal'  style='color: aliceblue; line-height: 2;padding: 0px 15px;'>Add New Patient</a> -->
@@ -140,20 +140,20 @@ require ('dbconnect.php');
                                                       
                                                     echo"  
                                                    
-                                                    <tr class='eachrow'  id='row".$s['ID']."'>
-                                                    
-                                                    
-                                                      
+                                                    <tr class='eachrow'  id='row".htmlspecialchars($s['ID'], ENT_QUOTES, 'UTF-8')."'>
+
+
+
                                                       <td style='  padding: 0px 1%;text-align: center' class='eachcol mrn' >
-                                                      <p>".$s['MRN']."</p>
+                                                      <p>".htmlspecialchars($s['MRN'], ENT_QUOTES, 'UTF-8')."</p>
                                                       </td>
 
                                                       <td style='  padding: 0px 1%;text-align: center' class='eachcol name'>
-                                                      <p>".$s['PNAME']."</p>
+                                                      <p>".htmlspecialchars($s['PNAME'], ENT_QUOTES, 'UTF-8')."</p>
                                                       </td>
-                                            
+
                                                       <td style='  padding: 0px 1%;text-align: center' class='eachcol admdate'  scope='row' >
-                                                      <p>".$s['ADMDATE']."</p>
+                                                      <p>".htmlspecialchars($s['ADMDATE'], ENT_QUOTES, 'UTF-8')."</p>
                                                       </td>";
 
                                                       if ($LOS < $shortlos){
@@ -166,7 +166,7 @@ require ('dbconnect.php');
                                                     
 
                                                       echo"
-                                                      <p>".$LOS."</p>
+                                                      <p>".htmlspecialchars($LOS, ENT_QUOTES, 'UTF-8')."</p>
                                                       </td>
                                                       ";
                                                    
@@ -185,7 +185,7 @@ require ('dbconnect.php');
                                                     $dxlist = $result1 -> fetch_array(MYSQLI_ASSOC);
                                                      
                                                 
-                                                      echo '<li>'.  $dxlist['name']. '</li>';
+                                                      echo '<li>'.  htmlspecialchars($dxlist['name'], ENT_QUOTES, 'UTF-8'). '</li>';
                                                   }}
                                                 
                                                       echo"

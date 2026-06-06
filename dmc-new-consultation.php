@@ -163,38 +163,38 @@ if (in_array($user['position'], $access_PICU_endorsement)) {
                                             $decodedIndications = json_decode($consultation['indication']);
                                             ?>
                                             <div class='col-sm-3'>
-                                                <div class='eachrow card' style='text-align: center;' id='row<?= $consultation['id'] ?>'>
+                                                <div class='eachrow card' style='text-align: center;' id='row<?= htmlspecialchars($consultation['id'], ENT_QUOTES, 'UTF-8') ?>'>
                                                     <div style='margin: 2%; display: none;' class='eachcol id' scope='row'>
-                                                        <input class='txtdata' type='hidden' name='id' id='id' value='<?= $consultation['id'] ?>' style='text-align: center;width: 85%;'>
+                                                        <input class='txtdata' type='hidden' name='id' id='id' value='<?= htmlspecialchars($consultation['id'], ENT_QUOTES, 'UTF-8') ?>' style='text-align: center;width: 85%;'>
                                                     </div>
                                                     <div style='margin: 2%; display: inline;' class='eachcol bed card-header' scope='row'>
                                                         <?php if (in_array($user['position'], $access_PICU_control)) { ?>
-                                                            <a type='button' class='btn-tool' style='display: contents;' onclick='del(<?= $consultation['id'] ?>)'><i class='fa fa-trash'></i></a>
+                                                            <a type='button' class='btn-tool' style='display: contents;' onclick='del(<?= htmlspecialchars(json_encode($consultation['id']), ENT_QUOTES, 'UTF-8') ?>)'><i class='fa fa-trash'></i></a>
                                                         <?php } ?>
                                                         <label style='text-align: center;margin-bottom: 0px;'>Consultation Location</label>
-                                                        <input class='txtdata' name='current_location' placeholder='Current Location' value='<?= $consultation['current_location'] ?>' style='text-align: center;' disabled>
+                                                        <input class='txtdata' name='current_location' placeholder='Current Location' value='<?= htmlspecialchars($consultation['current_location'], ENT_QUOTES, 'UTF-8') ?>' style='text-align: center;' disabled>
                                                         <label style='text-align: center;margin-bottom: 0px;'>Bed</label>
-                                                        <input class='txtdata' name='bed' placeholder='Bed Number' value='<?= $consultation['BED'] ?>' style='text-align: center;' disabled>
+                                                        <input class='txtdata' name='bed' placeholder='Bed Number' value='<?= htmlspecialchars($consultation['BED'], ENT_QUOTES, 'UTF-8') ?>' style='text-align: center;' disabled>
                                                     </div>
                                                     <div style='margin: 2%; display: inline;' class='eachcol mrn'>
                                                         <label style='text-align: center;margin-bottom: 0px;'>MRN</label>
-                                                        <input class='txtdata' name='mrn' value='<?= $consultation['MRN'] ?>' style='text-align: center;' disabled>
+                                                        <input class='txtdata' name='mrn' value='<?= htmlspecialchars($consultation['MRN'], ENT_QUOTES, 'UTF-8') ?>' style='text-align: center;' disabled>
                                                     </div>
                                                     <div style='margin: 2%; display: inline;' class='eachcol name'>
                                                         <label style='text-align: center;margin-bottom: 0px;'>Patient Name</label>
-                                                        <input class='txtdata' name='name' value='<?= $consultation['PNAME'] ?>' style='text-align: center;' disabled>
+                                                        <input class='txtdata' name='name' value='<?= htmlspecialchars($consultation['PNAME'], ENT_QUOTES, 'UTF-8') ?>' style='text-align: center;' disabled>
                                                     </div>
                                                     <div style='margin: 2%; display: inline;' class='eachcol age'>
                                                         <label style='text-align: center;margin-bottom: 0px;'>Age</label>
-                                                        <input class='txtdata' name='age' value='<?= $consultation['age'] ?>' style='text-align: center;' disabled>
+                                                        <input class='txtdata' name='age' value='<?= htmlspecialchars($consultation['age'], ENT_QUOTES, 'UTF-8') ?>' style='text-align: center;' disabled>
                                                     </div>
                                                     <div style='margin: 2%; display: inline;' class='eachcol consultationdate'>
                                                         <label style='text-align: center;margin-bottom: 0px;'>Consulted On</label>
-                                                        <input class='txtdata' name='consultation_date' value='<?= $consultation['consultation_date'] ?>' style='text-align: center;' disabled>
+                                                        <input class='txtdata' name='consultation_date' value='<?= htmlspecialchars($consultation['consultation_date'], ENT_QUOTES, 'UTF-8') ?>' style='text-align: center;' disabled>
                                                     </div>
                                                     <div style='margin: 2%; display: inline;' class='eachcol consultationfrom'>
                                                         <label style='text-align: center;margin-bottom: 0px;'>Consultation From</label>
-                                                        <input class='txtdata' name='consultation_from' value='<?= $consultation['consultation_from'] ?>' style='text-align: center;' disabled>
+                                                        <input class='txtdata' name='consultation_from' value='<?= htmlspecialchars($consultation['consultation_from'], ENT_QUOTES, 'UTF-8') ?>' style='text-align: center;' disabled>
                                                     </div>
                                                     <div style='margin: 2%; display: inline;' class='eachcol consultationtoservice'>
                                                         <label style='text-align: center;margin-bottom: 0px;'>Consultation To Service</label>
@@ -203,11 +203,11 @@ if (in_array($user['position'], $access_PICU_endorsement)) {
                                                             ? $specialities[$consultation['consultation_to_service']] 
                                                             : $consultation['consultation_to_service'];
                                                         ?>
-                                                        <input class='txtdata' name='consultation_to_service' value='<?= $consultationToService ?>' style='text-align: center;' disabled>
+                                                        <input class='txtdata' name='consultation_to_service' value='<?= htmlspecialchars($consultationToService, ENT_QUOTES, 'UTF-8') ?>' style='text-align: center;' disabled>
                                                     </div>
                                                     <div style='margin: 2%; display: inline;' class='eachcol consultationto'>
                                                         <label style='text-align: center;margin-bottom: 0px;'>Consulted Doctor</label>
-                                                        <input class='txtdata' name='consultationto' value='<?= $consultant_name ?>' style='text-align: center;' disabled>
+                                                        <input class='txtdata' name='consultationto' value='<?= htmlspecialchars($consultant_name, ENT_QUOTES, 'UTF-8') ?>' style='text-align: center;' disabled>
                                                     </div>
                                                     <div style='margin: 2%; display: inline;' class='eachcol indications'>
                                                         <label style='text-align: center;margin-bottom: 0px;'>Indications</label>
@@ -215,7 +215,7 @@ if (in_array($user['position'], $access_PICU_endorsement)) {
                                                             <?php
                                                             if (is_array($decodedIndications)) {
                                                                 foreach ($decodedIndications as $value) {
-                                                                    echo "<li>" . $consultationReasons[$value] . "</li>";
+                                                                    echo "<li>" . htmlspecialchars($consultationReasons[$value], ENT_QUOTES, 'UTF-8') . "</li>";
                                                                 }
                                                             }
                                                             ?>
@@ -223,14 +223,14 @@ if (in_array($user['position'], $access_PICU_endorsement)) {
                                                     </div>
                                                     <div style='margin: 2%; display: inline;' class='eachcol other_indications'>
                                                         <label style='text-align: center;margin-bottom: 0px;'>Other Indications</label>
-                                                        <p style='text-align: center;'><?= $consultation['other_ind'] ?></p>
+                                                        <p style='text-align: center;'><?= htmlspecialchars($consultation['other_ind'], ENT_QUOTES, 'UTF-8') ?></p>
                                                     </div>
                                                     <?php if ($user['member_id'] == $consultation['consultant_id'] || $user['manage_patient'] == '1') { ?>
-<form method='post' name='signoff' action='dmc-new-consultation.php' id="signoff_form_<?= $consultation['id'] ?>">
-    <input type='hidden' name='consultid' value='<?= $consultation['id'] ?>'>
+<form method='post' name='signoff' action='dmc-new-consultation.php' id="signoff_form_<?= htmlspecialchars($consultation['id'], ENT_QUOTES, 'UTF-8') ?>">
+    <input type='hidden' name='consultid' value='<?= htmlspecialchars($consultation['id'], ENT_QUOTES, 'UTF-8') ?>'>
     <button type='submit' name='signoff_btn' class='btn btn-danger' style='color: aliceblue;line-height: 2;margin-top: 3%;padding: 0px 10%;width: 100%;' onclick='signOff(this)'>Sign Off</button>
 </form>
-                                                        <a class='btn btn-info' href='#details_modal' data-book-id='<?= $consultation['id'] ?>' data-bs-toggle='modal' style='color: aliceblue;line-height: 2;margin-top: 3%;padding: 0px 10%;width: 100%;'>Modify</a>
+                                                        <a class='btn btn-info' href='#details_modal' data-book-id='<?= htmlspecialchars($consultation['id'], ENT_QUOTES, 'UTF-8') ?>' data-bs-toggle='modal' style='color: aliceblue;line-height: 2;margin-top: 3%;padding: 0px 10%;width: 100%;'>Modify</a>
                                                     <?php } ?>
                                                 </div>
                                             </div>
@@ -293,7 +293,7 @@ if (in_array($user['position'], $access_PICU_endorsement)) {
                         <select class='txtdata1 select2' style='width: 100%;' oninput='auto_grow(this)' multiple='multiple' id='indication_new' required>
                             <?php
                             foreach ($consultationReasons as $id => $reason) {
-                                echo "<option value='$id'>$reason</option>";
+                                echo "<option value='" . htmlspecialchars($id, ENT_QUOTES, 'UTF-8') . "'>" . htmlspecialchars($reason, ENT_QUOTES, 'UTF-8') . "</option>";
                             }
                             ?>
                         </select>
@@ -306,14 +306,14 @@ if (in_array($user['position'], $access_PICU_endorsement)) {
                             <option disabled selected>Select</option>
                             <?php
                             foreach ($specialities as $speciality) {
-                                echo "<option value='$speciality'>$speciality</option>";
+                                echo "<option value='" . htmlspecialchars($speciality, ENT_QUOTES, 'UTF-8') . "'>" . htmlspecialchars($speciality, ENT_QUOTES, 'UTF-8') . "</option>";
                             }
                                   $formationSQL = "SELECT * FROM other_specialities";
                             $result1 = $mysqli->query($formationSQL);
                             $otherspeciality = $result1 -> fetch_all(MYSQLI_ASSOC);
                                 foreach($otherspeciality as $osp)
                                 {
-                                    echo "<option value='".$osp['specilaity']."'>".$osp['specilaity']."</option>";
+                                    echo "<option value='".htmlspecialchars($osp['specilaity'], ENT_QUOTES, 'UTF-8')."'>".htmlspecialchars($osp['specilaity'], ENT_QUOTES, 'UTF-8')."</option>";
 
                                 }
                             ?>
@@ -323,11 +323,11 @@ if (in_array($user['position'], $access_PICU_endorsement)) {
                             <option selected disabled>Select</option>
                             <?php
                             foreach ($specialities as $id => $speciality) {
-                                echo "<option value='$id'>$speciality</option>";
+                                echo "<option value='" . htmlspecialchars($id, ENT_QUOTES, 'UTF-8') . "'>" . htmlspecialchars($speciality, ENT_QUOTES, 'UTF-8') . "</option>";
                             }
                                                             foreach($otherspeciality as $osp)
                                 {
-                                    echo "<option value='".$osp['specilaity']."'>".$osp['specilaity']."</option>";
+                                    echo "<option value='".htmlspecialchars($osp['specilaity'], ENT_QUOTES, 'UTF-8')."'>".htmlspecialchars($osp['specilaity'], ENT_QUOTES, 'UTF-8')."</option>";
 
                                 }
                             ?>
@@ -401,7 +401,7 @@ function addconsult(button) {
     var consultdate_new = document.getElementById('consultdate_new').value;
     var consultfrom_new = document.getElementById('consultfrom_new').value;
     var current_location_new = document.getElementById('current_location_new').value;
-    var entered_by = <?= $user['member_id'] ?>;
+    var entered_by = <?= json_encode($user['member_id']) ?>;
     var checked = document.querySelectorAll('#indication_new :checked');
     var indication_new = [...checked].map(option => option.value);
     var consultation_to_service = document.getElementById('consultation_to_service').value;

@@ -29,7 +29,7 @@ $consultant = $result1 -> fetch_all(MYSQLI_ASSOC);
 
     foreach($consultant as $con){
     echo"
-    <option value='".$con['member_id']."'>".$con['full_name']."</option>";
+    <option value='".htmlspecialchars($con['member_id'], ENT_QUOTES, 'UTF-8')."'>".htmlspecialchars($con['full_name'], ENT_QUOTES, 'UTF-8')."</option>";
 }
 
   echo"  </select>

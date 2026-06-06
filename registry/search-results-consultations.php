@@ -87,7 +87,7 @@ if ($searchresults){
 echo"
 <div id='messsssage' class='card'>
 <div class='card-header'>
-Results Found: ".$total_results." and showing ".count($searchresults)."
+Results Found: ".htmlspecialchars($total_results, ENT_QUOTES, 'UTF-8')." and showing ".count($searchresults)."
 </div>
 <div class='card-body'>
                 <div class='row'>";
@@ -104,7 +104,7 @@ Results Found: ".$total_results." and showing ".count($searchresults)."
                                                       
                                                     echo"  
                                                     <div class='col-sm-4'>
-                                                    <div class='eachrow card'  id='row".$s['id']."'>
+                                                    <div class='eachrow card'  id='row".htmlspecialchars($s['id'], ENT_QUOTES, 'UTF-8')."'>
                                                     
                                                     <div style='   margin: 1%; text-align: center;display: inline; ' class='eachcol bed card-header'  scope='row' >";
                                                    
@@ -117,10 +117,10 @@ Results Found: ".$total_results." and showing ".count($searchresults)."
                                                }else{
 
                                                       echo"
-                                                <label style='text-align: center;margin-bottom: 0px;'>Active Consultation In ".$s['current_location']." Bed #</label>
+                                                <label style='text-align: center;margin-bottom: 0px;'>Active Consultation In ".htmlspecialchars($s['current_location'], ENT_QUOTES, 'UTF-8')." Bed #</label>
 
-                                                      <input disabled class='txtdata' name='bed' placeholder='Bed Number' value='".$s['BED']."' style='text-align: center;' >
-                                                      <input disabled class='txtdata' type='hidden' name='id' id='id' value='".$s['id']."' style='text-align: center;width: 85%;' >";
+                                                      <input disabled class='txtdata' name='bed' placeholder='Bed Number' value='".htmlspecialchars($s['BED'], ENT_QUOTES, 'UTF-8')."' style='text-align: center;' >
+                                                      <input disabled class='txtdata' type='hidden' name='id' id='id' value='".htmlspecialchars($s['id'], ENT_QUOTES, 'UTF-8')."' style='text-align: center;width: 85%;' >";
                                                       }
 
                                                       echo"
@@ -131,11 +131,11 @@ Results Found: ".$total_results." and showing ".count($searchresults)."
                                                       <tr>
                                                       <td style='width: 50%; border-right: solid 0.5px;'>
                                                       <label style='text-align: center;margin-bottom: 0px;'>MRN</label>
-                                                      <p style='text-align: center;'>".$s['MRN']."</p>
+                                                      <p style='text-align: center;'>".htmlspecialchars($s['MRN'], ENT_QUOTES, 'UTF-8')."</p>
                                                       </td>
                                                       <td style='width: 50%;'>
                                                       <label style='text-align: center;margin-bottom: 0px;'>Age</label>
-                                                      <p style='text-align: center;'>".$s['age']."</p>
+                                                      <p style='text-align: center;'>".htmlspecialchars($s['age'], ENT_QUOTES, 'UTF-8')."</p>
                                                     </td>
                                                       </tr>
                                                       </table>
@@ -146,11 +146,11 @@ Results Found: ".$total_results." and showing ".count($searchresults)."
                                                       <tr>
                                                       <td style='width: 50%; border-right: solid 0.5px;'>
                                                       <label style='text-align: center;margin-bottom: 0px;'>Patient Name</label>
-                                                      <p style='text-align: center;'>".$s['PNAME']."</p>
+                                                      <p style='text-align: center;'>".htmlspecialchars($s['PNAME'], ENT_QUOTES, 'UTF-8')."</p>
                                                       </td>
                                                       <td style='width: 50%;'>
                                                       <label style='text-align: center;margin-bottom: 0px;'>Consultation Date</label>
-                                                      <p style='text-align: center;'>".$s['consultation_date']."</p>
+                                                      <p style='text-align: center;'>".htmlspecialchars($s['consultation_date'], ENT_QUOTES, 'UTF-8')."</p>
                                                     </td>
                                                       </tr>
                                                       </table>
@@ -162,18 +162,18 @@ Results Found: ".$total_results." and showing ".count($searchresults)."
                                                       <tr>
                                                       <td style='width: 50%; border-right: solid 0.5px;'>
                                                       <label style='text-align: center;margin-bottom: 0px;'>Consultation From</label>
-                                                      <p style='text-align: center;margin-bottom: 0px;'>".$s['consultation_from']."</p>
+                                                      <p style='text-align: center;margin-bottom: 0px;'>".htmlspecialchars($s['consultation_from'], ENT_QUOTES, 'UTF-8')."</p>
                                                       </td>
                                                       <td style='width: 50%;'>
                                                       <label style='text-align: center;margin-bottom: 0px;'>Consulted Service</label>";
                                                         if (is_numeric($s['consultation_to_service'])) {
                                                             if (isset($specialities[$s['consultation_to_service']])) {
-                                                                echo "<p style='text-align: center;margin-bottom: 0px;'>" . $specialities[$s['consultation_to_service']] . "</p>";
+                                                                echo "<p style='text-align: center;margin-bottom: 0px;'>" . htmlspecialchars($specialities[$s['consultation_to_service']], ENT_QUOTES, 'UTF-8') . "</p>";
                                                             } else {
                                                                 echo "<p style='text-align: center;margin-bottom: 0px;'>Unknown speciality</p>";
                                                             }
                                                         } else {
-                                                            echo "<p style='text-align: center;margin-bottom: 0px;'>" . $s['consultation_to_service'] . "</p>";
+                                                            echo "<p style='text-align: center;margin-bottom: 0px;'>" . htmlspecialchars($s['consultation_to_service'], ENT_QUOTES, 'UTF-8') . "</p>";
                                                         }
                                                      
                                                       echo"
@@ -190,7 +190,7 @@ Results Found: ".$total_results." and showing ".count($searchresults)."
                                                         
                                                             if (is_array($decodeindications)) {
                                                                 foreach ($decodeindications as $value) {
-                                                                    echo "<li>" . $consultationReasons[$value] . "</li>";
+                                                                    echo "<li>" . htmlspecialchars($consultationReasons[$value], ENT_QUOTES, 'UTF-8') . "</li>";
                                                                 }
                                                             }
                                                            
@@ -208,7 +208,7 @@ Results Found: ".$total_results." and showing ".count($searchresults)."
                                                $doctor1 = $result1 -> fetch_array(MYSQLI_ASSOC);
                                                 if ($doctor1){
                                               echo"
-                                              <p style='text-align: center;margin-bottom: 0px;'>".$doctor1['full_name']."</p>";
+                                              <p style='text-align: center;margin-bottom: 0px;'>".htmlspecialchars($doctor1['full_name'], ENT_QUOTES, 'UTF-8')."</p>";
                                             }else{
                                                 echo"  <p style='text-align: center;margin-bottom: 0px;'>Not Assigned Yet</p>";
                                             }
@@ -227,7 +227,7 @@ Results Found: ".$total_results." and showing ".count($searchresults)."
                                                 <tr>
                                                 <td style='width: 100%;'>
                                                 <label style='text-align: center;margin-bottom: 0px;'>Signed Off on</label>
-                                                <p style='text-align: center;margin-bottom: 0px;'>".$s['signoff_date']."</p>
+                                                <p style='text-align: center;margin-bottom: 0px;'>".htmlspecialchars($s['signoff_date'], ENT_QUOTES, 'UTF-8')."</p>
                                                 </td>
                                                 </tr>
                                                 </table>

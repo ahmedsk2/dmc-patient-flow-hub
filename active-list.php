@@ -120,7 +120,7 @@ foreach ($activepicupatients as $patient) {
             <div class="card-header">
               <h3 class="card-title"><i class="fas fa-user-tie text-info"></i> Patient Count per Consultant</h3>
               <div id="addbtn" class="eachrow" style="float: right;">
-                <h3 class="card-title"><i class="fas fa-user-tie text-info"></i> Total Count (non ICU): <?php echo $all_activepatients; ?></h3>
+                <h3 class="card-title"><i class="fas fa-user-tie text-info"></i> Total Count (non ICU): <?php echo htmlspecialchars($all_activepatients, ENT_QUOTES, 'UTF-8'); ?></h3>
               </div>
             </div>
             <div class="card-body">
@@ -150,13 +150,13 @@ foreach ($activepicupatients as $patient) {
                       $total = $cc['ward'];
                       echo "
                       <tr class='eachrow'>
-                        <td><p>Dr. " . $cc['name'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol'><p>" . $cc['old'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol'><p>" . $cc['new'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . $cc['activepatients'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . $total . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . $cc['icu'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . $cc['tb1'] . "</p></td>
+                        <td><p>Dr. " . htmlspecialchars($cc['name'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol'><p>" . htmlspecialchars($cc['old'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol'><p>" . htmlspecialchars($cc['new'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . htmlspecialchars($cc['activepatients'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . htmlspecialchars($total, ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . htmlspecialchars($cc['icu'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . htmlspecialchars($cc['tb1'], ENT_QUOTES, 'UTF-8') . "</p></td>
                       </tr>";
                     }
                   }
@@ -167,13 +167,13 @@ foreach ($activepicupatients as $patient) {
                       $total = $cc['ward'];
                       echo "
                       <tr class='eachrow'>
-                        <td><p>Dr. " . $cc['name'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol'><p>" . $cc['old'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol'><p>" . $cc['new'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . $cc['activepatients'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . $total . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . $cc['icu'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . $cc['tb1'] . "</p></td>
+                        <td><p>Dr. " . htmlspecialchars($cc['name'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol'><p>" . htmlspecialchars($cc['old'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol'><p>" . htmlspecialchars($cc['new'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . htmlspecialchars($cc['activepatients'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . htmlspecialchars($total, ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . htmlspecialchars($cc['icu'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . htmlspecialchars($cc['tb1'], ENT_QUOTES, 'UTF-8') . "</p></td>
                       </tr>";
                     }
                   }
@@ -185,13 +185,13 @@ foreach ($activepicupatients as $patient) {
                       $total = $cc['ward'];
                       echo "
                       <tr class='eachrow'>
-                        <td><p>Dr. " . $cc['name'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol'><p>" . $cc['old'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol'><p>" . $cc['new'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . $cc['activepatients'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . $total . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . $cc['icu'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . $cc['tb1'] . "</p></td>
+                        <td><p>Dr. " . htmlspecialchars($cc['name'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol'><p>" . htmlspecialchars($cc['old'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol'><p>" . htmlspecialchars($cc['new'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . htmlspecialchars($cc['activepatients'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . htmlspecialchars($total, ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . htmlspecialchars($cc['icu'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . htmlspecialchars($cc['tb1'], ENT_QUOTES, 'UTF-8') . "</p></td>
                       </tr>";
                     }
                   }
@@ -253,12 +253,12 @@ foreach ($activepicupatients as $patient) {
 <div class="card">
   <div class="card-header">
     <h3 class="card-title">
-      <a style="font-size: larger; font-weight: 700; color: black;" class="SeeMore2" id="<?php echo $consultant['member_id']; ?>-1" data-bs-toggle="collapse" href="#collapse<?php echo $consultant['member_id']; ?>" aria-expanded="false" aria-controls="collapse<?php echo $consultant['member_id']; ?>" onclick="showfunction('<?php echo $consultant['member_id']; ?>-1')">+</a>
-      <a style="color: black;"  data-bs-toggle="collapse" href="#collapse<?php echo $consultant['member_id']; ?>" aria-expanded="false" aria-controls="collapse<?php echo $consultant['member_id']; ?>" onclick="showfunction('<?php echo $consultant['member_id']; ?>-1')"><i class="fas fa-user-tie text-info"></i> Dr. <?php echo $consultant['full_name']; ?> Patient List</a>
+      <a style="font-size: larger; font-weight: 700; color: black;" class="SeeMore2" id="<?php echo htmlspecialchars($consultant['member_id'], ENT_QUOTES, 'UTF-8'); ?>-1" data-bs-toggle="collapse" href="#collapse<?php echo htmlspecialchars($consultant['member_id'], ENT_QUOTES, 'UTF-8'); ?>" aria-expanded="false" aria-controls="collapse<?php echo htmlspecialchars($consultant['member_id'], ENT_QUOTES, 'UTF-8'); ?>" onclick="showfunction('<?php echo htmlspecialchars($consultant['member_id'], ENT_QUOTES, 'UTF-8'); ?>-1')">+</a>
+      <a style="color: black;"  data-bs-toggle="collapse" href="#collapse<?php echo htmlspecialchars($consultant['member_id'], ENT_QUOTES, 'UTF-8'); ?>" aria-expanded="false" aria-controls="collapse<?php echo htmlspecialchars($consultant['member_id'], ENT_QUOTES, 'UTF-8'); ?>" onclick="showfunction('<?php echo htmlspecialchars($consultant['member_id'], ENT_QUOTES, 'UTF-8'); ?>-1')"><i class="fas fa-user-tie text-info"></i> Dr. <?php echo htmlspecialchars($consultant['full_name'], ENT_QUOTES, 'UTF-8'); ?> Patient List</a>
     </h3>
     <div id="addbtn" class='eachrow' style='float: right;'></div>
   </div>
-  <div class="collapse" id="collapse<?php echo $consultant['member_id']; ?>">
+  <div class="collapse" id="collapse<?php echo htmlspecialchars($consultant['member_id'], ENT_QUOTES, 'UTF-8'); ?>">
     <div class="card-body">
       <div class="row">
         <?php
@@ -292,9 +292,9 @@ foreach ($activepicupatients as $s) {
         if (!empty($s['longterm'])) {
             echo "<div style='background: #87503e;color: white;'><strong> Long Term Patient</strong></div>";
         }
-        echo "<p class='txtdata' name='bed' placeholder='Bed Number' style='text-align: center;'><strong>In " . $s['current_location'] . " Bed # " . $s['BED'] . "</strong></p></div>";
-        echo "<div style='margin: 0% 2%;' class='eachcol mrn'><p class='txtdata' name='mrn' style='text-align: center;'><strong> MRN: </strong>" . $s['MRN'] . "</p></div>";
-        echo "<div style='margin: 0% 2%;' class='eachcol name'><label style='margin: 0px; text-align: center;'>Patient Name:</label><p class='txtdata' name='mrn' style='text-align: center;'>" . $s['PNAME'] . "</p></div>";
+        echo "<p class='txtdata' name='bed' placeholder='Bed Number' style='text-align: center;'><strong>In " . htmlspecialchars($s['current_location'], ENT_QUOTES, 'UTF-8') . " Bed # " . htmlspecialchars($s['BED'], ENT_QUOTES, 'UTF-8') . "</strong></p></div>";
+        echo "<div style='margin: 0% 2%;' class='eachcol mrn'><p class='txtdata' name='mrn' style='text-align: center;'><strong> MRN: </strong>" . htmlspecialchars($s['MRN'], ENT_QUOTES, 'UTF-8') . "</p></div>";
+        echo "<div style='margin: 0% 2%;' class='eachcol name'><label style='margin: 0px; text-align: center;'>Patient Name:</label><p class='txtdata' name='mrn' style='text-align: center;'>" . htmlspecialchars($s['PNAME'], ENT_QUOTES, 'UTF-8') . "</p></div>";
         if ($s['current_location'] == 'ICU') {
             echo "<div style='margin: 2%; background: royalblue;color: white;' class='eachcol' scope='row'><p style='text-align: center;margin-bottom: 0px;'>ICU patient</p></div>";
         } else {
@@ -305,13 +305,13 @@ foreach ($activepicupatients as $s) {
             } elseif ($LOS >= $shortlos) {
                 echo "<div style='margin: 0% 2%; background: #fff3cd;' class='eachcol LOS' scope='row'>";
             }
-            echo "<p class='txtdata' name='mrn' style='text-align: center;'><strong> Duration of Admission: </strong>" . $LOS . "</p></div>";
+            echo "<p class='txtdata' name='mrn' style='text-align: center;'><strong> Duration of Admission: </strong>" . htmlspecialchars($LOS, ENT_QUOTES, 'UTF-8') . "</p></div>";
         }
         echo "<div style='margin: 0% 2%;' class='eachcol admissiondiagnosis'><label style='margin: 0px; text-align: center;'>Admission Diagnosis:</label><ul style='list-style-position: inside;margin: 1% 0% 5%;'>";
           if (is_array($decodedadmissiondx)) {
               foreach ($decodedadmissiondx as $value) {
                   if (isset($icd10_names[$value])) {
-                      echo '<li>' . $icd10_names[$value] . '</li>';
+                      echo '<li>' . htmlspecialchars($icd10_names[$value], ENT_QUOTES, 'UTF-8') . '</li>';
                   }
               }
           }

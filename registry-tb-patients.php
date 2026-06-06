@@ -109,7 +109,7 @@ foreach ($activepicupatints as $s) {
                     ?>
                     <div class="card">
                         <div class="card-header">
-                            <h3 class="card-title"><i class="fas fa-user-tie text-info"></i> Dr. <?php echo $consultant['full_name']; ?> consultations List</h3>
+                            <h3 class="card-title"><i class="fas fa-user-tie text-info"></i> Dr. <?php echo htmlspecialchars($consultant['full_name'], ENT_QUOTES, 'UTF-8'); ?> consultations List</h3>
                             <div id="addbtn" class="eachrow" style="float: right;"></div>
                         </div>
                         <!-- /.card-header -->
@@ -139,15 +139,15 @@ foreach ($activepicupatints as $s) {
                                             $timeDiff = abs($today1 - strtotime($s['ADMDATE']));
                                             $LOS = $timeDiff / 86400;  // 86400 seconds in one day
 
-                                            echo "<tr class='eachrow' id='row" . $s['ID'] . "'>
+                                            echo "<tr class='eachrow' id='row" . htmlspecialchars($s['ID'], ENT_QUOTES, 'UTF-8') . "'>
                                                 <td style='padding: 0px 1%; text-align: center' class='eachcol mrn'>
-                                                    <p>" . $s['MRN'] . "</p>
+                                                    <p>" . htmlspecialchars($s['MRN'], ENT_QUOTES, 'UTF-8') . "</p>
                                                 </td>
                                                 <td style='padding: 0px 1%; text-align: center' class='eachcol name'>
-                                                    <p>" . $s['PNAME'] . "</p>
+                                                    <p>" . htmlspecialchars($s['PNAME'], ENT_QUOTES, 'UTF-8') . "</p>
                                                 </td>
                                                 <td style='padding: 0px 1%; text-align: center' class='eachcol admdate' scope='row'>
-                                                    <p>" . $s['ADMDATE'] . "</p>
+                                                    <p>" . htmlspecialchars($s['ADMDATE'], ENT_QUOTES, 'UTF-8') . "</p>
                                                 </td>";
 
                                             if ($LOS < $shortlos) {
@@ -158,14 +158,14 @@ foreach ($activepicupatints as $s) {
                                                 echo "<td style='padding: 0px 1%; background: #fff3cd; text-align: center' class='eachcol admdate' scope='row'>";
                                             }
 
-                                            echo "<p>" . $LOS . "</p>
+                                            echo "<p>" . htmlspecialchars($LOS, ENT_QUOTES, 'UTF-8') . "</p>
                                                 </td>
                                                 <td style='padding: 0px 1%;' class='eachcol admissiondiagnosis'>
                                                     <ul style='list-style-position: inside; margin: 1% 0% 1%;'>";
                                             
                                             if (is_array($decodedadmissiondx)) {
                                                 foreach ($decodedadmissiondx as $value) {
-                                                    echo "<li>" . $icd10[$value] . "</li>";
+                                                    echo "<li>" . htmlspecialchars($icd10[$value], ENT_QUOTES, 'UTF-8') . "</li>";
                                                 }
                                             }
 
@@ -174,7 +174,7 @@ foreach ($activepicupatints as $s) {
                                             
                                             $mem_id = $s['admitted_by'];
                                             if (isset($members[$mem_id])) {
-                                                echo "<p>" . $members[$mem_id] . "</p>";
+                                                echo "<p>" . htmlspecialchars($members[$mem_id], ENT_QUOTES, 'UTF-8') . "</p>";
                                             } else {
                                                 echo "<p>Unknown member</p>";
                                             }
@@ -184,24 +184,24 @@ foreach ($activepicupatints as $s) {
                                             
                                             $mem_id = $s['trans_discharge_by'];
                                             if (isset($members[$mem_id])) {
-                                                echo "<p>" . $members[$mem_id] . "</p>";
+                                                echo "<p>" . htmlspecialchars($members[$mem_id], ENT_QUOTES, 'UTF-8') . "</p>";
                                             } else {
                                                 echo "<p>Unknown member</p>";
                                             }
 
                                             echo "</td>
                                                 <td style='padding: 0px 1%; text-align: center' class='eachcol admdate' scope='row'>
-                                                    <p>" . $s['trans_discharge'] . "</p>
+                                                    <p>" . htmlspecialchars($s['trans_discharge'], ENT_QUOTES, 'UTF-8') . "</p>
                                                 </td>
                                                 <td style='padding: 0px 1%; text-align: center' class='eachcol admdate' scope='row'>
-                                                    <p>" . $s['DISTO'] . "</p>
+                                                    <p>" . htmlspecialchars($s['DISTO'], ENT_QUOTES, 'UTF-8') . "</p>
                                                 </td>
                                                 <td style='padding: 0px 1%; text-align: center' class='eachcol admdate' scope='row'>
-                                                    <p>" . $s['DISDATE'] . "</p>
+                                                    <p>" . htmlspecialchars($s['DISDATE'], ENT_QUOTES, 'UTF-8') . "</p>
                                                 </td>
                                                 <td style='padding: 0px 1%; text-align: center' class='eachcol admdate' scope='row'>
                                                     <form method='post' name='undo' action='registry.php'>
-                                                        <input type='hidden' name='patientid' value='" . $s['ID'] . "'>";
+                                                        <input type='hidden' name='patientid' value='" . htmlspecialchars($s['ID'], ENT_QUOTES, 'UTF-8') . "'>";
                                             
                                             if ($s['DISDATE'] == $today) {
                                                 echo "<button type='submit' style='width: 100%;' value='submit' class='btn btn-warning' name='undo_btn'>Undo Discharge</button>";

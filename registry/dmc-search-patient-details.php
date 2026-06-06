@@ -74,29 +74,29 @@ return false;
 
 </script>
 <form autocomplete="off"  onsubmit="return updatepatient(event)">
-<input type="hidden" id='id_modify' value='<?php echo $id; ?>'>
+<input type="hidden" id='id_modify' value='<?php echo htmlspecialchars($id, ENT_QUOTES, 'UTF-8'); ?>'>
 <label>Bed Number</label>
-<input class='txtdata' id='bed_modify' value='<?php echo $patient['BED']; ?>' style='text-align: center;' required>
+<input class='txtdata' id='bed_modify' value='<?php echo htmlspecialchars($patient['BED'], ENT_QUOTES, 'UTF-8'); ?>' style='text-align: center;' required>
 <label>MRNs</label>
-<input class='txtdata' id='mrn_modify' value='<?php echo $patient['MRN']; ?>' style='text-align: center;' required>
+<input class='txtdata' id='mrn_modify' value='<?php echo htmlspecialchars($patient['MRN'], ENT_QUOTES, 'UTF-8'); ?>' style='text-align: center;' required>
 <label>Patient Name</label>
-<input class='txtdata' id='pname_modify' value='<?php echo $patient['PNAME']; ?>' style='text-align: center;' required>
+<input class='txtdata' id='pname_modify' value='<?php echo htmlspecialchars($patient['PNAME'], ENT_QUOTES, 'UTF-8'); ?>' style='text-align: center;' required>
 <label>Age</label>
-<input class='txtdata' id='age_modify' value='<?php echo $patient['age']; ?>' style='text-align: center;' required>
+<input class='txtdata' id='age_modify' value='<?php echo htmlspecialchars($patient['age'], ENT_QUOTES, 'UTF-8'); ?>' style='text-align: center;' required>
 <label>Gender</label>
 <select class='txtdata' id='gender_modify' style='text-align: center; width: 100%; padding: 4px;' required>
-<option selected value='<?php echo $patient['gender']; ?>'> <?php echo $patient['gender']; ?></option>
+<option selected value='<?php echo htmlspecialchars($patient['gender'], ENT_QUOTES, 'UTF-8'); ?>'> <?php echo htmlspecialchars($patient['gender'], ENT_QUOTES, 'UTF-8'); ?></option>
 <option value='Male'>Male</option>
 <option value='Female'>Female</option>
 </select>
 <label>Nationality</label>
 <select class='select2_modify txtdata' id='nationality_modify' style='text-align: center;' required>
-<option selected value='<?php echo $patient['nationality']; ?>'> <?php echo $patient['nationality']; ?></option>
+<option selected value='<?php echo htmlspecialchars($patient['nationality'], ENT_QUOTES, 'UTF-8'); ?>'> <?php echo htmlspecialchars($patient['nationality'], ENT_QUOTES, 'UTF-8'); ?></option>
  <?php  
 
 foreach($countries as $country)
     echo"
-    <option value='".$country['name']."'>".$country['name']."</option>";
+    <option value='".htmlspecialchars($country['name'], ENT_QUOTES, 'UTF-8')."'>".htmlspecialchars($country['name'], ENT_QUOTES, 'UTF-8')."</option>";
   ?>
 
 </select>
@@ -123,7 +123,7 @@ if (is_array($decodedadmissiondx)){
 		$dxlist = $result1 -> fetch_array(MYSQLI_ASSOC);
       // $selected = in_array($key, $decodedP) ? 'selected ' : '';
 
-      echo '<option selected value="' . $dxlist['id'] . '">'.  $dxlist['name']. '</option>';
+      echo '<option selected value="' . htmlspecialchars($dxlist['id'], ENT_QUOTES, 'UTF-8') . '">'.  htmlspecialchars($dxlist['name'], ENT_QUOTES, 'UTF-8'). '</option>';
   }}
 
   ?>

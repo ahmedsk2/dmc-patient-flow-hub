@@ -346,20 +346,20 @@ if ($result1) {
             <div class="card">
             <div class="card-header" style="display: flex; align-items: center;">
             <h3 class="card-title">
-      <a style="font-size: larger; font-weight: 700; color: black;" class="SeeMore2" id="<?php echo $consultant['member_id']; ?>-1" data-bs-toggle="collapse" href="#collapse<?php echo $consultant['member_id']; ?>" aria-expanded="false" aria-controls="collapse<?php echo $consultant['member_id']; ?>" onclick="showfunction('<?php echo $consultant['member_id']; ?>-1')">+</a>
-      <a style="color: black;"  data-bs-toggle="collapse" href="#collapse<?php echo $consultant['member_id']; ?>" aria-expanded="false" aria-controls="collapse<?php echo $consultant['member_id']; ?>" onclick="showfunction('<?php echo $consultant['member_id']; ?>-1')"><i class="fas fa-user-tie text-info"></i> Dr. <?php echo $consultant['full_name']; ?> Patient List</a>
+      <a style="font-size: larger; font-weight: 700; color: black;" class="SeeMore2" id="<?php echo htmlspecialchars($consultant['member_id'], ENT_QUOTES, 'UTF-8'); ?>-1" data-bs-toggle="collapse" href="#collapse<?php echo htmlspecialchars($consultant['member_id'], ENT_QUOTES, 'UTF-8'); ?>" aria-expanded="false" aria-controls="collapse<?php echo htmlspecialchars($consultant['member_id'], ENT_QUOTES, 'UTF-8'); ?>" onclick="showfunction('<?php echo $consultant['member_id']; /* [NEEDS REVIEW] line 349: value used inside onclick JS string literal */ ?>-1')">+</a>
+      <a style="color: black;"  data-bs-toggle="collapse" href="#collapse<?php echo htmlspecialchars($consultant['member_id'], ENT_QUOTES, 'UTF-8'); ?>" aria-expanded="false" aria-controls="collapse<?php echo htmlspecialchars($consultant['member_id'], ENT_QUOTES, 'UTF-8'); ?>" onclick="showfunction('<?php echo $consultant['member_id']; /* [NEEDS REVIEW] line 350: value used inside onclick JS string literal */ ?>-1')"><i class="fas fa-user-tie text-info"></i> Dr. <?php echo htmlspecialchars($consultant['full_name'], ENT_QUOTES, 'UTF-8'); ?> Patient List</a>
     </h3>
 
     <div style="margin-left: auto;">
         <?php if ($user['modify_patient'] == '1'): ?>
-            <a class="btn btn-info" href="#changeconsultant_modal" data-bs-target="#changeconsultant_modal" data-book-id="<?php echo $consultant['member_id']; ?>" data-bs-toggle="modal" style="color: aliceblue; line-height: 2; padding: 0px 15px;">Change Consultant</a>
+            <a class="btn btn-info" href="#changeconsultant_modal" data-bs-target="#changeconsultant_modal" data-book-id="<?php echo htmlspecialchars($consultant['member_id'], ENT_QUOTES, 'UTF-8'); ?>" data-bs-toggle="modal" style="color: aliceblue; line-height: 2; padding: 0px 15px;">Change Consultant</a>
         <?php endif; ?>
     </div>
 </div>
 
 
               <!-- /.card-header -->
-              <div class="collapse" id="collapse<?php echo $consultant['member_id']; ?>">
+              <div class="collapse" id="collapse<?php echo htmlspecialchars($consultant['member_id'], ENT_QUOTES, 'UTF-8'); ?>">
                 <div class="row">
          
                        
@@ -396,13 +396,13 @@ if ($result1) {
                                                       
 
                                                       
-                                                    echo"  
+                                                    echo"
                                                     <div class='col-sm-3'>
-                                                    <div class='eachrow card'  id='row".$s['ID']."'>
-                                                    
+                                                    <div class='eachrow card'  id='row".htmlspecialchars($s['ID'], ENT_QUOTES, 'UTF-8')."'>
+
                                                     <div style='   margin: 2%; text-align: center;display: inline; ' class='eachcol bed card-header'  scope='row' >";
                                                     if (in_array($user['position'],$access_PICU_control)){
-                                                    echo "<a  type='button' class='btn-tool'  style='display: contents;'   onclick='del(".$s['ID'].")'><i class='fa fa-trash'></i>  </a>";
+                                                    echo "<a  type='button' class='btn-tool'  style='display: contents;'   onclick='del(".$s['ID'].")'><i class='fa fa-trash'></i>  </a>"; // [NEEDS REVIEW] line 405: $s['ID'] used inside onclick JS call argument
                                                     }
                                                     // var_dump($decodedadmissiondx);  
                                                     // var_dump($tb_list);
@@ -425,26 +425,26 @@ if ($result1) {
                                                         echo"<div style='    background: #87503e;color: white;'><strong> Long Term Patient</strong></div>";
                                                       }
                                                 echo"
-                                                <label style='text-align: center;margin-bottom: 0px;'>In ".$s['current_location']." Bed #</label>
+                                                <label style='text-align: center;margin-bottom: 0px;'>In ".htmlspecialchars($s['current_location'], ENT_QUOTES, 'UTF-8')." Bed #</label>
 
-                                                      <input class='txtdata' name='bed' placeholder='Bed Number' value='".$s['BED']."' style='text-align: center;' >
-                                                      <input class='txtdata' type='hidden' name='id' id='id' value='".$s['ID']."' style='text-align: center;width: 85%;' >
-                                                     
+                                                      <input class='txtdata' name='bed' placeholder='Bed Number' value='".htmlspecialchars($s['BED'], ENT_QUOTES, 'UTF-8')."' style='text-align: center;' >
+                                                      <input class='txtdata' type='hidden' name='id' id='id' value='".htmlspecialchars($s['ID'], ENT_QUOTES, 'UTF-8')."' style='text-align: center;width: 85%;' >
+
                                                       </div>
-                                                      
+
                                                       <div style=' margin: 2%; ' class='eachcol mrn' >
                                                       <label style='text-align: center;margin-bottom: 0px;'>MRN</label>
-                                                        <input class='txtdata' name='mrn' value='".$s['MRN']."' style='text-align: center;'>
+                                                        <input class='txtdata' name='mrn' value='".htmlspecialchars($s['MRN'], ENT_QUOTES, 'UTF-8')."' style='text-align: center;'>
                                                       </div>
 
                                                       <div style=' margin: 2%; ' class='eachcol name'>
                                                       <label style='text-align: center;margin-bottom: 0px;'>Patient Name</label>
-                                                      <input class='txtdata' name='name' value='".$s['PNAME']."' style='text-align: center;'>
+                                                      <input class='txtdata' name='name' value='".htmlspecialchars($s['PNAME'], ENT_QUOTES, 'UTF-8')."' style='text-align: center;'>
                                                       </div>
-                                                
+
                                                       <div style=' margin: 2%; ' class='eachcol admdate'  scope='row' >
                                                       <label style='text-align: center;margin-bottom: 0px;'>Admission Date</label>
-                                                      <input type='text' onfocus='(this.type='date')' class='txtdata' name='admdate'  id='datepicker' value='".$s['ADMDATE']."' style='text-align: center;padding: 0px;' disabled>
+                                                      <input type='text' onfocus='(this.type='date')' class='txtdata' name='admdate'  id='datepicker' value='".htmlspecialchars($s['ADMDATE'], ENT_QUOTES, 'UTF-8')."' style='text-align: center;padding: 0px;' disabled>
                                                       </div>";
 
                                                       if($s['current_location'] == 'ICU'){
@@ -469,7 +469,7 @@ if ($result1) {
 
                                                                 echo"
                                                                 <label style='text-align: center;margin-bottom: 0px;'>Duration of Admission</label>
-                                                                <input type='text' class='txtdata'  value='".$LOS."' style='text-align: center;padding: 0px;' disabled>
+                                                                <input type='text' class='txtdata'  value='".htmlspecialchars($LOS, ENT_QUOTES, 'UTF-8')."' style='text-align: center;padding: 0px;' disabled>
                                                                 </div>
                                                                 ";
                                                               }
@@ -481,7 +481,7 @@ if ($result1) {
                                                         if (is_array($decodedadmissiondx)) {
                                                           foreach ($decodedadmissiondx as $value) {
                                                               if (isset($icd10_names[$value])) {
-                                                                  echo '<option selected value="' . $value . '">' . $icd10_names[$value] . '</option>';
+                                                                  echo '<option selected value="' . htmlspecialchars($value, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($icd10_names[$value], ENT_QUOTES, 'UTF-8') . '</option>';
                                                               }
                                                           }
                                                       }
@@ -500,32 +500,32 @@ if ($result1) {
                                                       echo "<label for='longterm' style=' display: contents; '> Long Term Patient</label><br> </div>";
 
                                                       echo"
-                                                      <div style=' margin: 2%; ' class='eachcol id' scope='row' ><input class='txtdata' name='id' value='".$s['ID']."' style='display: none;'>
+                                                      <div style=' margin: 2%; ' class='eachcol id' scope='row' ><input class='txtdata' name='id' value='".htmlspecialchars($s['ID'], ENT_QUOTES, 'UTF-8')."' style='display: none;'>
                                                    ";
                                                    if ($user['modify_patient'] == '1'){
-                                                   echo "<a class='btn btn-info' href='#details_modal' data-book-id='".$s['ID']."' data-bs-toggle='modal'  style='color: aliceblue;line-height: 2;margin-top: 3%;padding: 0px 10%;width: 100%;'>Modify</a>";
+                                                   echo "<a class='btn btn-info' href='#details_modal' data-book-id='".htmlspecialchars($s['ID'], ENT_QUOTES, 'UTF-8')."' data-bs-toggle='modal'  style='color: aliceblue;line-height: 2;margin-top: 3%;padding: 0px 10%;width: 100%;'>Modify</a>";
                                                    };
-                                                  
+
                                                    if($s['current_location'] == 'ICU'){
-                                                    echo "  <a  class='btn btn-danger'  href='#icu_modal' data-bs-toggle='modal'  data-book-id='".$s['ID']."'  style='color: aliceblue;line-height: 2;margin-top: 3%;padding: 0px 10%;width: 100%;'  id= 'icu_discharge'>ICU Discharge</a>";
+                                                    echo "  <a  class='btn btn-danger'  href='#icu_modal' data-bs-toggle='modal'  data-book-id='".htmlspecialchars($s['ID'], ENT_QUOTES, 'UTF-8')."'  style='color: aliceblue;line-height: 2;margin-top: 3%;padding: 0px 10%;width: 100%;'  id= 'icu_discharge'>ICU Discharge</a>";
                                                    }else{
-                                                     
+
                                                     if ($user['member_id'] == $s['consultant_id'] OR $user['manage_patient'] == '1'){
                                                       if ($s['delay'] !==Null){
-                                                        echo" <a  class='btn btn-danger'  href='#completedis_modal' data-bs-toggle='modal'  data-book-id='".$s['ID']."'  style='color: aliceblue;line-height: 2;margin-top: 3%;padding: 0px 10%;width: 100%;'  id= 'discharge'>Complete Discharge</a>";
+                                                        echo" <a  class='btn btn-danger'  href='#completedis_modal' data-bs-toggle='modal'  data-book-id='".htmlspecialchars($s['ID'], ENT_QUOTES, 'UTF-8')."'  style='color: aliceblue;line-height: 2;margin-top: 3%;padding: 0px 10%;width: 100%;'  id= 'discharge'>Complete Discharge</a>";
                                                         if ($user['modify_patient'] == '1'){
                                                         echo "
                                                           <form method='post' action='dmc-patients.php'>
-                                                          <input class='txtdata' type='hidden' name='reverse_id' value='".$s['ID']."'>
+                                                          <input class='txtdata' type='hidden' name='reverse_id' value='".htmlspecialchars($s['ID'], ENT_QUOTES, 'UTF-8')."'>
                                                           <button type='button' value='submit' name='reverse_discharge_btn' class='btn btn-danger' style='color: aliceblue;line-height: 2;margin-top: 3%;padding: 0px 10%;width: 100%;' onclick='reversedischarge(this)'>Reverse Discharge</button>
                                                           </form>";
                                                         };
 
                                                       }else{
-                                                               
+
                                                                   echo"
-                                                                  <a  class='btn btn-success'  href='#transfer_modal' data-bs-toggle='modal'  data-book-id='".$s['ID']."'  style='color: aliceblue;line-height: 2;margin-top: 3%;padding: 0px 10%;width: 100%;'  id= 'Transfer'>Transfer</a>
-                                                                  <a  class='btn btn-danger'  href='#my_modal' data-bs-toggle='modal'  data-book-id='".$s['ID']."'  style='color: aliceblue;line-height: 2;margin-top: 3%;padding: 0px 10%;width: 100%;'  id= 'discharge'>Discharge</a>
+                                                                  <a  class='btn btn-success'  href='#transfer_modal' data-bs-toggle='modal'  data-book-id='".htmlspecialchars($s['ID'], ENT_QUOTES, 'UTF-8')."'  style='color: aliceblue;line-height: 2;margin-top: 3%;padding: 0px 10%;width: 100%;'  id= 'Transfer'>Transfer</a>
+                                                                  <a  class='btn btn-danger'  href='#my_modal' data-bs-toggle='modal'  data-book-id='".htmlspecialchars($s['ID'], ENT_QUOTES, 'UTF-8')."'  style='color: aliceblue;line-height: 2;margin-top: 3%;padding: 0px 10%;width: 100%;'  id= 'discharge'>Discharge</a>
                                                                   ";
                                                                   }
                                                             }
@@ -566,7 +566,7 @@ if ($result1) {
             <div class="card-header">
               <h3 class="card-title"><i class="fas fa-user-tie text-info"></i> Patient Count per Consultant</h3>
               <div id="addbtn" class='eachrow' style='float: right;'>
-                <h3 class="card-title"><i class="fas fa-user-tie text-info"></i> Total Count (non ICU): <?php echo $patient_count; ?></h3>
+                <h3 class="card-title"><i class="fas fa-user-tie text-info"></i> Total Count (non ICU): <?php echo htmlspecialchars($patient_count, ENT_QUOTES, 'UTF-8'); ?></h3>
               </div>
             </div>
             <!-- /.card-header -->
@@ -597,13 +597,13 @@ if ($result1) {
                       $total = $cc['ward'];
                       echo "
                       <tr class='eachrow'>
-                        <td><p>Dr. " . $cc['name'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol'><p>" . $cc['old'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol'><p>" . $cc['new'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . $cc['activepatients'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . $total . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . $cc['icu'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . $cc['tb1'] . "</p></td>
+                        <td><p>Dr. " . htmlspecialchars($cc['name'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol'><p>" . htmlspecialchars($cc['old'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol'><p>" . htmlspecialchars($cc['new'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . htmlspecialchars($cc['activepatients'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . htmlspecialchars($total, ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . htmlspecialchars($cc['icu'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . htmlspecialchars($cc['tb1'], ENT_QUOTES, 'UTF-8') . "</p></td>
                       </tr>";
                     }
                   }
@@ -614,13 +614,13 @@ if ($result1) {
                       $total = $cc['ward'];
                       echo "
                       <tr class='eachrow'>
-                        <td><p>Dr. " . $cc['name'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol'><p>" . $cc['old'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol'><p>" . $cc['new'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . $cc['activepatients'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . $total . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . $cc['icu'] . "</p></td>
-                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . $cc['tb1'] . "</p></td>
+                        <td><p>Dr. " . htmlspecialchars($cc['name'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol'><p>" . htmlspecialchars($cc['old'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol'><p>" . htmlspecialchars($cc['new'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . htmlspecialchars($cc['activepatients'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . htmlspecialchars($total, ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . htmlspecialchars($cc['icu'], ENT_QUOTES, 'UTF-8') . "</p></td>
+                        <td style='padding: 0px 1%;' class='eachcol' scope='row'><p>" . htmlspecialchars($cc['tb1'], ENT_QUOTES, 'UTF-8') . "</p></td>
                       </tr>";
                     }
                   }
@@ -989,7 +989,7 @@ function reversedischarge(button) {
 $('#my_modal').on('show.bs.modal', function(e) {
  
   var bookId = $(e.relatedTarget).data('book-id');
-  var userid = <?php echo $user['member_id']; ?>;
+  var userid = <?php echo json_encode($user['member_id']); ?>;
 
  data = {bookId: bookId,userid:userid};
  $.post('patients/dmc-patients-discharge.php', data, function(data){
@@ -1042,7 +1042,7 @@ $('#changeconsultant_modal').on('show.bs.modal', function(e) {
 $('#completedis_modal').on('show.bs.modal', function(e) {
  
  var bookId = $(e.relatedTarget).data('book-id');
- var userid = <?php echo $user['member_id']; ?>;
+ var userid = <?php echo json_encode($user['member_id']); ?>;
 
  data = {bookId: bookId,userid:userid};
  $.post('patients/dmc-patients-completedischarge.php', data, function(data){
@@ -1057,7 +1057,7 @@ $('#completedis_modal').on('show.bs.modal', function(e) {
 $('#icu_modal').on('show.bs.modal', function(e) {
  
   var bookId = $(e.relatedTarget).data('book-id');
-  var userid = <?php echo $user['member_id']; ?>;
+  var userid = <?php echo json_encode($user['member_id']); ?>;
 
   data = {bookId: bookId,userid:userid};
   $.post('patients/dmc-patients-icudischarge.php', data, function(data){

@@ -60,7 +60,7 @@ function changeconsultant(button) {
 
         foreach ($consultant as $con) {
             $selected = ($con['member_id'] == $activepicupatints[0]['consultant_id']) ? "selected" : "";
-            echo "<option value='" . $con['member_id'] . "' $selected>" . $con['full_name'] . "</option>";
+            echo "<option value='" . htmlspecialchars($con['member_id'], ENT_QUOTES, 'UTF-8') . "' $selected>" . htmlspecialchars($con['full_name'], ENT_QUOTES, 'UTF-8') . "</option>";
         }
         ?>
     </select>
