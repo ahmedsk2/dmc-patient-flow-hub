@@ -1,0 +1,34 @@
+name: CI
+
+# Lightweight, Composer-free CI: lints every PHP file and runs the self-contained offline test
+# suite (tools/mfa_test.php via tests/run.php --unit). Integration checks that need a live DB /
+# dev server are skipped here (they run locally); this gate catches syntax errors and TOTP/crypto
+# regressions on every push/PR. Real PHPUnit can be added in a job where Composer is provisioned.
+
+on:
+  push:
+    branches: [ main, master, renovation ]
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, openssl, hash, mysqli, json, zip, gd, dom, curl
+          coverage: none
+
+      - name: Lint all PHP (excluding vendored libs)
+        run: |
+          echo "Linting PHP files..."
+          # `php -l` exits non-zero on a parse error; xargs propagates that as a non-zero exit.
+          find . -path ./vendor -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l
+          echo "All PHP files parse cleanly."
+
+      - name: Self-contained unit tests (offline)
+        run: php tests/run.php --unit
