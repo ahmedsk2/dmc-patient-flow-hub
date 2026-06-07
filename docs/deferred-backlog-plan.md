@@ -118,10 +118,22 @@
   - [ ] **Remaining (multi-session):** PSR-4 autoloader + a `src/` service/repository layer behind
     interfaces; `statistics/report_data.php` is the natural first slice to become a `src/` class with
     direct unit tests. Real PHPUnit swappable in where Composer exists.
-- [ ] **Phase 5 — Deeper schema normalization (validated, additive).** `patient_diagnosis` join
-  table (vs JSON), canonical `patients` entity (vs row-per-admission), specialty dedup — as
-  **additive** migrations with a compatibility layer + a data-migration validated against the
-  originals (counts must match). Highest risk; do behind the new layer, never as in-place edits.
+- [~] **Phase 5 — Deeper schema normalization (validated, additive).**
+  - [x] **`patient_diagnosis` join table** (vs the `admissiondiagnosis` JSON). Additive, derived,
+    indexed; JSON stays authoritative. `JSON_TABLE` backfill (16,067 rows / 14,827 admissions),
+    **lossless round-trip validated** (`tools/patient_diagnosis_validate.php`, in `tests/run.php`).
+    Migration 07. (commit 94c5bd1)
+  - [ ] **Canonical `patients` entity** (vs row-per-admission). Additive creation from distinct MRNs
+    is feasible, but the payoff only lands if the app is rewired to use it (risky) — and MRN is dirty
+    (~51 known-bad, unindexed mediumtext). Recommend doing it *after* the Phase-4 `src/` layer and a
+    prod MRN clean-up. Deferred (not started).
+  - [x] **Specialty "dedup" — investigated, CONTRAINDICATED.** The data shows `speciality` (a
+    consultant's *own* specialty — Hospitalist, Infectious Disease…, used by `members.specialty_id`)
+    and `other_specialities` (referral *target services* — ICU, Cardiology, GIT…) are **distinct
+    domains, not duplicates** (only the junk row "test" overlaps). Merging them would conflate two
+    concepts and is the wrong move. The real residue is a handful of junk rows ("resr", "345"×2,
+    "test"); deleting them is a **maintainer data-cleanup** (some may be referenced by members →
+    orphaning risk), not an automated migration. No code change made — documented decision.
 
 ## Validation log
 
@@ -139,6 +151,7 @@
 | MFA admin reset | seeded-enrolled member | endpoint | ✓ secret cleared + audit row |
 | PDF report_data vs a4.php | a4.php JSON (2023+2024) | report_data.php | ✓ 20/20 metrics identical |
 | pdf-report.php output | — | live endpoint | ✓ 200 application/pdf, valid %PDF, admin-gated |
+| patient_diagnosis join table | `admissiondiagnosis` JSON | join table | ✓ 16,067 rows lossless round-trip (commit 94c5bd1) |
 
 *charts.php diffs verified: after stripping warning markers, all 3 `charts__c*__quarterly` are
 byte-identical (zero number change); the 3 `charts__c*__monthly` differ only in the label array
