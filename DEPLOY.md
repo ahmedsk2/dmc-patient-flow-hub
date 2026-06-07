@@ -55,6 +55,19 @@ Run from `migrations/` — e.g. `mysql <dbname> < migrations/01-audit-log.sql`. 
       `picupatients` during the engine conversion — run in a low-traffic window.
 - [ ] After 03, spot-check: `SHOW TABLE STATUS` shows `picupatients` / `picupatients_temp` as `InnoDB`,
       and `SHOW INDEX FROM picupatients` lists the new MRN/consultant/location indexes.
+- [ ] `04-foreign-keys.sql` — adds 5 foreign keys (picupatients/consultations member references →
+      `members`, `ON DELETE SET NULL`). Run the **pre-flight orphan check** in the file header on prod
+      first (each must be 0; on the dump they were). The migration first normalizes `=0` sentinels to
+      NULL on those columns. **Optional** (integrity hardening) — the app already writes valid member ids,
+      and the FK additionally blocks spoofing a non-existent member. Validated locally (real writes pass,
+      invalid member refs are rejected).
+- [ ] `05-charset-utf8mb4.sql` — converts the four remaining non-utf8mb4 tables (`members`, `settings`,
+      `tbl_token_auth`, `countries`) so the whole schema is utf8mb4. **Optional** but recommended for
+      consistent Unicode/collation. Verified safe (true-latin1 / utf8mb3 — no re-encode needed).
+      ⚠️ **First** review + delete the spam member accounts flagged in the file header (open-registration
+      era; e.g. Turkish casino text + a bit.ly link) — see also the SECURITY note below.
+- [ ] After 04/05: `information_schema.KEY_COLUMN_USAGE` shows the 5 `fk_*` constraints; and no table in
+      `information_schema.TABLES` has a non-`utf8mb4` collation.
 
 ## 4. Server / PHP configuration
 
