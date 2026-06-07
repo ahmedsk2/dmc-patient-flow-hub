@@ -101,8 +101,15 @@
   - **Deploy steps (prod):** run `migrations/06-mfa.sql`; set a long random `MFA_KEY` in the prod
     (git-ignored) `config.local.php` — see `config.local.sample.php`. Keep `MFA_KEY` stable
     (changing it forces re-enrollment).
-- [ ] **Phase 3 — Server-side PDF.** Needs a PDF library (FPDF single-file, vendored) — the one
-  item that needs an external lib; confirm before fetching. Render the A4 reports server-side.
+- [x] **Phase 3 — Server-side PDF.** FPDF 1.86 vendored under `vendor/fpdf/` (single-file, no deps,
+  permissive licence; **user-approved** external code — runtime files only). `statistics/report_data.php`
+  (`dmc_yearly_report_data()`) computes the yearly aggregates via grouped queries, metric definitions
+  mirroring a4.php; **`tools/report_data_validate.php` proves 20/20 metrics identical to a4.php's JSON
+  for 2023 & 2024**. `pdf-report.php?y=YYYY` (admin-only; unauth→302) renders an A4-landscape PDF
+  (monthly KPI table + totals, per-consultant LOS, discharge destinations); a4.php untouched. A "PDF"
+  button sits beside Yearly/Monthly in allstat.php. (commit 792eb57)
+  - Deferred: bed-days/census column in the PDF (the one a4 metric not yet collapsed) and embedding
+    the Chart.js graphs as images (PDF is tabular).
 - [ ] **Phase 4 — Layering + test suite (strangler-fig start).** Self-contained PSR-4-style
   autoloader + a `src/` layer (repositories/services), extract a few slices behind interfaces, and
   a lightweight self-contained test runner (`tests/`) — real PHPUnit can be swapped in where
@@ -126,6 +133,8 @@
 | MFA TOTP core | RFC-6238 Appendix-B vectors | mfa.php | ✓ 30/30 (`tools/mfa_test.php`) |
 | MFA enroll → 2FA login | live dev server | end-to-end | ✓ password-alone blocked; TOTP → dashboard |
 | MFA admin reset | seeded-enrolled member | endpoint | ✓ secret cleared + audit row |
+| PDF report_data vs a4.php | a4.php JSON (2023+2024) | report_data.php | ✓ 20/20 metrics identical |
+| pdf-report.php output | — | live endpoint | ✓ 200 application/pdf, valid %PDF, admin-gated |
 
 *charts.php diffs verified: after stripping warning markers, all 3 `charts__c*__quarterly` are
 byte-identical (zero number change); the 3 `charts__c*__monthly` differ only in the label array
