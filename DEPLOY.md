@@ -3,8 +3,14 @@
 > Companion to [`PROJECT-TRACKER.md`](PROJECT-TRACKER.md). This is the **ordered, do-this-at-deploy**
 > checklist for shipping the `renovation` branch to the live PHP 8.3 server. Everything here was
 > deferred from the code batches because it touches production credentials, the database, or the
-> server config. **Nothing in the renovation has been runtime-tested** (no local PHP), so treat the
-> first deploy as a supervised change with a tested rollback.
+> server config.
+>
+> **Testing status:** the core renovation (login, session/cookie hardening, CSRF, the central auth
+> guard + role/capability/ownership checks, prepared-statement writes, server-side validation, audit
+> logging, the multi-step transaction rollbacks, and the dashboard/stats query rewrites) **was
+> runtime-tested locally on WAMP (PHP 8.3 + MySQL 8.4)** during the renovation. It has **not** been
+> tested on staging or against production data volume/encoding, so still treat the first production
+> deploy as a **supervised change with a tested rollback**.
 
 ---
 
@@ -70,10 +76,21 @@ Run from `migrations/` — e.g. `mysql <dbname> < migrations/01-audit-log.sql`. 
 
 ## 5. Deploy the code
 
-- [ ] Deploy the `renovation` branch.
+The repo is **self-contained**: the vendored runtime assets (`vendor/`, `dist/`, `css/webfonts/` — jQuery,
+Bootstrap, Chart.js, Select2, AdminLTE, the logo, FontAwesome web fonts) are committed, so a fresh
+`git clone` + `git checkout renovation` is a complete, working deploy with no separate asset/CDN sync step.
+
+- [ ] Deploy the `renovation` branch. **Do not clone over the live tree** — clone to a new directory and
+      cut over, or pull into a checkout that has the server's own `config.local.php` (which is git-ignored
+      and must not be overwritten or deleted by the deploy).
 - [ ] Confirm the blocked file types are not served: requesting `/Demo.sql`, `/CLAUDE.md`,
       `/config.local.php`, `/.git/config` should all be denied (403/404) by `.htaccess`.
 - [ ] Confirm the deleted debug endpoints are gone: `/reset-testcount.php` and `/test-trans.php` → 404.
+- [ ] **Clinical settings (Control panel):** the shuffle auto-assignment now honours `min_subs` as a
+      real floor (Q6 fix — previously it was a hardcoded `5`). Per the maintainer, set **`min_subs = 7`
+      and `max_subs = 7`** on the Control page so every on-service subspecialist is filled to 7 before
+      overflow returns to the hospitalists. Confirm the other thresholds (`min_hospitalist`,
+      `max_hospitalist`, `short_los`, `long_los`) still reflect current policy.
 
 ## 6. Post-deploy smoke tests (do these before announcing "live")
 
@@ -119,7 +136,8 @@ on confirmed success, (c) be written atomically, (d) appear in `audit_log`):**
 ## 7. Known follow-ups still open (see PROJECT-TRACKER.md "Decisions needed")
 
 These are intentionally **not** done and need clinical/product input before they are safe to implement:
-statistics sargability + the `MONTH(DISDATE)`/`YEAR(ADMDATE)` cross-column anomalies (CLIN), server-side
-object-ownership authorization (permission model re-confirmation), the canonical "active patient"
-definition for de-duplication, soft-delete policy, the UI/UX overhaul, CSP + removing `eval()`
-(needs the inline-JS refactor), and the PHPExcel→PhpSpreadsheet swap (needs Composer).
+the canonical "active patient" definition for de-duplication, the UI/UX overhaul, and the
+PHPExcel→PhpSpreadsheet swap (needs Composer). The statistics `MONTH(DISDATE)`/`YEAR(ADMDATE)`
+cross-column anomalies and the readmission-window logic were resolved this cycle (Q1/Q4), and CSP +
+removal of `eval()` is **done** (the dashboard now clones inline `<script>` blocks instead — no
+`unsafe-eval` in the policy).
