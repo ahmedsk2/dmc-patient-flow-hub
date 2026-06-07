@@ -122,19 +122,19 @@ Page POST handlers that run before render are also gated: `dmc-patients.php` (re
 
 ---
 
-## 5. Review checklist (what to confirm against intent)
+## 5. Review checklist — **CONFIRMED with the maintainer 2026-06-06** (no code changes required)
 
-- [ ] **Consultant (position 3) in `$access_PICU_endorsement`** — currently **excluded** (`[0,2,4]`), so on the
-      consultation/patient list a Consultant sees only **their own** ("My"), while Registrar/Resident see "All".
-      Is that the intended split?
-- [ ] **Inline list edits** (`*-update.php`) require only `require_role([0,2,3,4])`, **not** `modify_patient`
-      (decision **Q8 — left as-is**). Confirm inline bed/field edits should be open to all clinical roles.
-- [ ] **Discharge/transfer/sign-off** = own consultant **or** `manage_patient` **or** Admin. Confirm "primary
-      consultant or Can-Manage" is the intended ownership rule.
-- [ ] **Delete patient / delete consultation = Admin only.** Confirm.
+- [x] **Consultant (position 3) in `$access_PICU_endorsement`** — **CONFIRMED:** Consultants see **their own**
+      patients only ("My"); Registrar/Resident/Admin see "All". Intended — keep `[0,2,4]`.
+- [x] **Inline list edits** (`*-update.php`) require only `require_role([0,2,3,4])`, **not** `modify_patient` —
+      **CONFIRMED:** inline bed/field edits stay open to all clinical roles (Q8). `modify_patient` gates only the
+      full Modify modal.
+- [x] **Discharge/transfer/sign-off** = own consultant **or** `manage_patient` **or** Admin — **CONFIRMED** as the
+      intended ownership rule.
+- [x] **Delete patient / delete consultation = Admin only** — **CONFIRMED.**
 - [ ] **Capability flags** (`add_new_patient`/`assign_access`/`manage_patient`/`modify_patient`) are per-user in
-      `members`. Confirm who currently holds each in production matches intent.
-- [ ] **Registry, statistics, control, old-patient import, Excel export = Admin only.** Confirm.
+      `members`. _Operational_ — confirm the per-user grants in production match intent (a data check, not code).
+- [x] **Registry, statistics, control, old-patient import, Excel export = Admin only** — **CONFIRMED.**
 
 > If any row above is wrong for your policy, the fix is localized: change the `require_*` call in the named
 > endpoint (or the `$access_PICU_*` arrays in `sidebar.php`). The **Critical** protections (every write requires
