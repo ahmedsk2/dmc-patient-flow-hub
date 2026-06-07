@@ -204,6 +204,12 @@ _Last updated: 2026-06-06_
   - **D — keep `v_mrn` STRICT** (digits ≤11, validated only-on-change — already shipped `f5db226`). Refined the dirty-MRN count: **~51 genuinely-bad** (names/beds/placeholders/swapped fields/double-MRNs) + ~4 whitespace-padded-valid (of the 204 the raw regex flagged; the rest are valid once trimmed, which `v_mrn` already does). Maintainer will **reality-check + fix the old non-conforming records on the real DB** before relying on the strict rule; handed off the find-query (+ optional whitespace-normalize `UPDATE`) for that.
   - **Net:** all decision-gated items are now closed. **Remaining = pure ops/deploy (`DEPLOY.md`) + the framework re-platform STOP line.**
 
+- **✨ 2026-06-07 — Tier-1 P2/P3 polish (the safe/bounded subset the maintainer opted into):**
+  - **Branding/typo cleanup + semantic icons (U5/UI-14) DONE** (`95140ef`): fixed the "DMC Help Disk"→"DMC Help Desk" typo (DRY'd to `SMTP_FROM_NAME`); de-white-labeled the 6 leftover vendor logo links (`innovia.ai`/`healthpro.ai` → `www.dmc-im.com`) + sidebar logo `alt` + the active-list "Designed by Innovia.ai" footer; distinct nav icons (TB=`fa-lungs`, Patients=`fa-bed`, Consultations=`fa-notes-medical`, Admissions=`fa-user-plus` — were 3× generic `fa-edit`). Kept the maintainers' own footer credit. All FA icons verified to render.
+  - **Dashboard near-real-time refresh (PERF-06) DONE** (`e44addf`): 5-minute **visibility-gated full reload** of the read-only board (leak-free — no orphaned Chart.js; only refreshes a visible tab). Websocket intentionally not used (not viable on the shared host).
+  - **Un-hide the hidden KPI page — INVESTIGATED → NOT a safe toggle; left hidden.** The `display:none` `<page>` in `statistics/a4.php:1004` is an **unfinished draft** (commented-out experimental code) and part of the duplicated **"A4 twins"**; un-hiding it would print a broken/duplicate page. Belongs with the P2 "merge A4 twins" cleanup (X3), not a quick win.
+  - **Deferred per maintainer (re-platform line):** Tier 2 (stats engine SQL+caching, server-side PDF, MFA) and Tier 3 (layering+PHPUnit, deeper schema normalization) — not started.
+
 _(Add new notes/decisions above this line as we go.)_
 
 ---
@@ -251,7 +257,7 @@ _(Add new notes/decisions above this line as we go.)_
 - ✅ **"Active patient" definition CONFIRMED (2026-06-07):** canonical **active = `DISDATE IS NULL`**; the per-page **ICU-excluding** census variants are **intentional** → broad de-dup/unification **contraindicated** (leave purpose-specific filters as designed). Multi-active-row dupes were junk; the admit flow blocks new ones. No code change. — (X2 / SIMP-02, CLIN-08)
 - ⬜ **Statistics engine**: grouped SQL + caching; merge A4 twins — (X3,P1,P4 / SIMP-03,PERF-01) — P2
 - ✅ **UI/UX overhaul — responsive/tablet + a11y (U2,U4,W5)** — DONE & runtime-verified (2026-06-07). The responsive card grid + modal/filter layout (UI-01..08) is **wired via `css/app.css`** — root-caused that it had NEVER loaded (app pages use a combined bundle, not `main.css`) — and verified in-browser at desktop/tablet/phone; LOS-band a11y label done (U1, above). _Remaining (design-gated, P2/P3): the broader data-entry / status-pipeline redesign._
-- ⬜ **Server-side PDF** reports; un-hide the hidden KPI page — (U3) — P2. _(Vendoring CDNs locally is ✅ DONE — the CDN-localization pass.)_
+- ⬜ **Server-side PDF** reports — (U3) — P2 (Tier 2; needs a PDF library/dep). _(Vendoring CDNs locally ✅ DONE. Un-hiding the hidden KPI page was investigated 2026-06-07 → it's an unfinished draft / part of the "A4 twins" → NOT a safe toggle; folded into the "merge A4 twins" task X3 below.)_
 - 🔄 Normalize **diagnoses/MRN/specialty** schema; add FKs — **FKs DONE** (migration 04, validated); deeper normalization (diagnosis join-table vs JSON, MRN-as-patient-entity, specialty dedup) still a P2/P3 redesign — (D2,D4,D5)
 
 ### Phase 4 — Re-platform (P3 — decision-gated, after Phase 1)
@@ -259,8 +265,8 @@ _(Add new notes/decisions above this line as we go.)_
 - ⬜ **Strangler-fig** incremental migration; add CI — (Phase 4) — P3
 
 ### Phase 5 — Nice-to-haves (P3)
-- ⬜ Branding/typo cleanup, semantic icons — (U5 / UI-14) — P3
-- ⬜ Real-time dashboard refresh (polling/websocket) — (PERF-06) — P3
+- ✅ Branding/typo cleanup, semantic icons — (U5 / UI-14) — DONE 2026-06-07 (`95140ef`): de-white-labeled vendor links, "Help Disk"→"Help Desk", distinct nav icons.
+- ✅ Real-time dashboard refresh — (PERF-06) — DONE 2026-06-07 (`e44addf`): 5-min visibility-gated full reload (polling; websocket not viable on shared host).
 - ⬜ MFA, richer reporting — P3
 
 ---
