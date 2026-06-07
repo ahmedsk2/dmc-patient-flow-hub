@@ -100,7 +100,7 @@ if (isset($_POST['reg_user'])) {
 <body class="hold-transition login-page">
 <div class="login-box">
   <div class="login-logo">
-    <a href="https://www.innovia.ai/"><img src="dist/img/logo-wt.png" width="100%"></a>
+    <a href="https://www.dmc-im.com/"><img src="dist/img/logo-wt.png" width="100%"></a>
   </div>
 
   <div class="card">

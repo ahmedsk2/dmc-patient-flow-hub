@@ -331,10 +331,10 @@ foreach ($activepicupatients as $s) {
     </div>
   </section>
   <footer class="main-footer" style="margin: 0px;">
-    <strong>Designed by <a href="https://www.Innovia.ai/">Innovia.ai</a>.</strong>
+    <strong>DMC Internal Medicine &mdash; Patient-Flow Hub.</strong>
     All rights reserved.
     <div class="float-right d-none d-sm-inline-block">
-      <b>Version</b> 2.2
+      <b>Version</b> 2.5
     </div>
   </footer>
 <script src="vendor/jquery-3.7.1.min.js"></script>

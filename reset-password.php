@@ -87,7 +87,7 @@ if (!empty($_GET['token']))
 <div class="login-box">
   <div class="login-logo">
 	
-    <a href="https://www.healthpro.ai/main/">  <img src="dist/img/logo.png" width="100%"></a>
+    <a href="https://www.dmc-im.com/">  <img src="dist/img/logo.png" width="100%"></a>
   </div>
 
  

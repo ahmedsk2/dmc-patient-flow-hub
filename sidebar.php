@@ -143,7 +143,7 @@ $position = $_SESSION['position'];
   <aside class="main-sidebar sidebar-dark-primary elevation-4">
     <!-- Brand Logo -->
     <a href="dashboard.php" class="brand-link">
-      <img src="dist/img/logo-wt.png" alt="healthpro.Ai" width="110%" class="brand-image elevation-1" style="opacity: 1">
+      <img src="dist/img/logo-wt.png" alt="DMC Internal Medicine" width="110%" class="brand-image elevation-1" style="opacity: 1">
     </a>
     <!-- Sidebar -->
     <div class="sidebar">
@@ -174,13 +174,13 @@ $position = $_SESSION['position'];
           </li>
           <li class="nav-item">
             <a href="tb-patients.php" class="nav-link">
-              <i class="nav-icon fas fa-book"></i>
+              <i class="nav-icon fas fa-lungs"></i>
               <p>Active TB Patients</p>
             </a>
           </li>
           <li class="nav-item">
             <a href="dmc-patients.php" class="nav-link">
-              <i class="nav-icon fas fa-edit"></i>
+              <i class="nav-icon fas fa-bed"></i>
               <?php
               echo in_array($position, $access_PICU_endorsement) ? "<p>All Patients</p>" : "<p>My Patients</p>";
               ?>
@@ -189,7 +189,7 @@ $position = $_SESSION['position'];
           <?php if (in_array($position, $access_PICU_patients)): ?>
           <li class="nav-item">
             <a href="dmc-new-consultation.php" class="nav-link">
-              <i class="nav-icon fas fa-edit"></i>
+              <i class="nav-icon fas fa-notes-medical"></i>
               <?php
               echo in_array($position, $access_PICU_endorsement) ? "<p>All Consultations</p>" : "<p>My Consultations</p>";
               ?>
@@ -197,7 +197,7 @@ $position = $_SESSION['position'];
           </li>
           <li class="nav-item">
             <a href="dmc-new-admissions.php" class="nav-link">
-              <i class="nav-icon fas fa-edit"></i>
+              <i class="nav-icon fas fa-user-plus"></i>
               <p>New Admissions</p>
             </a>
           </li>

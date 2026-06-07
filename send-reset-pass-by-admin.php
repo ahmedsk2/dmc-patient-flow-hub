@@ -57,7 +57,7 @@ $email = $_POST['email'];
             $mail->Host = SMTP_HOST;
             $mail->Port = SMTP_PORT;
             $mail->From = SMTP_FROM;
-            $mail->FromName='DMC Help Disk';
+            $mail->FromName = SMTP_FROM_NAME; // "DMC Help Desk" (was a hardcoded "Help Disk" typo)
             $mail->AddAddress($email, '');
             $mail->Subject  =  'DMC System: Reset Password';
             $mail->IsHTML(true);

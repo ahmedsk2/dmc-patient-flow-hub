@@ -26,7 +26,7 @@
 <div class="login-box">
   <div class="login-logo">
 	
-    <a href="https://www.healthpro.ai/main/">  <img src="dist/img/logo.png" width="100%"></a>
+    <a href="https://www.dmc-im.com/">  <img src="dist/img/logo.png" width="100%"></a>
   </div>
 
  
@@ -86,7 +86,7 @@ $email = $row['member_email'];
     $mail->Host = SMTP_HOST;
     $mail->Port = SMTP_PORT;
     $mail->From = SMTP_FROM;
-    $mail->FromName='DMC Help Disk';
+    $mail->FromName = SMTP_FROM_NAME; // "DMC Help Desk" (was a hardcoded "Help Disk" typo)
     $mail->AddAddress($email, '');
     $mail->Subject  =  'DMC System: Reset Password';
     $mail->IsHTML(true);
