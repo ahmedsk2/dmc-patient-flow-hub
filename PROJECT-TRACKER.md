@@ -194,6 +194,9 @@ _Last updated: 2026-06-06_
   - ⚠️ **Known nuance:** page-handler denials (Q1/Q4) stop the write via `exit()` but return **HTTP 200** (not 403) because `sidebar.php` already emitted output — matches the existing page-gate convention; the action **endpoints** (Q2 etc.) return proper 403/419. Security is intact (no write); only the status code is cosmetic. A proper fix = run page POST-handlers before any output (a later refactor).
   - Local test account `observer1` / `LocalTest123!` (position 5) kept in the local DB so the Observer read-only view can be re-verified. Bucket 3 remaining: **3c (soft-delete)** only.
 
+- **🗑️ 2026-06-07 — Soft-delete (3c): DECISION = keep hard-delete (no code change).** Patient/consultation delete stays a hard `DELETE`, which is acceptable because it's already **Admin-only + name+MRN confirmation + recorded in `audit_log`** (who/what/when). Recoverability comes from **DB backups** (already `DEPLOY.md §0`), not a `deleted_at` flag — avoiding the broad, higher-risk change of adding `AND deleted_at IS NULL` to every patient/consultation query on a live clinical system. **This completes Bucket 3** (3a/3b clinical-defs ✅, 3c soft-delete ✅ decided, 3d permission-model ✅, 3e PHPExcel ✅). Buckets 2 + 3 done → at the agreed **framework re-platform STOP line**.
+  - **Remaining (team / ops, not code):** run the `DEPLOY.md` steps (rotate creds, TLS, backup, migrations 01–05, set `min_subs=max_subs=7`); clean the **~204 dirty MRNs** (names/beds mis-entered into the MRN field); confirm the single canonical **"active patient"** definition (then the inconsistent census/stats `WHERE` clauses can be unified safely); apply the `permissions.docx`-vs-enforced corrections to any out-of-band docs.
+
 _(Add new notes/decisions above this line as we go.)_
 
 ---
