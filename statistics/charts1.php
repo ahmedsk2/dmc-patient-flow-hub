@@ -158,14 +158,17 @@ switch ($kpi){
                   $ydate1 = date("Y", strtotime($s_date));
                   $chart_title = "Readmissions for " . $mdate1_name . " " . $ydate1;
 
-                  // Fetch all admitted patients for the given month and year
+                  // Fetch all admitted patients for the given month and year.
+                  // Sargable half-open month range so the ADMDATE index is usable (was MONTH()/YEAR()).
+                  $mStart = sprintf('%04d-%02d-01', $ydate1, $month);
+                  $mEnd   = date('Y-m-t', strtotime($mStart));
                   $formationSQL = "
                       SELECT consultant_id, ID, MRN, ADMDATE
                       FROM picupatients
-                      WHERE MONTH(ADMDATE) = ? AND YEAR(ADMDATE) = ?
+                      WHERE ADMDATE BETWEEN ? AND ?
                   ";
                   $stmt = $mysqli->prepare($formationSQL);
-                  $stmt->bind_param('ii', $month, $ydate1);
+                  $stmt->bind_param('ss', $mStart, $mEnd);
                   $stmt->execute();
                   $result1 = $stmt->get_result();
                   $admitted_patients = $result1->fetch_all(MYSQLI_ASSOC);
@@ -241,9 +244,12 @@ switch ($kpi){
                     /////////////////////
                         // readmissions
                     //////////////////////////
-                    $formationSQL = "SELECT consultant_id,ID, MRN, ADMDATE FROM picupatients WHERE QUARTER(ADMDATE) = ? AND YEAR(ADMDATE) = ?";
+                    // Sargable quarter range so the ADMDATE index is usable (was QUARTER()/YEAR()).
+                    $qStart = sprintf('%04d-%02d-01', $ydate1, ($quarter - 1) * 3 + 1);
+                    $qEnd   = date('Y-m-t', strtotime($qStart . ' +2 month'));
+                    $formationSQL = "SELECT consultant_id,ID, MRN, ADMDATE FROM picupatients WHERE ADMDATE BETWEEN ? AND ?";
                     $stmt = $mysqli->prepare($formationSQL);
-                    $stmt->bind_param('ii', $quarter, $ydate1);
+                    $stmt->bind_param('ss', $qStart, $qEnd);
                     $stmt->execute();
                     $result1 = $stmt->get_result();
                     $admitted_patients = $result1 -> fetch_all(MYSQLI_ASSOC);
