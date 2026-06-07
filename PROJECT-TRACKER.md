@@ -133,6 +133,17 @@ _Last updated: 2026-06-06_
   - Committed + pushed. **User verifying on a real tablet (pull `renovation` branch, load pages).**
   - **Still pending in UI/UX pass:** modals, form layout on small screens, further feedback from tablet test.
 
+- **2026-06-07 — UI/UX pass continued: modal form layout, card/filter input widths, XSS/HTML fixes in modal fragments** (branch `renovation`).
+  - **UI-05 — Modal form layout:** `.modal-body input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])` + `.modal-body select` → `width:100%; display:block`. Fixes bare `<input class='txtdata'>` and bare `<select>` in the Admit, Discharge, Consultation, and Transfer modal forms that rendered at browser-native ~10 em on tablet. Select2-enhanced elements unaffected (Select2 hides original `<select>` and applies explicit `width:'100%'` in JS init).
+  - **UI-06 — Patient card inline edit input width:** `.eachrow.card .eachcol input.txtdata:not([type="hidden"])` → `width:100%; display:block`. Fills each card cell (Bed, MRN, Name, Age, Date) instead of ~10 em browser default.
+  - **UI-07 — Filter form / registry search input width:** `.card-body input.txtdata:not([type="hidden"]):not([type="checkbox"]):not([type="radio"])` → `width:100%; display:block`. Covers `search.php` + `control.php` user-table inputs. Statistics page unaffected (uses `txtdata1` + explicit inline widths). Checkboxes/radios have `style='width:auto;'` → inline override wins.
+  - **XSS fix + HTML structure — `patients/dmc-patients-details.php`:** Wrapped ~12 bare `$patient[]`/`$con[]`/`$country[]`/`$dxlist[]` echoes in `htmlspecialchars(ENT_QUOTES,'UTF-8')`; fixed duplicate-consultant-option bug (current consultant was emitted twice — once `selected`, once not); removed orphaned `</select>` before the Diagnosis field and orphaned `</div>` before `.modal-footer`.
+  - **HTML structure — `registry/dmc-search-patient-details.php`:** Removed orphaned `</select>` + `</div>` (escaping was already correct in this file).
+  - **HTML structure — `patients/dmc-patients-completedischarge.php`:** Removed orphaned `</select>` after `<form>` open, two trailing `"` on `<option>` lines, and orphaned `</div>` before `.modal-footer`.
+  - Checked `patients/dmc-patients-icudischarge.php`, `patients/dmc-patients-changeconsultant.php`, `patients/dmc-patients-ptransferdiv.php`, `patients/dmc-patients-discharge.php` — all clean, no further fixes needed.
+  - **Commits:** `2b378b3` (UI-05–07 CSS), `e8740ed` (details XSS + registry HTML), `d57a343` (complete-discharge HTML). Branch `renovation` tip = `d57a343`. Pushed to origin.
+  - **UI/UX Item #4 status:** UI-01–07 + table-responsive PHP fix complete. Pending: tablet-feedback–driven iteration (user verifying on real device).
+
 _(Add new notes/decisions above this line as we go.)_
 
 ---
