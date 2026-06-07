@@ -123,6 +123,24 @@ if ($time == "yearly"){
 
 
 // var_dump($dishtransnumbers);
+    // Readmissions for the whole year in ONE grouped query (was an N+1 per-patient LIMIT-1
+    // sub-query loop inside each month — the dominant query cost of this report). Per admission
+    // only "does a qualifying prior record exist" (0/1) matters, so EXISTS + COUNT(*) GROUP BY
+    // month reproduces the per-month mysqli_num_rows(LIMIT 1) sums exactly.
+    $readmissionByMonth = [];
+    $rq = "SELECT DATE_FORMAT(a.ADMDATE,'%Y-%m') AS ym, COUNT(*) AS c
+           FROM picupatients a
+           WHERE a.ADMDATE BETWEEN ? AND ?
+             AND EXISTS (SELECT 1 FROM picupatients p
+                         WHERE p.DISDATE + INTERVAL 3 DAY >= a.ADMDATE AND p.ID < a.ID AND p.MRN = a.MRN
+                           AND (p.trans_discharge = 'discharge from ICU' or p.trans_discharge='discharge from ward' or p.trans_discharge IS NULL))
+           GROUP BY ym";
+    $stmt = $mysqli->prepare($rq);
+    $stmt->bind_param('ss', $yStart, $yEnd);
+    $stmt->execute();
+    $rqr = $stmt->get_result();
+    while ($row = $rqr->fetch_assoc()) { $readmissionByMonth[$row['ym']] = (int) $row['c']; }
+
     /// get monthly data
     while($n < 12){
 
@@ -343,30 +361,9 @@ $date_day= $date1;
         $date_day= date('Y-m-d', strtotime($date_day . ' +1 day'));
     }
 /////////////////////
-    ///// readmissions
+    ///// readmissions  (grouped above into $readmissionByMonth — was an N+1 per-patient loop)
 //////////////////////////
-// echo $mdate1 ."</br>";
-// sargable date range (was MONTH()/YEAR())
-$formationSQL = "SELECT * FROM picupatients WHERE ADMDATE BETWEEN ? AND ?";
-$stmt = $mysqli->prepare($formationSQL);
-$stmt->bind_param('ss', $first_day_ofmonth, $last_day_ofmonth);
-$stmt->execute();
-$result1 = $stmt->get_result();
-$admitted_patients = $result1 -> fetch_all(MYSQLI_ASSOC);
-
-$readmission_count=0;
-
-$formationSQL = "SELECT * FROM picupatients WHERE DISDATE + INTERVAL 3 DAY >=? AND ID <?  AND MRN=? AND (trans_discharge = 'discharge from ICU' or trans_discharge='discharge from ward' or trans_discharge IS NULL) LIMIT 1";
-$stmt = $mysqli->prepare($formationSQL);
-foreach ($admitted_patients as $s){
-  $stmt->bind_param('sis', $s['ADMDATE'], $s['ID'], $s['MRN']);
-  $stmt->execute();
-  $result1 = $stmt->get_result();
-$recentadmission = mysqli_num_rows($result1);
-// $recentadmission1 = $result1 -> fetch_array(MYSQLI_ASSOC);
-// var_dump($recentadmission1);
-$readmission_count=$readmission_count+$recentadmission;
-}
+$readmission_count = $readmissionByMonth[$ydate1 . '-' . $mdate1] ?? 0;
 
 /////////////////
       array_push($label,$monthName);
