@@ -26,10 +26,12 @@ RewriteRule ^(.*)$ https://www.dmc-im.com/$1 [L,R=301]
     Header always set X-XSS-Protection "0"
     # Drop browser features this app never uses (defense-in-depth).
     Header always set Permissions-Policy "geolocation=(), camera=(), microphone=(), payment=(), usb=()"
-    # Content-Security-Policy is intentionally NOT enabled yet: the app currently
-    # relies on inline scripts/styles, eval() in dashboard.php, and external CDNs.
-    # Add a strict policy only after those are removed (plan items S3/S10/U3), e.g.:
-    # Header always set Content-Security-Policy "default-src 'self'; object-src 'none'; frame-ancestors 'self'; base-uri 'self'"
+    # Content-Security-Policy (S10/SEC-26). eval() has been removed (dashboard.php), so no
+    # 'unsafe-eval'. 'unsafe-inline' is still required because the app uses inline <script>/<style>
+    # throughout; a future hardening can move to per-request nonces to drop it. External origins
+    # are the CDNs actually used (jsDelivr/Google/cdnjs/Bootstrap). Validated on PHP 8.3: dashboard
+    # Chart.js + the register/reset password meter (jQuery+zxcvbn) all work under this policy.
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://ajax.googleapis.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://maxcdn.bootstrapcdn.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://maxcdn.bootstrapcdn.com data:; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'"
 </IfModule>
 
 # --- Block direct web access to sensitive files ---

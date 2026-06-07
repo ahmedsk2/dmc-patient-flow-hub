@@ -39,6 +39,17 @@
         loadingPercentage.textContent = percentage + '%';
       }
 
+      // Run a fragment's inline <script> blocks WITHOUT eval() (so the CSP needs no 'unsafe-eval'):
+      // clone each into a fresh <script> element, which the browser executes on insertion.
+      function runInlineScripts(containerId) {
+        document.querySelectorAll('#' + containerId + ' script').forEach(function (old) {
+          var s = document.createElement('script');
+          if (old.src) { s.src = old.src; } else { s.textContent = old.textContent; }
+          document.body.appendChild(s);
+          if (old.parentNode) { old.parentNode.removeChild(old); }
+        });
+      }
+
       // Function to load content asynchronously
       function loadContent() {
         let totalSteps = 2; // Total number of steps to load content
@@ -82,9 +93,8 @@
           .then(data => {
             document.getElementById('mypresentersTable1').innerHTML = data;
 
-            // Ensure that any inline scripts within the loaded HTML are executed
-            let scripts = document.querySelectorAll('#mypresentersTable1 script');
-            scripts.forEach(script => eval(script.textContent));
+            // Execute the fragment's inline scripts without eval() (CSP-friendly).
+            runInlineScripts('mypresentersTable1');
 
             updateAndCheckCompletion();
 
@@ -99,9 +109,8 @@
           .then(data => {
             document.getElementById('mypresentersTable3').innerHTML = data;
 
-            // Ensure that any inline scripts within the loaded HTML are executed
-            let scripts = document.querySelectorAll('#mypresentersTable3 script');
-            scripts.forEach(script => eval(script.textContent));
+            // Execute the fragment's inline scripts without eval() (CSP-friendly).
+            runInlineScripts('mypresentersTable3');
 
             updateAndCheckCompletion();
 
