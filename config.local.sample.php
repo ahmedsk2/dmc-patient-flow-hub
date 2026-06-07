@@ -20,3 +20,10 @@ define('SMTP_PASS', 'CHANGE_ME');
 define('SMTP_FROM', 'no-reply@example.com');
 define('SMTP_FROM_NAME', 'DMC Help Desk');
 define('SMTP_SECURE', 'tls');
+
+// --- MFA (TOTP) ---
+// Encrypts each user's TOTP secret at rest. Generate ONCE and keep stable:
+//   php -r "echo bin2hex(random_bytes(32));"
+// (Changing it forces every enrolled user to re-enroll.)
+define('MFA_KEY', 'CHANGE_ME_to_64_random_hex_chars');
+define('MFA_ISSUER', 'DMC Internal Medicine');

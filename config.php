@@ -56,3 +56,13 @@ dmc_env_define('SMTP_PASS', 'DMC_SMTP_PASS', '');
 dmc_env_define('SMTP_FROM', 'DMC_SMTP_FROM', 'info@dmc-im.com');
 dmc_env_define('SMTP_FROM_NAME', 'DMC_SMTP_FROM_NAME', 'DMC Help Desk');
 dmc_env_define('SMTP_SECURE', 'DMC_SMTP_SECURE', 'tls');
+
+// --- MFA (TOTP) ---
+// MFA_KEY encrypts each user's TOTP shared secret at rest (AES-256-GCM). Set a long random
+// value in config.local.php (or the DMC_MFA_KEY env var); generate one with:
+//   php -r "echo bin2hex(random_bytes(32));"
+// Empty => MFA crypto is disabled: enrollment/verification refuse to run rather than ever
+// store a secret in the clear. Rotating MFA_KEY invalidates existing enrollments (users must
+// re-enroll), so treat it as a long-lived secret.
+dmc_env_define('MFA_KEY', 'DMC_MFA_KEY', '');
+dmc_env_define('MFA_ISSUER', 'DMC_MFA_ISSUER', 'DMC Internal Medicine');
