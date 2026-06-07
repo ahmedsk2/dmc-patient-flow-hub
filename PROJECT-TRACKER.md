@@ -12,21 +12,23 @@
 ---
 
 ## Progress snapshot
-_Last updated: 2026-06-06_
+_Last updated: 2026-06-08_
 
 | Phase | Done / Total | State |
 |---|---|---|
 | Review & planning (read-only) | 4 / 4 | ✅ complete |
-| Phase 0 — Containment | 3 ✅ · 1 🔄 · 3 ⏸️ ops | 🔄 in progress |
+| Phase 0 — Containment | 3 ✅ · 1 🔄 · 3 ⏸️ ops | 🔄 in progress (all remaining = your ops/deploy steps) |
 | Phase 1 — Critical security & data integrity | 16 ✅ (of 16) | ✅ done (permission model re-reviewed + tightened 2026-06-07; all runtime-verified) |
-| Phase 2 — Stabilize | 5 ✅ · 1 ❌(Q9) · 1 🔄 · 1 ⬜ (of 8) | 🔄 in progress |
-| Phase 3 — Refactor + UI/UX | UI/UX ✅ · CSP/eval ✅ · 5 ⬜ (P2/P3) | UI/UX done; remainder = re-platform-adjacent / P3 |
-| Phase 4 — Re-platform (decision-gated) | 0 / 2 | not started |
-| Phase 5 — Nice-to-haves | 0 / 3 | not started |
+| Phase 2 — Stabilize | 5 ✅ · 1 ❌(Q9) · 1 🔄 · 1 ⬜ (of 8) | 🔄 (remaining: schema-migration tooling = ops; assess dead `consultation_details`/`Notes`) |
+| Phase 3 — Refactor + UI/UX | UI/UX ✅ · CSP/eval ✅ · **PDF ✅** · **stats grouped-SQL ✅** · **dx-join ✅** · layering 🔄 · 2 ⬜ | big progress 2026-06-08; remainder = caching (skip, by design) / merge-A4-twins / MRN-as-entity / more layering |
+| Phase 4 — Re-platform (decision-gated) | 0 / 2 | not started (framework choice deferred to end; layering scaffold seeded) |
+| Phase 5 — Nice-to-haves | 3 ✅ (of 3) | ✅ MFA + branding + dashboard-refresh all done (MFA 2026-06-08) |
 
 ---
 
 ## Notes & decisions  _(newest first)_
+
+- **✅ 2026-06-07/08 — Tier 2 + Tier 3 backlog worked end-to-end (all validated; ~27 commits, branch `renovation`).** Built a golden-master harness (`tools/stats_validate.php`) + a self-contained test runner (`tests/run.php`) and held every number-changing edit to byte-for-byte equivalence (or RFC vectors / lossless round-trips / prod ground-truth). **(1) Statistics engine — grouped SQL:** time1, charts1, charts, a4, a4-monthly loops collapsed; **charts1 readmission/quarterly crash fixed** (11 MB → 5.5 KB); 2 latent charts.php bugs fixed; **a4.php ~1800→~170, a4-monthly ~3500→~445 SELECTs**. Caching deliberately skipped (clinical-staleness hazard). **(2) MFA (opt-in)** — self-contained TOTP (RFC-6238), enrol + QR (vendored qrcodejs) + 2nd-factor login + recovery codes + admin reset + per-role enforcement lever; migration 06 + `MFA_KEY` at deploy. **(3) Server-side PDF** — FPDF vendored + `pdf-report.php` (data 20/20 == a4.php). **(4) Layering started** — PSR-4 autoloader + `src/` `YearlyReport` slice + test runner. **(5) Schema** — `patient_diagnosis` join-table (migration 07, lossless on the full 35.8k prod export); specialty "dedup" found CONTRAINDICATED (distinct domains); canonical-`patients` still deferred (needs MRN clean-up). The maintainer supplied a current prod export which **closed the a4 census `<= today` validation gap** (proved set-based bed-days == the per-day loop across 54 months incl. the live partial month). Full status/validation log: [`docs/deferred-backlog-plan.md`](docs/deferred-backlog-plan.md). **New deploy steps:** run migrations **06** (MFA) + **07** (patient_diagnosis), set a stable random `MFA_KEY`.
 
 - **✅ 2026-06-06 — Item #3: schema FKs + charset migrations drafted & VALIDATED (run in a window).** Two new migrations, both applied cleanly to the full local dump and verified: **`04-foreign-keys.sql`** — 5 FKs (picupatients.consultant_id/admitted_by/trans_discharge_by + consultations.consultant_id/entered_by_id → `members`, `ON DELETE SET NULL ON UPDATE CASCADE`); 0 orphans, normalizes `=0` sentinels to NULL first. Verified: real-member writes pass, an invalid member ref is **rejected** (also blocks spoofing a non-existent actor); the app already writes valid member ids (UI sends `$user['member_id']`). **Excluded** `members.specialty_id` FK (its `0` = "no specialty" is load-bearing for the shuffle's `=1` vs `!=1`) and `members.position` (Admin=0 not in `position`). **`05-charset-utf8mb4.sql`** — converts the 4 remaining non-utf8mb4 tables (`members`, `settings`, `tbl_token_auth` latin1; `countries` utf8mb3) → utf8mb4_unicode_ci; **whole schema now utf8mb4** (verified 0 stragglers). Safe (true-latin1 / utf8mb3 — no re-encode; only non-ASCII members rows are spam, below). Both added to `DEPLOY.md` §3 (optional, recommended; run after backup). **🔎 NEW security finding:** the pre-renovation open self-registration created **spam member accounts** (Turkish casino text + a `bit.ly` link — local dump ids 280/281/282). Detection query is in `05`'s header + DEPLOY.md; **review and delete in prod**. register.php now rejects this (position whitelist + inactive + CSRF), so it can't recur.
 
@@ -253,12 +255,12 @@ _(Add new notes/decisions above this line as we go.)_
 - ✅ Status **color+contrast** a11y safety fix — (U1 / UI-01,02) — status badges already carry text; the **LOS band** (colour-only green/yellow/red) now also shows a high-contrast **text label** ("Short/Average/Long stay") via `view-helpers.php::los_band_badge()`, inserted at all 10 LOS-band cells across 8 board pages (commit `132817d`; browser-verified on WAMP). WCAG 1.4.1 gap closed. _(Broader responsive/tablet + status-pipeline redesign still part of the U2/U4 overhaul — needs design direction.)_
 
 ### Phase 3 — Refactor + UI/UX overhaul (P2/P3)
-- ⬜ Introduce **layering + PHPUnit**; extract helpers/partials — (C1,C3 / ARCH-01,03,04) — P2
+- 🔄 Introduce **layering + PHPUnit**; extract helpers/partials — (C1,C3 / ARCH-01,03,04) — P2. **STARTED 2026-06-08:** Composer-free PSR-4 autoloader (`autoload.php`, `DMC\`→`src/`) + first slice `DMC\Reports\YearlyReport` (report_data extracted; legacy fn now a BC shim, equivalence re-proven) + a self-contained test runner (`tests/run.php`, 4/4 green). Remaining = more slices behind interfaces + real PHPUnit where Composer exists (multi-session).
 - ✅ **"Active patient" definition CONFIRMED (2026-06-07):** canonical **active = `DISDATE IS NULL`**; the per-page **ICU-excluding** census variants are **intentional** → broad de-dup/unification **contraindicated** (leave purpose-specific filters as designed). Multi-active-row dupes were junk; the admit flow blocks new ones. No code change. — (X2 / SIMP-02, CLIN-08)
-- ⬜ **Statistics engine**: grouped SQL + caching; merge A4 twins — (X3,P1,P4 / SIMP-03,PERF-01) — P2
+- 🔄 **Statistics engine**: grouped SQL + caching; merge A4 twins — (X3,P1,P4 / SIMP-03,PERF-01) — P2. **grouped-SQL DONE 2026-06-08**: collapsed the per-period / per-consultant / per-day loops in time1, charts1, charts, a4, a4-monthly (incl. the readmission N+1 and the per-day census) → **a4.php ~1800→~170, a4-monthly ~3500→~445 SELECTs**; charts1's 11 MB readmission/quarterly **crash fixed**; charts.php 2 latent bugs fixed. All golden-master byte-identical; census formula prod-validated on the live partial month. **Caching deliberately NOT done** (stale clinical figures = safety hazard; MyISAM has no safe change-version). Remaining: merge the "A4 twins" (dead quarterly branch / draft KPI page) + the small per-month metric loops (low value now).
 - ✅ **UI/UX overhaul — responsive/tablet + a11y (U2,U4,W5)** — DONE & runtime-verified (2026-06-07). The responsive card grid + modal/filter layout (UI-01..08) is **wired via `css/app.css`** — root-caused that it had NEVER loaded (app pages use a combined bundle, not `main.css`) — and verified in-browser at desktop/tablet/phone; LOS-band a11y label done (U1, above). _Remaining (design-gated, P2/P3): the broader data-entry / status-pipeline redesign._
-- ⬜ **Server-side PDF** reports — (U3) — P2 (Tier 2; needs a PDF library/dep). _(Vendoring CDNs locally ✅ DONE. Un-hiding the hidden KPI page was investigated 2026-06-07 → it's an unfinished draft / part of the "A4 twins" → NOT a safe toggle; folded into the "merge A4 twins" task X3 below.)_
-- 🔄 Normalize **diagnoses/MRN/specialty** schema; add FKs — **FKs DONE** (migration 04, validated); deeper normalization (diagnosis join-table vs JSON, MRN-as-patient-entity, specialty dedup) still a P2/P3 redesign — (D2,D4,D5)
+- ✅ **Server-side PDF** reports — (U3) — **DONE 2026-06-08**: FPDF vendored (user-approved, runtime files only) + `pdf-report.php?y=` (admin-only A4-landscape PDF: monthly KPI table, per-consultant LOS, discharge destinations) built on the validated `DMC\Reports\YearlyReport` layer (figures 20/20 == a4.php). "PDF" button added beside Yearly/Monthly in allstat.php. _(Charts-in-PDF + un-hiding the draft KPI page intentionally skipped — tabular PDF gives exact figures; the draft page belongs to the "merge A4 twins" task X3.)_
+- 🔄 Normalize **diagnoses/MRN/specialty** schema; add FKs — **FKs DONE** (migration 04). **diagnosis join-table DONE 2026-06-08**: `patient_diagnosis` (migration 07) — additive/derived, the `admissiondiagnosis` JSON stays authoritative; lossless round-trip validated on the full 35.8k production export (handled a JSON-`null` edge case). **Specialty "dedup" → CONTRAINDICATED** (the two tables are *distinct domains* — own-specialty vs referral-service — not duplicates; merging would be wrong). **MRN-as-patient-entity still deferred** (needs the prod MRN clean-up first; do behind the new `src/` layer). — (D2,D4,D5)
 
 ### Phase 4 — Re-platform (P3 — decision-gated, after Phase 1)
 - ⏸️ **Decide framework** (Laravel / Symfony / Slim) — P3
@@ -267,7 +269,7 @@ _(Add new notes/decisions above this line as we go.)_
 ### Phase 5 — Nice-to-haves (P3)
 - ✅ Branding/typo cleanup, semantic icons — (U5 / UI-14) — DONE 2026-06-07 (`95140ef`): de-white-labeled vendor links, "Help Disk"→"Help Desk", distinct nav icons.
 - ✅ Real-time dashboard refresh — (PERF-06) — DONE 2026-06-07 (`e44addf`): 5-min visibility-gated full reload (polling; websocket not viable on shared host).
-- ⬜ MFA, richer reporting — P3
+- ✅ **MFA** — **DONE 2026-06-08**: self-contained TOTP (RFC-6238-validated, AES-256-GCM secret-at-rest), self-service enrolment + **QR** (vendored MIT qrcodejs) + manual key, login second factor, single-use recovery codes, admin lockout-reset (audited), and a per-role **enforcement** lever (`settings.mfa_enforcement`, default 0 = opt-in). Deploy: run migration 06 + set `MFA_KEY`. 🔄 **richer reporting** = the server-side PDF (done above); further dashboards P3.
 
 ---
 
