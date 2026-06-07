@@ -160,22 +160,22 @@ if (isset($_POST['reg_user'])) {
   </div>
 </div>
 
-<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/zxcvbn/4.2.0/zxcvbn.js" type="text/javascript"></script>
+<script src="vendor/jquery-3.7.1.min.js"></script>
+<script src="vendor/zxcvbn/4.2.0/zxcvbn.js" type="text/javascript"></script>
 <script type="text/javascript">
   $(document).ready(function () {
     $.fn.bootstrapPasswordMeter = function (options) {
       var settings = $.extend({
         minPasswordLength: 3,
-        level0ClassName: 'progress-bar-danger',
+        level0ClassName: 'bg-danger',
         level0Description: 'Weak',
-        level1ClassName: 'progress-bar-danger',
+        level1ClassName: 'bg-danger',
         level1Description: 'Not great',
-        level2ClassName: 'progress-bar-warning',
+        level2ClassName: 'bg-warning',
         level2Description: 'Better',
-        level3ClassName: 'progress-bar-success',
+        level3ClassName: 'bg-success',
         level3Description: 'Strong',
-        level4ClassName: 'progress-bar-success',
+        level4ClassName: 'bg-success',
         level4Description: 'Very strong',
         parentContainerClass: '.form-group'
       }, options || {});
