@@ -1,7 +1,7 @@
 <?php
 require_once 'sidebar.php';
 
-if (!in_array($user['position'], $access_PICU_patients)) {
+if (!in_array($user['position'], $access_PICU_view)) { // VIEW gate (incl. Observer read-only); TB list is read-only — no write handlers here
     echo "
     <div class='content-wrapper'>
         <section class='content'>

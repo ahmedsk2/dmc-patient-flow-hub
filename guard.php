@@ -107,6 +107,23 @@ if (!function_exists('require_capability')) {
     }
 }
 
+if (!function_exists('require_any_capability')) {
+    // Allow if Admin (position 0) OR the user holds ANY of the given capability flags.
+    // Used where several flags are equally sufficient — e.g. bulk change-consultant is
+    // permitted for Can-Assign OR Can-Manage (or Admin).
+    function require_any_capability(array $flags) {
+        require_login();
+        $u = current_user();
+        if ($u && (int) $u['position'] === 0) { return; } // Admin implicit
+        if ($u) {
+            foreach ($flags as $f) {
+                if ((string) ($u[$f] ?? '') === '1') { return; }
+            }
+        }
+        deny(403, 'Forbidden.');
+    }
+}
+
 if (!function_exists('require_patient_access')) {
     // Object-level authorization for patient-state actions (discharge / transfer / etc.).
     // Mirrors the UI gate exactly: allow Admin (position 0), anyone with the manage_patient

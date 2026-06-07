@@ -135,7 +135,7 @@ $other_specialities = $result1 -> fetch_all(MYSQLI_ASSOC);
     }
 }
 
-  if (!in_array($user['position'],$access_PICU_patients)){
+  if (!in_array($user['position'],$access_PICU_view)){ // VIEW gate (incl. Observer read-only); writes still gated to $access_PICU_patients above
     
     echo "
     <div class='content-wrapper'>

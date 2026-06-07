@@ -1,5 +1,6 @@
 <?php
-require_once __DIR__ . '/../guard.php'; require_role([0, 2, 3, 4]); // clinical roles only (no Observer)
+require_once __DIR__ . '/../guard.php'; require_role([0, 2, 3, 4]);
+require_any_capability(['assign_access', 'manage_patient']); // Q2: only Can-Assign / Can-Manage (or Admin) may open the bulk change-consultant tool
 
 require_once ('../dbconnect.php');
 $consultant_id = $_REQUEST['bookId']; 

@@ -47,6 +47,7 @@ if (isset($_POST['assign_me_btn'])) {
 /// assign to consultnat
 
 if (isset($_POST['assign_to_consultant_btn'])) {
+  require_capability('assign_access'); // Q1: assigning a patient to a CHOSEN consultant needs Can-Assign (assign-to-me below stays open to any clinical role)
   // receive all input values from the form
 
  $patient_id = $_POST['patientid1'];

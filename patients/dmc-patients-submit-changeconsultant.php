@@ -1,5 +1,6 @@
 <?php
-require_once __DIR__ . '/../guard.php'; require_role([0, 2, 3, 4]); // clinical roles only (no Observer)
+require_once __DIR__ . '/../guard.php'; require_role([0, 2, 3, 4]);
+require_any_capability(['assign_access', 'manage_patient']); // Q2: bulk reassign of patients between consultants needs Can-Assign or Can-Manage (Admin implicit)
 csrf_verify();
  
 require_once ('../dbconnect.php');

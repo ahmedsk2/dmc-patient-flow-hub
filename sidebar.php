@@ -22,6 +22,10 @@ $access_PICU_endorsement = [0, 2, 4];
 $access_PICU_control = [0];
 $access_PICU_registrar = [0, 2];
 $access_PICU_consultant = [0, 2, 3];
+// Read-only VIEW gate: Observer (5) may VIEW the patient lists/board. All writes stay gated to
+// $access_PICU_patients (action endpoints require_role([0,2,3,4]) + capability/ownership), so this
+// grants view-only access and never a write path.
+$access_PICU_view = [0, 2, 3, 4, 5];
 
 $formationSQL = "SELECT * FROM members WHERE member_id = ?";
 $stmt = $mysqli->prepare($formationSQL);
