@@ -251,7 +251,7 @@ _(Add new notes/decisions above this line as we go.)_
 - ✅ **"Active patient" definition CONFIRMED (2026-06-07):** canonical **active = `DISDATE IS NULL`**; the per-page **ICU-excluding** census variants are **intentional** → broad de-dup/unification **contraindicated** (leave purpose-specific filters as designed). Multi-active-row dupes were junk; the admit flow blocks new ones. No code change. — (X2 / SIMP-02, CLIN-08)
 - ⬜ **Statistics engine**: grouped SQL + caching; merge A4 twins — (X3,P1,P4 / SIMP-03,PERF-01) — P2
 - ✅ **UI/UX overhaul — responsive/tablet + a11y (U2,U4,W5)** — DONE & runtime-verified (2026-06-07). The responsive card grid + modal/filter layout (UI-01..08) is **wired via `css/app.css`** — root-caused that it had NEVER loaded (app pages use a combined bundle, not `main.css`) — and verified in-browser at desktop/tablet/phone; LOS-band a11y label done (U1, above). _Remaining (design-gated, P2/P3): the broader data-entry / status-pipeline redesign._
-- ⬜ **Server-side PDF** reports; un-hide KPI page; vendor CDNs locally — (U3 / UI-05,06,07,08) — P2
+- ⬜ **Server-side PDF** reports; un-hide the hidden KPI page — (U3) — P2. _(Vendoring CDNs locally is ✅ DONE — the CDN-localization pass.)_
 - 🔄 Normalize **diagnoses/MRN/specialty** schema; add FKs — **FKs DONE** (migration 04, validated); deeper normalization (diagnosis join-table vs JSON, MRN-as-patient-entity, specialty dedup) still a P2/P3 redesign — (D2,D4,D5)
 
 ### Phase 4 — Re-platform (P3 — decision-gated, after Phase 1)
