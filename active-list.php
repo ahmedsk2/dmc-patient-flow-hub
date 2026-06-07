@@ -9,6 +9,12 @@ if(!$isLoggedIn) {
 require 'dbconnect.php';
 require_once 'view-helpers.php'; // los_band_badge() (pure helper; active-list.php does not load guard.php)
 
+// LOS-band thresholds from the settings row. active-list.php is a standalone page (no sidebar/guard
+// bootstrap), so it must load these itself — the LOS-band colouring + los_band_badge() below use them.
+$settings = $mysqli->query("SELECT short_los, long_los FROM settings WHERE id = 0")->fetch_assoc() ?: [];
+$shortlos = (int) ($settings['short_los'] ?? 5);
+$longlos  = (int) ($settings['long_los'] ?? 11);
+
 $user_id = $_SESSION["member_id"];
 $currentMonth = date("m");
 $currentYear = date("Y");
