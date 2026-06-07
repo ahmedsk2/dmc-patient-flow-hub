@@ -80,9 +80,27 @@
 - `compare` skips a documented non-deterministic set (`charts1__readmission__quarterly` — see bug
   above) so the green/red signal reflects only baseline-able cases. **Self-test: two captures of the
   same code → 20/20 compared cases IDENTICAL, 1 skipped.** The harness is proven deterministic.
-- [ ] **Phase 2 — MFA (TOTP, self-contained RFC-6238).** Secret column (migration), enrolment
-  (QR via a self-contained generator or otpauth URI), verification step after password login,
-  recovery codes, admin reset, enforcement policy. Tests.
+- [x] **Phase 2 — MFA (TOTP, self-contained RFC-6238).** Rollout chosen: **opt-in / enforce-later**
+  (no clinician lockout at deploy). Delivered + validated:
+  - `mfa.php` — TOTP (HMAC-SHA1, 6-digit/30s), Base32, drift-window verify (constant-time),
+    otpauth URI, AES-256-GCM at-rest encryption of the secret (key = config `MFA_KEY`), single-use
+    bcrypt recovery codes. **`tools/mfa_test.php`: 30/30, incl. the published RFC-6238 vectors** →
+    interoperable with Google Authenticator / Authy / MS Authenticator. (commit 317415e)
+  - `migrations/06-mfa.sql` — additive nullable `members.mfa_secret/mfa_recovery_codes/
+    mfa_enrolled_at` + `settings.mfa_enforcement` (default 0). No existing login changes.
+  - `mfa-setup.php` (enroll + code-gated disable), `mfa-verify.php` (second factor — the real
+    session is established only after a valid TOTP/recovery code), `index.php` additive hook,
+    sidebar link. **Validated end-to-end**: enroll → logout → password-login diverts to 2FA
+    (password alone does NOT log in) → wrong code rejected → correct TOTP → dashboard. (commit 4bb86a6)
+  - `mfa-admin-reset.php` + control.php button — admin lockout recovery (admin-only, CSRF, audited).
+    Validated (resets secret + writes `mfa.admin_reset` audit row). (commit 75e5be9)
+  - **Deferred by design:** the per-role *enforcement* switch (`settings.mfa_enforcement`, default 0)
+    — not needed for opt-in; column is ready. A self-contained QR *image* (currently otpauth URI +
+    manual key; manual entry works in all apps) — would need a vendored JS lib (consent) or a PHP
+    QR encoder.
+  - **Deploy steps (prod):** run `migrations/06-mfa.sql`; set a long random `MFA_KEY` in the prod
+    (git-ignored) `config.local.php` — see `config.local.sample.php`. Keep `MFA_KEY` stable
+    (changing it forces re-enrollment).
 - [ ] **Phase 3 — Server-side PDF.** Needs a PDF library (FPDF single-file, vendored) — the one
   item that needs an external lib; confirm before fetching. Render the A4 reports server-side.
 - [ ] **Phase 4 — Layering + test suite (strangler-fig start).** Self-contained PSR-4-style
@@ -105,6 +123,9 @@
 | charts1.php readmission/quarterly fix | ground-truth | endpoint chartdata | ✓ matches loop **and** set-based (sum 49) |
 | charts.php two bug fixes | `before` | `after2` | ✓ 14/14 untouched identical; 6 charts diffs = intended only* |
 | a4 + a4-monthly readmission collapse | `before` (25, incl. A4) | `after`/`after2` | ✓ 25/25 IDENTICAL (commit 2fd8d40) |
+| MFA TOTP core | RFC-6238 Appendix-B vectors | mfa.php | ✓ 30/30 (`tools/mfa_test.php`) |
+| MFA enroll → 2FA login | live dev server | end-to-end | ✓ password-alone blocked; TOTP → dashboard |
+| MFA admin reset | seeded-enrolled member | endpoint | ✓ secret cleared + audit row |
 
 *charts.php diffs verified: after stripping warning markers, all 3 `charts__c*__quarterly` are
 byte-identical (zero number change); the 3 `charts__c*__monthly` differ only in the label array
