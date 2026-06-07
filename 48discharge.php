@@ -223,7 +223,7 @@ while ($row = $result1->fetch_array(MYSQLI_ASSOC)) {
                                                       }elseif   ($LOS >= $shortlos){
                                                         echo"   <td style='  padding: 0px 1%; background: #fff3cd;text-align: center' class='eachcol admdate'    scope='row' >";
                                                       }
-                                                    
+                                                      echo los_band_badge($LOS, $shortlos, $longlos); // a11y: name the LOS band (not colour-only)
 
                                                       echo"
                                                       <p>".htmlspecialchars($LOS, ENT_QUOTES, 'UTF-8')."</p>

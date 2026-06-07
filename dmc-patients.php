@@ -474,7 +474,8 @@ if ($result1) {
                                                                 }elseif   ($LOS >= $shortlos){
                                                                   echo"  <div style=' margin: 2%; background: #fff3cd;' class='eachcol admdate'    scope='row' >";
                                                                 }
-                                                              
+                                                                echo los_band_badge($LOS, $shortlos, $longlos); // a11y: name the LOS band (not colour-only)
+
                                                               
 
                                                                 echo"

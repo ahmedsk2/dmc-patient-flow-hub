@@ -349,6 +349,7 @@ while ($row = $memberResult->fetch_assoc()) {
                                                                 }elseif   ($LOS >= $shortlos){
                                                                   echo"  <div style=' margin: 1%; background: #fff3cd;' class='eachcol admdate'    scope='row' >";
                                                                 }
+                                                                echo los_band_badge($LOS, $shortlos, $longlos); // a11y: name the LOS band (not colour-only)
 
                                                                 echo"
                                                                 <label style='text-align: center;margin-bottom: 0px;'>Duration of Admission: ".htmlspecialchars($LOS, ENT_QUOTES, 'UTF-8')." Days</label>
@@ -850,6 +851,7 @@ while ($row = $memberResult->fetch_assoc()) {
                                                                 }elseif   ($LOS >= $shortlos){
                                                                   echo"  <div style=' margin: 1%; background: #fff3cd;' class='eachcol admdate'    scope='row' >";
                                                                 }
+                                                                echo los_band_badge($LOS, $shortlos, $longlos); // a11y: name the LOS band (not colour-only)
 
                                                                 echo"
                                                                 <label style='text-align: center;margin-bottom: 0px;'>Duration of Admission: ".htmlspecialchars($LOS, ENT_QUOTES, 'UTF-8')." Days</label>

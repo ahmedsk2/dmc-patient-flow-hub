@@ -7,6 +7,7 @@ if(!$isLoggedIn) {
     exit;
 }
 require 'dbconnect.php';
+require_once 'view-helpers.php'; // los_band_badge() (pure helper; active-list.php does not load guard.php)
 
 $user_id = $_SESSION["member_id"];
 $currentMonth = date("m");
@@ -305,6 +306,7 @@ foreach ($activepicupatients as $s) {
             } elseif ($LOS >= $shortlos) {
                 echo "<div style='margin: 0% 2%; background: #fff3cd;' class='eachcol LOS' scope='row'>";
             }
+            echo los_band_badge($LOS, $shortlos, $longlos); // a11y: name the LOS band (not colour-only)
             echo "<p class='txtdata' name='mrn' style='text-align: center;'><strong> Duration of Admission: </strong>" . htmlspecialchars($LOS, ENT_QUOTES, 'UTF-8') . "</p></div>";
         }
         echo "<div style='margin: 0% 2%;' class='eachcol admissiondiagnosis'><label style='margin: 0px; text-align: center;'>Admission Diagnosis:</label><ul style='list-style-position: inside;margin: 1% 0% 5%;'>";

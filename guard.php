@@ -16,8 +16,9 @@
  * AJAX and csrf_field() hidden inputs for real forms.
  */
 
-require_once __DIR__ . '/dbconnect.php'; // provides $mysqli (idempotent)
-require_once __DIR__ . '/audit.php';     // provides audit_log() (fail-safe)
+require_once __DIR__ . '/dbconnect.php';      // provides $mysqli (idempotent)
+require_once __DIR__ . '/audit.php';          // provides audit_log() (fail-safe)
+require_once __DIR__ . '/view-helpers.php';   // provides los_band_badge() etc. (no side effects)
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
