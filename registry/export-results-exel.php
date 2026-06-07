@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../guard.php'; require_role([0]);
 
 require ('../dbconnect.php');
-include('../vendor/PHPExcel.php');
+require_once __DIR__ . '/../xlsx-writer.php'; // dependency-free .xlsx writer (replaced abandoned PHPExcel)
   // TB list
 
   $formationSQL = "SELECT dx_id FROM tb_list";
@@ -248,99 +248,52 @@ $export="";
 
 if(mysqli_num_rows($result) > 0)
   {
-$objPHPExcel    =   new PHPExcel();
- 
-$objPHPExcel->setActiveSheetIndex(0);
- 
+    $xlsx = new XlsxWriter();
+    $xlsx->setHeaderRows(1); // bold the header row
+    $xlsx->addRow([
+        'MRN', 'Age', 'Gender', 'Nationality', 'Diagnosis', 'Admission Date',
+        'Admission From', 'Admission To', 'Clinical Discharge Date', 'Physical Discharge Date',
+        'Discharged To', 'Mortality', 'Delay of discharge', 'Primary Consultant',
+    ]);
 
-$objPHPExcel->getActiveSheet()->SetCellValue('A1', 'MRN');
-$objPHPExcel->getActiveSheet()->SetCellValue('B1', 'Age');
-$objPHPExcel->getActiveSheet()->SetCellValue('C1', 'Gender');
-$objPHPExcel->getActiveSheet()->SetCellValue('D1', 'Nationality');
-$objPHPExcel->getActiveSheet()->SetCellValue('E1', 'Diagnosis');
-$objPHPExcel->getActiveSheet()->SetCellValue('F1', 'Admission Date');
-$objPHPExcel->getActiveSheet()->SetCellValue('G1', 'Admission From');
-$objPHPExcel->getActiveSheet()->SetCellValue('H1', 'Admission To');
-$objPHPExcel->getActiveSheet()->SetCellValue('I1', 'Clinical Discharge Date');
-$objPHPExcel->getActiveSheet()->SetCellValue('J1', 'Physical Discharge Date');
-$objPHPExcel->getActiveSheet()->SetCellValue('K1', 'Discharged To');
-$objPHPExcel->getActiveSheet()->SetCellValue('L1', 'Mortality');
-$objPHPExcel->getActiveSheet()->SetCellValue('M1', 'Delay of discharge');
-$objPHPExcel->getActiveSheet()->SetCellValue('N1', 'Primary Consultant');
+    // Prepare the per-row lookups once (not re-prepared every row).
+    $dxstmt  = $mysqli->prepare("SELECT name FROM icd10 WHERE id=?");
+    $constmt = $mysqli->prepare("SELECT full_name FROM members WHERE member_id=?");
 
- 
-$objPHPExcel->getActiveSheet()->getStyle("A1:O1")->getFont()->setBold(true);
- 
-$rowCount   =   2;
+    $up = static function ($v) { return mb_strtoupper((string) $v, 'UTF-8'); };
 
+    while ($row = $result->fetch_assoc()) {
+        // Diagnosis names (reset each row — the old code left a stale value when the JSON
+        // wasn't an array; reset up front so a missing diagnosis is blank, not carried over).
+        $diagnosis = "";
+        $decodedadmissiondx = json_decode($row['admissiondiagnosis']);
+        if (is_array($decodedadmissiondx)) {
+            foreach ($decodedadmissiondx as $value) {
+                $dxstmt->bind_param('s', $value);
+                $dxstmt->execute();
+                $dxlist = $dxstmt->get_result()->fetch_assoc();
+                if ($dxlist) { $diagnosis .= $dxlist['name'] . '  ||  '; }
+            }
+        }
 
-while($row  =   $result->fetch_assoc()){
-    $objPHPExcel->getActiveSheet()->SetCellValue('A'.$rowCount, mb_strtoupper($row['MRN'],'UTF-8'));
-    $objPHPExcel->getActiveSheet()->SetCellValue('B'.$rowCount, mb_strtoupper($row['age'],'UTF-8'));
-    $objPHPExcel->getActiveSheet()->SetCellValue('C'.$rowCount, mb_strtoupper($row['gender'],'UTF-8'));
-    $objPHPExcel->getActiveSheet()->SetCellValue('D'.$rowCount, mb_strtoupper($row['nationality'],'UTF-8'));
- 
- $decodedadmissiondx=json_decode($row['admissiondiagnosis']);
- if (is_array($decodedadmissiondx)){
-    $diagnosis="";
-    $formationSQL = "SELECT * FROM icd10 WHERE id=?";
-    $dxstmt = $mysqli->prepare($formationSQL);
-    foreach($decodedadmissiondx as $key => $value)
-{
-$dxstmt->bind_param('s', $value);
-$dxstmt->execute();
-$result1 = $dxstmt->get_result();
-$dxlist = $result1 -> fetch_array(MYSQLI_ASSOC);
+        // Primary consultant name.
+        $doctorname = "not assigned";
+        $con_id = $row['consultant_id'];
+        if ($con_id !== null && $con_id !== '') {
+            $constmt->bind_param('i', $con_id);
+            $constmt->execute();
+            $doctor1 = $constmt->get_result()->fetch_assoc();
+            if ($doctor1) { $doctorname = $doctor1['full_name']; }
+        }
 
+        $xlsx->addRow([
+            $up($row['MRN']), $up($row['age']), $up($row['gender']), $up($row['nationality']),
+            $up($diagnosis), $up($row['ADMDATE']), $up($row['ADMFROM']), $up($row['current_location']),
+            $up($row['med_DISDATE']), $up($row['DISDATE']), $up($row['DISTO']), $up($row['MORTALITY']),
+            $up($row['delay']), $up($doctorname),
+        ]);
+    }
 
-$diagnosis .=  $dxlist['name']. '  ||  ';
-}}
-    $objPHPExcel->getActiveSheet()->SetCellValue('E'.$rowCount, mb_strtoupper($diagnosis,'UTF-8'));
-    $objPHPExcel->getActiveSheet()->SetCellValue('F'.$rowCount, mb_strtoupper($row['ADMDATE'],'UTF-8'));
-    $objPHPExcel->getActiveSheet()->SetCellValue('G'.$rowCount, mb_strtoupper($row['ADMFROM'],'UTF-8'));
-    $objPHPExcel->getActiveSheet()->SetCellValue('H'.$rowCount, mb_strtoupper($row['current_location'],'UTF-8'));
-    $objPHPExcel->getActiveSheet()->SetCellValue('I'.$rowCount, mb_strtoupper($row['med_DISDATE'],'UTF-8'));
-    $objPHPExcel->getActiveSheet()->SetCellValue('J'.$rowCount, mb_strtoupper($row['DISDATE'],'UTF-8'));
-    $objPHPExcel->getActiveSheet()->SetCellValue('K'.$rowCount, mb_strtoupper($row['DISTO'],'UTF-8'));
-    $objPHPExcel->getActiveSheet()->SetCellValue('L'.$rowCount, mb_strtoupper($row['MORTALITY'],'UTF-8'));
-    $objPHPExcel->getActiveSheet()->SetCellValue('M'.$rowCount, mb_strtoupper($row['delay'],'UTF-8'));
-
-    
- $con_id= $row['consultant_id'];
- $formationSQL = "SELECT * FROM members WHERE member_id=?";
- $constmt = $mysqli->prepare($formationSQL);
- $constmt->bind_param('i', $con_id);
- $constmt->execute();
- $result1 = $constmt->get_result();
- $doctor1 = $result1 -> fetch_array(MYSQLI_ASSOC);
- $doctorname="";
-    if ($doctor1){
-        $doctorname=$doctor1['full_name'];
-
-    }else{
-
-        $doctorname="not assigned";
- 
-    } 
-
-    $objPHPExcel->getActiveSheet()->SetCellValue('N'.$rowCount, mb_strtoupper( $doctorname,'UTF-8'));
-    $rowCount++;
-}
- 
- 
-for($col = 'A'; $col !== 'N'; $col++) {
-    $objPHPExcel->getActiveSheet()
-        ->getColumnDimension($col)
-        ->setAutoSize(true);
-}
-
-$objWriter  =   new PHPExcel_Writer_Excel2007($objPHPExcel);
- 
-$fileName = "Export-".date('d-m-Y').".xlsx";
-header('Content-Type: application/vnd.ms-excel'); //mime type
-header('Content-Disposition: attachment;filename='.$fileName); //tell browser what's the file name
-header('Cache-Control: max-age=0'); //no cache
-$objWriter = PHPExcel_IOFactory::createWriter($objPHPExcel, 'Excel2007');  
-$objWriter->save('php://output');
+    $xlsx->download("Export-" . date('d-m-Y') . ".xlsx");
 }
 ?>
