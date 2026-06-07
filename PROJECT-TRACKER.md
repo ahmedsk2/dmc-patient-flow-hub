@@ -20,7 +20,7 @@ _Last updated: 2026-06-06_
 | Phase 0 — Containment | 3 ✅ · 1 🔄 · 3 ⏸️ ops | 🔄 in progress |
 | Phase 1 — Critical security & data integrity | 14 ✅ · 1 ⬜ (of 16) | ✅ done (1 ⬜ = team-input permission model) |
 | Phase 2 — Stabilize | 5 ✅ · 1 ❌(Q9) · 1 🔄 · 1 ⬜ (of 8) | 🔄 in progress |
-| Phase 3 — Refactor + UI/UX | 0 / 6 | not started |
+| Phase 3 — Refactor + UI/UX | 1 🔄 · 5 ⬜ | in progress |
 | Phase 4 — Re-platform (decision-gated) | 0 / 2 | not started |
 | Phase 5 — Nice-to-haves | 0 / 3 | not started |
 
@@ -124,6 +124,15 @@ _Last updated: 2026-06-06_
   audit-HIPAA/framework sections (RENOVATION-PLAN.md §8) was not yet run through 3-vote
   verification.
 
+- **🔄 2026-06-07 — Item #4: UI/UX responsive pass STARTED.** Added responsive CSS (`css/main.css` — `[UI-01..04]`) and two PHP fixes:
+  - **UI-01** Responsive card-column breakpoints: patient/consultation cards (`col-sm-3` → 3/2/1 per row; `col-sm-4` → 2/1 per row) at Bootstrap lg/md/xs breakpoints via `:has(.eachrow.card)`. Covers all 9 card-rendering pages.
+  - **UI-02** Fixed systemic `display: inline` bug on `.eachcol` cells: **all editable-card pages** (`dmc-new-admissions.php`, `dmc-new-consultation.php`) had every data cell set to inline, making them flow horizontally and overflow on narrow viewports. Fixed with `.eachrow.card .eachcol:not(.id) { display: block !important }` (`.id` cell excluded — hidden ID container).
+  - **UI-03** WCAG touch-target: added `min-height: 44px` on action buttons inside cards (Discharge/Transfer/Modify).
+  - **UI-04** Status-badge padding: the coloured status banners (Readmission, TB, Long Term, Discharged Still In) had zero padding — added `padding: 2px 6px`, `border-radius: 3px`, `margin-bottom: 4px`, small font-size.
+  - **PHP fix**: `dmc-new-admissions.php` ICU-patients table wrapped in `table-responsive`.
+  - Committed + pushed. **User verifying on a real tablet (pull `renovation` branch, load pages).**
+  - **Still pending in UI/UX pass:** modals, form layout on small screens, further feedback from tablet test.
+
 _(Add new notes/decisions above this line as we go.)_
 
 ---
@@ -170,7 +179,8 @@ _(Add new notes/decisions above this line as we go.)_
 - ⬜ Introduce **layering + PHPUnit**; extract helpers/partials — (C1,C3 / ARCH-01,03,04) — P2
 - ⬜ **De-duplicate** lists/census/ICD-10 on ONE "active" definition — (X2 / SIMP-02, CLIN-08) — P2
 - ⬜ **Statistics engine**: grouped SQL + caching; merge A4 twins — (X3,P1,P4 / SIMP-03,PERF-01) — P2
-- ⬜ **UI/UX overhaul**: responsive/tablet, a11y, data-entry, status pipeline — (U2,U4,W5) — P2
+- 🔄 **UI/UX overhaul**: responsive/tablet, a11y, data-entry, status pipeline — (U2,U4,W5) — P2  
+  _In progress (2026-06-07): responsive card grid + display bug fix committed (see note above); tablet test pending_
 - ⬜ **Server-side PDF** reports; un-hide KPI page; vendor CDNs locally — (U3 / UI-05,06,07,08) — P2
 - 🔄 Normalize **diagnoses/MRN/specialty** schema; add FKs — **FKs DONE** (migration 04, validated); deeper normalization (diagnosis join-table vs JSON, MRN-as-patient-entity, specialty dedup) still a P2/P3 redesign — (D2,D4,D5)
 
