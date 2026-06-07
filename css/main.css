@@ -640,3 +640,84 @@ input {
     padding: 50px 40px;
   }
 }
+
+/* ==========================================================================
+   #PATIENT / CONSULTATION CARD GRID — RESPONSIVE COLUMNS   [UI-01]
+   ========================================================================== */
+/*
+ * Patient and consultation cards are emitted as col-sm-3 (4/row) or col-sm-4
+ * (3/row) containers. Bootstrap's col-sm-* locks the width at ≥576 px, so on a
+ * tablet in portrait the cards become very narrow.
+ *
+ * :has() is supported in all evergreen browsers since late 2023
+ * (Chrome 105+, Safari 15.4+, Firefox 121+). Older browsers keep the default
+ * col-sm-3 / col-sm-4 width — acceptable graceful degradation.
+ */
+
+/* ≥768 px (small tablets, landscape phones): col-sm-3 → 3/row */
+@media (max-width: 991.98px) {
+  .col-sm-3:has(.eachrow.card) {
+    flex: 0 0 auto;
+    width: 33.333333%;
+  }
+}
+
+/* ≥576 px (tablet portrait): 2/row for both col-sm-3 and col-sm-4 cards */
+@media (max-width: 767.98px) {
+  .col-sm-3:has(.eachrow.card),
+  .col-sm-4:has(.eachrow.card) {
+    flex: 0 0 auto;
+    width: 50%;
+  }
+}
+
+/* < 576 px (phones): full-width — one card per row */
+@media (max-width: 575.98px) {
+  .col-sm-3:has(.eachrow.card),
+  .col-sm-4:has(.eachrow.card) {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+}
+
+/* ==========================================================================
+   #PATIENT CARD — DISPLAY:INLINE BUG FIX   [UI-02]
+   ========================================================================== */
+/*
+ * Patient/consultation card cells carry inline `display: inline` styles on
+ * several pages (dmc-new-admissions and dmc-new-consultation: every cell;
+ * dmc-patients, active-list, and registry files: only the bed/header cell).
+ * Force all visible cells back to block so they stack vertically inside the
+ * card. The .id cell is the hidden ID container — must keep display: none.
+ */
+.eachrow.card .eachcol:not(.id) {
+  display: block !important;
+}
+
+/* ==========================================================================
+   #PATIENT CARD — TOUCH-FRIENDLY ACTION BUTTONS   [UI-03]
+   ========================================================================== */
+/*
+ * Discharge / Transfer / Modify buttons inside cards already have width:100%
+ * inline, but line-height:2 alone may fall short of the 44 px WCAG touch
+ * target on some viewports. Guarantee a minimum tap area.
+ */
+.eachrow.card .btn {
+  min-height: 44px;
+}
+
+/* ==========================================================================
+   #PATIENT CARD — STATUS INDICATOR BADGES   [UI-04]
+   ========================================================================== */
+/*
+ * The coloured status banners (Readmission, TB Patient, Long Term Patient,
+ * Discharged Still In) are plain <div> elements with inline background colours
+ * but no padding. Add a small internal padding and bottom margin so the text
+ * is readable and banners don't run into each other.
+ */
+.eachrow.card > .card-header > div {
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-bottom: 4px;
+  font-size: 0.85em;
+}

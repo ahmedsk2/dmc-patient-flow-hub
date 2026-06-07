@@ -553,7 +553,7 @@ while ($row = $icd10_result->fetch_assoc()) {
 		$icupatients = $result1 -> fetch_all(MYSQLI_ASSOC);
     // var_dump($icupatients);
 
-    echo "<div class='row' style='margin: 1%;'>
+    echo "<div class='row table-responsive' style='margin: 1%;'>
             <table class='col-md-12'>
             <thead style='text-align: center;font-weight: 700;'>
               <tr>
