@@ -44,8 +44,11 @@ $position = $_SESSION['position'];
 
   <!-- Combined CSS files -->
   <link href="css/css/all.min.css" rel="stylesheet">
-  
-  
+  <!-- App-page custom layer: loaded AFTER the bundle so it overrides framework
+       defaults for the patient/consultation card UI + modal forms (UI-01..07). -->
+  <link href="css/app.css" rel="stylesheet">
+
+
 
   <style>
 .select2-container--default .select2-selection--multiple .select2-selection__choice {

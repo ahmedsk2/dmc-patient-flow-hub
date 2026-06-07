@@ -31,6 +31,10 @@ css/metadata/
 # --- AdminLTE build sources, unused at runtime ("orderes" is the upstream typo) ---
 work-orderes/
 
+# --- Local dev tooling (never deployed / committed) ---
+dev-router.php
+.claude/launch.json
+
 # --- OS / editor cruft ---
 Thumbs.db
 .DS_Store
