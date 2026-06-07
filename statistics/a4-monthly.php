@@ -317,7 +317,7 @@ page[size="A4"][layout="landscape"] {
       // Medical Los
       /////////////
   
-      $formationSQL = "SELECT ADMDATE, med_DISDATE FROM picupatients WHERE DISDATE IS NOT NULL AND MONTH(DISDATE) = ? AND YEAR(ADMDATE) = ? AND (current_location != 'ICU' or current_location is null)";
+      $formationSQL = "SELECT ADMDATE, med_DISDATE FROM picupatients WHERE DISDATE IS NOT NULL AND MONTH(DISDATE) = ? AND YEAR(DISDATE) = ? AND (current_location != 'ICU' or current_location is null)";
       $stmt = $mysqli->prepare($formationSQL);
       $stmt->bind_param('ii', $mdate1, $ydate1);
       $stmt->execute();
@@ -346,7 +346,7 @@ page[size="A4"][layout="landscape"] {
       // physical Los
       /////////////
   
-      $formationSQL = "SELECT ADMDATE, DISDATE FROM picupatients WHERE DISDATE IS NOT NULL AND MONTH(DISDATE) = ? AND YEAR(ADMDATE) = ? AND (current_location != 'ICU' or current_location is null)";
+      $formationSQL = "SELECT ADMDATE, DISDATE FROM picupatients WHERE DISDATE IS NOT NULL AND MONTH(DISDATE) = ? AND YEAR(DISDATE) = ? AND (current_location != 'ICU' or current_location is null)";
       $stmt = $mysqli->prepare($formationSQL);
       $stmt->bind_param('ii', $mdate1, $ydate1);
       $stmt->execute();
@@ -375,7 +375,7 @@ page[size="A4"][layout="landscape"] {
       // ICU physical Los
       /////////////
   
-      $formationSQL = "SELECT ADMDATE, DISDATE FROM picupatients WHERE DISDATE IS NOT NULL AND MONTH(DISDATE) = ? AND YEAR(ADMDATE) = ? AND current_location ='ICU'";
+      $formationSQL = "SELECT ADMDATE, DISDATE FROM picupatients WHERE DISDATE IS NOT NULL AND MONTH(DISDATE) = ? AND YEAR(DISDATE) = ? AND current_location ='ICU'";
       $stmt = $mysqli->prepare($formationSQL);
       $stmt->bind_param('ii', $mdate1, $ydate1);
       $stmt->execute();

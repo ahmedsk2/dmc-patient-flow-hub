@@ -83,7 +83,7 @@ $date->modify("-1 day");
       $result1 = $stmt->get_result();
       $admittedpcount = mysqli_num_rows($result1);
 
-      $formationSQL = "SELECT * FROM picupatients WHERE MONTH(DISDATE) = ? AND YEAR(ADMDATE) = ?  AND (current_location != 'ICU' or current_location is null)";
+      $formationSQL = "SELECT * FROM picupatients WHERE MONTH(DISDATE) = ? AND YEAR(DISDATE) = ?  AND (current_location != 'ICU' or current_location is null)";
       $stmt = $mysqli->prepare($formationSQL);
       $stmt->bind_param('ii', $mdate1, $ydate1);
       $stmt->execute();
@@ -131,7 +131,7 @@ $date->modify("-1 day");
          $result1 = $stmt->get_result();
          $admittedpcount = mysqli_num_rows($result1);
 
-         $formationSQL = "SELECT * FROM picupatients WHERE QUARTER(DISDATE) = ? AND YEAR(ADMDATE) = ?  AND (current_location != 'ICU' or current_location is null)";
+         $formationSQL = "SELECT * FROM picupatients WHERE QUARTER(DISDATE) = ? AND YEAR(DISDATE) = ?  AND (current_location != 'ICU' or current_location is null)";
          $stmt = $mysqli->prepare($formationSQL);
          $stmt->bind_param('ii', $quarter, $ydate1);
          $stmt->execute();
