@@ -76,30 +76,39 @@ $date->modify("-1 day");
       $dateObj   = DateTime::createFromFormat('!m', $mdate1);
       $monthName = $dateObj->format('F'); // March
 
-      $formationSQL = "SELECT * FROM picupatients WHERE MONTH(ADMDATE) = ? AND YEAR(ADMDATE) = ?  AND (current_location != 'ICU' or current_location is null)";
+      // Sargable half-open month range [first-of-month, first-of-next-month) so the indexes on
+      // ADMDATE/DISDATE are usable (was MONTH()/YEAR() wrapping, which defeats them). Proven
+      // result-identical to the old MONTH+YEAR predicate on DATE columns.
+      $rangeStart = sprintf('%04d-%02d-01', $ydate1, $mdate1);
+      $rangeEnd   = date('Y-m-01', strtotime($rangeStart . ' +1 month'));
+
+      $formationSQL = "SELECT * FROM picupatients WHERE ADMDATE >= ? AND ADMDATE < ? AND (current_location != 'ICU' or current_location is null)";
       $stmt = $mysqli->prepare($formationSQL);
-      $stmt->bind_param('ii', $mdate1, $ydate1);
+      $stmt->bind_param('ss', $rangeStart, $rangeEnd);
       $stmt->execute();
       $result1 = $stmt->get_result();
       $admittedpcount = mysqli_num_rows($result1);
 
-      $formationSQL = "SELECT * FROM picupatients WHERE MONTH(DISDATE) = ? AND YEAR(DISDATE) = ?  AND (current_location != 'ICU' or current_location is null)";
+      $formationSQL = "SELECT * FROM picupatients WHERE DISDATE >= ? AND DISDATE < ? AND (current_location != 'ICU' or current_location is null)";
       $stmt = $mysqli->prepare($formationSQL);
-      $stmt->bind_param('ii', $mdate1, $ydate1);
+      $stmt->bind_param('ss', $rangeStart, $rangeEnd);
       $stmt->execute();
       $result1 = $stmt->get_result();
       $dischargedpcount = mysqli_num_rows($result1);
 
-      $formationSQL = "SELECT * FROM consultations WHERE MONTH(consultation_date) = ?";
+      // Consultations were previously MONTH-only (no year) -> they counted that month across ALL
+      // years. Now scoped to the same month+year as the admissions/discharges series (cross-year
+      // fix) and sargable.
+      $formationSQL = "SELECT * FROM consultations WHERE consultation_date >= ? AND consultation_date < ?";
       $stmt = $mysqli->prepare($formationSQL);
-      $stmt->bind_param('i', $mdate1);
+      $stmt->bind_param('ss', $rangeStart, $rangeEnd);
       $stmt->execute();
       $result1 = $stmt->get_result();
       $newconsultscount = mysqli_num_rows($result1);
 
-      $formationSQL = "SELECT * FROM consultations WHERE MONTH(signoff_date) = ?";
+      $formationSQL = "SELECT * FROM consultations WHERE signoff_date >= ? AND signoff_date < ?";
       $stmt = $mysqli->prepare($formationSQL);
-      $stmt->bind_param('i', $mdate1);
+      $stmt->bind_param('ss', $rangeStart, $rangeEnd);
       $stmt->execute();
       $result1 = $stmt->get_result();
       $signedoffcount = mysqli_num_rows($result1);
@@ -124,30 +133,35 @@ $date->modify("-1 day");
         $date1 = $date->format('Y-m-d');
         $ydate1=date("Y",strtotime($date1));
 
-         $formationSQL = "SELECT * FROM picupatients WHERE QUARTER(ADMDATE) = ? AND YEAR(ADMDATE) = ?  AND (current_location != 'ICU' or current_location is null)";
+         // Sargable half-open quarter range [quarter-start, next-quarter-start). $quarter is 4..1.
+         $qStart = sprintf('%04d-%02d-01', $ydate1, ($quarter - 1) * 3 + 1);
+         $qEnd   = date('Y-m-01', strtotime($qStart . ' +3 month'));
+
+         $formationSQL = "SELECT * FROM picupatients WHERE ADMDATE >= ? AND ADMDATE < ? AND (current_location != 'ICU' or current_location is null)";
          $stmt = $mysqli->prepare($formationSQL);
-         $stmt->bind_param('ii', $quarter, $ydate1);
+         $stmt->bind_param('ss', $qStart, $qEnd);
          $stmt->execute();
          $result1 = $stmt->get_result();
          $admittedpcount = mysqli_num_rows($result1);
 
-         $formationSQL = "SELECT * FROM picupatients WHERE QUARTER(DISDATE) = ? AND YEAR(DISDATE) = ?  AND (current_location != 'ICU' or current_location is null)";
+         $formationSQL = "SELECT * FROM picupatients WHERE DISDATE >= ? AND DISDATE < ? AND (current_location != 'ICU' or current_location is null)";
          $stmt = $mysqli->prepare($formationSQL);
-         $stmt->bind_param('ii', $quarter, $ydate1);
+         $stmt->bind_param('ss', $qStart, $qEnd);
          $stmt->execute();
          $result1 = $stmt->get_result();
          $dischargedpcount = mysqli_num_rows($result1);
 
-         $formationSQL = "SELECT * FROM consultations WHERE QUARTER(consultation_date) = ?";
+         // Consultations were QUARTER-only (no year) -> scoped to the displayed year now (cross-year fix) + sargable.
+         $formationSQL = "SELECT * FROM consultations WHERE consultation_date >= ? AND consultation_date < ?";
          $stmt = $mysqli->prepare($formationSQL);
-         $stmt->bind_param('i', $quarter);
+         $stmt->bind_param('ss', $qStart, $qEnd);
          $stmt->execute();
          $result1 = $stmt->get_result();
          $newconsultscount = mysqli_num_rows($result1);
 
-         $formationSQL = "SELECT * FROM consultations WHERE QUARTER(signoff_date) = ?";
+         $formationSQL = "SELECT * FROM consultations WHERE signoff_date >= ? AND signoff_date < ?";
          $stmt = $mysqli->prepare($formationSQL);
-         $stmt->bind_param('i', $quarter);
+         $stmt->bind_param('ss', $qStart, $qEnd);
          $stmt->execute();
          $result1 = $stmt->get_result();
          $signedoffcount = mysqli_num_rows($result1);
