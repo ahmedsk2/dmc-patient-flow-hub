@@ -94,10 +94,12 @@
     (password alone does NOT log in) → wrong code rejected → correct TOTP → dashboard. (commit 4bb86a6)
   - `mfa-admin-reset.php` + control.php button — admin lockout recovery (admin-only, CSRF, audited).
     Validated (resets secret + writes `mfa.admin_reset` audit row). (commit 75e5be9)
-  - **Deferred by design:** the per-role *enforcement* switch (`settings.mfa_enforcement`, default 0)
-    — not needed for opt-in; column is ready. A self-contained QR *image* (currently otpauth URI +
-    manual key; manual entry works in all apps) — would need a vendored JS lib (consent) or a PHP
-    QR encoder.
+  - **Per-role enforcement lever DONE** (`settings.mfa_enforcement`: 0=off, 1=admins, 2=all). Control-
+    panel dropdown + a loop-free gate in sidebar.php (required-but-not-enrolled → mfa-setup); default 0
+    so it's a no-op until switched on. Validated E2E (policy 0 normal; 1/2 force a non-enrolled admin
+    to setup; mfa-setup stays reachable). (commit 563eb38)
+  - **Deferred by design:** a self-contained QR *image* (currently otpauth URI + manual key; manual
+    entry works in all authenticator apps) — would need a vendored JS lib (consent) or a PHP QR encoder.
   - **Deploy steps (prod):** run `migrations/06-mfa.sql`; set a long random `MFA_KEY` in the prod
     (git-ignored) `config.local.php` — see `config.local.sample.php`. Keep `MFA_KEY` stable
     (changing it forces re-enrollment).
@@ -152,6 +154,8 @@
 | PDF report_data vs a4.php | a4.php JSON (2023+2024) | report_data.php | ✓ 20/20 metrics identical |
 | pdf-report.php output | — | live endpoint | ✓ 200 application/pdf, valid %PDF, admin-gated |
 | patient_diagnosis join table | `admissiondiagnosis` JSON | join table | ✓ 16,067 rows lossless round-trip (commit 94c5bd1) |
+| src/ YearlyReport extraction | report_data == a4 (through class) | after refactor | ✓ 20/20 still identical (commit 097d78e) |
+| MFA enforcement gate | — | live E2E | ✓ 0=normal, 1/2 force setup, no loop, save persists (commit 563eb38) |
 
 *charts.php diffs verified: after stripping warning markers, all 3 `charts__c*__quarterly` are
 byte-identical (zero number change); the 3 `charts__c*__monthly` differ only in the label array
