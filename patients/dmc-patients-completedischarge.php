@@ -84,7 +84,6 @@ button.disabled = true;
 <input type="hidden" id='id_modify' value='<?php echo htmlspecialchars($id, ENT_QUOTES, 'UTF-8'); ?>'>
 
 
-</select>
 <h3><label>Discharge Details</label></h3>
 
         <label>Close File Date</label>
@@ -92,14 +91,14 @@ button.disabled = true;
         
         <label>Status at discharge</label>
       <select class='txtdata disstatus' id ="disstatus"  name='disstatus' style="width: 100%;text-align: center;padding: 4px;" required>
-      <option selected disabled value=''>Select</option>"
+      <option selected disabled value=''>Select</option>
       <option value='Alive'>Alive</option>
       <option value='Dead'>Dead</option>
     </select>
 
         <label id ="dischargedlabel">Discharged to</label>
         <select class='txtdata' id ="disto"  name='disto' style="width: 100%;text-align: center;padding: 4px;" required>
-        <option selected disabled value=''>Select</option>"
+        <option selected disabled value=''>Select</option>
         <option value='Home'>Home</option>
         <option value='Other Facility'>Other Facility</option>
         <option value='LAMA'>LAMA</option>
@@ -111,7 +110,6 @@ button.disabled = true;
 
 
 
-</div>
 
 <div class="modal-footer" style="text-align: center;display: block;">
 <div color='green' style="color:forestgreen;" id="message"></div>
