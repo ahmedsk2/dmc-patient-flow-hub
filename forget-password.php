@@ -44,7 +44,7 @@ require_once __DIR__ . '/csrf.php';
         <form method="post" action="forget-password-email.php">
           <?php echo csrf_field(); ?>
           <div class="input-group mb-3">
-            <input type="text" name="email" class="form-control" placeholder="Username or E-Mail" required autofocus>
+            <input type="text" name="email" class="form-control" aria-label="Username or e-mail" placeholder="Username or E-Mail" required autofocus>
             <div class="input-group-append">
               <div class="input-group-text">
                 <span class="fas fa-envelope"></span>

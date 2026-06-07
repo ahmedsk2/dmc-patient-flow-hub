@@ -110,16 +110,16 @@ if (isset($_POST['reg_user'])) {
       <form method="post" autocomplete="off" action="register.php">
         <?php echo csrf_field(); ?>
         <div class="form-group">
-          <label>Username</label>
-          <input type="text" name="username" class="form-control"  placeholder="Login Name" required>
+          <label for="reg_username">Username</label>
+          <input type="text" name="username" id="reg_username" class="form-control"  placeholder="Login Name" required>
         </div>
         <div class="form-group">
-          <label>Full Name</label>
-          <input type="text" name="full_name" class="form-control"  placeholder="Display Name" required>
+          <label for="reg_full_name">Full Name</label>
+          <input type="text" name="full_name" id="reg_full_name" class="form-control"  placeholder="Display Name" required>
         </div>
         <div class="form-group">
-          <label>Position</label>
-          <select name="position" class="form-control" required>
+          <label for="reg_position">Position</label>
+          <select name="position" id="reg_position" class="form-control" required>
             <option selected disabled value="">Select</option>
             <?php
             $formationSQL = "SELECT * FROM position";
@@ -132,19 +132,19 @@ if (isset($_POST['reg_user'])) {
           </select>
         </div>
         <div class="form-group">
-          <label>Email</label>
-          <input type="email" name="email" class="form-control"  placeholder="E-Mail" required>
+          <label for="reg_email">Email</label>
+          <input type="email" name="email" id="reg_email" class="form-control"  placeholder="E-Mail" required>
         </div>
         <div class="form-group">
-          <label>Password</label>
+          <label for="password">Password</label>
           <input type="password" autocomplete="new-password" id="password" name="password_1" class="form-control" placeholder="Password" required>
           <div class="progress mt-2">
             <div class="progress-bar"></div>
           </div>
         </div>
         <div class="form-group">
-          <label>Confirm Password</label>
-          <input type="password" autocomplete="new-password" name="password_2" class="form-control" placeholder="Confirm Password" required>
+          <label for="reg_password_2">Confirm Password</label>
+          <input type="password" autocomplete="new-password" name="password_2" id="reg_password_2" class="form-control" placeholder="Confirm Password" required>
         </div>
         <div class="form-group" style="color: red;">
           <?php include('errors.php'); ?>

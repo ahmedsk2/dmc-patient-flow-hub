@@ -121,7 +121,7 @@ if (!empty($_POST["login"])) {
                 <form action="" method="post" id="frmLogin">
                     <?php echo csrf_field(); ?>
                     <div class="input-group mb-3">
-                        <input class="form-control" name="member_name" type="text" placeholder="Username" value="<?php if (isset($_COOKIE["member_login"])) {
+                        <input class="form-control" name="member_name" type="text" aria-label="Username" placeholder="Username" value="<?php if (isset($_COOKIE["member_login"])) {
                                                                                                                         echo htmlspecialchars($_COOKIE["member_login"], ENT_QUOTES, 'UTF-8');
                                                                                                                     } ?>" required autofocus>
                         <div class="input-group-append">
@@ -131,7 +131,7 @@ if (!empty($_POST["login"])) {
                         </div>
                     </div>
                     <div class="input-group mb-3">
-                        <input type="password" class="form-control" name="member_password" placeholder="Password" value="<?php if (isset($_COOKIE["member_password"])) {
+                        <input type="password" class="form-control" name="member_password" aria-label="Password" placeholder="Password" value="<?php if (isset($_COOKIE["member_password"])) {
                                                                                                                                 echo htmlspecialchars($_COOKIE["member_password"], ENT_QUOTES, 'UTF-8');
                                                                                                                             } ?>">
                         <div class="input-group-append">
