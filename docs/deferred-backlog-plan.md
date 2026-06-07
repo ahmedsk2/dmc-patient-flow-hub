@@ -11,7 +11,12 @@
 - [x] **Phase 0 — Validation foundation.** `tools/stats_validate.php` golden-master harness
   (authenticated HTTP capture of all 6 stats endpoints × param matrix; sha + diff). Baseline
   `before` captured (21 cases). Baselines git-ignored.
-- [ ] **Phase 1 — Statistics engine (grouped SQL + caching).** Correctness (sargability +
+- [x] **Phase 1 — Statistics engine (grouped SQL).** Substantially complete: time1 collapsed; kpis
+  verified already-grouped; charts1 collapsed + the readmission/quarterly **crash fixed**; charts.php
+  two latent bugs fixed; a4/a4-monthly readmission N+1 collapsed. Every change proven against the
+  golden master. Remaining a4 sub-items (per-day census collapse, caching, merge-twins, un-hide KPI)
+  are **documented deferrals** with rationale below — not silent gaps.
+- [ ] ~~Phase 1 (original framing)~~ — Correctness (sargability +
   cross-year) was already fixed in earlier batches; remaining work is PERFORMANCE: collapse the
   per-period PHP loops into single `GROUP BY` queries, then add a cached-aggregates layer for the
   heavy A4 reports (a4.php ≈ 1,800 q/load, a4-monthly ≈ 3,500). Validate each rewrite byte-for-byte
@@ -36,7 +41,23 @@
     (daily/monthly **and** quarterly) dereferenced a null row when no readmission was found → 24
     "array offset on null" warnings/quarter; added a `$recentadmission &&` guard (count was already
     unaffected, so zero number change).
-  - [ ] a4.php / a4-monthly.php (+ cache + merge twins + un-hide KPI page)
+  - [~] a4.php / a4-monthly.php — **dominant cost collapsed**: the 72h-readmission N+1 (a per-patient
+    LIMIT-1 sub-query inside each of 12 months) → one `EXISTS + COUNT(*) GROUP BY month` query.
+    Byte-identical (all 25 cases incl. `a4*__2023/2024`). Measured: a4.php ~1800→~616 SELECTs (~66%),
+    a4-monthly ~3500→~2661. **Deliberately deferred** (documented, not silent):
+    - *Per-day census (bed-days / daily occupancy) loop* — now the dominant remaining cost (esp.
+      a4-monthly's two per-day loops). A set-based bed-days query is feasible BUT (a) byte-exact
+      reproduction of the inclusive boundaries + same-day exclusion + the per-day `<= today` cutoff is
+      error-prone, and (b) there's a **validation gap**: the golden-master years (2023/24) are in the
+      past, so the `<= today` cutoff is never exercised — a collapse could pass the baseline yet be
+      wrong for the *current partial month*. Needs a current-period golden-master case before it's safe.
+    - *Per-month metric COUNTs/LOS fetches* (5+3 per month) — safely collapsible (time1-style) but low
+      marginal value now that the census dominates.
+    - *Cached-aggregates layer* — **not done on purpose**: a stale cached report in a live clinical
+      system is a safety hazard, and these MyISAM tables have no reliable change-version (no
+      updated_at/triggers) for safe invalidation. Live queries are the safe default.
+    - *Merge "A4 twins" + un-hide the draft KPI page* — structural/product changes (un-hiding a
+      `display:none` draft page alters the printed clinical report); defer to a product decision.
 
 ### Bugs found during validation (fix as part of the relevant rewrite)
 
@@ -83,6 +104,7 @@
 | charts1.php LOS + admission rewrite | `before` | `after` | ✓ 20/20 identical (1 skip) |
 | charts1.php readmission/quarterly fix | ground-truth | endpoint chartdata | ✓ matches loop **and** set-based (sum 49) |
 | charts.php two bug fixes | `before` | `after2` | ✓ 14/14 untouched identical; 6 charts diffs = intended only* |
+| a4 + a4-monthly readmission collapse | `before` (25, incl. A4) | `after`/`after2` | ✓ 25/25 IDENTICAL (commit 2fd8d40) |
 
 *charts.php diffs verified: after stripping warning markers, all 3 `charts__c*__quarterly` are
 byte-identical (zero number change); the 3 `charts__c*__monthly` differ only in the label array
