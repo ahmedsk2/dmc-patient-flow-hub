@@ -98,8 +98,9 @@
     panel dropdown + a loop-free gate in sidebar.php (required-but-not-enrolled → mfa-setup); default 0
     so it's a no-op until switched on. Validated E2E (policy 0 normal; 1/2 force a non-enrolled admin
     to setup; mfa-setup stays reachable). (commit 563eb38)
-  - **Deferred by design:** a self-contained QR *image* (currently otpauth URI + manual key; manual
-    entry works in all authenticator apps) — would need a vendored JS lib (consent) or a PHP QR encoder.
+  - **QR code DONE** — `vendor/qrcodejs/` (davidshimjs, MIT, single 20KB file, user-approved) renders
+    the QR client-side on mfa-setup.php from the otpauth URI; Base32 manual key kept as fallback.
+    Nothing new leaves the server (secret already on the page). (commit aa081c6)
   - **Deploy steps (prod):** run `migrations/06-mfa.sql`; set a long random `MFA_KEY` in the prod
     (git-ignored) `config.local.php` — see `config.local.sample.php`. Keep `MFA_KEY` stable
     (changing it forces re-enrollment).
