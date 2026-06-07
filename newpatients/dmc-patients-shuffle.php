@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../guard.php'; require_role([0, 2, 3, 4]); require_capability('assign_access');
+require_once __DIR__ . '/../guard.php'; require_role([0, 2, 3, 4]); require_capability('assign_access'); csrf_verify();
 
 session_start();
 
@@ -325,9 +325,8 @@ if ($subcount >= $max_subs && $n_newpatients > 0){
     }
 }
 audit_log('patients.shuffle','picupatients',null); // bulk auto-assignment run (actor from session)
-echo "<script language='javascript'>\n";
-echo "window.location.href = '../dmc-new-admissions.php';";
-echo "</script>\n";
+// Machine-detectable status for the AJAX caller (W1); assignPatients() reloads on dmcOk().
+echo "Patients assigned successfully";
 
 
 ?>

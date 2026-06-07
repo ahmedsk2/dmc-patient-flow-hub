@@ -205,7 +205,7 @@ while ($row = $icd10_result->fetch_assoc()) {
                   if ($user['assign_access']== '1'){
 
                     echo "
-                    <a  class='btn btn-danger'  href='newpatients/dmc-patients-shuffle.php' onclick='assignPatients(this)' style='color: aliceblue; line-height: 2;padding: 0px 15px;margin-bottom: 2%;'>Assign Patients</a>";
+                    <a  class='btn btn-danger'  href='javascript:void(0)' onclick='assignPatients(this)' style='color: aliceblue; line-height: 2;padding: 0px 15px;margin-bottom: 2%;'>Assign Patients</a>";
                       }
                   ?>
           </div>
@@ -617,15 +617,27 @@ require 'footer.php';
 
 
 function assignPatients(button) {
-    // Disable the button and show loading spinner
+    // Bulk auto-assignment ("shuffle"). POST via AJAX so the request carries the CSRF token
+    // (footer ajaxSend adds X-CSRF-Token) instead of being a state-changing GET navigation.
     button.disabled = true;
     button.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"><span class="sr-only">Loading...</span></div>';
 
-    // Simulate an AJAX call to assign patients
-    setTimeout(function() {
-        // Redirect to the actual URL after the loading spinner
-        window.location.href = 'newpatients/dmc-patients-shuffle.php';
-    }, 2000); // Simulate a delay of 2 seconds
+    $.post('newpatients/dmc-patients-shuffle.php', {})
+        .done(function (resp) {
+            // W1: only treat as done on confirmed success.
+            if (window.dmcOk(resp)) {
+                window.location.href = 'dmc-new-admissions.php';
+            } else {
+                button.disabled = false;
+                button.innerHTML = 'Assign Patients';
+                alert('Auto-assignment failed. Please reload the page and try again.');
+            }
+        })
+        .fail(function () {
+            button.disabled = false;
+            button.innerHTML = 'Assign Patients';
+            alert('Auto-assignment failed (server error). Please try again.');
+        });
 }
 
 function icutransfer(button, value){

@@ -380,7 +380,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                                     <td class='eachcol member_email'>
                                                         <p><?= htmlspecialchars($member['member_email'], ENT_QUOTES, 'UTF-8') ?></p>
                                                         <?php if (in_array($user['position'], $access_PICU_control)): ?>
-                                                            <a href="send-reset-pass-by-admin.php?email=<?= rawurlencode($member['member_email']) ?>">Send Reset Password Email</a>
+                                                            <form method="post" action="send-reset-pass-by-admin.php" style="display:inline; margin:0;"><?= csrf_field() ?><input type="hidden" name="email" value="<?= htmlspecialchars($member['member_email'], ENT_QUOTES, 'UTF-8') ?>"><button type="submit" class="btn btn-link p-0" style="font-size:inherit; vertical-align:baseline;">Send Reset Password Email</button></form>
                                                         <?php endif; ?>
                                                     </td>
                                                     <td class='eachcol position'>
@@ -505,7 +505,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                                     <td class='eachcol member_email'>
                                                         <p><?= htmlspecialchars($member['member_email'], ENT_QUOTES, 'UTF-8') ?></p>
                                                         <?php if (in_array($user['position'], $access_PICU_control)): ?>
-                                                            <a href="send-reset-pass-by-admin.php?email=<?= rawurlencode($member['member_email']) ?>">Send Reset Password Email</a>
+                                                            <form method="post" action="send-reset-pass-by-admin.php" style="display:inline; margin:0;"><?= csrf_field() ?><input type="hidden" name="email" value="<?= htmlspecialchars($member['member_email'], ENT_QUOTES, 'UTF-8') ?>"><button type="submit" class="btn btn-link p-0" style="font-size:inherit; vertical-align:baseline;">Send Reset Password Email</button></form>
                                                         <?php endif; ?>
                                                     </td>
                                                     <td class='eachcol position'>

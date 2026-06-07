@@ -1,31 +1,17 @@
 <?php 
-session_start();
-// production error handling is configured centrally (php.ini)
-// var_dump($_SESSION);
-require_once "authCookieSessionValidate.php";
+require_once __DIR__ . '/guard.php';
+require_role([0]);   // Admin only (centralized auth gate)
+csrf_verify();       // was a CSRF-able GET link; now a POST form carrying a token
 
-if(!$isLoggedIn) {
-    header("Location: ./");
+if (empty($_POST['email'])) {
+    header("Location: control.php");
+    exit();
 }
 
-$access_PICU_control=[0];
+require_once __DIR__ . '/dbconnect.php';
+require_once __DIR__ . '/reset_tokens.php';
 
-        if (!in_array($_SESSION['position'],$access_PICU_control)){
-            header("Location: control.php");
-            // echo "error";
-            exit();
-                  }
-
-        if (!isset($_GET['email']) || empty($_GET['email'])){
-            header("Location: control.php");
-            // echo "error";
-            exit();
-        }
-
-            require('dbconnect.php');
-            require_once __DIR__ . '/reset_tokens.php';
-
-           $email = $_GET['email'];
+$email = $_POST['email'];
 
 
                 // Prepare the SQL statement with placeholders
