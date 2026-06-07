@@ -41,9 +41,9 @@ $DATE = getenv('DMC_STATS_DATE') ?: '2024-06-15';
 // `compare` skips these so they don't masquerade as real DIFFs; the rewrite makes the endpoint
 // fast + clean, and its clinical payload (per-consultant readmission counts) is then validated
 // against an independent ground-truth query rather than whole-page sha.
-$NONDETERMINISTIC = [
-    'charts1__readmission__quarterly' => 'pre-rewrite warning-storm crash is non-deterministic; validated via ground-truth',
-];
+// (now empty — charts1__readmission__quarterly was the only entry; its rewrite made it
+//  fast + deterministic, so it is back under full byte-for-byte coverage.)
+$NONDETERMINISTIC = [];
 
 /** Build the endpoint × parameter matrix that mirrors what statistics.php / allstat.php send. */
 function build_matrix($date, $withA4) {
