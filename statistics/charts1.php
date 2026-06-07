@@ -19,7 +19,47 @@ $formationSQL = "SELECT * FROM members WHERE position = '3' AND active = 1";
 $result1 = $mysqli->query($formationSQL);
 $consultants = $result1 -> fetch_all(MYSQLI_ASSOC);
 
-     ?>
+/*
+ * Grouped-SQL helpers — replace the per-consultant N+1 loops (one query per consultant per metric)
+ * with a single GROUP BY consultant_id query per metric. The predicates are unchanged and a
+ * half-open [start, end) window over a DATE column selects exactly the same rows as the original
+ * MONTH()/YEAR()/QUARTER()/=date predicates, so per-consultant values are identical (proven
+ * byte-for-byte by tools/stats_validate.php). Integer COUNTs are order-independent; for LOS the
+ * day-diffs are exact integers (Asia/Riyadh has no DST), so the PHP average is order-independent too.
+ */
+// COUNT(*) for one window, grouped by consultant_id -> [consultant_id => count].
+$countByConsultant = function ($table, $col, $start, $end, $extra = '') use ($mysqli) {
+    $sql = "SELECT consultant_id, COUNT(*) AS c FROM $table WHERE $col >= ? AND $col < ?$extra GROUP BY consultant_id";
+    $stmt = $mysqli->prepare($sql);
+    $stmt->bind_param('ss', $start, $end);
+    $stmt->execute();
+    $r = $stmt->get_result();
+    $m = [];
+    while ($row = $r->fetch_assoc()) { $m[(int) $row['consultant_id']] = (int) $row['c']; }
+    return $m;
+};
+// Raw ADMDATE/DISDATE rows for one window (non-ICU), bucketed by consultant_id -> [cid => [rows]].
+$nonIcu = " AND (current_location != 'ICU' or current_location is null)";
+$losRowsByConsultant = function ($col, $start, $end) use ($mysqli, $nonIcu) {
+    $sql = "SELECT consultant_id, ADMDATE, DISDATE FROM picupatients WHERE $col >= ? AND $col < ?$nonIcu";
+    $stmt = $mysqli->prepare($sql);
+    $stmt->bind_param('ss', $start, $end);
+    $stmt->execute();
+    $r = $stmt->get_result();
+    $m = [];
+    while ($row = $r->fetch_assoc()) { $m[(int) $row['consultant_id']][] = $row; }
+    return $m;
+};
+// Average LOS (days) for one consultant's rows, computed exactly as the original per-consultant loop.
+$losAverage = function ($rows) {
+    $los = [];
+    foreach ($rows as $date) {
+        $timeDiff = abs(strtotime($date['ADMDATE']) - strtotime($date['DISDATE']));
+        array_push($los, $timeDiff / 86400);
+    }
+    return count($los) ? array_sum($los) / count($los) : 0;
+};
+?>
    
     
 <div class="row">
@@ -58,36 +98,14 @@ switch ($kpi){
                     $ydate1=date("Y",strtotime($s_date));
                     $chart_title="Average Length of Stay for " . $mdate1_name . " " . $ydate1; 
                   
+                    // grouped: one fetch of this month's discharges, bucket by consultant (averaging is identical)
+                    $mStart = sprintf('%04d-%02d-01', $ydate1, $month);
+                    $mEnd   = date('Y-m-d', strtotime($mStart . ' +1 month'));   // first of next month (half-open)
+                    $losByC = $losRowsByConsultant('DISDATE', $mStart, $mEnd);
                     foreach($consultants as $c){
-
-                    $formationSQL = "SELECT ADMDATE, DISDATE FROM picupatients WHERE MONTH(DISDATE) = ? AND YEAR(DISDATE) = ? AND consultant_id=? AND (current_location != 'ICU' or current_location is null)";
-                    $stmt = $mysqli->prepare($formationSQL);
-                    $stmt->bind_param('iii', $month, $ydate1, $c['member_id']);
-                    $stmt->execute();
-                    $result1 = $stmt->get_result();
-                    $dates = $result1 -> fetch_all(MYSQLI_ASSOC);
-
-                
-                    $los=array();
-
-                    foreach ($dates as $date){
-                        $timeDiff = abs(strtotime($date['ADMDATE']) - strtotime($date['DISDATE']));
-
-                        array_push($los,$timeDiff/86400);
-
+                        array_push($label, $c['full_name']);
+                        array_push($chartdata, $losAverage($losByC[(int) $c['member_id']] ?? []));
                     }
-                    // var_dump($los);
-                    // $a = array_filter($los);
-                    if(count($los)) {
-                        $average = array_sum($los)/count($los);
-                    }else {
-                    $average = 0;
-                    }
-
-                    array_push($label,$c['full_name']);
-                    array_push($chartdata,$average);
-                  
-                  }
                 break;
 
             case "quarterly":
@@ -108,36 +126,14 @@ switch ($kpi){
                     $chart_title="Average Length of Stay for forth quarter " .$ydate1;
                 }
                 // by type of discharge
+                // grouped: one fetch of this quarter's discharges, bucket by consultant (averaging is identical)
+                $qStart = sprintf('%04d-%02d-01', $ydate1, ($quarter - 1) * 3 + 1);
+                $qEnd   = date('Y-m-d', strtotime($qStart . ' +3 month'));   // first day after the quarter (half-open)
+                $losByC = $losRowsByConsultant('DISDATE', $qStart, $qEnd);
                 foreach($consultants as $c){
-
-                    $formationSQL = "SELECT ADMDATE, DISDATE FROM picupatients WHERE QUARTER(DISDATE) = ? AND YEAR(DISDATE) = ? AND consultant_id=? AND (current_location != 'ICU' or current_location is null)";
-                    $stmt = $mysqli->prepare($formationSQL);
-                    $stmt->bind_param('iii', $quarter, $ydate1, $c['member_id']);
-                    $stmt->execute();
-                    $result1 = $stmt->get_result();
-                    $dates = $result1 -> fetch_all(MYSQLI_ASSOC);
-
-                
-                    $los=array();
-
-                    foreach ($dates as $date){
-                        $timeDiff = abs(strtotime($date['ADMDATE']) - strtotime($date['DISDATE']));
-
-                        array_push($los,$timeDiff/86400);
-
-                    }
-                    // var_dump($los);
-                    // $a = array_filter($los);
-                    if(count($los)) {
-                        $average = array_sum($los)/count($los);
-                    }else {
-                    $average = 0;
-                    }
-
-                    array_push($label,$c['full_name']);
-                    array_push($chartdata,$average);
-                  
-                  }
+                    array_push($label, $c['full_name']);
+                    array_push($chartdata, $losAverage($losByC[(int) $c['member_id']] ?? []));
+                }
                
             break;
             }
@@ -239,41 +235,37 @@ switch ($kpi){
                       $quarter=4;
                       $chart_title="72 hours Readmissions for forth quarter " .$ydate1;
                   }
-                  foreach($consultants as $c){
-                          
-                    /////////////////////
-                        // readmissions
-                    //////////////////////////
-                    // Sargable quarter range so the ADMDATE index is usable (was QUARTER()/YEAR()).
-                    $qStart = sprintf('%04d-%02d-01', $ydate1, ($quarter - 1) * 3 + 1);
-                    $qEnd   = date('Y-m-t', strtotime($qStart . ' +2 month'));
-                    $formationSQL = "SELECT consultant_id,ID, MRN, ADMDATE FROM picupatients WHERE ADMDATE BETWEEN ? AND ?";
-                    $stmt = $mysqli->prepare($formationSQL);
-                    $stmt->bind_param('ss', $qStart, $qEnd);
-                    $stmt->execute();
-                    $result1 = $stmt->get_result();
-                    $admitted_patients = $result1 -> fetch_all(MYSQLI_ASSOC);
+                  // fetch-once + guarded subquery + count-per-consultant (mirrors the monthly path above).
+                  // Was an N-consultants x M-patients loop that re-fetched the quarter per consultant
+                  // and dereferenced a null row on every miss -> hundreds of thousands of PHP warnings
+                  // and a non-deterministic crash. Same window, same subquery, same attribution (the
+                  // prior record's consultant_id) -> identical per-consultant counts, now fast + clean.
+                  $qStart = sprintf('%04d-%02d-01', $ydate1, ($quarter - 1) * 3 + 1);
+                  $qEnd   = date('Y-m-t', strtotime($qStart . ' +2 month'));
+                  $formationSQL = "SELECT consultant_id,ID, MRN, ADMDATE FROM picupatients WHERE ADMDATE BETWEEN ? AND ?";
+                  $stmt = $mysqli->prepare($formationSQL);
+                  $stmt->bind_param('ss', $qStart, $qEnd);
+                  $stmt->execute();
+                  $admitted_patients = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
-                    $readmission_count=0;
-                    // echo $date1 ."</br>";
-                    $formationSQL = "SELECT * FROM picupatients WHERE DISDATE + INTERVAL 3 DAY >=? AND ID < ?  AND MRN=? AND (trans_discharge = 'discharge from ICU' or trans_discharge='discharge from ward' or trans_discharge IS NULL) LIMIT 1";
-                    $stmt = $mysqli->prepare($formationSQL);
-                    foreach ($admitted_patients as $s){
-                    $stmt->bind_param('sis', $s['ADMDATE'], $s['ID'], $s['MRN']);
-                    $stmt->execute();
-                    $result1 = $stmt->get_result();
-                    $recentadmission = $result1 -> fetch_array(MYSQLI_ASSOC);
-
-                   if ($c['member_id'] == $recentadmission['consultant_id']){
-                    $readmission_count=$readmission_count+1;
-                    // var_dump($recentadmission);
+                  $readmissions = [];
+                  $formationSQL = "SELECT * FROM picupatients WHERE DISDATE + INTERVAL 3 DAY >=? AND ID < ?  AND MRN=? AND (trans_discharge = 'discharge from ICU' or trans_discharge='discharge from ward' or trans_discharge IS NULL) LIMIT 1";
+                  $stmt = $mysqli->prepare($formationSQL);
+                  foreach ($admitted_patients as $s){
+                      $stmt->bind_param('sis', $s['ADMDATE'], $s['ID'], $s['MRN']);
+                      $stmt->execute();
+                      $recentadmission = $stmt->get_result()->fetch_array(MYSQLI_ASSOC);
+                      if ($recentadmission) { $readmissions[] = $recentadmission; }
                   }
-                    }
 
-                  array_push($label,$c['full_name']);
-                  array_push($chartdata,$readmission_count);
-                
-                }
+                  foreach($consultants as $c){
+                      $readmission_count = 0;
+                      foreach ($readmissions as $recentadmission) {
+                          if ($c['member_id'] == $recentadmission['consultant_id']) { $readmission_count++; }
+                      }
+                      array_push($label,$c['full_name']);
+                      array_push($chartdata,$readmission_count);
+                  }
                  
               break;
               }
@@ -292,79 +284,40 @@ switch ($kpi){
             case 'daily':
                 $chart_title="Admissions / Consultations for "  .$s_date;
                 // var_dump($consultants);
+                // grouped: 4 GROUP BY-consultant counts over the single day (= half-open [day, day+1))
+                $aStart = $s_date;
+                $aEnd   = date('Y-m-d', strtotime($s_date . ' +1 day'));
+                $admMap = $countByConsultant('picupatients', 'ADMDATE', $aStart, $aEnd, $nonIcu);
+                $disMap = $countByConsultant('picupatients', 'DISDATE', $aStart, $aEnd, $nonIcu);
+                $conMap = $countByConsultant('consultations', 'consultation_date', $aStart, $aEnd);
+                $sgnMap = $countByConsultant('consultations', 'signoff_date', $aStart, $aEnd);
                 foreach($consultants as $c){
-                    $formationSQL = "SELECT * FROM picupatients WHERE ADMDATE = ?  AND consultant_id=? AND (current_location != 'ICU' or current_location is null)";
-                    $stmt = $mysqli->prepare($formationSQL);
-                    $stmt->bind_param('si', $s_date, $c['member_id']);
-                    $stmt->execute();
-                    $result1 = $stmt->get_result();
-                    $admittedpcount = mysqli_num_rows($result1);
-
-                    $formationSQL = "SELECT * FROM picupatients WHERE DISDATE = ? AND consultant_id=? AND (current_location != 'ICU' or current_location is null)";
-                    $stmt = $mysqli->prepare($formationSQL);
-                    $stmt->bind_param('si', $s_date, $c['member_id']);
-                    $stmt->execute();
-                    $result1 = $stmt->get_result();
-                    $dischargedpcount = mysqli_num_rows($result1);
-
-                    $formationSQL = "SELECT * FROM consultations WHERE consultation_date = ?  AND consultant_id=? ";
-                    $stmt = $mysqli->prepare($formationSQL);
-                    $stmt->bind_param('si', $s_date, $c['member_id']);
-                    $stmt->execute();
-                    $result1 = $stmt->get_result();
-                    $newconsultscount = mysqli_num_rows($result1);
-
-                    $formationSQL = "SELECT * FROM consultations WHERE signoff_date = ?  AND consultant_id=? ";
-                    $stmt = $mysqli->prepare($formationSQL);
-                    $stmt->bind_param('si', $s_date, $c['member_id']);
-                    $stmt->execute();
-                    $result1 = $stmt->get_result();
-                    $signedoffcount = mysqli_num_rows($result1);
-            
+                    $cid = (int) $c['member_id'];
                     array_push($label,$c['full_name']);
-                    array_push($admissions,$admittedpcount);
-                    array_push($discharges,$dischargedpcount);
-                    array_push($newconsults,$newconsultscount);
-                    array_push($signedoff,$signedoffcount);
+                    array_push($admissions, $admMap[$cid] ?? 0);
+                    array_push($discharges, $disMap[$cid] ?? 0);
+                    array_push($newconsults, $conMap[$cid] ?? 0);
+                    array_push($signedoff, $sgnMap[$cid] ?? 0);
                 }
 
                 break;
             case 'monthly':
                                  
                     $chart_title="Admissions / Consultations for " . $mdate1_name . " " . $ydate1; 
+                    // grouped: 4 GROUP BY-consultant counts over the month (= half-open [first, next-first))
+                    $mStart = sprintf('%04d-%02d-01', $ydate1, $month);
+                    $mEnd   = date('Y-m-d', strtotime($mStart . ' +1 month'));
+                    $admMap = $countByConsultant('picupatients', 'ADMDATE', $mStart, $mEnd, $nonIcu);
+                    $disMap = $countByConsultant('picupatients', 'DISDATE', $mStart, $mEnd, $nonIcu);
+                    $conMap = $countByConsultant('consultations', 'consultation_date', $mStart, $mEnd);
+                    $sgnMap = $countByConsultant('consultations', 'signoff_date', $mStart, $mEnd);
                     foreach($consultants as $c){
-                        $formationSQL = "SELECT * FROM picupatients WHERE MONTH(ADMDATE) = ? AND YEAR(ADMDATE) = ? AND consultant_id=? AND (current_location != 'ICU' or current_location is null)";
-                        $stmt = $mysqli->prepare($formationSQL);
-                        $stmt->bind_param('iii', $month, $ydate1, $c['member_id']);
-                        $stmt->execute();
-                        $result1 = $stmt->get_result();
-                        $admittedpcount = mysqli_num_rows($result1);
-                        $formationSQL = "SELECT * FROM picupatients WHERE MONTH(DISDATE) = ? AND YEAR(DISDATE) = ? AND consultant_id=? AND (current_location != 'ICU' or current_location is null)";
-                        $stmt = $mysqli->prepare($formationSQL);
-                        $stmt->bind_param('iii', $month, $ydate1, $c['member_id']);
-                        $stmt->execute();
-                        $result1 = $stmt->get_result();
-                        $dischargedpcount = mysqli_num_rows($result1);
-
-                        $formationSQL = "SELECT * FROM consultations WHERE MONTH(consultation_date) = ? AND YEAR(consultation_date) = ?  AND consultant_id=? ";
-                        $stmt = $mysqli->prepare($formationSQL);
-                        $stmt->bind_param('iii', $month, $ydate1, $c['member_id']);
-                        $stmt->execute();
-                        $result1 = $stmt->get_result();
-                        $newconsultscount = mysqli_num_rows($result1);
-
-                        $formationSQL = "SELECT * FROM consultations WHERE MONTH(signoff_date) = ? AND YEAR(signoff_date) = ?  AND consultant_id=? ";
-                        $stmt = $mysqli->prepare($formationSQL);
-                        $stmt->bind_param('iii', $month, $ydate1, $c['member_id']);
-                        $stmt->execute();
-                        $result1 = $stmt->get_result();
-                        $signedoffcount = mysqli_num_rows($result1);
-                
+                        $cid = (int) $c['member_id'];
                         array_push($label,$c['full_name']);
-                        array_push($admissions,$admittedpcount);
-                        array_push($discharges,$dischargedpcount);
-                        array_push($newconsults,$newconsultscount);
-                        array_push($signedoff,$signedoffcount);
+                        array_push($admissions, $admMap[$cid] ?? 0);
+                        array_push($discharges, $disMap[$cid] ?? 0);
+                        array_push($newconsults, $conMap[$cid] ?? 0);
+                        array_push($signedoff, $sgnMap[$cid] ?? 0);
                     }
              
 
@@ -387,39 +340,20 @@ switch ($kpi){
                 }
       
               
+                    // grouped: 4 GROUP BY-consultant counts over the quarter (= half-open [q-first, +3 months))
+                    $qStart = sprintf('%04d-%02d-01', $ydate1, ($quarter - 1) * 3 + 1);
+                    $qEnd   = date('Y-m-d', strtotime($qStart . ' +3 month'));
+                    $admMap = $countByConsultant('picupatients', 'ADMDATE', $qStart, $qEnd, $nonIcu);
+                    $disMap = $countByConsultant('picupatients', 'DISDATE', $qStart, $qEnd, $nonIcu);
+                    $conMap = $countByConsultant('consultations', 'consultation_date', $qStart, $qEnd);
+                    $sgnMap = $countByConsultant('consultations', 'signoff_date', $qStart, $qEnd);
                     foreach($consultants as $c){
-                        $formationSQL = "SELECT * FROM picupatients WHERE QUARTER(ADMDATE) = ? AND YEAR(ADMDATE) = ? AND consultant_id=? AND (current_location != 'ICU' or current_location is null)";
-                        $stmt = $mysqli->prepare($formationSQL);
-                        $stmt->bind_param('iii', $quarter, $ydate1, $c['member_id']);
-                        $stmt->execute();
-                        $result1 = $stmt->get_result();
-                        $admittedpcount = mysqli_num_rows($result1);
-                        $formationSQL = "SELECT * FROM picupatients WHERE QUARTER(DISDATE) = ? AND YEAR(DISDATE) = ? AND consultant_id=? AND (current_location != 'ICU' or current_location is null)";
-                        $stmt = $mysqli->prepare($formationSQL);
-                        $stmt->bind_param('iii', $quarter, $ydate1, $c['member_id']);
-                        $stmt->execute();
-                        $result1 = $stmt->get_result();
-                        $dischargedpcount = mysqli_num_rows($result1);
-
-                        $formationSQL = "SELECT * FROM consultations WHERE QUARTER(consultation_date) = ? AND YEAR(consultation_date) = ?  AND consultant_id=? ";
-                        $stmt = $mysqli->prepare($formationSQL);
-                        $stmt->bind_param('iii', $quarter, $ydate1, $c['member_id']);
-                        $stmt->execute();
-                        $result1 = $stmt->get_result();
-                        $newconsultscount = mysqli_num_rows($result1);
-
-                        $formationSQL = "SELECT * FROM consultations WHERE QUARTER(signoff_date) = ? AND YEAR(signoff_date) = ?  AND consultant_id=? ";
-                        $stmt = $mysqli->prepare($formationSQL);
-                        $stmt->bind_param('iii', $quarter, $ydate1, $c['member_id']);
-                        $stmt->execute();
-                        $result1 = $stmt->get_result();
-                        $signedoffcount = mysqli_num_rows($result1);
-                
+                        $cid = (int) $c['member_id'];
                         array_push($label,$c['full_name']);
-                        array_push($admissions,$admittedpcount);
-                        array_push($discharges,$dischargedpcount);
-                        array_push($newconsults,$newconsultscount);
-                        array_push($signedoff,$signedoffcount);
+                        array_push($admissions, $admMap[$cid] ?? 0);
+                        array_push($discharges, $disMap[$cid] ?? 0);
+                        array_push($newconsults, $conMap[$cid] ?? 0);
+                        array_push($signedoff, $sgnMap[$cid] ?? 0);
                     }
             break;
             }

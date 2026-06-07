@@ -21,7 +21,14 @@
     Proven byte-identical (`time1__*` match `before`). Commit `5679057`.
   - [ ] kpis.php — **already grouped** in an earlier batch (`fetchCounts()` = 1 `GROUP BY` query
     per metric, sargable `BETWEEN` filter). Verify-only, no rewrite needed.
-  - [ ] charts1.php · charts.php
+  - [x] charts1.php — per-consultant KPI charts. LOS (3 intervals): N per-consultant fetches → 1
+    grouped fetch + PHP bucketing (averaging unchanged; day-diffs are exact integers in Asia/Riyadh
+    so order-independent). Admission (3 intervals): 4N queries → 4 `GROUP BY consultant_id` counts.
+    Readmission/quarterly: the N×(1+M) loop that crashed (warning storm) → fetch-once + guarded
+    subquery + count (mirrors the monthly path) — same window/subquery/attribution. 8 deterministic
+    cases byte-identical vs `before`; the (formerly 11 MB, non-deterministic) quarterly now a clean
+    5.5 KB page whose chartdata matches two independent ground-truth recomputations (loop + set-based).
+  - [ ] charts.php (fix $all_counts1; collapse per-consultant loops)
   - [ ] a4.php / a4-monthly.php (+ cache + merge twins + un-hide KPI page)
 
 ### Bugs found during validation (fix as part of the relevant rewrite)
@@ -66,3 +73,5 @@
 | (Phase 0) baseline `before` | 21 cases captured | — | n/a |
 | (Phase 0.1) harness self-test | `before` | `selftest` (same code) | ✓ 20/20 identical, 1 skip |
 | time1.php grouped-SQL rewrite | `before` | `after` | ✓ `time1__*` identical (commit 5679057) |
+| charts1.php LOS + admission rewrite | `before` | `after` | ✓ 20/20 identical (1 skip) |
+| charts1.php readmission/quarterly fix | ground-truth | endpoint chartdata | ✓ matches loop **and** set-based (sum 49) |
