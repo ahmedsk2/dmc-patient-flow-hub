@@ -18,9 +18,9 @@ _Last updated: 2026-06-06_
 |---|---|---|
 | Review & planning (read-only) | 4 / 4 | ✅ complete |
 | Phase 0 — Containment | 3 ✅ · 1 🔄 · 3 ⏸️ ops | 🔄 in progress |
-| Phase 1 — Critical security & data integrity | 14 ✅ · 1 ⬜ (of 16) | ✅ done (1 ⬜ = team-input permission model) |
+| Phase 1 — Critical security & data integrity | 16 ✅ (of 16) | ✅ done (permission model re-reviewed + tightened 2026-06-07; all runtime-verified) |
 | Phase 2 — Stabilize | 5 ✅ · 1 ❌(Q9) · 1 🔄 · 1 ⬜ (of 8) | 🔄 in progress |
-| Phase 3 — Refactor + UI/UX | 1 🔄 · 5 ⬜ | in progress |
+| Phase 3 — Refactor + UI/UX | UI/UX ✅ · CSP/eval ✅ · 5 ⬜ (P2/P3) | UI/UX done; remainder = re-platform-adjacent / P3 |
 | Phase 4 — Re-platform (decision-gated) | 0 / 2 | not started |
 | Phase 5 — Nice-to-haves | 0 / 3 | not started |
 
@@ -214,12 +214,12 @@ _(Add new notes/decisions above this line as we go.)_
 
 ### Phase 1 — Critical security & data integrity (P1 — ~4-6 wks)
 - ✅ **Central server-side auth guard + fine-grained authorization** — `guard.php` authn on all 42 action endpoints (Batch 2); **role + capability + object-ownership enforcement** server-side on clinical writes/renderers and page handlers (Batches 24–26): clinical roles `[0,2,3,4]`, capability flags 1:1 with the UI, and `require_patient_access()`/`require_consultation_access()` (Admin/Can-Manage/own-consultant) on discharge/transfer/reverse/sign-off. Runtime-tested role matrix. — (S1 / SEC-01,04,07-11,20,21)
-- ✅ **Re-confirm the real role/capability permission model** — **CONFIRMED with the maintainer 2026-06-06.** All four code-affecting rows verified as intended → **no changes needed** (Consultant sees own-only; inline edits open to all clinical roles; discharge/transfer/sign-off = own-consultant/Can-Manage/Admin; delete = Admin only). Recorded in [`PERMISSION-MATRIX.md`](PERMISSION-MATRIX.md) §5. (Only operational follow-up: confirm the per-user capability-flag grants in prod match intent — a data check.) — (NEW)
+- ✅ **Re-confirm the real role/capability permission model** — confirmed 2026-06-06, then **deeper re-review with the maintainer 2026-06-07** which DID apply three tightenings (commit `6972aac`, runtime-verified): **Q1** assign-to-consultant now needs Can-Assign; **Q2** bulk change-consultant now needs Can-Assign/Can-Manage (new `require_any_capability`); **Q4** Observer (pos 5) now has a read-only board view (`$access_PICU_view`). Q3 (residents keep consultation access) + Q5 (residents can't discharge without Can-Manage) confirmed as-is. Discharge/transfer/sign-off = own-consultant/Can-Manage/Admin; delete = Admin only. (Only operational follow-up: confirm per-user capability-flag grants in prod match intent — a data check.) — (NEW)
 - ✅ Convert **all queries to prepared statements** — account cluster (Batch 3) + all subdir endpoints (Batch 4) + all page files (Batch 5). Repo-wide grep confirms **0 executed interpolated queries** remain. (S2,C2 / SEC-07-13). ⏳ needs runtime test on server.
 - ✅ **Encode all output + CSP** — ~250+ DB/request sinks wrapped (htmlspecialchars/json_encode) across all rendering files (Batch 6; SEC-18); **`eval()` removed** from `dashboard.php` + baseline **CSP** added in `.htaccess` with no `unsafe-eval` (Batch 26b; SEC-26) — (S3,S10 / SEC-18,26)
 - ✅ Block **privilege escalation** — `register.php` rejects position 0 + creates inactive accounts; user-mgmt admin-gated (Batches 2–3) — (S4 / SEC-02,03)
 - ✅ Fix **password reset** — public SQLi removed + account flows parameterized (Batch 3); random single-use 1-hour **token redesign** (`reset_tokens.php` + migration 02 `password_resets`, SHA-256-hashed at rest) + widened `member_password` → varchar(255) (Batch 11) — (S5 / SEC-13,14,30). ⏳ run migration 02 at deploy.
-- ✅ **Session hardening** (B7) + **CSRF tokens** complete: csrf.php + global ajaxSend header + `csrf_verify()` on 16 AJAX endpoints (B9) + `csrf_field()`/verify on all real forms — account & page (B10); pairing grep-verified. ⏸️ `search.php` undo has no form (SameSite-covered); GET actions need POST-conversion. — (S6 / SEC-19,23)
+- ✅ **Session hardening** (B7) + **CSRF tokens** complete: csrf.php + global ajaxSend header + `csrf_verify()` on 16 AJAX endpoints (B9) + `csrf_field()`/verify on all real forms — account & page (B10); pairing grep-verified. **GET→POST conversion DONE (2026-06-07):** the shuffle auto-assign + admin send-reset link are now POST + `csrf_verify()` (a GET → 419), runtime-verified. _(Only `search.php` undo remains form-less → SameSite-covered.)_ — (S6 / SEC-19,23)
 - ✅ **Externalize secrets** from source — (S7 / SEC-16,17) — done (Batch 1; live rotation is the Phase 0 ops step)
 - ✅ Add **security headers** — (S8 / SEC-27) — HSTS/nosniff/X-Frame-Options/Referrer-Policy/Permissions-Policy added in `.htaccess` (Batch 1/20); **CSP added** (Batch 26b) once `eval()` was removed (S3/S10)
 - ✅ Removed live `var_dump` / `$_POST`-dump / `error_log(print_r)` / forced `display_errors` leaks + set `display_errors=Off` (Batch 7, SEC-24); replaced **PHPExcel → dependency-free `xlsx-writer.php`** (SEC-25; ~4.9 MB EOL lib removed) — (S9 / SEC-24,25)
@@ -243,8 +243,7 @@ _(Add new notes/decisions above this line as we go.)_
 - ⬜ Introduce **layering + PHPUnit**; extract helpers/partials — (C1,C3 / ARCH-01,03,04) — P2
 - ⬜ **De-duplicate** lists/census/ICD-10 on ONE "active" definition — (X2 / SIMP-02, CLIN-08) — P2
 - ⬜ **Statistics engine**: grouped SQL + caching; merge A4 twins — (X3,P1,P4 / SIMP-03,PERF-01) — P2
-- 🔄 **UI/UX overhaul**: responsive/tablet, a11y, data-entry, status pipeline — (U2,U4,W5) — P2  
-  _In progress (2026-06-07): responsive card grid + display bug fix committed (see note above); tablet test pending_
+- ✅ **UI/UX overhaul — responsive/tablet + a11y (U2,U4,W5)** — DONE & runtime-verified (2026-06-07). The responsive card grid + modal/filter layout (UI-01..08) is **wired via `css/app.css`** — root-caused that it had NEVER loaded (app pages use a combined bundle, not `main.css`) — and verified in-browser at desktop/tablet/phone; LOS-band a11y label done (U1, above). _Remaining (design-gated, P2/P3): the broader data-entry / status-pipeline redesign._
 - ⬜ **Server-side PDF** reports; un-hide KPI page; vendor CDNs locally — (U3 / UI-05,06,07,08) — P2
 - 🔄 Normalize **diagnoses/MRN/specialty** schema; add FKs — **FKs DONE** (migration 04, validated); deeper normalization (diagnosis join-table vs JSON, MRN-as-patient-entity, specialty dedup) still a P2/P3 redesign — (D2,D4,D5)
 
@@ -265,7 +264,7 @@ _Resolved in the Q&A round (see top note): internet-facing + HIPAA-equivalent & 
 
 **Still open:**
 - ✅ **Permission model — CONFIRMED 2026-06-06** (all code-affecting rows intended; no changes). See [`PERMISSION-MATRIX.md`](PERMISSION-MATRIX.md) §5. Only operational follow-up: verify per-user capability-flag grants in prod.
-- ⏸️ **UI/UX + accessibility direction (U1/U2/U4/W5).** Concrete first item ready to implement once you confirm: the **LOS band is colour-only** (green/yellow/red) on the admission-duration cell across **9 board pages** — proposed fix is to add a short text/icon ("Short / Average / Long stay", derived from `short_los`/`long_los`) so it's not colour-dependent. Also: responsive/tablet layout, the broader status-pipeline redesign. These need your design preferences (labels, icons, scope) before I touch the main clinical screens.
+- ✅ **UI/UX + accessibility — responsive/tablet + LOS-band label DONE** (2026-06-07, runtime-verified). _Remaining (design-gated, P2/P3): the broader status-pipeline / data-entry redesign needs your design direction (labels, icons, scope) before touching the main clinical screens._
 - ⏸️ **Confirm the time1.php cross-year fix.** The Monthly/Quarterly **Overview** chart's consultation bars were counting all years for a month/quarter; they now show the **selected period only** (lower, correct numbers). Flagging since it changes a displayed figure.
 - ⏸️ **Backup/retention policy**; who operates the app long-term (hospital vs white-label vendor).
 - ✅ **Charset normalization + FKs — drafted & validated** (migrations 04/05); run in a maintenance window after backup (see DEPLOY.md §3). Only remaining DB decision: review/delete the spam member accounts (open-registration era) before running 05.
