@@ -38,6 +38,21 @@ if (!empty($_POST["login"])) {
 
     if ($isAuthenticated) {
         if ($active == 1) {
+            // MFA opt-in: if this user has enrolled a TOTP secret, the password is only the
+            // FIRST factor — hand off to mfa-verify.php and do NOT establish the real session
+            // (member_id/position/name) until the second factor checks out. Users who have not
+            // enrolled fall straight through to the unchanged login below, so this is a no-op
+            // for everyone until they opt in.
+            if (!empty($user[0]["mfa_secret"])) {
+                session_regenerate_id(true);
+                $_SESSION["mfa_pending"] = [
+                    "member_id"   => $user[0]["member_id"],
+                    "position"    => $user[0]["position"],
+                    "member_name" => $user[0]["member_name"],
+                    "ts"          => time(),
+                ];
+                $util->redirect("mfa-verify.php");
+            }
             session_regenerate_id(true); // prevent session fixation: new id on login
             $_SESSION["member_id"] = $user[0]["member_id"];
             $_SESSION["position"] = $user[0]["position"];

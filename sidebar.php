@@ -155,6 +155,7 @@ $position = $_SESSION['position'];
         <div class="info">
           <p style="color: white;font-weight: bolder;text-transform: capitalize;font-size: large;" class="d-block"><?php echo $username1; ?></p>
           <a href="profile.php" class="d-block">Edit Profile</a>
+          <a href="mfa-setup.php" class="d-block" style="font-size: .85rem;"><i class="fas fa-shield-alt"></i> Two-factor auth</a>
         </div>
       </div>
       <!-- Sidebar Menu -->
