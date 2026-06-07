@@ -5,7 +5,9 @@
  * Enroll: generate a secret (held in the session until confirmed) -> user scans/keys it into an
  * authenticator app -> confirms with a live code -> we encrypt + persist it and show one-time
  * recovery codes. Disable: requires a current code (so a hijacked session without the device
- * cannot turn MFA off). No external dependency; QR is provided as an otpauth:// URI + manual key.
+ * cannot turn MFA off). The QR is rendered client-side from the otpauth:// URI by the vendored
+ * MIT qrcodejs lib (the secret is already on this server-rendered page — nothing new leaves it);
+ * the manual Base32 key is shown as a fallback for apps without a camera.
  */
 session_start();
 require_once __DIR__ . '/csrf.php';
@@ -144,8 +146,9 @@ $h = fn($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
             <?php } elseif (!$errors) { ?>
                 <ol style="font-size:.92rem;padding-left:1.1rem;">
                     <li>Install an authenticator app (Google Authenticator, Authy, Microsoft Authenticator…).</li>
-                    <li>Add an account using this key (or the link below):</li>
+                    <li>Scan this QR code with it (or enter the key manually below):</li>
                 </ol>
+                <div id="mfa-qr" style="display:flex;justify-content:center;margin-bottom:.6rem;"></div>
                 <div class="text-center mb-2">
                     <div class="text-muted" style="font-size:.8rem;">Manual key</div>
                     <code style="font-size:1.1rem;letter-spacing:1px;word-break:break-all;"><?php echo $h($setupSecret); ?></code>
@@ -163,6 +166,13 @@ $h = fn($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
                     <button type="submit" name="confirm_enroll" value="1" class="btn btn-primary btn-block">Enable MFA</button>
                 </form>
                 <div class="mt-3 text-center"><a href="dashboard.php">Cancel</a></div>
+                <script src="vendor/qrcodejs/qrcode.min.js"></script>
+                <script>
+                  new QRCode(document.getElementById("mfa-qr"), {
+                    text: <?php echo json_encode($otpauth); ?>,
+                    width: 176, height: 176, correctLevel: QRCode.CorrectLevel.M
+                  });
+                </script>
             <?php } else { ?>
                 <div class="text-center"><a href="dashboard.php">Back to dashboard</a></div>
             <?php } ?>
