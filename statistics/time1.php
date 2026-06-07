@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/../guard.php'; require_role([0]);
- 
+
 session_start();
 date_default_timezone_set('Asia/Riyadh');
 $today=date("Y-m-d");
@@ -21,163 +21,97 @@ $discharges=array();
 $newconsults=array();
 $signedoff=array();
 
+// Grouped-SQL engine: run ONE "COUNT(*) ... GROUP BY <bucket>" query per metric over the whole
+// window, then look up each period's count from a map — instead of one query per period
+// (was up to 31x4=124 daily / 12x4=48 monthly / 4x4=16 quarterly separate queries).
+// The predicates are unchanged, so the per-period counts are identical (proven byte-for-byte
+// by tools/stats_validate.php: capture before -> this rewrite -> capture after -> compare).
+$icuFilter = " AND (current_location != 'ICU' or current_location is null)";
+$groupCount = function ($table, $col, $bucketExpr, $start, $end, $extra) use ($mysqli) {
+    $sql = "SELECT $bucketExpr AS b, COUNT(*) AS c FROM $table WHERE $col >= ? AND $col < ?$extra GROUP BY b";
+    $stmt = $mysqli->prepare($sql);
+    $stmt->bind_param('ss', $start, $end);
+    $stmt->execute();
+    $r = $stmt->get_result();
+    $m = [];
+    while ($row = $r->fetch_assoc()) { $m[(string) $row['b']] = (int) $row['c']; }
+    return $m;
+};
+
 if ($time == "daily"){
     $title ='Daily Overview';
-$date=new DateTime();
-$n=0;
-while($n < 31){
-  $date1 = $date->format('Y-m-d');
+    // 31 days: today back to today-30 (same as the old loop). Bucket = the date itself.
+    $days = [];
+    $d = new DateTime();
+    for ($n = 0; $n < 31; $n++) { $days[] = $d->format('Y-m-d'); $d->modify('-1 day'); }
+    $winStart = end($days);                                            // earliest day
+    $winEnd   = date('Y-m-d', strtotime(reset($days) . ' +1 day'));    // day after the latest (half-open)
 
-  $formationSQL = "SELECT * FROM picupatients WHERE ADMDATE = ? AND (current_location != 'ICU' or current_location is null)";
-  $stmt = $mysqli->prepare($formationSQL);
-  $stmt->bind_param('s', $date1);
-  $stmt->execute();
-  $result1 = $stmt->get_result();
-  $admittedpcount = mysqli_num_rows($result1);
+    $admMap = $groupCount('picupatients', 'ADMDATE', 'ADMDATE', $winStart, $winEnd, $icuFilter);
+    $disMap = $groupCount('picupatients', 'DISDATE', 'DISDATE', $winStart, $winEnd, $icuFilter);
+    $conMap = $groupCount('consultations', 'consultation_date', 'consultation_date', $winStart, $winEnd, '');
+    $sgnMap = $groupCount('consultations', 'signoff_date', 'signoff_date', $winStart, $winEnd, '');
 
-  $formationSQL = "SELECT * FROM picupatients WHERE DISDATE = ? AND (current_location != 'ICU' or current_location is null)";
-  $stmt = $mysqli->prepare($formationSQL);
-  $stmt->bind_param('s', $date1);
-  $stmt->execute();
-  $result1 = $stmt->get_result();
-  $dischargedpcount = mysqli_num_rows($result1);
-
-  $formationSQL = "SELECT * FROM consultations WHERE consultation_date = ?";
-  $stmt = $mysqli->prepare($formationSQL);
-  $stmt->bind_param('s', $date1);
-  $stmt->execute();
-  $result1 = $stmt->get_result();
-  $newconsultscount = mysqli_num_rows($result1);
-
-  $formationSQL = "SELECT * FROM consultations WHERE signoff_date = ?";
-  $stmt = $mysqli->prepare($formationSQL);
-  $stmt->bind_param('s', $date1);
-  $stmt->execute();
-  $result1 = $stmt->get_result();
-  $signedoffcount = mysqli_num_rows($result1);
-
-  array_push($label,$date1);
-  array_push($admissions,$admittedpcount);
-  array_push($discharges,$dischargedpcount);
-  array_push($newconsults,$newconsultscount);
-  array_push($signedoff,$signedoffcount);
-$n++;
-$date->modify("-1 day");
-
-}
-} elseif ($time == "monthly"){
- $title ='Monthly Overview';
-    $date=new DateTime();
-    $n=0;
-    while($n < 12){
-      $date1 = $date->format('Y-m-d');
-      $mdate1=date("m",strtotime($date1));
-      $ydate1=date("Y",strtotime($date1));
-      $dateObj   = DateTime::createFromFormat('!m', $mdate1);
-      $monthName = $dateObj->format('F'); // March
-
-      // Sargable half-open month range [first-of-month, first-of-next-month) so the indexes on
-      // ADMDATE/DISDATE are usable (was MONTH()/YEAR() wrapping, which defeats them). Proven
-      // result-identical to the old MONTH+YEAR predicate on DATE columns.
-      $rangeStart = sprintf('%04d-%02d-01', $ydate1, $mdate1);
-      $rangeEnd   = date('Y-m-01', strtotime($rangeStart . ' +1 month'));
-
-      $formationSQL = "SELECT * FROM picupatients WHERE ADMDATE >= ? AND ADMDATE < ? AND (current_location != 'ICU' or current_location is null)";
-      $stmt = $mysqli->prepare($formationSQL);
-      $stmt->bind_param('ss', $rangeStart, $rangeEnd);
-      $stmt->execute();
-      $result1 = $stmt->get_result();
-      $admittedpcount = mysqli_num_rows($result1);
-
-      $formationSQL = "SELECT * FROM picupatients WHERE DISDATE >= ? AND DISDATE < ? AND (current_location != 'ICU' or current_location is null)";
-      $stmt = $mysqli->prepare($formationSQL);
-      $stmt->bind_param('ss', $rangeStart, $rangeEnd);
-      $stmt->execute();
-      $result1 = $stmt->get_result();
-      $dischargedpcount = mysqli_num_rows($result1);
-
-      // Consultations were previously MONTH-only (no year) -> they counted that month across ALL
-      // years. Now scoped to the same month+year as the admissions/discharges series (cross-year
-      // fix) and sargable.
-      $formationSQL = "SELECT * FROM consultations WHERE consultation_date >= ? AND consultation_date < ?";
-      $stmt = $mysqli->prepare($formationSQL);
-      $stmt->bind_param('ss', $rangeStart, $rangeEnd);
-      $stmt->execute();
-      $result1 = $stmt->get_result();
-      $newconsultscount = mysqli_num_rows($result1);
-
-      $formationSQL = "SELECT * FROM consultations WHERE signoff_date >= ? AND signoff_date < ?";
-      $stmt = $mysqli->prepare($formationSQL);
-      $stmt->bind_param('ss', $rangeStart, $rangeEnd);
-      $stmt->execute();
-      $result1 = $stmt->get_result();
-      $signedoffcount = mysqli_num_rows($result1);
-    // var_dump($admittedpcount);
-      array_push($label,$monthName);
-      array_push($admissions,$admittedpcount);
-      array_push($discharges,$dischargedpcount);
-      array_push($newconsults,$newconsultscount);
-      array_push($signedoff,$signedoffcount);
-    $n++;
-    $date->modify("-1 month");
-    
+    foreach ($days as $date1) {
+        array_push($label, $date1);
+        array_push($admissions, $admMap[$date1] ?? 0);
+        array_push($discharges, $disMap[$date1] ?? 0);
+        array_push($newconsults, $conMap[$date1] ?? 0);
+        array_push($signedoff, $sgnMap[$date1] ?? 0);
     }
-    
-    
+} elseif ($time == "monthly"){
+    $title ='Monthly Overview';
+    // 12 months ending this month (same loop as before). Bucket = calendar month (Y-m).
+    $months = [];
+    $d = new DateTime();
+    for ($n = 0; $n < 12; $n++) {
+        $months[] = [
+            'key'   => $d->format('Y-m'),
+            'name'  => DateTime::createFromFormat('!m', $d->format('m'))->format('F'),
+            'start' => $d->format('Y-m-01'),
+        ];
+        $d->modify('-1 month');
+    }
+    $starts   = array_column($months, 'start');
+    $winStart = min($starts);                                          // earliest month start
+    $winEnd   = date('Y-m-01', strtotime(max($starts) . ' +1 month')); // first of month after the latest
+
+    $admMap = $groupCount('picupatients', 'ADMDATE', "DATE_FORMAT(ADMDATE,'%Y-%m')", $winStart, $winEnd, $icuFilter);
+    $disMap = $groupCount('picupatients', 'DISDATE', "DATE_FORMAT(DISDATE,'%Y-%m')", $winStart, $winEnd, $icuFilter);
+    $conMap = $groupCount('consultations', 'consultation_date', "DATE_FORMAT(consultation_date,'%Y-%m')", $winStart, $winEnd, '');
+    $sgnMap = $groupCount('consultations', 'signoff_date', "DATE_FORMAT(signoff_date,'%Y-%m')", $winStart, $winEnd, '');
+
+    foreach ($months as $mo) {
+        array_push($label, $mo['name']);
+        array_push($admissions, $admMap[$mo['key']] ?? 0);
+        array_push($discharges, $disMap[$mo['key']] ?? 0);
+        array_push($newconsults, $conMap[$mo['key']] ?? 0);
+        array_push($signedoff, $sgnMap[$mo['key']] ?? 0);
+    }
 }  elseif ($time == "quarterly"){
     $title ='Quarterly Overview';
-       $date=new DateTime();
-       $n=0;
-       $quarter=4;
-       while($n < 4){
-        $date1 = $date->format('Y-m-d');
-        $ydate1=date("Y",strtotime($date1));
+    // The four quarters of the CURRENT year (the old loop did NOT advance $date, so $ydate1 stayed
+    // the current year; quarter ran 4,3,2,1). Bucket = YEAR-QUARTER over [Jan 1, next Jan 1).
+    $y        = (int) (new DateTime())->format('Y');
+    $winStart = sprintf('%04d-01-01', $y);
+    $winEnd   = sprintf('%04d-01-01', $y + 1);
 
-         // Sargable half-open quarter range [quarter-start, next-quarter-start). $quarter is 4..1.
-         $qStart = sprintf('%04d-%02d-01', $ydate1, ($quarter - 1) * 3 + 1);
-         $qEnd   = date('Y-m-01', strtotime($qStart . ' +3 month'));
+    $admMap = $groupCount('picupatients', 'ADMDATE', "CONCAT(YEAR(ADMDATE),'-',QUARTER(ADMDATE))", $winStart, $winEnd, $icuFilter);
+    $disMap = $groupCount('picupatients', 'DISDATE', "CONCAT(YEAR(DISDATE),'-',QUARTER(DISDATE))", $winStart, $winEnd, $icuFilter);
+    $conMap = $groupCount('consultations', 'consultation_date', "CONCAT(YEAR(consultation_date),'-',QUARTER(consultation_date))", $winStart, $winEnd, '');
+    $sgnMap = $groupCount('consultations', 'signoff_date', "CONCAT(YEAR(signoff_date),'-',QUARTER(signoff_date))", $winStart, $winEnd, '');
 
-         $formationSQL = "SELECT * FROM picupatients WHERE ADMDATE >= ? AND ADMDATE < ? AND (current_location != 'ICU' or current_location is null)";
-         $stmt = $mysqli->prepare($formationSQL);
-         $stmt->bind_param('ss', $qStart, $qEnd);
-         $stmt->execute();
-         $result1 = $stmt->get_result();
-         $admittedpcount = mysqli_num_rows($result1);
-
-         $formationSQL = "SELECT * FROM picupatients WHERE DISDATE >= ? AND DISDATE < ? AND (current_location != 'ICU' or current_location is null)";
-         $stmt = $mysqli->prepare($formationSQL);
-         $stmt->bind_param('ss', $qStart, $qEnd);
-         $stmt->execute();
-         $result1 = $stmt->get_result();
-         $dischargedpcount = mysqli_num_rows($result1);
-
-         // Consultations were QUARTER-only (no year) -> scoped to the displayed year now (cross-year fix) + sargable.
-         $formationSQL = "SELECT * FROM consultations WHERE consultation_date >= ? AND consultation_date < ?";
-         $stmt = $mysqli->prepare($formationSQL);
-         $stmt->bind_param('ss', $qStart, $qEnd);
-         $stmt->execute();
-         $result1 = $stmt->get_result();
-         $newconsultscount = mysqli_num_rows($result1);
-
-         $formationSQL = "SELECT * FROM consultations WHERE signoff_date >= ? AND signoff_date < ?";
-         $stmt = $mysqli->prepare($formationSQL);
-         $stmt->bind_param('ss', $qStart, $qEnd);
-         $stmt->execute();
-         $result1 = $stmt->get_result();
-         $signedoffcount = mysqli_num_rows($result1);
-       
-        //  array_push($label,$quarter);
-         array_push($admissions,$admittedpcount);
-         array_push($discharges,$dischargedpcount);
-         array_push($newconsults,$newconsultscount);
-         array_push($signedoff,$signedoffcount);
-       $n++;
-       $quarter=$quarter-1;
-       
-       }
-       $label=['Forth Quarter','Third Quarter', 'Second Quarter', 'First Quarter']  ;
-    //    array_merge($label,$quarter_label);
-   } 
+    $quarter = 4;
+    for ($n = 0; $n < 4; $n++) {
+        $key = $y . '-' . $quarter;
+        array_push($admissions, $admMap[$key] ?? 0);
+        array_push($discharges, $disMap[$key] ?? 0);
+        array_push($newconsults, $conMap[$key] ?? 0);
+        array_push($signedoff, $sgnMap[$key] ?? 0);
+        $quarter = $quarter - 1;
+    }
+    $label=['Forth Quarter','Third Quarter', 'Second Quarter', 'First Quarter']  ;
+}
 
 
 $label=array_reverse($label);
@@ -247,7 +181,7 @@ $signedoff=array_reverse($signedoff);
   const weekend =[];
   const mconfig = {
     type: 'bar',
-    
+
     data: mdata,
     options: {
       maintainAspectRatio: false,
