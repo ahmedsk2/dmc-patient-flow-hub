@@ -104,6 +104,10 @@ $h = fn($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
         <div class="card-body login-card-body">
             <p class="login-box-msg">Two-factor authentication</p>
 
+            <?php if (isset($_GET['required']) && !$enrolled) { ?>
+                <div class="alert alert-info py-2">Your organization now requires two-factor
+                    authentication. Please set it up to continue.</div>
+            <?php } ?>
             <?php if ($flash !== '') { ?>
                 <div class="alert alert-success py-2"><?php echo $h($flash); ?></div>
             <?php } ?>

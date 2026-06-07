@@ -34,6 +34,20 @@ $stmt->execute();
 $user = $stmt->get_result()->fetch_array(MYSQLI_ASSOC);
 $stmt->close();
 
+// MFA enforcement (opt-in lever; settings.mfa_enforcement: 0=off, 1=admins, 2=all active users).
+// When the policy requires this user's role to use MFA and they have NOT enrolled, force them to
+// the enrollment page. mfa-setup.php / mfa-verify.php / logout.php are standalone (they don't
+// include sidebar.php), so there's no redirect loop and enrollment stays reachable; the default
+// (0) means this never fires, so it's a no-op until an admin turns it on in the Control panel.
+$mfaPolicy = (int) ($mysqli->query("SELECT mfa_enforcement FROM settings WHERE id = 0")->fetch_assoc()['mfa_enforcement'] ?? 0);
+if ($mfaPolicy > 0 && empty($user['mfa_secret'])) {
+    $needsMfa = ($mfaPolicy === 2) || ($mfaPolicy === 1 && (int) $user['position'] === 0);
+    if ($needsMfa) {
+        header("Location: mfa-setup.php?required=1");
+        exit;
+    }
+}
+
 $username1 = $_SESSION['name'];
 $position = $_SESSION['position'];
 

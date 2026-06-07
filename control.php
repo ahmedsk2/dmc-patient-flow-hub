@@ -26,8 +26,8 @@ $specialities = fetchAllData($mysqli, "SELECT * FROM speciality");
 $settings = fetchAllData($mysqli, "SELECT * FROM settings")[0];
 
 function updateSettings($mysqli, $data) {
-    $stmt = $mysqli->prepare("UPDATE settings SET long_los=?, max_hospitalist=?, max_subs=?, min_hospitalist=?, min_subs=?, short_los=? WHERE id=0");
-    $stmt->bind_param("iiiiii", $data['long_los'], $data['max_hospitalist'], $data['max_sub'], $data['min_hospitalist'], $data['min_sub'], $data['short_los']);
+    $stmt = $mysqli->prepare("UPDATE settings SET long_los=?, max_hospitalist=?, max_subs=?, min_hospitalist=?, min_subs=?, short_los=?, mfa_enforcement=? WHERE id=0");
+    $stmt->bind_param("iiiiiii", $data['long_los'], $data['max_hospitalist'], $data['max_sub'], $data['min_hospitalist'], $data['min_sub'], $data['short_los'], $data['mfa_enforcement']);
     return $stmt->execute();
 }
 
@@ -59,7 +59,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 'min_sub' => $_POST['min_sub'],
                 'max_sub' => $_POST['max_sub'],
                 'short_los' => $_POST['short_los'],
-                'long_los' => $_POST['long_los']
+                'long_los' => $_POST['long_los'],
+                'mfa_enforcement' => (int) ($_POST['mfa_enforcement'] ?? 0)
             ];
             if (updateSettings($mysqli, $data)) {
                 $_SESSION['message'] = "Updated successfully.";
@@ -196,6 +197,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                         <div class="form-group">
                                             <label for="long_los">Long Duration of Admission More Than</label>
                                             <input class="form-control" type="text" id="long_los" name="long_los" value="<?= htmlspecialchars($settings['long_los'], ENT_QUOTES, 'UTF-8') ?>" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="mfa_enforcement"><i class="fas fa-shield-alt text-info"></i> Two-factor authentication (MFA)</label>
+                                            <?php $mfaPol = (int) ($settings['mfa_enforcement'] ?? 0); ?>
+                                            <select class="form-control" id="mfa_enforcement" name="mfa_enforcement">
+                                                <option value="0" <?= $mfaPol === 0 ? 'selected' : '' ?>>Optional (opt-in) — recommended</option>
+                                                <option value="1" <?= $mfaPol === 1 ? 'selected' : '' ?>>Required for Admins</option>
+                                                <option value="2" <?= $mfaPol === 2 ? 'selected' : '' ?>>Required for all active users</option>
+                                            </select>
+                                            <small class="text-muted">Required users who haven't enrolled are sent to set up MFA on next page load. Have recovery codes / admin reset ready before requiring everyone.</small>
                                         </div>
                                     </div>
                                 </div>
