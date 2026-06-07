@@ -33,6 +33,18 @@ $COOKIE = tempnam(sys_get_temp_dir(), 'dmcjar');
 // A representative date that sits inside the data, plus the recent A4 years.
 $DATE = getenv('DMC_STATS_DATE') ?: '2024-06-15';
 
+// Endpoints whose CURRENT (pre-rewrite) output is inherently non-deterministic and therefore
+// cannot be byte-baselined. charts1.php's readmission/quarterly path runs an
+// N-consultants x M-patients loop that also dereferences a null row every miss -> the dev server
+// renders hundreds of thousands of Xdebug warning traces and crashes at a VARIABLE point
+// (max_execution_time / memory), so the captured body differs run-to-run even with identical code.
+// `compare` skips these so they don't masquerade as real DIFFs; the rewrite makes the endpoint
+// fast + clean, and its clinical payload (per-consultant readmission counts) is then validated
+// against an independent ground-truth query rather than whole-page sha.
+$NONDETERMINISTIC = [
+    'charts1__readmission__quarterly' => 'pre-rewrite warning-storm crash is non-deterministic; validated via ground-truth',
+];
+
 /** Build the endpoint × parameter matrix that mirrors what statistics.php / allstat.php send. */
 function build_matrix($date, $withA4) {
     $m = [];
@@ -62,6 +74,21 @@ function build_matrix($date, $withA4) {
 /** Normalize a response so a same-day re-capture diffs only on real number/content changes. */
 function normalize($html) {
     // Drop volatile bits that legitimately vary between runs but aren't "the numbers":
+    //
+    // (1) Xdebug error-trace tables. When an endpoint triggers a PHP notice/warning, the dev
+    //     server's Xdebug renders an HTML "Call Stack" table whose *Time* column is wall-clock
+    //     seconds-since-start — it changes on every run and would mask real diffs. The wrapper
+    //     `<table class='xdebug-error xe-*'>...</table>` (optionally inside <font>, after <br/>)
+    //     is Xdebug-specific, so this can never match clinical content. We replace the whole
+    //     block with a stable marker: presence/position of a warning still shows up (good — a
+    //     rewrite that ADDS or MOVES a warning is flagged), only the timing jitter is removed.
+    //     When a rewrite legitimately FIXES the underlying warning the marker disappears, which
+    //     is a real, reviewable output change — exactly what the golden master should surface.
+    $html = preg_replace(
+        "#(?:<br\\s*/?>\\s*)?(?:<font[^>]*>\\s*)?<table class='xdebug-error[\\s\\S]*?</table>(?:\\s*</font>)?#i",
+        '<XDEBUG-ERROR-TRACE>',
+        $html
+    );
     $html = preg_replace('/\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/', '<TS>', $html); // timestamps
     $html = preg_replace('/\s+/', ' ', $html);                                       // whitespace
     return trim($html);
@@ -145,8 +172,13 @@ if ($cmd === 'compare') {
     if (!$ma || !$mb) { fwrite(STDERR, "missing baseline(s): need $ROOT/$a and $ROOT/$b\n"); exit(1); }
     $keys = array_unique(array_merge(array_keys($ma), array_keys($mb)));
     sort($keys);
-    $diffs = 0;
+    $diffs = 0; $skips = 0;
     foreach ($keys as $k) {
+        if (isset($NONDETERMINISTIC[$k])) {
+            $skips++;
+            echo "SKIP  $k   (non-deterministic: {$NONDETERMINISTIC[$k]})\n";
+            continue;
+        }
         $sa = $ma[$k]['sha'] ?? null; $sb = $mb[$k]['sha'] ?? null;
         if ($sa === $sb && $sa !== null) { continue; }
         $diffs++;
@@ -163,8 +195,10 @@ if ($cmd === 'compare') {
             }
         }
     }
-    echo $diffs === 0 ? "\n✓ IDENTICAL — all " . count($keys) . " cases match ($a vs $b)\n"
-                      : "\n✗ $diffs/" . count($keys) . " cases DIFFER ($a vs $b)\n";
+    $compared = count($keys) - $skips;
+    $skipNote = $skips ? " ($skips skipped non-deterministic)" : "";
+    echo $diffs === 0 ? "\n✓ IDENTICAL — all $compared compared cases match ($a vs $b)$skipNote\n"
+                      : "\n✗ $diffs/$compared compared cases DIFFER ($a vs $b)$skipNote\n";
     exit($diffs === 0 ? 0 : 1);
 }
 
