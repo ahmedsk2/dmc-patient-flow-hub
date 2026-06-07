@@ -43,8 +43,7 @@ function fetchReadmissions($mysqli, $groupBy, $start, $end) {
         JOIN recent_discharges r
           ON a.MRN = r.MRN
          AND r.ID < a.ID
-         AND r.DISDATE >= DATE_SUB(a.ADMDATE, INTERVAL 30 DAY)
-         AND a.ADMDATE <= DATE_ADD(r.DISDATE, INTERVAL 3 DAY)
+         AND a.ADMDATE <= DATE_ADD(r.DISDATE, INTERVAL 3 DAY)   -- readmitted within 72h (Q4: matches the row badge; redundant 30-day clause removed)
         GROUP BY grp
         ORDER BY grp;
     ";

@@ -252,37 +252,53 @@ if ($leastcount>=$max_hospitalist && $n_newpatients>0){
         // var_dump($subspeciality);
 
         
-        while (($subcount < 5)){
+        // Round A - floor (Q6): give every on-service subspecialist at least min_subs first
+        while (($subcount <= ($min_subs - 1)) && $n_newpatients > 0){
             foreach ($subspeciality_count as $key => $hc){
-                if ($hc < $max_subs){
+                if ($hc < $min_subs){
                     $subspeciality_count[$key]++;
                     $n_newpatients--;
                     $sql = "UPDATE picupatients SET consultant_id=?,newassign='1', assigned_on=? WHERE DISDATE IS NULL AND consultant_id IS NULL Limit 1";
                     $stmt = $mysqli->prepare($sql);
                     $stmt->bind_param("is", $key, $today);
                     if ($stmt->execute() === TRUE) {
-                        $message= "</br> third round ( all hospitalist have 15 and fill subspeciality with less than 5 ): Record updated successfully </br>";
+                        $message= "</br> subspecialist floor round (fill each up to min_subs): Record updated successfully </br>";
                     } else {
-                    error_log(__FILE__ . ": update " . $mysqli->error); $message= "Error updating record.";
+                        error_log(__FILE__ . ": update " . $mysqli->error); $message= "Error updating record.";
                     }
-                      echo "$message";
-                    // echo "</br>new ramining" . $n_newpatients;
-                    // echo  "</br> Minimum count" .$subcount;
+                    echo "$message";
                 }
-                // echo  "</br><strong> First Round </strong>";
-
-                if ($n_newpatients <=0){
-                    break 2;
-                }
+                if ($n_newpatients <= 0){ break 2; }
             }
             $subcount = min($subspeciality_count);
-            echo "</br>" . $subcount . "</br>";
+        }
+        // Round B - cap (Q6): fill subspecialists up to max_subs
+        if ($subcount >= $min_subs && $n_newpatients > 0){
+            while (($subcount < $max_subs) && $n_newpatients > 0){
+                foreach ($subspeciality_count as $key => $hc){
+                    if ($hc < $max_subs){
+                        $subspeciality_count[$key]++;
+                        $n_newpatients--;
+                        $sql = "UPDATE picupatients SET consultant_id=?,newassign='1', assigned_on=? WHERE DISDATE IS NULL AND consultant_id IS NULL Limit 1";
+                        $stmt = $mysqli->prepare($sql);
+                        $stmt->bind_param("is", $key, $today);
+                        if ($stmt->execute() === TRUE) {
+                            $message= "</br> subspecialist cap round (fill each up to max_subs): Record updated successfully </br>";
+                        } else {
+                            error_log(__FILE__ . ": update " . $mysqli->error); $message= "Error updating record.";
+                        }
+                        echo "$message";
+                    }
+                    if ($n_newpatients <= 0){ break 2; }
+                }
+                $subcount = min($subspeciality_count);
+            }
         }
 }
 
 
-// redistribure again on hospitalitsts the remaining extra characters
-if ($subcount>=5 && $n_newpatients>0){
+// redistribute the remaining patients on hospitalists once subspecialists are at their cap
+if ($subcount >= $max_subs && $n_newpatients > 0){
 
     while (($n_newpatients > 0)){
         foreach ($hospitalist_count as $key => $hc){
