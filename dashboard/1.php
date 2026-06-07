@@ -44,19 +44,32 @@ function fetchDailyOverview($mysqli) {
 }
 
 function fetchCurrentPatients($mysqli) {
+    // Non-ICU, currently-admitted census by specialty / long-term. The previous version
+    // LEFT JOINed tb_list via JSON_CONTAINS, which DUPLICATED a patient row for every matching
+    // TB code and inflated all four counts. Count the specialty/long-term buckets without that
+    // join (one row per patient), and count TB as DISTINCT patients separately.
     $query = "
-        SELECT 
-            SUM(CASE WHEN m.specialty_id = '1' AND p.DISDATE IS NULL AND (p.longterm IS NULL OR p.longterm = '') AND (p.current_location != 'ICU' OR p.current_location IS NULL) THEN 1 ELSE 0 END) as under_hospitalist,
-            SUM(CASE WHEN m.specialty_id != '1' AND p.DISDATE IS NULL AND (p.longterm IS NULL OR p.longterm = '') AND (p.current_location != 'ICU' OR p.current_location IS NULL) THEN 1 ELSE 0 END) as under_subs,
-            SUM(CASE WHEN DISDATE IS NULL AND longterm = 'longterm' AND (p.current_location != 'ICU' OR p.current_location IS NULL) THEN 1 ELSE 0 END) as longterm,
-            SUM(CASE WHEN p.DISDATE IS NULL AND JSON_CONTAINS(p.admissiondiagnosis, JSON_QUOTE(t.dx_id)) AND (p.current_location != 'ICU' OR p.current_location IS NULL) THEN 1 ELSE 0 END) as tuber_count
+        SELECT
+            SUM(CASE WHEN m.specialty_id = '1' AND (p.longterm IS NULL OR p.longterm = '') THEN 1 ELSE 0 END) as under_hospitalist,
+            SUM(CASE WHEN m.specialty_id != '1' AND (p.longterm IS NULL OR p.longterm = '') THEN 1 ELSE 0 END) as under_subs,
+            SUM(CASE WHEN p.longterm = 'longterm' THEN 1 ELSE 0 END) as longterm
         FROM members m
         JOIN picupatients p ON m.member_id = p.consultant_id
-        LEFT JOIN tb_list t ON JSON_CONTAINS(p.admissiondiagnosis, JSON_QUOTE(t.dx_id))
+        WHERE p.DISDATE IS NULL AND (p.current_location != 'ICU' OR p.current_location IS NULL)
     ";
-
     $result = $mysqli->query($query);
-    return $result->fetch_assoc();
+    $row = $result->fetch_assoc();
+
+    // Distinct assigned, non-ICU, currently-admitted patients with >= 1 TB diagnosis.
+    $tb = $mysqli->query("
+        SELECT COUNT(DISTINCT p.ID) AS c
+        FROM members m
+        JOIN picupatients p ON m.member_id = p.consultant_id
+        WHERE p.DISDATE IS NULL AND (p.current_location != 'ICU' OR p.current_location IS NULL)
+          AND EXISTS (SELECT 1 FROM tb_list t WHERE JSON_CONTAINS(p.admissiondiagnosis, JSON_QUOTE(t.dx_id)))
+    ");
+    $row['tuber_count'] = $tb ? (int) ($tb->fetch_assoc()['c'] ?? 0) : 0;
+    return $row;
 }
 
 function fetchConsultantsData($mysqli) {

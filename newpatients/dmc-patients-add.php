@@ -35,7 +35,7 @@ require_once ('../dbconnect.php');
 
    // W3: server-side validation of the new admission input (client checks are bypassable).
    $verr = v_first([
-       v_len($mrn_new, 'MRN', 50),
+       v_mrn($mrn_new),
        v_len($pname_new, 'Patient name', 100),
        v_in($gender_new, 'Gender', ['Male', 'Female']),
        v_int_range($age_new, 'Age', 0, 150),

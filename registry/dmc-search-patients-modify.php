@@ -16,7 +16,7 @@ $id = $_REQUEST['id_modify'];
 
    // W3: validate the edited patient record before persisting (client checks are bypassable).
    $verr = v_first([
-       v_len($mrn_modify, 'MRN', 50),
+       v_mrn($mrn_modify),
        v_len($pname_modify, 'Patient name', 100),
        v_in($gender_modify, 'Gender', ['Male', 'Female']),
        v_int_range($age_modify, 'Age', 0, 150),

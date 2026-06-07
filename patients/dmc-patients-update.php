@@ -24,7 +24,7 @@ if (!empty($admdate1)){
 // blocked by already-stored data in the other (unchanged) fields.
 $attrib = $_REQUEST['attribChanged'] ?? '';
 $verr = '';
-if ($attrib === 'mrn')         { $verr = v_len($mrn, 'MRN', 50); }
+if ($attrib === 'mrn')         { $verr = v_mrn($mrn); }
 elseif ($attrib === 'name')    { $verr = v_len($name, 'Patient name', 100); }
 elseif ($attrib === 'admdate') { $verr = v_date_ymd($admdate, 'Admission date'); }
 if ($verr !== '') { echo "Error: " . $verr; exit; }

@@ -72,6 +72,19 @@ if (!function_exists('v_required')) {
         return '';
     }
 
+    // MRN (picupatients): digits only, max 11 (confirmed canonical format). NOTE: consultations.MRN
+    // is a different identifier and is NOT validated with this.
+    function v_mrn($value, $label = 'MRN') {
+        $v = trim((string) $value);
+        if ($v === '') {
+            return "$label is required.";
+        }
+        if (!preg_match('/^\d{1,11}$/', $v)) {
+            return "$label must be digits only (max 11).";
+        }
+        return '';
+    }
+
     // Membership in a fixed allow-list (e.g. gender, discharge status).
     function v_in($value, $label, array $allowed) {
         $v = trim((string) $value);

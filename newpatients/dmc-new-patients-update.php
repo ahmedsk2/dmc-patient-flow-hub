@@ -27,7 +27,7 @@ if (!empty($admdate1)){
 // W3: validate only the field that actually changed (avoids blocking edits on unchanged data).
 $attrib = $_REQUEST['attribChanged'] ?? '';
 $verr = '';
-if ($attrib === 'mrn')         { $verr = v_len($mrn, 'MRN', 50); }
+if ($attrib === 'mrn')         { $verr = v_mrn($mrn); }
 elseif ($attrib === 'name')    { $verr = v_len($name, 'Patient name', 100); }
 elseif ($attrib === 'age')     { $verr = v_int_range($age, 'Age', 0, 150); }
 elseif ($attrib === 'gender')  { $verr = v_in($gender, 'Gender', ['Male', 'Female']); }
