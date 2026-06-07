@@ -106,7 +106,6 @@ foreach($countries as $country)
 $decodedadmissiondx=json_decode($patient['admissiondiagnosis']);
 ?>
 
-</select>
 <label>Diagnosis</label>
 <select class='txtdata ddxname_modify form-control' style='width: 100%;'  oninput='auto_grow(this)'  multiple='multiple' id='admissiondiagnosis_modify' required>
 <?php
@@ -129,7 +128,6 @@ if (is_array($decodedadmissiondx)){
   ?>
 
 </select>
-</div>
 
 <div class="modal-footer" style="text-align: center;display: block;">
 <div color='green' style="color:forestgreen;" id="message111"></div>

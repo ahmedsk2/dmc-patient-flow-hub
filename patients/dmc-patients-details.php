@@ -101,44 +101,43 @@ else{
 <form autocomplete="off">
 <input type="hidden" id='id_modify' value='<?php echo htmlspecialchars($id, ENT_QUOTES, 'UTF-8'); ?>'>
 <label>Bed Number</label>
-<input class='txtdata' id='bed_modify' value='<?php echo $patient['BED']; ?>' style='text-align: center;' required>
+<input class='txtdata' id='bed_modify' value='<?php echo htmlspecialchars($patient['BED'], ENT_QUOTES, 'UTF-8'); ?>' style='text-align: center;' required>
 <label>Patient Location</label>
 <select class='txtdata' id='current_location_modify' style='width: 100%; padding: 4px;text-align: center;' required>
-      <option selected value='<?php echo $patient['current_location']; ?>'> <?php echo $patient['current_location']; ?></option>
+      <option selected value='<?php echo htmlspecialchars($patient['current_location'], ENT_QUOTES, 'UTF-8'); ?>'> <?php echo htmlspecialchars($patient['current_location'], ENT_QUOTES, 'UTF-8'); ?></option>
       <option value='Ward'>Ward</option>
       <option value='ICU'>ICU</option>
       <option value='ER'>ER</option>
-    </select><label>MRNs</label>
-<input class='txtdata' id='mrn_modify' value='<?php echo $patient['MRN']; ?>' style='text-align: center;' required>
+    </select>
+<label>MRNs</label>
+<input class='txtdata' id='mrn_modify' value='<?php echo htmlspecialchars($patient['MRN'], ENT_QUOTES, 'UTF-8'); ?>' style='text-align: center;' required>
 <label>Patient Name</label>
-<input class='txtdata' id='pname_modify' value='<?php echo $patient['PNAME']; ?>' style='text-align: center;' required>
+<input class='txtdata' id='pname_modify' value='<?php echo htmlspecialchars($patient['PNAME'], ENT_QUOTES, 'UTF-8'); ?>' style='text-align: center;' required>
 <label>Age</label>
-<input class='txtdata' id='age_modify' value='<?php echo $patient['age']; ?>' style='text-align: center;' required>
+<input class='txtdata' id='age_modify' value='<?php echo htmlspecialchars($patient['age'], ENT_QUOTES, 'UTF-8'); ?>' style='text-align: center;' required>
 <label>Gender</label>
 <select class='txtdata' id='gender_modify' style="width: 100%;text-align: center;padding: 4px;" required>
-<option selected value='<?php echo $patient['gender']; ?>'> <?php echo $patient['gender']; ?></option>
+<option selected value='<?php echo htmlspecialchars($patient['gender'], ENT_QUOTES, 'UTF-8'); ?>'> <?php echo htmlspecialchars($patient['gender'], ENT_QUOTES, 'UTF-8'); ?></option>
 <option value='Male'>Male</option>
 <option value='Female'>Female</option>
 </select>
 <label>Nationality</label>
 <select class='select2_modify txtdata' id='nationality_modify' style='text-align: center;' required>
-<option selected value='<?php echo $patient['nationality']; ?>'> <?php echo $patient['nationality']; ?></option>
- <?php  
-
-foreach($countries as $country)
-    echo"
-    <option value='".$country['name']."'>".$country['name']."</option>";
+<option selected value='<?php echo htmlspecialchars($patient['nationality'], ENT_QUOTES, 'UTF-8'); ?>'> <?php echo htmlspecialchars($patient['nationality'], ENT_QUOTES, 'UTF-8'); ?></option>
+ <?php
+foreach ($countries as $country)
+    echo '<option value="' . htmlspecialchars($country['name'], ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($country['name'], ENT_QUOTES, 'UTF-8') . '</option>';
   ?>
 
 </select>
 
 <label>Admission date</label>
-<input value='<?php echo $patient['ADMDATE']; ?>' class='txtdata' id ="admdate_modify"  data-date-format="DD-MM-YYYY" type="text"  name='admdate' style="text-align: center;padding: 0px;" required readonly>
+<input value='<?php echo htmlspecialchars($patient['ADMDATE'], ENT_QUOTES, 'UTF-8'); ?>' class='txtdata' id ="admdate_modify"  data-date-format="DD-MM-YYYY" type="text"  name='admdate' style="text-align: center;padding: 0px;" required readonly>
 
 
 <label>Admitted from</label>
 <select class='txtdata' id ="admfrom_modify1" style="width: 100%;text-align: center;padding: 4px;" required>
-<option selected value='<?php echo $patient['ADMFROM']; ?>'><?php echo $patient['ADMFROM']; ?></option>"
+<option selected value='<?php echo htmlspecialchars($patient['ADMFROM'], ENT_QUOTES, 'UTF-8'); ?>'><?php echo htmlspecialchars($patient['ADMFROM'], ENT_QUOTES, 'UTF-8'); ?></option>
 <option value='ER'>ER</option>
 <option value='ICU'>ICU</option>
 <option value='OPD'>OPD</option>
@@ -154,13 +153,10 @@ $formationSQL = "SELECT * FROM members WHERE on_service = '1'";
 $result1 = $mysqli->query($formationSQL);
 $consultant = $result1 -> fetch_all(MYSQLI_ASSOC);
 
-foreach ($consultant as $con){
-if ($con['member_id'] == $patient['consultant_id']){
-echo"  <option selected value='".$con['member_id']."'>".$con['full_name']."</option>";
-}
-
-
-  echo "<option value='".$con['member_id']."'>".$con['full_name']."</option>";
+foreach ($consultant as $con) {
+    $selected = ($con['member_id'] == $patient['consultant_id']) ? ' selected' : '';
+    echo '<option' . $selected . ' value="' . htmlspecialchars($con['member_id'], ENT_QUOTES, 'UTF-8') . '">'
+        . htmlspecialchars($con['full_name'], ENT_QUOTES, 'UTF-8') . '</option>';
 }
 ?>
 
@@ -171,28 +167,25 @@ echo"  <option selected value='".$con['member_id']."'>".$con['full_name']."</opt
 $decodedadmissiondx=json_decode($patient['admissiondiagnosis']);
 ?>
 
-</select>
 <label>Diagnosis</label>
 <select class='txtdata ddxname_modify form-control' style='width: 100%;'  oninput='auto_grow(this)'  multiple='multiple' id='admissiondiagnosis_modify' required>
 <?php
 
 if (is_array($decodedadmissiondx)){
-        
+
         foreach($decodedadmissiondx as $key => $value)
   {
     $dxstmt = $mysqli->prepare("SELECT * FROM icd10 WHERE id = ?");
 		$dxstmt->bind_param("s", $value);
 		$dxstmt->execute();
 		$dxlist = $dxstmt->get_result()->fetch_array(MYSQLI_ASSOC);
-      // $selected = in_array($key, $decodedP) ? 'selected ' : '';
 
-      echo '<option selected value="' . $dxlist['id'] . '">'.  $dxlist['name']. '</option>';
+      echo '<option selected value="' . htmlspecialchars($dxlist['id'], ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($dxlist['name'], ENT_QUOTES, 'UTF-8') . '</option>';
   }}
 
   ?>
 
 </select>
-</div>
 
 <div class="modal-footer" style="text-align: center;display: block;">
 <div color='green' style="color:forestgreen;" id="message111"></div>
