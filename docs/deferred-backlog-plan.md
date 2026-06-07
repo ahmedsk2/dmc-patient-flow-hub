@@ -110,10 +110,14 @@
   button sits beside Yearly/Monthly in allstat.php. (commit 792eb57)
   - Deferred: bed-days/census column in the PDF (the one a4 metric not yet collapsed) and embedding
     the Chart.js graphs as images (PDF is tabular).
-- [ ] **Phase 4 — Layering + test suite (strangler-fig start).** Self-contained PSR-4-style
-  autoloader + a `src/` layer (repositories/services), extract a few slices behind interfaces, and
-  a lightweight self-contained test runner (`tests/`) — real PHPUnit can be swapped in where
-  Composer exists on the server. Honest: this is the START of a multi-session rewrite.
+- [~] **Phase 4 — Layering + test suite (strangler-fig start).**
+  - [x] **Self-contained test runner** (`tests/run.php` + `tests/README.md`): one command aggregates
+    the validated check scripts (TOTP/RFC-6238 unit + report_data==a4 integration) via PHP_BINARY
+    subprocesses; integration checks auto-skip when the dev server is down so `--unit` is CI-safe.
+    (commit 8d0b6b3)
+  - [ ] **Remaining (multi-session):** PSR-4 autoloader + a `src/` service/repository layer behind
+    interfaces; `statistics/report_data.php` is the natural first slice to become a `src/` class with
+    direct unit tests. Real PHPUnit swappable in where Composer exists.
 - [ ] **Phase 5 — Deeper schema normalization (validated, additive).** `patient_diagnosis` join
   table (vs JSON), canonical `patients` entity (vs row-per-admission), specialty dedup — as
   **additive** migrations with a compatibility layer + a data-migration validated against the
