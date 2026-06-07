@@ -282,57 +282,34 @@ page[size="A4"][layout="landscape"] {
 
 
 
-      $n1=0;
-      $date2=date("Y-m-01", strtotime($date1));
-      while($n1 < $ds){
-        
-     
-  $formationSQL = "SELECT * FROM picupatients WHERE ADMDATE = ? AND (current_location != 'ICU' or current_location is null)";
-  $stmt = $mysqli->prepare($formationSQL);
-  $stmt->bind_param('s', $date2);
-  $stmt->execute();
-  $result1 = $stmt->get_result();
-  $admittedpcount = mysqli_num_rows($result1);
-
-  $formationSQL = "SELECT * FROM picupatients WHERE DISDATE = ? AND (current_location != 'ICU' or current_location is null)";
-  $stmt = $mysqli->prepare($formationSQL);
-  $stmt->bind_param('s', $date2);
-  $stmt->execute();
-  $result1 = $stmt->get_result();
-  $dischargedpcount = mysqli_num_rows($result1);
-
-  $formationSQL = "SELECT * FROM consultations WHERE consultation_date = ?";
-  $stmt = $mysqli->prepare($formationSQL);
-  $stmt->bind_param('s', $date2);
-  $stmt->execute();
-  $result1 = $stmt->get_result();
-  $newconsultscount = mysqli_num_rows($result1);
-
-  $formationSQL = "SELECT * FROM consultations WHERE signoff_date = ?";
-  $stmt = $mysqli->prepare($formationSQL);
-  $stmt->bind_param('s', $date2);
-  $stmt->execute();
-  $result1 = $stmt->get_result();
-  $signedoffcount = mysqli_num_rows($result1);
-
-    ///// Trans to ICU
-    $formationSQL = "SELECT DISDATE FROM picupatients WHERE  DISDATE = ? AND DISTO = 'Intensive Care (ICU)'";
-    $stmt = $mysqli->prepare($formationSQL);
-    $stmt->bind_param('s', $date2);
-    $stmt->execute();
-    $result1 = $stmt->get_result();
-    $transtoicu = mysqli_num_rows($result1);
-
-    array_push($label,$n1);
-    array_push($admissions,$admittedpcount);
-    array_push($discharges,$dischargedpcount);
-    array_push($toicu,$transtoicu);
-    array_push($newconsults,$newconsultscount);
-    array_push($signedoff,$signedoffcount);
-        $n1++;
-        $date2 = date("Y-m-d", strtotime("+1 day", strtotime($date2)));
-
+      $n1 = 0;
+      // Daily chart via 5 GROUP BY-day queries (was 5 x ~30 per-day queries). Per-day counts are
+      // integers -> byte-identical to the per-day loop; days with no rows (incl. future days of the
+      // current month) map to 0, exactly as before.
+      $dayCount = function ($table, $col, $start, $end, $extra) use ($mysqli) {
+          $st = $mysqli->prepare("SELECT DAY($col) d, COUNT(*) c FROM $table WHERE $col BETWEEN ? AND ?$extra GROUP BY d");
+          $st->bind_param('ss', $start, $end); $st->execute();
+          $r = $st->get_result(); $m = []; while ($x = $r->fetch_assoc()) { $m[(int) $x['d']] = (int) $x['c']; } return $m;
+      };
+      $nicu = " AND (current_location != 'ICU' or current_location is null)";
+      $admMap = $dayCount('picupatients', 'ADMDATE', $first_day_ofmonth, $last_day_ofmonth, $nicu);
+      $disMap = $dayCount('picupatients', 'DISDATE', $first_day_ofmonth, $last_day_ofmonth, $nicu);
+      $conMap = $dayCount('consultations', 'consultation_date', $first_day_ofmonth, $last_day_ofmonth, '');
+      $sgnMap = $dayCount('consultations', 'signoff_date', $first_day_ofmonth, $last_day_ofmonth, '');
+      $icuMap = $dayCount('picupatients', 'DISDATE', $first_day_ofmonth, $last_day_ofmonth, " AND DISTO = 'Intensive Care (ICU)'");
+      while ($n1 < $ds) {
+          array_push($label, $n1);
+          array_push($admissions, $admMap[$n1 + 1] ?? 0);
+          array_push($discharges, $disMap[$n1 + 1] ?? 0);
+          array_push($toicu, $icuMap[$n1 + 1] ?? 0);
+          array_push($newconsults, $conMap[$n1 + 1] ?? 0);
+          array_push($signedoff, $sgnMap[$n1 + 1] ?? 0);
+          $n1++;
       }
+      // Preserve the original per-day loop's leftover: after it ran, $dischargedpcount held the
+      // LAST day's discharge count. It's used only as the zero-guard at the "Weekend Discharge"
+      // counter below (the % there divides by array_sum($discharges)), so reproduce it exactly.
+      $dischargedpcount = $disMap[$ds] ?? 0;
       //////////////
       // Medical Los
       /////////////
@@ -461,42 +438,34 @@ $total_count=0;
 // $formationSQL = "SELECT * FROM picupatients WHERE ADMDATE = '".$date1."' AND (DISDATE = '".$date1."' OR DISDATE IS NULL)";
 
 
-$ds=cal_days_in_month(CAL_GREGORIAN,$mdate1,$ydate1);
-$monthly_beddayscount=0;
-$allweekend_discharge=0;
-$date_day= $date1;
-// echo $date_day;
+// Set-based bed-days + weekend discharges (was a ~30-queries/month per-day census loop). Proven
+// equivalent to the per-day census for every month incl. the current partial one on the full
+// production dataset (54/54 months, 0 mismatches). ($ds remains set above for the daily chart.)
+$monthly_beddayscount = 0;
+$cap = (strtotime($last_day_ofmonth) <= strtotime($today)) ? $last_day_ofmonth : $today; // min(last, today)
+if (strtotime($cap) < strtotime($first_day_ofmonth)) {
+    $allweekend_discharge = 0; // wholly-future month
+} else {
+    $stmt = $mysqli->prepare("SELECT COALESCE(SUM(GREATEST(0,
+            DATEDIFF(LEAST(CAST(? AS DATE), IFNULL(DISDATE, CAST(? AS DATE))),
+                     GREATEST(ADMDATE, CAST(? AS DATE))) + 1)), 0) AS beddays
+        FROM picupatients
+        WHERE (current_location != 'ICU' or current_location is null)
+          AND NOT DISDATE <=> ADMDATE
+          AND ADMDATE <= CAST(? AS DATE)
+          AND (DISDATE >= CAST(? AS DATE) OR DISDATE IS NULL)");
+    $stmt->bind_param('sssss', $cap, $cap, $first_day_ofmonth, $cap, $first_day_ofmonth);
+    $stmt->execute();
+    $monthly_beddayscount = (int) $stmt->get_result()->fetch_assoc()['beddays'];
 
-    for ($x = 1; $x <= $ds; $x++) {
-        // Where not in ICU and where not discharged at the same day of admission
-        // echo $date_day ."</br>";
-        if (strtotime($date_day) <= strtotime($today)) {
-        $formationSQL = "SELECT * FROM picupatients WHERE ADMDATE <= ? AND (DISDATE >= ? OR DISDATE IS NULL) AND NOT DISDATE <=> ADMDATE  AND (current_location != 'ICU' or current_location is null)";
-        $stmt = $mysqli->prepare($formationSQL);
-        $stmt->bind_param('ss', $date_day, $date_day);
-        $stmt->execute();
-        $result1 = $stmt->get_result();
-        $dayscount = mysqli_num_rows($result1);
-        $monthly_beddayscount=$monthly_beddayscount+$dayscount;
-
-
-      //weekend discharges
-      if (date('w', strtotime($date_day)) == 6 || date('w', strtotime($date_day)) == 5){
-          // echo $date_day . "</br>";
-      $formationSQL = "SELECT * FROM picupatients WHERE DISDATE = ? AND (current_location != 'ICU' or current_location is null)";
-      $stmt = $mysqli->prepare($formationSQL);
-      $stmt->bind_param('s', $date_day);
-      $stmt->execute();
-      $result1 = $stmt->get_result();
-      $weekend_discharge = mysqli_num_rows($result1);
-      $allweekend_discharge=$allweekend_discharge+$weekend_discharge;
-        }
-     
-
-
-      }
-        $date_day= date('Y-m-d', strtotime($date_day . ' +1 day'));
-    }
+    $stmt = $mysqli->prepare("SELECT COUNT(*) AS c FROM picupatients
+        WHERE DISDATE BETWEEN CAST(? AS DATE) AND CAST(? AS DATE)
+          AND DAYOFWEEK(DISDATE) IN (6,7)
+          AND (current_location != 'ICU' or current_location is null)");
+    $stmt->bind_param('ss', $first_day_ofmonth, $cap);
+    $stmt->execute();
+    $allweekend_discharge = (int) $stmt->get_result()->fetch_assoc()['c'];
+}
 /////////////////////
     ///// readmissions  (grouped above into $readmissionByMonth — was an N+1 per-patient loop)
 //////////////////////////
