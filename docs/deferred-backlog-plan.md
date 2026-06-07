@@ -41,18 +41,21 @@
     (daily/monthly **and** quarterly) dereferenced a null row when no readmission was found → 24
     "array offset on null" warnings/quarter; added a `$recentadmission &&` guard (count was already
     unaffected, so zero number change).
-  - [~] a4.php / a4-monthly.php — **dominant cost collapsed**: the 72h-readmission N+1 (a per-patient
-    LIMIT-1 sub-query inside each of 12 months) → one `EXISTS + COUNT(*) GROUP BY month` query.
-    Byte-identical (all 25 cases incl. `a4*__2023/2024`). Measured: a4.php ~1800→~616 SELECTs (~66%),
-    a4-monthly ~3500→~2661. **Deliberately deferred** (documented, not silent):
-    - *Per-day census (bed-days / daily occupancy) loop* — now the dominant remaining cost (esp.
-      a4-monthly's two per-day loops). A set-based bed-days query is feasible BUT (a) byte-exact
-      reproduction of the inclusive boundaries + same-day exclusion + the per-day `<= today` cutoff is
-      error-prone, and (b) there's a **validation gap**: the golden-master years (2023/24) are in the
-      past, so the `<= today` cutoff is never exercised — a collapse could pass the baseline yet be
-      wrong for the *current partial month*. Needs a current-period golden-master case before it's safe.
-    - *Per-month metric COUNTs/LOS fetches* (5+3 per month) — safely collapsible (time1-style) but low
-      marginal value now that the census dominates.
+  - [x] a4.php / a4-monthly.php — **fully collapsed**. (1) the 72h-readmission N+1 → one
+    `EXISTS + COUNT(*) GROUP BY month` query; (2) the **per-day census** (bed-days + weekend) → set-based
+    per-month queries; (3) a4-monthly's **daily-chart** per-day loop → 5 `GROUP BY`-day queries.
+    **Measured: a4.php ~1800→~170 SELECTs (~91%); a4-monthly ~3500→~445 (~87%).** Byte-identical on the
+    demo golden master (`a4*__2023/2024`).
+    - The census **validation gap is now CLOSED**: the maintainer supplied a current full production
+      export (35,808 admissions through 2026-06-07, 151 active). Imported to an isolated local DB and
+      proved the set-based bed-days **and** weekend formulas equal the original per-day loop for **all
+      54 months including the live partial month** (June 2026: 886==886), mismatches=0 — so the
+      `<= today` boundary is exercised on real data. (`patient_diagnosis` lossless was also re-proven
+      on the full 35.8k dataset; surfaced + handled a JSON-`null` diagnosis edge case the demo lacked.)
+    - One original quirk preserved byte-for-byte: a4-monthly's "Weekend Discharge" zero-guard used the
+      per-day loop's leftover `$dischargedpcount` (last day's count); reproduced exactly.
+    - *Per-month metric COUNTs/LOS fetches* (5+3 per month) — still loop-per-month; safely collapsible
+      (time1-style) but now low marginal value (~a few dozen queries left).
     - *Cached-aggregates layer* — **not done on purpose**: a stale cached report in a live clinical
       system is a safety hazard, and these MyISAM tables have no reliable change-version (no
       updated_at/triggers) for safe invalidation. Live queries are the safe default.
@@ -155,6 +158,9 @@
 | PDF report_data vs a4.php | a4.php JSON (2023+2024) | report_data.php | ✓ 20/20 metrics identical |
 | pdf-report.php output | — | live endpoint | ✓ 200 application/pdf, valid %PDF, admin-gated |
 | patient_diagnosis join table | `admissiondiagnosis` JSON | join table | ✓ 16,067 rows lossless round-trip (commit 94c5bd1) |
+| patient_diagnosis on PROD | full 2026 export (35,808) | join table | ✓ lossless; JSON-null edge case handled (commit 8b3d561) |
+| a4 census collapse — formula | per-day loop (prod, 54 mo) | set-based | ✓ bed-days + weekend, 0 mismatches incl. partial June 2026 |
+| a4 + a4-monthly census collapse | `before` (demo, 25) | `after` | ✓ a4/a4monthly byte-identical (commits 920cc35, e779e4f) |
 | src/ YearlyReport extraction | report_data == a4 (through class) | after refactor | ✓ 20/20 still identical (commit 097d78e) |
 | MFA enforcement gate | — | live E2E | ✓ 0=normal, 1/2 force setup, no loop, save persists (commit 563eb38) |
 
