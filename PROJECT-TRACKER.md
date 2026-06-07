@@ -143,9 +143,9 @@ _(Add new notes/decisions above this line as we go.)_
 - ✅ Add **indexes** + make stat queries **sargable** — indexes added in migration 03 (Batch 14); **sargability done** for the department-wide stats queries (time1/a4/a4-monthly/charts1; DB-proven equivalent), per-consultant charts intentionally left (already served by the consultant_id index) — (D3,P2 / DB-03,PERF-02)
 - ❌ **Soft-delete** — **won't do (Q9):** keep hard delete. Delete is **Admin-only** server-side — `patients/dmc-patient-delete.php`, `consultations/dmc-consultation-delete.php`, `dmc-users-delete.php` all `require_role([0])` (verified) — and `audit_log` records deletions (Batch 8). — (R4 / REL-05)
 - ⬜ Backups + **schema-migrations** tooling — (R5 / REL-04) — P1
-- ⬜ Delete remaining **dead code/weight** — (X4 / SIMP-04,05) — P2
+- 🔄 Delete remaining **dead code/weight** — committed `php_errorlog`s removed (Batch 1), `work-orderes/` git-ignored, empty `dashboard/2.php`/`4.php` removed; ⬜ unused `consultation_details`/`Notes` tables + abandoned PHPExcel still to assess — (X4 / SIMP-04,05) — P2
 - ✅ **No DB-error leaks to clients** — ~25 endpoints now log `$mysqli`/`$stmt->error` server-side + show a generic message (Batch 15); a single formal error-handler layer is a Phase-3 nicety — (C4 / ARCH-05)
-- ⬜ Status **color+icon+contrast** a11y safety fix — (U1 / UI-01,02) — P1/P2
+- 🔄 Status **color+icon+contrast** a11y safety fix — (U1 / UI-01,02) — P1/P2 — _assessed: the status **badges already carry text** ("New", "Readmission in 72 hours", "TB Patient", "Discharged Still in", "Long Term Patient") so 1.4.1 is largely met there; the **LOS band** on the admission-duration cell is conveyed by **colour alone** (green `<short_los` / yellow / red `>long_los`) with no text/icon, across **9 board pages** (dmc-patients, active-list, dmc-new-admissions, dmc-old-patients, longterm, registry-tb-patients, 48discharge, registry/search-results, search-results-diagnosis). Fixing consistently (label/icon choice + applying to all 9) is a UI-overhaul decision — **awaiting design direction** (see Decisions needed)._
 
 ### Phase 3 — Refactor + UI/UX overhaul (P2/P3)
 - ⬜ Introduce **layering + PHPUnit**; extract helpers/partials — (C1,C3 / ARCH-01,03,04) — P2
@@ -167,14 +167,16 @@ _(Add new notes/decisions above this line as we go.)_
 ---
 
 ## Decisions needed  ⏸️ _(awaiting your input)_
-- ⏸️ **Is the app internet-facing or intranet/VPN-only?** (sets breach blast-radius & urgency)
-- ⏸️ **Compliance regime + breach-notification posture** given current exposure
-- ⏸️ **Re-confirm the permission model** (permissions.docx is dated) — who owns the source of truth?
-- ⏸️ **Framework choice** for Phase 4
-- ⏸️ **Backup/retention policy**; who maintains the app (hospital vs white-label vendor)
-- ⏸️ **Clinical sign-offs (CLIN-01…09):** readmission window · LOS/DST calc · `settings` thresholds ·
-  shuffle assignment policy · `MORTALITY` vocabulary · two-phase discharge semantics ·
-  canonical "active patient" definition · TB-list maintenance · MRN format
+
+_Resolved in the Q&A round (see top note): internet-facing + HIPAA-equivalent & Saudi PDPL (Q12); creds rotated (Q11); prod = PHP 8.3 + TLS (Q13); clinical CLIN-01…09 — readmission window, LOS calc, `settings` thresholds, shuffle policy, "active patient" per-page filters, MRN format — all answered (Q1–Q10); framework deferred to end of backlog (Q14)._
+
+**Still open:**
+- ⏸️ **Re-confirm the permission model** (permissions.docx is dated) — who owns the source of truth? The server-side guards currently **mirror the actual UI gates** (Q7); if the intended policy differs, the role/capability/ownership rules in `guard.php` + endpoints need adjusting.
+- ⏸️ **UI/UX + accessibility direction (U1/U2/U4/W5).** Concrete first item ready to implement once you confirm: the **LOS band is colour-only** (green/yellow/red) on the admission-duration cell across **9 board pages** — proposed fix is to add a short text/icon ("Short / Average / Long stay", derived from `short_los`/`long_los`) so it's not colour-dependent. Also: responsive/tablet layout, the broader status-pipeline redesign. These need your design preferences (labels, icons, scope) before I touch the main clinical screens.
+- ⏸️ **PHPExcel → PhpSpreadsheet (SEC-25).** PHPExcel is end-of-life (known CVEs) and powers `registry/export-results-exel.php`. Replacing it needs either **Composer** or **manually vendoring** PhpSpreadsheet. You deferred Composer/framework (Q14) — so: do you want the security swap now via a vendored PhpSpreadsheet copy, or deferred with the re-platform?
+- ⏸️ **Confirm the time1.php cross-year fix.** The Monthly/Quarterly **Overview** chart's consultation bars were counting all years for a month/quarter; they now show the **selected period only** (lower, correct numbers). Flagging since it changes a displayed figure.
+- ⏸️ **Backup/retention policy**; who operates the app long-term (hospital vs white-label vendor).
+- ⏸️ **Charset normalization** (latin1/utf8mb3 → utf8mb4) — deferred as a risky re-encode; needs a maintenance window + tested backup before attempting.
 
 ---
 
