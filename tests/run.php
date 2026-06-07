@@ -30,6 +30,7 @@ $suites = [
     ['src/ YearlyReport class structure',    'tests/yearly_report_test.php',         'integration'],
     ['Stats: report_data == a4.php',         'tools/report_data_validate.php',       'integration'],
     ['Schema: patient_diagnosis lossless',   'tools/patient_diagnosis_validate.php', 'integration'],
+    ['Schema: patients entity faithful',     'tools/patients_validate.php',          'integration'],
 ];
 
 echo "DMC test runner  (server " . ($serverUp ? "UP @ $base" : "down") . ($unitOnly ? ", --unit" : "") . ")\n";
