@@ -197,6 +197,13 @@ _Last updated: 2026-06-06_
 - **🗑️ 2026-06-07 — Soft-delete (3c): DECISION = keep hard-delete (no code change).** Patient/consultation delete stays a hard `DELETE`, which is acceptable because it's already **Admin-only + name+MRN confirmation + recorded in `audit_log`** (who/what/when). Recoverability comes from **DB backups** (already `DEPLOY.md §0`), not a `deleted_at` flag — avoiding the broad, higher-risk change of adding `AND deleted_at IS NULL` to every patient/consultation query on a live clinical system. **This completes Bucket 3** (3a/3b clinical-defs ✅, 3c soft-delete ✅ decided, 3d permission-model ✅, 3e PHPExcel ✅). Buckets 2 + 3 done → at the agreed **framework re-platform STOP line**.
   - **Remaining (team / ops, not code):** run the `DEPLOY.md` steps (rotate creds, TLS, backup, migrations 01–05, set `min_subs=max_subs=7`); clean the **~204 dirty MRNs** (names/beds mis-entered into the MRN field); confirm the single canonical **"active patient"** definition (then the inconsistent census/stats `WHERE` clauses can be unified safely); apply the `permissions.docx`-vs-enforced corrections to any out-of-band docs.
 
+- **✅ 2026-06-07 — The four "needs your input" follow-ups RESOLVED with the maintainer (no code changes):**
+  - **A — `time1.php` cross-year fix CONFIRMED:** the Monthly/Quarterly Overview consultation bars showing the **selected period only** (not all-years) is the intended figure. No change.
+  - **B — capability-flag grants CONFIRMED as-is (intended):** the broad Resident `manage_patient` grants and the occasional Observer flag are deliberate (maintainer sometimes needs an Observer to do other tasks). **No change** — leave grants as they are.
+  - **C — canonical "active patient" = `DISDATE IS NULL`** (general). The per-page **ICU-excluding** census variants are **intentional** (some pages deliberately don't count ICU patients), so broad **de-dup / query-unification is contraindicated** — leave the purpose-specific filters (dashboard census, shuffle assignable-pool) as designed. The only multi-active-row "dupes" were junk test data, and `dmc-patients-add` already blocks a second active row for a real MRN. **No code change.**
+  - **D — keep `v_mrn` STRICT** (digits ≤11, validated only-on-change — already shipped `f5db226`). Refined the dirty-MRN count: **~51 genuinely-bad** (names/beds/placeholders/swapped fields/double-MRNs) + ~4 whitespace-padded-valid (of the 204 the raw regex flagged; the rest are valid once trimmed, which `v_mrn` already does). Maintainer will **reality-check + fix the old non-conforming records on the real DB** before relying on the strict rule; handed off the find-query (+ optional whitespace-normalize `UPDATE`) for that.
+  - **Net:** all decision-gated items are now closed. **Remaining = pure ops/deploy (`DEPLOY.md`) + the framework re-platform STOP line.**
+
 _(Add new notes/decisions above this line as we go.)_
 
 ---
@@ -241,7 +248,7 @@ _(Add new notes/decisions above this line as we go.)_
 
 ### Phase 3 — Refactor + UI/UX overhaul (P2/P3)
 - ⬜ Introduce **layering + PHPUnit**; extract helpers/partials — (C1,C3 / ARCH-01,03,04) — P2
-- ⬜ **De-duplicate** lists/census/ICD-10 on ONE "active" definition — (X2 / SIMP-02, CLIN-08) — P2
+- ✅ **"Active patient" definition CONFIRMED (2026-06-07):** canonical **active = `DISDATE IS NULL`**; the per-page **ICU-excluding** census variants are **intentional** → broad de-dup/unification **contraindicated** (leave purpose-specific filters as designed). Multi-active-row dupes were junk; the admit flow blocks new ones. No code change. — (X2 / SIMP-02, CLIN-08)
 - ⬜ **Statistics engine**: grouped SQL + caching; merge A4 twins — (X3,P1,P4 / SIMP-03,PERF-01) — P2
 - ✅ **UI/UX overhaul — responsive/tablet + a11y (U2,U4,W5)** — DONE & runtime-verified (2026-06-07). The responsive card grid + modal/filter layout (UI-01..08) is **wired via `css/app.css`** — root-caused that it had NEVER loaded (app pages use a combined bundle, not `main.css`) — and verified in-browser at desktop/tablet/phone; LOS-band a11y label done (U1, above). _Remaining (design-gated, P2/P3): the broader data-entry / status-pipeline redesign._
 - ⬜ **Server-side PDF** reports; un-hide KPI page; vendor CDNs locally — (U3 / UI-05,06,07,08) — P2
@@ -265,7 +272,7 @@ _Resolved in the Q&A round (see top note): internet-facing + HIPAA-equivalent & 
 **Still open:**
 - ✅ **Permission model — CONFIRMED 2026-06-06** (all code-affecting rows intended; no changes). See [`PERMISSION-MATRIX.md`](PERMISSION-MATRIX.md) §5. Only operational follow-up: verify per-user capability-flag grants in prod.
 - ✅ **UI/UX + accessibility — responsive/tablet + LOS-band label DONE** (2026-06-07, runtime-verified). _Remaining (design-gated, P2/P3): the broader status-pipeline / data-entry redesign needs your design direction (labels, icons, scope) before touching the main clinical screens._
-- ⏸️ **Confirm the time1.php cross-year fix.** The Monthly/Quarterly **Overview** chart's consultation bars were counting all years for a month/quarter; they now show the **selected period only** (lower, correct numbers). Flagging since it changes a displayed figure.
+- ✅ **time1.php cross-year fix CONFIRMED (2026-06-07):** selected-period-only is the intended figure for the Monthly/Quarterly Overview consultation bars. No further change.
 - ⏸️ **Backup/retention policy**; who operates the app long-term (hospital vs white-label vendor).
 - ✅ **Charset normalization + FKs — drafted & validated** (migrations 04/05); run in a maintenance window after backup (see DEPLOY.md §3). Only remaining DB decision: review/delete the spam member accounts (open-registration era) before running 05.
 
