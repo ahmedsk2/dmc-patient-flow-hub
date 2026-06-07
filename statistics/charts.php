@@ -257,9 +257,12 @@ foreach ($dischargedpatients1 as $dp){
 
 }
 /// all counts are
-$all_counts=[$home,$lama,$otherfacility,$abscanded,$mortuary,$transfer];
-$sum=array_sum($all_counts);
-$label1=["Home","Other Facility","LAMA","Absconded","Mortuary"];
+// FIX: this daily/monthly branch built $all_counts (chart-1's variable) with a 5-label set, but the
+// chart-2 <script> below reads $all_counts1 / 6 labels — so monthly rendered `all_counts1 = null` +
+// an "Undefined variable" warning (the doughnut was blank). Mirror the quarterly branch exactly.
+$all_counts1=[$home,$lama,$otherfacility,$abscanded,$mortuary,$transfer];
+$sum=array_sum($all_counts1);
+$label1=["Home","Other Facility","LAMA","Absconded","Mortuary", "Transfer"];
 break;
 case "quarterly":
   $month = date("m",strtotime($s_date));
@@ -1185,7 +1188,7 @@ switch ($interval) {
             $stmt->execute();
             $result1 = $stmt->get_result();
             $recentadmission = $result1->fetch_assoc();
-            if ($id == $recentadmission['consultant_id']) $readmission_count++;
+            if ($recentadmission && $id == $recentadmission['consultant_id']) $readmission_count++;
         }
 
         $for = " for " . $mdate1_name . " " . $ydate1;
@@ -1299,7 +1302,7 @@ switch ($interval) {
             $stmt->execute();
             $result1 = $stmt->get_result();
             $recentadmission = $result1->fetch_assoc();
-            if ($id == $recentadmission['consultant_id']) $readmission_count++;
+            if ($recentadmission && $id == $recentadmission['consultant_id']) $readmission_count++;
         }
         break;
 }

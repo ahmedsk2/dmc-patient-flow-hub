@@ -28,7 +28,14 @@
     subquery + count (mirrors the monthly path) — same window/subquery/attribution. 8 deterministic
     cases byte-identical vs `before`; the (formerly 11 MB, non-deterministic) quarterly now a clean
     5.5 KB page whose chartdata matches two independent ground-truth recomputations (loop + set-based).
-  - [ ] charts.php (fix $all_counts1; collapse per-consultant loops)
+  - [x] charts.php — per-consultant detail view; already mostly grouped (`GROUP BY trans_discharge`
+    / `DISTO`, single-query LOS table). No N+1 worth collapsing. Fixed two latent bugs instead:
+    (1) the discharge-destination doughnut's daily/monthly branch built `$all_counts` + a 5-label set
+    but the `<script>` reads `$all_counts1` / 6 labels → monthly rendered a blank doughnut + an
+    "Undefined variable" warning; mirrored the quarterly branch. (2) The LOS/numbers readmission loop
+    (daily/monthly **and** quarterly) dereferenced a null row when no readmission was found → 24
+    "array offset on null" warnings/quarter; added a `$recentadmission &&` guard (count was already
+    unaffected, so zero number change).
   - [ ] a4.php / a4-monthly.php (+ cache + merge twins + un-hide KPI page)
 
 ### Bugs found during validation (fix as part of the relevant rewrite)
@@ -75,3 +82,9 @@
 | time1.php grouped-SQL rewrite | `before` | `after` | ✓ `time1__*` identical (commit 5679057) |
 | charts1.php LOS + admission rewrite | `before` | `after` | ✓ 20/20 identical (1 skip) |
 | charts1.php readmission/quarterly fix | ground-truth | endpoint chartdata | ✓ matches loop **and** set-based (sum 49) |
+| charts.php two bug fixes | `before` | `after2` | ✓ 14/14 untouched identical; 6 charts diffs = intended only* |
+
+*charts.php diffs verified: after stripping warning markers, all 3 `charts__c*__quarterly` are
+byte-identical (zero number change); the 3 `charts__c*__monthly` differ only in the label array
+(`+"Transfer"`) and `all_counts1` (`null`→`[0,0,0,0,0,0]`). The all-zeros confirmed genuine via a
+direct query (June-2024 has no destination-discharge rows for those consultants).
