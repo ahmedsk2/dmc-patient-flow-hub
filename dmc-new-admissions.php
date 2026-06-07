@@ -25,8 +25,8 @@ if (isset($_POST['assign_me_btn'])) {
   // receive all input values from the form
 
  $patient_id = $_POST['patientid'];
- $user_id = $_POST['userid'];
- 
+ $user_id = (int) $user['member_id']; // "assign to me" = the logged-in user; ignore any spoofable POST value
+
           $query = "UPDATE  picupatients SET consultant_id=?, newassign='1', assigned_on=? WHERE ID=?";
           $stmt = $mysqli->prepare($query);
           $stmt->bind_param('isi', $user_id, $today, $patient_id);

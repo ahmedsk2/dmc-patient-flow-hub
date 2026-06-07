@@ -9,7 +9,7 @@ require ('../dbconnect.php');
    $pname_new = $_REQUEST['pname_new']; 
    $age_new = $_REQUEST['age_new']; 
    $current_location = $_REQUEST['current_location_new'];
-   $entered_by=$_REQUEST['entered_by'];
+   $entered_by = current_actor_id(); // attribution from session, not a spoofable POST value
      $consultdate_new1=$_REQUEST['consultdate_new'];  
      if (!empty($consultdate_new1)){
        $consultdate_new=date("Y-m-d",strtotime($consultdate_new1));

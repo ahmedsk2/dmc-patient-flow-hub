@@ -4,7 +4,7 @@ csrf_verify();
  
 require_once ('../dbconnect.php');
 $pid = $_REQUEST['patientid']; 
-$userid =$id = $_REQUEST['userid']; 
+$userid = $id = current_actor_id(); // attribution from session, not a spoofable POST value
 date_default_timezone_set('Asia/Riyadh');
 $today=date("Y-m-d");
 

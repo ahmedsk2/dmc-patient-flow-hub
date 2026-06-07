@@ -4,7 +4,8 @@ csrf_verify();
  
 require_once ('../dbconnect.php');
 $id = $_REQUEST['id_modify']; 
-$userid = $_REQUEST['userid']; 
+$userid = current_actor_id(); // attribution from session, not a spoofable POST value
+
 
    
 $disdate1 = $_REQUEST['disdate']; 

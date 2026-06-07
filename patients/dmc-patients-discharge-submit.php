@@ -10,7 +10,8 @@ $id = $_REQUEST['id_modify'];
    $pname_modify = $_REQUEST['pname_modify']; 
    $age = $_REQUEST['age']; 
    $nationality_modify=$_REQUEST['nationality_modify']; 
-   $userid = $_REQUEST['userid']; 
+   $userid = current_actor_id(); // attribution from session, not a spoofable POST value
+
 
   
 

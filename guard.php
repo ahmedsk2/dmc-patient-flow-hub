@@ -71,6 +71,18 @@ if (!function_exists('current_user')) {
     }
 }
 
+if (!function_exists('current_actor_id')) {
+    // The authenticated actor's member_id, taken ONLY from the server session — the
+    // trustworthy source for "who performed this action" attribution columns
+    // (admitted_by / trans_discharge_by / entered_by_id). NEVER source these from the
+    // request body: a logged-in user could otherwise forge attribution. NOTE: assignment
+    // TARGETS (e.g. the selected consultant_id) are a separate, legitimate client choice
+    // and are intentionally NOT covered by this helper.
+    function current_actor_id() {
+        return (int) ($_SESSION['member_id'] ?? 0);
+    }
+}
+
 if (!function_exists('require_role')) {
     function require_role(array $allowed) {
         require_login();

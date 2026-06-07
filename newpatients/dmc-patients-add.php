@@ -10,7 +10,7 @@ require_once ('../dbconnect.php');
    $nationality_new=$_REQUEST['nationality_new']; 
    $age_new = $_REQUEST['age_new']; 
    $current_location = $_REQUEST['current_location_new'];
-   $admitted_by=$_REQUEST['admitted_by'];
+   $admitted_by = current_actor_id(); // attribution: the logged-in actor, NOT a spoofable POST value
      $admdate1_new=$_REQUEST['admdate_new'];  
      if (!empty($admdate1_new)){
        $admdate=date("Y-m-d",strtotime($admdate1_new));
