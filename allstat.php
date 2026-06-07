@@ -218,7 +218,7 @@ $('.year111').change(function(){
   year =document.getElementById('year1').value;
  
     // disto.style.display = "none";
-    buttons.innerHTML ="<a href='statistics/a4.php?y="+year+"' class='btn btn-success' style='line-height: 150%;margin: 0px 2%;' target='_blank'>Yearly</a><a href='statistics/a4-monthly.php?y="+year+"' style='line-height: 150%;margin: 0px 2%;' class='btn btn-success'  target='_blank'>Monthly</a>";
+    buttons.innerHTML ="<a href='statistics/a4.php?y="+year+"' class='btn btn-success' style='line-height: 150%;margin: 0px 2%;' target='_blank'>Yearly</a><a href='statistics/a4-monthly.php?y="+year+"' style='line-height: 150%;margin: 0px 2%;' class='btn btn-success'  target='_blank'>Monthly</a><a href='pdf-report.php?y="+year+"' style='line-height: 150%;margin: 0px 2%;' class='btn btn-primary' target='_blank'><i class='fas fa-file-pdf'></i> PDF</a>";
     
     // mortuary.style.display = "block";
 
