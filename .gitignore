@@ -34,6 +34,7 @@ work-orderes/
 # --- Local dev tooling (never deployed / committed) ---
 dev-router.php
 .claude/launch.json
+tools/stats-baselines/
 
 # --- OS / editor cruft ---
 Thumbs.db
