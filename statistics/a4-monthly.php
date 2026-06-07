@@ -205,9 +205,9 @@ page[size="A4"][layout="landscape"] {
 
   
     foreach($consultants as $c){
-    $formationSQL = "SELECT ADMDATE, DISDATE FROM picupatients WHERE DISDATE IS NOT NULL AND consultant_id=? AND MONTH(DISDATE) = ? AND YEAR(DISDATE) = ? AND (current_location != 'ICU' or current_location is null)";
+    $formationSQL = "SELECT ADMDATE, DISDATE FROM picupatients WHERE DISDATE IS NOT NULL AND consultant_id=? AND DISDATE BETWEEN ? AND ? AND (current_location != 'ICU' or current_location is null)";
     $stmt = $mysqli->prepare($formationSQL);
-    $stmt->bind_param('iii', $c['member_id'], $mdate1, $ydate1);
+    $stmt->bind_param('iss', $c['member_id'], $first_day_ofmonth, $last_day_ofmonth);
     $stmt->execute();
     $result1 = $stmt->get_result();
     $datesss = $result1 -> fetch_all(MYSQLI_ASSOC);
@@ -239,9 +239,9 @@ page[size="A4"][layout="landscape"] {
 
         ///// Discharge / Transfer to
         $title='Discharge / Transfer in '.$ydate1;
-        $formationSQL = "SELECT DISTO, DISDATE, COUNT(*) FROM picupatients WHERE DISDATE IS NOT NULL AND MONTH(DISDATE) = ? AND YEAR(DISDATE) = ? AND (current_location != 'ICU' or current_location is null) GROUP BY DISTO";
+        $formationSQL = "SELECT DISTO, DISDATE, COUNT(*) FROM picupatients WHERE DISDATE IS NOT NULL AND DISDATE BETWEEN ? AND ? AND (current_location != 'ICU' or current_location is null) GROUP BY DISTO";
         $stmt = $mysqli->prepare($formationSQL);
-        $stmt->bind_param('ii', $mdate1, $ydate1);
+        $stmt->bind_param('ss', $first_day_ofmonth, $last_day_ofmonth);
         $stmt->execute();
         $result1 = $stmt->get_result();
         $DISTO = $result1 -> fetch_all(MYSQLI_ASSOC);
@@ -317,9 +317,9 @@ page[size="A4"][layout="landscape"] {
       // Medical Los
       /////////////
   
-      $formationSQL = "SELECT ADMDATE, med_DISDATE FROM picupatients WHERE DISDATE IS NOT NULL AND MONTH(DISDATE) = ? AND YEAR(DISDATE) = ? AND (current_location != 'ICU' or current_location is null)";
+      $formationSQL = "SELECT ADMDATE, med_DISDATE FROM picupatients WHERE DISDATE IS NOT NULL AND DISDATE BETWEEN ? AND ? AND (current_location != 'ICU' or current_location is null)";
       $stmt = $mysqli->prepare($formationSQL);
-      $stmt->bind_param('ii', $mdate1, $ydate1);
+      $stmt->bind_param('ss', $first_day_ofmonth, $last_day_ofmonth);
       $stmt->execute();
       $result1 = $stmt->get_result();
       $datesss = $result1 -> fetch_all(MYSQLI_ASSOC);
@@ -346,9 +346,9 @@ page[size="A4"][layout="landscape"] {
       // physical Los
       /////////////
   
-      $formationSQL = "SELECT ADMDATE, DISDATE FROM picupatients WHERE DISDATE IS NOT NULL AND MONTH(DISDATE) = ? AND YEAR(DISDATE) = ? AND (current_location != 'ICU' or current_location is null)";
+      $formationSQL = "SELECT ADMDATE, DISDATE FROM picupatients WHERE DISDATE IS NOT NULL AND DISDATE BETWEEN ? AND ? AND (current_location != 'ICU' or current_location is null)";
       $stmt = $mysqli->prepare($formationSQL);
-      $stmt->bind_param('ii', $mdate1, $ydate1);
+      $stmt->bind_param('ss', $first_day_ofmonth, $last_day_ofmonth);
       $stmt->execute();
       $result1 = $stmt->get_result();
       $datesss = $result1 -> fetch_all(MYSQLI_ASSOC);
@@ -375,9 +375,9 @@ page[size="A4"][layout="landscape"] {
       // ICU physical Los
       /////////////
   
-      $formationSQL = "SELECT ADMDATE, DISDATE FROM picupatients WHERE DISDATE IS NOT NULL AND MONTH(DISDATE) = ? AND YEAR(DISDATE) = ? AND current_location ='ICU'";
+      $formationSQL = "SELECT ADMDATE, DISDATE FROM picupatients WHERE DISDATE IS NOT NULL AND DISDATE BETWEEN ? AND ? AND current_location ='ICU'";
       $stmt = $mysqli->prepare($formationSQL);
-      $stmt->bind_param('ii', $mdate1, $ydate1);
+      $stmt->bind_param('ss', $first_day_ofmonth, $last_day_ofmonth);
       $stmt->execute();
       $result1 = $stmt->get_result();
       $icudatesss = $result1 -> fetch_all(MYSQLI_ASSOC);
@@ -481,9 +481,9 @@ $date_day= $date1;
     ///// readmissions
 //////////////////////////
 // echo $mdate1 ."</br>";
-$formationSQL = "SELECT * FROM picupatients WHERE MONTH(ADMDATE) = ? AND YEAR(ADMDATE) = ?";
+$formationSQL = "SELECT * FROM picupatients WHERE ADMDATE BETWEEN ? AND ?";
 $stmt = $mysqli->prepare($formationSQL);
-$stmt->bind_param('ii', $mdate1, $ydate1);
+$stmt->bind_param('ss', $first_day_ofmonth, $last_day_ofmonth);
 $stmt->execute();
 $result1 = $stmt->get_result();
 $admitted_patients = $result1 -> fetch_all(MYSQLI_ASSOC);
