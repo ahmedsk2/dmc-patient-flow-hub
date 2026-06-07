@@ -130,5 +130,14 @@
 
       // Start loading content
       loadContent();
+
+      // PERF-06 — near-real-time refresh: the dashboard is a read-only monitoring board, so
+      // reload periodically to pick up new admissions / discharges / consultations. A full reload
+      // is leak-free (no orphaned Chart.js instances from re-injecting the fragments) and only
+      // fires while the tab is visible, so background tabs don't keep hammering the DB.
+      var DASH_REFRESH_MS = 5 * 60 * 1000; // 5 minutes
+      setInterval(function () {
+        if (document.visibilityState === 'visible') { location.reload(); }
+      }, DASH_REFRESH_MS);
     });
   </script>
