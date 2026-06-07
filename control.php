@@ -381,6 +381,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                                         <p><?= htmlspecialchars($member['member_email'], ENT_QUOTES, 'UTF-8') ?></p>
                                                         <?php if (in_array($user['position'], $access_PICU_control)): ?>
                                                             <form method="post" action="send-reset-pass-by-admin.php" style="display:inline; margin:0;"><?= csrf_field() ?><input type="hidden" name="email" value="<?= htmlspecialchars($member['member_email'], ENT_QUOTES, 'UTF-8') ?>"><button type="submit" class="btn btn-link p-0" style="font-size:inherit; vertical-align:baseline;">Send Reset Password Email</button></form>
+                                                            <?php if (!empty($member['mfa_secret'])): ?>
+                                                                <br><form method="post" action="mfa-admin-reset.php" style="display:inline; margin:0;" onsubmit="return confirm('Reset MFA for this user? They will sign in with password only until they re-enroll.');"><?= csrf_field() ?><input type="hidden" name="member_id" value="<?= htmlspecialchars($member['member_id'], ENT_QUOTES, 'UTF-8') ?>"><button type="submit" class="btn btn-link p-0 text-danger" style="font-size:inherit; vertical-align:baseline;"><i class="fas fa-shield-alt"></i> Reset MFA (locked out)</button></form>
+                                                            <?php endif; ?>
                                                         <?php endif; ?>
                                                     </td>
                                                     <td class='eachcol position'>
@@ -506,6 +509,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                                         <p><?= htmlspecialchars($member['member_email'], ENT_QUOTES, 'UTF-8') ?></p>
                                                         <?php if (in_array($user['position'], $access_PICU_control)): ?>
                                                             <form method="post" action="send-reset-pass-by-admin.php" style="display:inline; margin:0;"><?= csrf_field() ?><input type="hidden" name="email" value="<?= htmlspecialchars($member['member_email'], ENT_QUOTES, 'UTF-8') ?>"><button type="submit" class="btn btn-link p-0" style="font-size:inherit; vertical-align:baseline;">Send Reset Password Email</button></form>
+                                                            <?php if (!empty($member['mfa_secret'])): ?>
+                                                                <br><form method="post" action="mfa-admin-reset.php" style="display:inline; margin:0;" onsubmit="return confirm('Reset MFA for this user? They will sign in with password only until they re-enroll.');"><?= csrf_field() ?><input type="hidden" name="member_id" value="<?= htmlspecialchars($member['member_id'], ENT_QUOTES, 'UTF-8') ?>"><button type="submit" class="btn btn-link p-0 text-danger" style="font-size:inherit; vertical-align:baseline;"><i class="fas fa-shield-alt"></i> Reset MFA (locked out)</button></form>
+                                                            <?php endif; ?>
                                                         <?php endif; ?>
                                                     </td>
                                                     <td class='eachcol position'>
