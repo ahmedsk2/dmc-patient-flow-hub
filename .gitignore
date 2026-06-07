@@ -14,15 +14,21 @@ php_errorlog
 **/php_errorlog
 *.log
 
-# --- Large third-party libs & generated assets (kept on disk, not tracked) ---
-vendor/
-dist/
+# --- Runtime assets: COMMITTED so the repo is self-contained / clone-deployable ---
+# This app has no package manager; jQuery/Bootstrap/Chart.js/Select2 (vendor/),
+# AdminLTE + the logo (dist/), and FontAwesome web fonts (css/webfonts/, referenced
+# by css/css/all.min.css) are all required at runtime. They are vendored copies and
+# are tracked in git so a fresh `git clone` is a working deploy. Verified free of
+# secrets/PHI before committing.
+
+# --- FontAwesome source/extra assets NOT used at runtime (no code references) ---
 css/svgs/
-css/webfonts/
 css/sprites/
 css/less/
 css/scss/
 css/metadata/
+
+# --- AdminLTE build sources, unused at runtime ("orderes" is the upstream typo) ---
 work-orderes/
 
 # --- OS / editor cruft ---
