@@ -140,7 +140,7 @@ if(!$isLoggedIn) {
                             <div class="col-8">
                             <input type="hidden" name="member_id" value="<?php echo htmlspecialchars($user1['member_id'], ENT_QUOTES, 'UTF-8')  ?>">
 
-                            <input type="text" name="member_name" value="<?php echo htmlspecialchars($user1['member_name'], ENT_QUOTES, 'UTF-8')  ?>" placeholder="Login Name" >
+                            <input type="text" name="member_name" value="<?php echo htmlspecialchars($user1['member_name'], ENT_QUOTES, 'UTF-8')  ?>" aria-label="Login name" placeholder="Login Name" >
                             </div>
                         </div>
                   </div>
@@ -151,7 +151,7 @@ if(!$isLoggedIn) {
                                 <label>Full / Display Name </label>
                             </div>
                             <div class="col-8">
-                            <input type="text" name="full_name" value="<?php echo htmlspecialchars($user1['full_name'], ENT_QUOTES, 'UTF-8')  ?>" placeholder="Login Name" >
+                            <input type="text" name="full_name" value="<?php echo htmlspecialchars($user1['full_name'], ENT_QUOTES, 'UTF-8')  ?>" aria-label="Full or display name" placeholder="Full / Display Name" >
                             </div>
                         </div>
                   </div>
@@ -162,7 +162,7 @@ if(!$isLoggedIn) {
                                 <label>E-Mail </label>
                             </div>
                             <div class="col-8">
-                            <input type="text" name="member_email" value="<?php echo htmlspecialchars($user1['member_email'], ENT_QUOTES, 'UTF-8')  ?>" placeholder="Login Name" >
+                            <input type="text" name="member_email" value="<?php echo htmlspecialchars($user1['member_email'], ENT_QUOTES, 'UTF-8')  ?>" aria-label="E-mail" placeholder="E-Mail" >
                             </div>
                         </div>
                   </div>

@@ -103,7 +103,7 @@ if (isset($_POST['change_pass'])) {
   	    <label>Old Password</label>
     </div>
     <div class="col-7">
-  	  <input type="password" name="oldpassword" value="" placeholder="Old Password" >
+  	  <input type="password" name="oldpassword" value="" aria-label="Old password" placeholder="Old Password" >
     </div>
 </div>
 
@@ -130,7 +130,7 @@ if (isset($_POST['change_pass'])) {
         <label>Confirm password</label>
     </div>
     <div class="col-7">
-        <input autocomplete="false" type="password" name="password_2" placeholder="Confirm password">
+        <input autocomplete="false" type="password" name="password_2" aria-label="Confirm new password" placeholder="Confirm password">
   	</div>
 </div>
 <div class="input-group mb-3" style='color: red;'>

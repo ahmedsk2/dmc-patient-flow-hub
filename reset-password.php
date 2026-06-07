@@ -128,7 +128,7 @@ if (!empty($_GET['token']))
         <label>Confirm password</label>
     </div>
     <div class="col-7">
-        <input autocomplete="false" type="password" name="password_22" placeholder="Confirm password">
+        <input autocomplete="false" type="password" name="password_22" aria-label="Confirm new password" placeholder="Confirm password">
   	</div>
 </div>
 <div class="input-group mb-3" style='color: red;'>
