@@ -839,7 +839,7 @@ const mymonthlyChart<?php echo $n; ?> = new Chart(
                                 datalabels: {
                                         anchor: 'end',
                                         align: 'end',
-                                        formatter: Math,
+                                        formatter: Math.round,
                                         color: '#00000',
                                         font: {
                                             weight: 'thin',
@@ -907,7 +907,7 @@ const mymonthlyChart<?php echo $n; ?> = new Chart(
         display: false,
                                         anchor: 'end',
                                         align: 'end',
-                                        formatter: Math,
+                                        formatter: Math.round,
                                         color: '#000000',
                                         font: {
                                             weight: 'thin',

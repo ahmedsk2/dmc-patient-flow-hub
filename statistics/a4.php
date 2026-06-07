@@ -814,7 +814,7 @@ const mymonthlyChart = new Chart(
                                 datalabels: {
                                         anchor: 'end',
                                         align: 'top',
-                                        formatter: Math,
+                                        formatter: Math.round,
                                         font: {
                                             weight: 'thin',
                                             size: 14
@@ -887,7 +887,7 @@ const mymonthlyChart = new Chart(
                                 datalabels: {
                                         anchor: 'end',
                                         align: 'top',
-                                        formatter: Math,
+                                        formatter: Math.round,
                                         font: {
                                             weight: 'thin',
                                             size: 14
@@ -968,7 +968,7 @@ const mymonthlyChart = new Chart(
                                 datalabels: {
                                         anchor: 'end',
                                         align: 'top',
-                                        formatter: Math,
+                                        formatter: Math.round,
                                         font: {
                                             weight: 'thin',
                                             size: 14
@@ -1053,7 +1053,7 @@ const mymonthlyChart = new Chart(
                                 datalabels: {
                                         anchor: 'center',
                                         align: 'center',
-                                        formatter: Math,
+                                        formatter: Math.round,
                                         color: '#ffffff',
                                         font: {
                                             weight: 'thin',
@@ -1124,7 +1124,7 @@ const mymonthlyChart = new Chart(
         display: false,
                                         anchor: 'end',
                                         align: 'end',
-                                        formatter: Math,
+                                        formatter: Math.round,
                                         color: '#000000',
                                         font: {
                                             weight: 'thin',

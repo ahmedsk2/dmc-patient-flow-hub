@@ -379,6 +379,6 @@ $(function() {
 </script>
 
 
-<script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/daterangepicker@3.1/daterangepicker.min.js"></script>
+<script src="vendor/moments.js/2.30.1/moment.min.js"></script>
+<script src="vendor/daterangepicker/3.1.0/daterangepicker.min.js"></script>
 <!-- then your own script that calls picker.startDate.format(...) -->
