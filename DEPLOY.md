@@ -148,9 +148,17 @@ on confirmed success, (c) be written atomically, (d) appear in `audit_log`):**
 
 ## 7. Known follow-ups still open (see PROJECT-TRACKER.md "Decisions needed")
 
-These are intentionally **not** done and need clinical/product input before they are safe to implement:
-the canonical "active patient" definition for de-duplication, the UI/UX overhaul, and the
-PHPExcel→PhpSpreadsheet swap (needs Composer). The statistics `MONTH(DISDATE)`/`YEAR(ADMDATE)`
-cross-column anomalies and the readmission-window logic were resolved this cycle (Q1/Q4), and CSP +
-removal of `eval()` is **done** (the dashboard now clones inline `<script>` blocks instead — no
-`unsafe-eval` in the policy).
+Still open — need clinical/product input (not safe to implement blind): the canonical
+"active patient" definition for de-duplication, a **soft-delete policy** (delete is currently a
+hard DELETE), and a **re-confirmation of the permission model**. Also a data-cleanup task: ~204
+records hold a mis-entered MRN (patient names / bed numbers typed into the field) that need real
+values — can't be auto-fixed.
+
+Resolved during the renovation: the statistics `MONTH(DISDATE)`/`YEAR(ADMDATE)` cross-column
+anomalies and the readmission-window logic (Q1/Q4); CSP + `eval()` removal is **done** (the
+dashboard clones inline `<script>` blocks — no `unsafe-eval`); the **Excel export no longer uses
+PHPExcel** — it was replaced by a dependency-free `xlsx-writer.php` (**no Composer needed**;
+runtime-verified to emit a valid `.xlsx`) and the abandoned PHPExcel library was removed; and the
+**UI/UX responsive overhaul is done** (wired via `css/app.css`, verified at desktop/tablet/phone).
+Dropping CSP `'unsafe-inline'` (per-request nonces) remains re-platform-scale work (~1,585 inline
+`style=` attributes + 53 inline event handlers that nonces can't cover).

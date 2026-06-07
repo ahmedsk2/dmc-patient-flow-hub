@@ -92,7 +92,7 @@ return HTML fragments or JSON. The crucial structural fact:
 | `registry/` | search-results (admissions / diagnosis / consultations), patient-details, modify, Excel export | **no auth** (all) |
 | `statistics/` | kpis, charts, charts1, time1, a4, a4-monthly | session-only or **no auth** |
 | `dashboard/` | `1.php`, `3.php` (data fragments); `2.php`, `4.php` are empty | **no auth** |
-| `vendor/` | jQuery 3.7.1, Bootstrap 5.3.3, AdminLTE, FontAwesome 6.5.2, Select2, Chart.js 4.4, moment.js, daterangepicker, html2canvas, **PHPMailer**, **PHPExcel (abandoned)** | third-party |
+| `vendor/` | jQuery 3.7.1, Bootstrap 5.3.3, AdminLTE, FontAwesome 6.5.2, Select2, Chart.js 4.4, moment.js, daterangepicker, html2canvas, **PHPMailer** _(PHPExcel was removed — Excel export now uses the bespoke root `xlsx-writer.php`)_ | third-party |
 | `css/`, `dist/` | AdminLTE theme + custom `css/main.css`; FontAwesome icon set | assets |
 | `work-orderes/` | AdminLTE build sources (unused at runtime; "orderes" is a typo) | dead weight |
 
@@ -449,7 +449,8 @@ readmission sub-queries). One report page is `display:none` and never prints.
 - Branding references `innovia.ai` / `healthpro.Ai` (white-label origin).
 - **Third-party libraries** (vendored, unmanaged): jQuery 3.7.1, Bootstrap 5.3.3, AdminLTE,
   FontAwesome 6.5.2, Select2, Chart.js 4.4, moment.js, daterangepicker, html2canvas,
-  PHPMailer (current-ish), **PHPExcel (end-of-life; CVEs — used by `registry/export-results-exel.php`)**.
+  PHPMailer (current-ish). _(PHPExcel was **removed** — the Excel export in `registry/export-results-exel.php`
+  now uses the bespoke, dependency-free root `xlsx-writer.php`; no Composer/PhpSpreadsheet needed.)_
 - **No `.env`, no config separation, no secrets manager, no `.gitignore`, no CI, no tests.**
 
 ### Run/deploy (observed)
