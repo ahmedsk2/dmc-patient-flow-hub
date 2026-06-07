@@ -721,3 +721,66 @@ input {
   margin-bottom: 4px;
   font-size: 0.85em;
 }
+
+/* ==========================================================================
+   #MODAL FORM LAYOUT   [UI-05]
+   ========================================================================== */
+/*
+ * Many modal forms (Admit, Discharge, Consultation, Transfer, etc.) use bare
+ * <input class='txtdata'> / <select class='txtdata'> without Bootstrap's
+ * .form-control, so inputs default to browser-native inline width — narrow on
+ * tablet/mobile. Fix: force all non-checkbox/radio/hidden inputs and all
+ * selects inside .modal-body to fill available width. Select2-enhanced
+ * elements are unaffected: Select2 hides the original <select> and sizes its
+ * own container from the explicit `width:'100%'` in the JS init.
+ * Labels get block layout + spacing so each label stacks cleanly above its
+ * field instead of flowing inline next to it.
+ */
+.modal-body label {
+  display: block;
+  margin-top: 10px;
+  margin-bottom: 2px;
+  font-weight: 500;
+}
+
+.modal-body input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]) {
+  width: 100%;
+  display: block;
+}
+
+.modal-body select {
+  width: 100%;
+  display: block;
+}
+
+/* ==========================================================================
+   #PATIENT CARD — INLINE EDIT INPUT WIDTH   [UI-06]
+   ========================================================================== */
+/*
+ * The editable inline inputs on patient cards (Bed, MRN, Name, Age, Date)
+ * carry class 'txtdata' but no width:100% inline style, so they render at
+ * browser-default width (~10em) instead of filling the card cell.
+ * With the .eachcol cells now display:block (UI-02), the inputs can fill
+ * the full cell width. Hidden inputs are excluded.
+ */
+.eachrow.card .eachcol input.txtdata:not([type="hidden"]) {
+  width: 100%;
+  display: block;
+}
+
+/* ==========================================================================
+   #FILTER FORM — SEARCH / REGISTRY INPUTS   [UI-07]
+   ========================================================================== */
+/*
+ * Filter form inputs inside Bootstrap cards (search.php, control.php user
+ * table) use class 'txtdata' but no width:100%. On a phone the column is
+ * full-width but the input stays narrow. Make them fill their column.
+ * Checkboxes and radios already carry inline style='width:auto;' which
+ * overrides this rule, so they are unaffected.
+ * Statistics page inputs use class 'txtdata1' (not 'txtdata') plus explicit
+ * inline widths — also unaffected.
+ */
+.card-body input.txtdata:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]) {
+  width: 100%;
+  display: block;
+}
