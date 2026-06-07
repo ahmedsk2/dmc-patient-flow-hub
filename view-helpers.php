@@ -36,3 +36,19 @@ if (!function_exists('los_band_badge')) {
              . "</span>";
     }
 }
+
+if (!function_exists('h')) {
+    /**
+     * Null-safe HTML escape for echoing a value into HTML text/attribute context.
+     * Equivalent to htmlspecialchars($v, ENT_QUOTES, 'UTF-8') but tolerates null —
+     * PHP 8.1+ deprecates passing null to htmlspecialchars(). Use this for new output
+     * sinks, especially nullable DB columns (DISDATE / med_DISDATE / MORTALITY / DISTO /
+     * trans_discharge / delay / signoff_date, etc.), so they never raise E_DEPRECATED.
+     *
+     * @param string|int|float|null $v
+     * @return string escaped output, safe to echo
+     */
+    function h($v) {
+        return htmlspecialchars((string) ($v ?? ''), ENT_QUOTES, 'UTF-8');
+    }
+}

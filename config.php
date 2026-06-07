@@ -15,6 +15,15 @@
 // 0) Global uncaught-exception / fatal safety net (registered as early as possible).
 require_once __DIR__ . '/error-handler.php';
 
+// 0b) Error-reporting policy (legacy bridge): report everything EXCEPT E_DEPRECATED.
+// PHP 8.1+ raises "Passing null to ... htmlspecialchars()" deprecations across ~540
+// legacy output sinks; the calls are benign (null coerces to '') but would flood the
+// error log (log_errors=On). Excluding E_DEPRECATED keeps the log focused on real
+// warnings/errors; the uncaught/fatal net above and normal warnings are unaffected, and
+// display_errors stays Off in prod so end users never saw these regardless. Prefer the
+// null-safe h() helper (view-helpers.php) in new code; revisit at the framework re-platform.
+error_reporting(E_ALL & ~E_DEPRECATED);
+
 // 1) Local overrides (git-ignored). May define the DB_*/SMTP_* constants directly.
 $__local = __DIR__ . '/config.local.php';
 if (is_file($__local)) {

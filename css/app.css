@@ -169,3 +169,19 @@
   width: 100%;
   display: block;
 }
+
+/* ==========================================================================
+   #CARD-FORM SUBMIT BUTTONS — NO OVERFLOW   [UI-08]
+   ========================================================================== */
+/*
+ * Control-panel cards (and any card holding a small form) place a submit button
+ * directly in the form. In a narrow col-md-3 on a tablet, a long label
+ * ("Add Allied Specialty") makes the button wider than its column, so it pokes
+ * a few px past the viewport edge. Cap the button to its container and let the
+ * label wrap. max-width:100% is a no-op for buttons that already fit, so this is
+ * safe for every other card-form button too.
+ */
+.card-body > form > .btn {
+  max-width: 100%;
+  white-space: normal;
+}
