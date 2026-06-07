@@ -24,9 +24,22 @@ $id = $_REQUEST['id_modify'];
    $admissiondiagnosis_modify1 = $_REQUEST['admissiondiagnosis_modify'];
    $admissiondiagnosis = json_encode($admissiondiagnosis_modify1);
 
+   // CLIN-MRN: canonical MRN format is digits-only (<=11). ~1.4% of legacy records hold a
+   // non-conforming MRN from data-entry errors (names/beds typed into the field); enforcing the
+   // format on every save would block editing those patients' OTHER fields. So validate the MRN
+   // only when it is actually being CHANGED — setting a new MRN still requires the clean format.
+   $mrn_changed = true;
+   if ($mrn_check = $mysqli->prepare("SELECT MRN FROM picupatients WHERE ID = ?")) {
+       $mrn_check->bind_param("i", $id);
+       $mrn_check->execute();
+       $mrn_row = $mrn_check->get_result()->fetch_assoc();
+       $mrn_check->close();
+       if ($mrn_row && (string) $mrn_row['MRN'] === (string) $mrn_modify) { $mrn_changed = false; }
+   }
+
    // W3: validate the edited patient record before persisting (client checks are bypassable).
    $verr = v_first([
-       v_mrn($mrn_modify),
+       $mrn_changed ? v_mrn($mrn_modify) : '',
        v_len($pname_modify, 'Patient name', 100),
        v_in($gender_modify, 'Gender', ['Male', 'Female']),
        v_int_range($age_modify, 'Age', 0, 150),
