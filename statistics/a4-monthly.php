@@ -175,6 +175,26 @@ page[size="A4"][layout="landscape"] {
     $rqr = $stmt->get_result();
     while ($row = $rqr->fetch_assoc()) { $readmissionByMonth[$row['ym']] = (int) $row['c']; }
 
+        // Per-(month,consultant) LOS for the whole year in ONE grouped fetch (was an N-consultants query
+    // loop PER month) + the 3 per-month LOS metrics as grouped-by-month maps. Day-diffs are exact
+    // integers -> PHP averages are order-independent -> byte-identical to the per-month loops.
+    $cLosByMC = [];
+    $cLosStmt = $mysqli->prepare("SELECT consultant_id, MONTH(DISDATE) m, ADMDATE, DISDATE FROM picupatients WHERE DISDATE IS NOT NULL AND DISDATE BETWEEN ? AND ? AND (current_location != 'ICU' or current_location is null)");
+    $cLosStmt->bind_param('ss', $gyStart, $gyEnd); $cLosStmt->execute();
+    $cRes = $cLosStmt->get_result();
+    while ($x = $cRes->fetch_assoc()) { $cLosByMC[(int) $x['m']][(int) $x['consultant_id']][] = abs(strtotime($x['ADMDATE']) - strtotime($x['DISDATE'])) / 86400; }
+    $mLosAvg = function ($endCol, $extra) use ($mysqli, $gyStart, $gyEnd) {
+        $st = $mysqli->prepare("SELECT MONTH(DISDATE) m, ADMDATE, $endCol e FROM picupatients WHERE DISDATE IS NOT NULL AND DISDATE BETWEEN ? AND ?$extra");
+        $st->bind_param('ss', $gyStart, $gyEnd); $st->execute();
+        $r = $st->get_result(); $b = [];
+        while ($x = $r->fetch_assoc()) { $b[(int) $x['m']][] = abs(strtotime($x['ADMDATE']) - strtotime($x['e'])) / 86400; }
+        $o = []; foreach ($b as $m => $l) { $o[$m] = count($l) ? array_sum($l) / count($l) : 0; } return $o;
+    };
+    $nicuY = " AND (current_location != 'ICU' or current_location is null)";
+    $mLosByM   = $mLosAvg('med_DISDATE', $nicuY);
+    $losByM    = $mLosAvg('DISDATE', $nicuY);
+    $icuLosByM = $mLosAvg('DISDATE', " AND current_location ='ICU'");
+
     /// get monthly data
     while($n < 12){
 
@@ -225,34 +245,10 @@ page[size="A4"][layout="landscape"] {
 
   
     foreach($consultants as $c){
-    $formationSQL = "SELECT ADMDATE, DISDATE FROM picupatients WHERE DISDATE IS NOT NULL AND consultant_id=? AND DISDATE BETWEEN ? AND ? AND (current_location != 'ICU' or current_location is null)";
-    $stmt = $mysqli->prepare($formationSQL);
-    $stmt->bind_param('iss', $c['member_id'], $first_day_ofmonth, $last_day_ofmonth);
-    $stmt->execute();
-    $result1 = $stmt->get_result();
-    $datesss = $result1 -> fetch_all(MYSQLI_ASSOC);
-
-    $los=array();
-      
-    foreach ($datesss as $d){
-      $timeDiff = abs(strtotime($d['ADMDATE']) - strtotime($d['DISDATE']));
-    
-      array_push($los,$timeDiff/86400);
-      
-    }
-
-    if(count($los) > 0) {
-      $average = array_sum($los)/count($los);
-    } else {
-      $average = 0;
-    }
-
-    if($average>0){
-      array_push($consultantLOS,(number_format(($average), 1, '.', '')));
-      } else {
-        array_push($consultantLOS,0);
-              }
-    array_push($consultantname,$c['full_name']);
+      $los = $cLosByMC[(int) $mdate1][(int) $c['member_id']] ?? [];
+      $average = count($los) > 0 ? array_sum($los) / count($los) : 0;
+      if ($average > 0) { array_push($consultantLOS, (number_format(($average), 1, '.', ''))); } else { array_push($consultantLOS, 0); }
+      array_push($consultantname, $c['full_name']);
     }
 
 
@@ -311,91 +307,11 @@ page[size="A4"][layout="landscape"] {
       // counter below (the % there divides by array_sum($discharges)), so reproduce it exactly.
       $dischargedpcount = $disMap[$ds] ?? 0;
       //////////////
-      // Medical Los
-      /////////////
-  
-      $formationSQL = "SELECT ADMDATE, med_DISDATE FROM picupatients WHERE DISDATE IS NOT NULL AND DISDATE BETWEEN ? AND ? AND (current_location != 'ICU' or current_location is null)";
-      $stmt = $mysqli->prepare($formationSQL);
-      $stmt->bind_param('ss', $first_day_ofmonth, $last_day_ofmonth);
-      $stmt->execute();
-      $result1 = $stmt->get_result();
-      $datesss = $result1 -> fetch_all(MYSQLI_ASSOC);
-      
-      // echo $mdate1 . "</br>";
-    
-      $los=array();
-      
-      foreach ($datesss as $d){
-        $timeDiff = abs(strtotime($d['ADMDATE']) - strtotime($d['med_DISDATE']));
-      
-        array_push($los,$timeDiff/86400);
-        
-      }
-      // var_dump($los);
-      // $a = array_filter($los);
-      if(count($los) > 0) {
-        $m_average = array_sum($los)/count($los);
-      } else {
-        $m_average = 0;
-      }
-     
-       //////////////
-      // physical Los
-      /////////////
-  
-      $formationSQL = "SELECT ADMDATE, DISDATE FROM picupatients WHERE DISDATE IS NOT NULL AND DISDATE BETWEEN ? AND ? AND (current_location != 'ICU' or current_location is null)";
-      $stmt = $mysqli->prepare($formationSQL);
-      $stmt->bind_param('ss', $first_day_ofmonth, $last_day_ofmonth);
-      $stmt->execute();
-      $result1 = $stmt->get_result();
-      $datesss = $result1 -> fetch_all(MYSQLI_ASSOC);
-      
-      // echo $mdate1 . "</br>";
-    
-      $los=array();
-      
-      foreach ($datesss as $d){
-        $timeDiff = abs(strtotime($d['ADMDATE']) - strtotime($d['DISDATE']));
-      
-        array_push($los,$timeDiff/86400);
-        
-      }
-      // var_dump($los);
-      // $a = array_filter($los);
-      if(count($los) > 0) {
-        $average = array_sum($los)/count($los);
-      } else {
-        $average = 0;
-      }
-
-      //////////////
-      // ICU physical Los
-      /////////////
-  
-      $formationSQL = "SELECT ADMDATE, DISDATE FROM picupatients WHERE DISDATE IS NOT NULL AND DISDATE BETWEEN ? AND ? AND current_location ='ICU'";
-      $stmt = $mysqli->prepare($formationSQL);
-      $stmt->bind_param('ss', $first_day_ofmonth, $last_day_ofmonth);
-      $stmt->execute();
-      $result1 = $stmt->get_result();
-      $icudatesss = $result1 -> fetch_all(MYSQLI_ASSOC);
-      
-      // echo $mdate1 . "</br>";
-    
-      $los=array();
-      
-      foreach ($icudatesss as $d){
-        $timeDiff = abs(strtotime($d['ADMDATE']) - strtotime($d['DISDATE']));
-      
-        array_push($los,$timeDiff/86400);
-        
-      }
-      // var_dump($los);
-      // $a = array_filter($los);
-      if(count($los) > 0) {
-        $icuaverageLOS = array_sum($los)/count($los);
-      } else {
-        $icuaverageLOS = 0;
-      }
+      // Medical / physical / ICU LOS — grouped month-map lookups (built once above the loop)
+      $mi = (int) $mdate1;
+      $m_average     = $mLosByM[$mi]   ?? 0;
+      $average       = $losByM[$mi]    ?? 0;
+      $icuaverageLOS = $icuLosByM[$mi] ?? 0;
 
 
 ////////////////////////////////////
