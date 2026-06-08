@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdmissionsController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\ConsultationsController;
 use App\Http\Controllers\DashboardController;
@@ -20,4 +21,8 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/patients', [PatientsController::class, 'index'])->name('patients.index');
     Route::get('/consultations', [ConsultationsController::class, 'index'])->name('consultations.index');
+
+    Route::get('/admissions/create', [AdmissionsController::class, 'create'])->name('admissions.create');
+    Route::post('/admissions', [AdmissionsController::class, 'store'])->name('admissions.store');
+    Route::get('/api/icd10', [AdmissionsController::class, 'icd10'])->name('icd10.search');
 });

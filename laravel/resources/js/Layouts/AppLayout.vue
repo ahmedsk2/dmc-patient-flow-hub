@@ -1,15 +1,20 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 
 const logout = () => router.post('/logout');
-
-import { computed } from 'vue';
 
 defineProps({ title: { type: String, default: '' } });
 
 const page = usePage();
 const sidebarOpen = ref(false);
+
+// flash toast
+const toast = ref(null);
+let toastTimer = null;
+watch(() => page.props.flash, (f) => {
+    if (f && f.message) { toast.value = f; clearTimeout(toastTimer); toastTimer = setTimeout(() => (toast.value = null), 4500); }
+}, { immediate: true, deep: true });
 
 const nav = [
     { label: 'Dashboard', href: '/', icon: 'grid' },
@@ -126,5 +131,18 @@ const icons = {
                 <slot />
             </main>
         </div>
+
+        <!-- Flash toast -->
+        <Transition enter-active-class="transition duration-300" enter-from-class="translate-y-3 opacity-0" leave-active-class="transition duration-300" leave-to-class="translate-y-3 opacity-0">
+            <div v-if="toast" class="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl px-5 py-3.5 text-sm font-semibold text-white shadow-2xl"
+                :class="toast.type === 'error' ? 'bg-danger-600' : 'bg-success-600'">
+                <svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path v-if="toast.type === 'error'" stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0 3.75h.008M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                    <path v-else stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+                {{ toast.message }}
+            </div>
+        </Transition>
     </div>
 </template>
+

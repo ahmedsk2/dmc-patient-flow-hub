@@ -1,0 +1,144 @@
+<script setup>
+import { ref, watch } from 'vue';
+import { Head, useForm } from '@inertiajs/vue3';
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+const props = defineProps({ consultants: Array, countries: Array, locations: Array, admitFrom: Array });
+
+const today = new Date().toISOString().slice(0, 10);
+const form = useForm({
+    mrn: '', name: '', age: '', gender: '', nationality: '',
+    bed: '', admit_date: today, admitted_from: 'ER', current_location: 'Ward',
+    consultant_id: '', diagnoses: [],
+});
+
+// ICD-10 async picker
+const dxQuery = ref('');
+const dxResults = ref([]);
+const selectedDx = ref([]);
+let dxTimer = null;
+watch(dxQuery, (q) => {
+    clearTimeout(dxTimer);
+    if (q.trim().length < 2) { dxResults.value = []; return; }
+    dxTimer = setTimeout(async () => {
+        const r = await fetch(`/api/icd10?q=${encodeURIComponent(q.trim())}`, { headers: { Accept: 'application/json' } });
+        dxResults.value = await r.json();
+    }, 250);
+});
+const addDx = (d) => {
+    if (!selectedDx.value.find((x) => x.code === d.code)) { selectedDx.value.push(d); form.diagnoses.push(d.code); }
+    dxQuery.value = ''; dxResults.value = [];
+};
+const removeDx = (code) => {
+    selectedDx.value = selectedDx.value.filter((x) => x.code !== code);
+    form.diagnoses = form.diagnoses.filter((c) => c !== code);
+};
+
+const submit = () => form.post('/admissions');
+const field = 'w-full rounded-xl border border-ink-200 bg-white px-3.5 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20';
+</script>
+
+<template>
+    <Head title="New Admission" />
+    <AppLayout title="New Admission">
+        <form @submit.prevent="submit" class="mx-auto max-w-4xl space-y-6">
+            <!-- Patient -->
+            <section class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+                <h2 class="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-brand-700">
+                    <span class="grid h-6 w-6 place-items-center rounded-lg bg-brand-100 text-brand-700">1</span> Patient
+                </h2>
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-ink-700">MRN <span class="text-danger-500">*</span></label>
+                        <input v-model="form.mrn" :class="[field, form.errors.mrn && 'border-danger-500']" placeholder="Medical record number" inputmode="numeric" />
+                        <p v-if="form.errors.mrn" class="mt-1 text-xs text-danger-600">{{ form.errors.mrn }}</p>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-ink-700">Full name <span class="text-danger-500">*</span></label>
+                        <input v-model="form.name" :class="[field, form.errors.name && 'border-danger-500']" placeholder="Patient name" />
+                        <p v-if="form.errors.name" class="mt-1 text-xs text-danger-600">{{ form.errors.name }}</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-ink-700">Age</label>
+                            <input v-model="form.age" :class="[field, form.errors.age && 'border-danger-500']" inputmode="numeric" placeholder="Years" />
+                            <p v-if="form.errors.age" class="mt-1 text-xs text-danger-600">{{ form.errors.age }}</p>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-ink-700">Gender</label>
+                            <select v-model="form.gender" :class="field"><option value="">—</option><option>Male</option><option>Female</option></select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-ink-700">Nationality</label>
+                        <input v-model="form.nationality" :class="field" list="countries" placeholder="Country" />
+                        <datalist id="countries"><option v-for="c in countries" :key="c" :value="c" /></datalist>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Admission -->
+            <section class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+                <h2 class="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-brand-700">
+                    <span class="grid h-6 w-6 place-items-center rounded-lg bg-brand-100 text-brand-700">2</span> Admission
+                </h2>
+                <div class="grid gap-4 sm:grid-cols-3">
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-ink-700">Admit date <span class="text-danger-500">*</span></label>
+                        <input v-model="form.admit_date" type="date" :max="today" :class="[field, form.errors.admit_date && 'border-danger-500']" />
+                        <p v-if="form.errors.admit_date" class="mt-1 text-xs text-danger-600">{{ form.errors.admit_date }}</p>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-ink-700">Admitted from</label>
+                        <select v-model="form.admitted_from" :class="field"><option v-for="a in admitFrom" :key="a">{{ a }}</option></select>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-ink-700">Location <span class="text-danger-500">*</span></label>
+                        <select v-model="form.current_location" :class="field"><option v-for="l in locations" :key="l">{{ l }}</option></select>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-ink-700">Bed</label>
+                        <input v-model="form.bed" :class="field" placeholder="Bed / room" />
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="mb-1 block text-sm font-semibold text-ink-700">Consultant</label>
+                        <select v-model="form.consultant_id" :class="field">
+                            <option value="">Leave unassigned (assignment queue)</option>
+                            <option v-for="c in consultants" :key="c.id" :value="c.id">{{ c.name }}</option>
+                        </select>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Diagnoses -->
+            <section class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+                <h2 class="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-brand-700">
+                    <span class="grid h-6 w-6 place-items-center rounded-lg bg-brand-100 text-brand-700">3</span> Admission diagnosis (ICD-10)
+                </h2>
+                <div class="relative">
+                    <input v-model="dxQuery" :class="field" placeholder="Type a code or description (≥2 chars)…" />
+                    <ul v-if="dxResults.length" class="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded-xl border border-ink-100 bg-white py-1 shadow-lg">
+                        <li v-for="d in dxResults" :key="d.code" @click="addDx(d)" class="cursor-pointer px-4 py-2 text-sm hover:bg-brand-50">
+                            <span class="nums font-semibold text-brand-700">{{ d.code }}</span> · {{ d.name }}
+                        </li>
+                    </ul>
+                </div>
+                <div v-if="selectedDx.length" class="mt-3 flex flex-wrap gap-2">
+                    <span v-for="d in selectedDx" :key="d.code" class="inline-flex items-center gap-1.5 rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-700">
+                        <span class="nums">{{ d.code }}</span> {{ d.name }}
+                        <button type="button" @click="removeDx(d.code)" class="text-brand-500 hover:text-danger-600">✕</button>
+                    </span>
+                </div>
+                <p v-else class="mt-3 text-sm text-ink-400">No diagnoses added yet.</p>
+            </section>
+
+            <div class="flex items-center justify-end gap-3">
+                <a href="/patients" class="rounded-xl px-5 py-2.5 text-sm font-semibold text-ink-500 hover:text-ink-700">Cancel</a>
+                <button type="submit" :disabled="form.processing"
+                    class="rounded-xl bg-gradient-to-r from-brand-500 to-brand-700 px-6 py-2.5 font-semibold text-white shadow-lg shadow-brand-900/20 transition hover:from-brand-600 hover:to-brand-800 disabled:opacity-60">
+                    {{ form.processing ? 'Admitting…' : 'Admit patient' }}
+                </button>
+            </div>
+        </form>
+    </AppLayout>
+</template>
