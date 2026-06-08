@@ -30,7 +30,17 @@ $login = curl_get("$BASE/index.php", $COOKIE);
 preg_match('/name="csrf_token" value="([^"]+)"/', $login, $m);
 curl_get("$BASE/index.php", $COOKIE, http_build_query(['member_name' => $USER, 'member_password' => $PASS, 'login' => 'Login', 'csrf_token' => $m[1] ?? '']));
 
-$mysqli = new mysqli('127.0.0.1', 'root', '', 'dmc');
+// Read the DB the same way the app does (config.local.php), so the direct-DB report_data
+// computation and the a4.php numbers fetched over HTTP both come from the SAME database.
+// (Hardcoding 'dmc' here silently compared dmc-data vs the dev server's configured DB.)
+$cfg = __DIR__ . '/../config.local.php';
+if (is_file($cfg)) { require_once $cfg; }
+$mysqli = new mysqli(
+    defined('DB_HOST') ? DB_HOST : '127.0.0.1',
+    defined('DB_USER') ? DB_USER : 'root',
+    defined('DB_PASS') ? DB_PASS : '',
+    defined('DB_NAME') ? DB_NAME : 'dmc'
+);
 
 function grab($pattern, $html) { return preg_match($pattern, $html, $mm) ? $mm[1] : null; }
 function grab_all($pattern, $html) { preg_match_all($pattern, $html, $mm); return $mm[1]; }
