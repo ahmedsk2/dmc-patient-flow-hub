@@ -40,6 +40,10 @@ tools/stats-baselines/
 # local chart snapshots (regenerable; delivered to the user, not repo artifacts):
 tools/e2e/snaps/
 
+# --- Composer phar (downloaded tool; not part of the app) ---
+/composer.phar
+composer-setup.php
+
 # --- OS / editor cruft ---
 Thumbs.db
 .DS_Store
