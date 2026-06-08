@@ -1,0 +1,32 @@
+-- ============================================================================
+-- Migration 11 — consultations.MRN type fix (data integrity)              [DB-NORM-3]
+-- ============================================================================
+-- consultations.MRN was INT, but the MRN is an identifier, not a number — and picupatients.MRN is
+-- mediumtext. Storing an MRN in an INT silently corrupts it:
+--   * MRNs greater than INT max (2147483647) are clamped to 2147483647 — on the current production
+--     copy 13 patients have such an MRN;
+--   * non-numeric MRNs (data-entry errors: names/beds/placeholders typed into the MRN field — ~295
+--     patients) are stored as 0.
+-- In both cases a consultation can no longer be linked back to its patient by MRN.
+--
+-- Fix: widen to VARCHAR(64). This holds any real MRN (large, or non-numeric), is directly comparable
+-- to picupatients.MRN in string context for registry look-ups, and — unlike TEXT/mediumtext — stays
+-- fully indexable without a prefix, so the idx_consultations_mrn index from migration 03 is preserved
+-- and simply rebuilt for the new type by the MODIFY.
+--
+-- The consultation INSERT/UPDATE code already binds MRN as a string ('s'), so once the column is
+-- VARCHAR every NEW consultation stores the MRN faithfully. EXISTING rows are converted in place:
+-- a legitimate numeric MRN becomes its exact decimal string ("3912590" -> "3912590"); the already-
+-- truncated rows keep their (lost) value as a string — this migration cannot recover data that the
+-- INT column already destroyed, it only stops the corruption going forward.
+--
+-- SAFE + non-destructive (no row loss; an in-place column type change). consultations is InnoDB
+-- already. The FKs added in migration 04 are on consultant_id / entered_by_id, NOT on MRN, so they
+-- are unaffected. RUN ONCE in a maintenance window after a verified backup.
+--
+-- Pre-check (current type) / verify (after):
+--   SELECT COLUMN_NAME, COLUMN_TYPE FROM information_schema.COLUMNS
+--     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'consultations' AND COLUMN_NAME = 'MRN';
+-- ============================================================================
+
+ALTER TABLE `consultations` MODIFY `MRN` VARCHAR(64) NULL DEFAULT NULL;
