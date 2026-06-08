@@ -68,6 +68,17 @@ Run from `migrations/` — e.g. `mysql <dbname> < migrations/01-audit-log.sql`. 
       era; e.g. Turkish casino text + a bit.ly link) — see also the SECURITY note below.
 - [ ] After 04/05: `information_schema.KEY_COLUMN_USAGE` shows the 5 `fk_*` constraints; and no table in
       `information_schema.TABLES` has a non-`utf8mb4` collation.
+- [ ] `06-mfa.sql` — adds `members.mfa_secret / mfa_recovery_codes / mfa_enrolled_at` and
+      `settings.mfa_enforcement`. **Required** before MFA can be enrolled/enforced; also: `sidebar.php`'s
+      enforcement gate reads `settings.mfa_enforcement`, so apply this (the enforcement default is 0 = off).
+- [ ] `07-patient-diagnosis.sql` — creates the additive `patient_diagnosis` join table (JSON
+      `admissiondiagnosis` stays authoritative; the table is a queryable projection). Safe, additive.
+- [ ] `08-drop-dead-tables.sql` — drops the unused `consultation_details` and `Notes` tables. **First**
+      confirm they are empty/unused in prod (the file header has the check); destructive, so back up first.
+- [ ] `09-patients-entity.sql` — creates the additive canonical `patients` entity (one row per MRN). Safe.
+- [ ] `10-icd10-id-index.sql` — **PERF, important.** Adds covering index `idx_icd10_id (id, name)` on the
+      72k-row `icd10` table. Without it, every diagnosis lookup is a ~1.3 s full scan and `longterm.php`
+      times out (>60 s); with it, ~0.13 ms. Additive, result-preserving. Verify with `SHOW INDEX FROM icd10`.
 
 ## 4. Server / PHP configuration
 
