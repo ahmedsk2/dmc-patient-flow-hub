@@ -4,23 +4,28 @@ import { Link, router, usePage } from '@inertiajs/vue3';
 
 const logout = () => router.post('/logout');
 
+import { computed } from 'vue';
+
 defineProps({ title: { type: String, default: '' } });
 
 const page = usePage();
 const sidebarOpen = ref(false);
 
 const nav = [
-    { label: 'Dashboard', href: '/', icon: 'grid', active: true },
-    { label: 'New Admissions', href: '#', icon: 'plus' },
-    { label: 'Patients', href: '#', icon: 'bed' },
-    { label: 'Consultations', href: '#', icon: 'chat' },
-    { label: 'Registry', href: '#', icon: 'search' },
-    { label: 'Statistics', href: '#', icon: 'chart' },
-    { label: 'Reports', href: '#', icon: 'doc' },
+    { label: 'Dashboard', href: '/', icon: 'grid' },
+    { label: 'New Admission', href: '/admissions/create', icon: 'plus' },
+    { label: 'Patients', href: '/patients', icon: 'bed' },
+    { label: 'Consultations', href: '/consultations', icon: 'chat' },
+    { label: 'Registry', href: '/registry', icon: 'search' },
+    { label: 'Statistics', href: '/statistics', icon: 'chart' },
+    { label: 'Reports', href: '/reports', icon: 'doc' },
 ];
 const admin = [
-    { label: 'Control Panel', href: '#', icon: 'cog' },
+    { label: 'Control Panel', href: '/control', icon: 'cog' },
 ];
+
+const url = computed(() => page.url);
+const isActive = (href) => href === '/' ? url.value === '/' : url.value.startsWith(href);
 
 // Heroicons-style outline paths (24x24, stroke).
 const icons = {
@@ -55,12 +60,12 @@ const icons = {
                 <p class="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-navy-400">Clinical</p>
                 <Link v-for="item in nav" :key="item.label" :href="item.href"
                     class="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition"
-                    :class="item.active ? 'bg-white/10 text-white shadow-inner' : 'text-navy-200 hover:bg-white/5 hover:text-white'">
-                    <svg class="h-5 w-5 shrink-0" :class="item.active ? 'text-brand-300' : 'text-navy-400 group-hover:text-brand-300'" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor">
+                    :class="isActive(item.href) ? 'bg-white/10 text-white shadow-inner' : 'text-navy-200 hover:bg-white/5 hover:text-white'">
+                    <svg class="h-5 w-5 shrink-0" :class="isActive(item.href) ? 'text-brand-300' : 'text-navy-400 group-hover:text-brand-300'" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" :d="icons[item.icon]" />
                     </svg>
                     {{ item.label }}
-                    <span v-if="item.active" class="ml-auto h-1.5 w-1.5 rounded-full bg-brand-400"></span>
+                    <span v-if="isActive(item.href)" class="ml-auto h-1.5 w-1.5 rounded-full bg-brand-400"></span>
                 </Link>
 
                 <p class="px-3 pt-5 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-navy-400">Administration</p>

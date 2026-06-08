@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\ConsultationsController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\PatientsController;
 use Illuminate\Support\Facades\Route;
 
 // Guest
@@ -15,4 +17,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard.alt');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
+    Route::get('/patients', [PatientsController::class, 'index'])->name('patients.index');
+    Route::get('/consultations', [ConsultationsController::class, 'index'])->name('consultations.index');
 });
