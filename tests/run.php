@@ -31,6 +31,11 @@ $suites = [
     ['Stats: report_data == a4.php',         'tools/report_data_validate.php',       'integration'],
     ['Schema: patient_diagnosis lossless',   'tools/patient_diagnosis_validate.php', 'integration'],
     ['Schema: patients entity faithful',     'tools/patients_validate.php',          'integration'],
+    // E2E (real HTTP, local dev server). setup MUST precede the three suites it provisions accounts for.
+    ['E2E: role accounts + login',           'tools/e2e/setup_accounts.php',         'integration'],
+    ['E2E: patient/consultation lifecycle',  'tools/e2e/test_functional.php',        'integration'],
+    ['E2E: authorization matrix + CSRF',     'tools/e2e/test_authz.php',             'integration'],
+    ['E2E: stats/dashboard endpoints',       'tools/e2e/test_stats.php',             'integration'],
 ];
 
 echo "DMC test runner  (server " . ($serverUp ? "UP @ $base" : "down") . ($unitOnly ? ", --unit" : "") . ")\n";
