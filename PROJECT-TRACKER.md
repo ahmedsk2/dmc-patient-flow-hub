@@ -28,6 +28,26 @@ _Last updated: 2026-06-08_
 
 ## Notes & decisions  _(newest first)_
 
+- **✅ 2026-06-08 — Statistics VALUE-validation pass (displayed numbers vs independent ground truth): 3 stat miscounts fixed, snapshots captured.**
+  Built [`tools/e2e/test_stats_values.php`](tools/e2e/test_stats_values.php) (35 checks) — it extracts every chart's
+  *displayed* numbers (chart-data JS arrays + KPI table cells) and compares them to an INDEPENDENT recomputation
+  from each metric's definition (esp. consultations). The golden master only proved the perf-rewrite preserved the
+  ORIGINAL numbers, so pre-existing miscounts survived; this pass catches them. **Fixed (commit `b59f1e9`):**
+  1. **statistics/charts.php DAILY (per-physician)** — `LEFT JOIN picupatients × consultations ON consultant_id` +
+     `SUM(CASE…)` with **no GROUP BY** → every consultation multiplied by the consultant's patient count, and the same
+     inflated total pushed to every day (flat line). One consultant showed **110,670** "new consultations"/day vs a true
+     35/month. Rewritten to per-day grouped counts per table (no cross join). Now exact.
+  2. **statistics/charts.php MONTHLY (per-physician)** — `$months` built with `date("m")` = zero-padded `"01".."09"`,
+     but the result map is keyed by `MONTH()` integers `1..9`; PHP keeps `"09"` as a STRING key so it never matched →
+     **Jan–Sep silently rendered 0** (showed 39 vs the true 292/yr). Cast the month key to int; all 12 months correct.
+  3. **dashboard/3.php "Total Sign Offs"** — counted sign-offs only among consultations whose `consultation_date` was
+     also in that year, excluding consultations entered in a prior year but signed off this year. Decoupled to count by
+     `signoff_date` independently (now consistent with kpis/time1/a4).
+  **Validated CLEAN (35/35):** kpis full table (Admissions 8436, Discharges 8425, Trans-to-ICU 479, ICU Mortality 149,
+  Ward Mortality 90, 72h Readmissions 324 — all match independent SQL), time1, charts1 (per-month + per-consultant
+  scope = active position-3), charts.php all 3 intervals + per-month, dashboard/1, dashboard/3, a4. Snapshots of all
+  surfaces delivered to the maintainer (rendered from `dmc_prod`). Harness registered in `tests/run.php`.
+
 - **✅ 2026-06-08 — A-to-Z verification pass (real-HTTP harness + browser): 258 checks green, 6 bugs fixed.**
   Built a black-box E2E harness ([`tools/e2e/`](tools/e2e/README.md)) that drives the app as each of the 5
   roles over real HTTP (through guard/CSRF/validate) and asserts DB state, plus a browser pass (Preview MCP)
