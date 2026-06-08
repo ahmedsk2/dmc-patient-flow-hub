@@ -28,6 +28,37 @@ _Last updated: 2026-06-08_
 
 ## Notes & decisions  _(newest first)_
 
+- **✅ 2026-06-08 — A-to-Z verification pass (real-HTTP harness + browser): 258 checks green, 6 bugs fixed.**
+  Built a black-box E2E harness ([`tools/e2e/`](tools/e2e/README.md)) that drives the app as each of the 5
+  roles over real HTTP (through guard/CSRF/validate) and asserts DB state, plus a browser pass (Preview MCP)
+  that confirms every chart actually draws. **Functional 52/52** (admit variants + validation, all 3 assign
+  paths, consultation add/modify/sign-off/delete, two-phase + one-shot + ICU discharge, all 3 transfer types,
+  72h readmission, long-term, mortality, delete, session-sourced attribution); **authz 158/158** (every action
+  endpoint × every role, CSRF 419, object-level IDOR, Observer read-only); **stats 48/48** (clean output + Chart.js
+  data across the param matrix). Registered in `tests/run.php` (auto-skip in CI). **Bugs found & fixed this pass:**
+  1. `search.php` stray `//` rendered under Mortality Status (leaked text before an HTML comment) — `f1fc189`.
+  2. Registry **readmission** search showed "Results Found: N" but **rendered no cards** (filter enforced per-row
+     in PHP while the COUNT ignored it) → pushed the readmission predicate into SQL so count/showing/cards agree — `0a2a80b`.
+  3. **`longterm.php` timed out (>60 s)** → root cause: `icd10` (72,750 rows) had **no index on `id`** (the code
+     column every dx lookup uses); each lookup was a 1.3 s full scan and longterm nests 41×175×per-dx. Added
+     covering index `idx_icd10_id (id, name)` (**migration 10**); 1288 ms→0.13 ms; longterm 60 s→0.83 s. Speeds 8
+     pages that do per-code lookups — `8833cbf`.
+  4. **CSRF gap:** the two assign page-handlers in `dmc-new-admissions.php` (assign-to-me / assign-to-consultant)
+     were the only state-changing writes with no `csrf_verify()` (native form POSTs, not AJAX). Added `csrf_verify()`
+     + `csrf_field()` on the live form; proved blocked. Swept all other page-handlers — clean — `8c7cce9`.
+  5. `dashboard/3.php` emitted a `foreach`-over-null **Warning** that corrupts the eval'd dashboard fragment →
+     `is_array()` guard — `a68bfde`.
+  6. **"Graphs not working":** `statistics/charts1.php` shipped both the LOS and admission chart scripts but only
+     one canvas per KPI, so one `new Chart()` always failed ("can't acquire context") and flooded the console →
+     guarded each build with a canvas-existence check; 0 chart errors after — `8123648`. Browser-verified every
+     surface renders: dashboard (4), statistics KPI+physician charts, allstat (time trend + KPI table), a4 (6),
+     a4-monthly (36).
+  - **⬜ OPEN finding (needs maintainer call — clinical-schema type change):** `consultations.MRN` is `INT` while
+    `picupatients.MRN` is `mediumtext`. In the prod copy **13 patients have an MRN > INT max** (silently truncated
+    to 2147483647 in `consultations`) and **295 have a non-numeric MRN** (would store as 0) — so a consultation for
+    those patients can't be linked back by MRN. Recommend a reviewed migration to widen `consultations.MRN` to match
+    `picupatients.MRN`. Not auto-applied (typed clinical column; downstream reporting may assume int). Spawned as a task.
+
 - **✅ 2026-06-08 — Backlog driven to "everything done except the framework re-platform".** Closed the
   remaining small/medium items: dropped the dead `consultation_details`/`Notes` tables (migration 08);
   removed a4.php's dead `$time=="quarterly"` "A4 twin" (~489 lines); **finished the stats grouped-SQL**
