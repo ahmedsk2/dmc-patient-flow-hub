@@ -73,14 +73,17 @@ const icons = {
                     <span v-if="isActive(item.href)" class="ml-auto h-1.5 w-1.5 rounded-full bg-brand-400"></span>
                 </Link>
 
-                <p class="px-3 pt-5 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-navy-400">Administration</p>
-                <Link v-for="item in admin" :key="item.label" :href="item.href"
-                    class="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-navy-200 transition hover:bg-white/5 hover:text-white">
-                    <svg class="h-5 w-5 shrink-0 text-navy-400 group-hover:text-brand-300" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" :d="icons[item.icon]" />
-                    </svg>
-                    {{ item.label }}
-                </Link>
+                <template v-if="page.props.auth?.user?.is_admin">
+                    <p class="px-3 pt-5 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-navy-400">Administration</p>
+                    <Link v-for="item in admin" :key="item.label" :href="item.href"
+                        class="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition"
+                        :class="isActive(item.href) ? 'bg-white/10 text-white shadow-inner' : 'text-navy-200 hover:bg-white/5 hover:text-white'">
+                        <svg class="h-5 w-5 shrink-0" :class="isActive(item.href) ? 'text-brand-300' : 'text-navy-400 group-hover:text-brand-300'" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" :d="icons[item.icon]" />
+                        </svg>
+                        {{ item.label }}
+                    </Link>
+                </template>
             </nav>
 
             <div class="absolute bottom-0 left-0 right-0 p-4">

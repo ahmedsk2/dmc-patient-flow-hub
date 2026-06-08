@@ -3,10 +3,12 @@
 use App\Http\Controllers\AdmissionsController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\ConsultationsController;
+use App\Http\Controllers\ControlController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PatientActionController;
 use App\Http\Controllers\PatientsController;
 use App\Http\Controllers\RegistryController;
+use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\StatisticsController;
 use Illuminate\Support\Facades\Route;
 
@@ -36,4 +38,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/statistics', [StatisticsController::class, 'index'])->name('statistics.index');
     Route::get('/registry', [RegistryController::class, 'index'])->name('registry.index');
     Route::get('/registry/export', [RegistryController::class, 'export'])->name('registry.export');
+    Route::get('/reports', [ReportsController::class, 'index'])->name('reports.index');
+
+    // Admin
+    Route::middleware('admin')->group(function () {
+        Route::get('/control', [ControlController::class, 'index'])->name('control.index');
+        Route::put('/control/settings', [ControlController::class, 'updateSettings'])->name('control.settings');
+        Route::put('/control/users/{user}', [ControlController::class, 'updateUser'])->name('control.users.update');
+    });
 });
