@@ -36,6 +36,7 @@ $suites = [
     ['E2E: patient/consultation lifecycle',  'tools/e2e/test_functional.php',        'integration'],
     ['E2E: authorization matrix + CSRF',     'tools/e2e/test_authz.php',             'integration'],
     ['E2E: stats/dashboard endpoints',       'tools/e2e/test_stats.php',             'integration'],
+    ['E2E: stat VALUES vs ground truth',     'tools/e2e/test_stats_values.php',      'integration'],
 ];
 
 echo "DMC test runner  (server " . ($serverUp ? "UP @ $base" : "down") . ($unitOnly ? ", --unit" : "") . ")\n";

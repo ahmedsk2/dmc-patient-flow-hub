@@ -60,12 +60,16 @@ $result = $stmt->get_result();
 }
 
 function getConsultations($mysqli, $currentYear) {
+    // total_consultations = consultations ENTERED this year; total_signoffs = consultations SIGNED OFF
+    // this year (by signoff_date), counted INDEPENDENTLY. The previous query filtered the whole row set
+    // by YEAR(consultation_date), so a consultation entered in a prior year but signed off this year was
+    // excluded from the sign-off count — undercounting it. Counting both independently also matches
+    // kpis.php / time1.php / a4.php ("Sign-Offs" = activity by signoff_date in the period).
     $stmt = $mysqli->prepare("
-        SELECT 
-            COUNT(*) AS total_consultations,
-            COUNT(CASE WHEN YEAR(signoff_date) = ? THEN 1 ELSE NULL END) AS total_signoffs
+        SELECT
+            SUM(CASE WHEN YEAR(consultation_date) = ? THEN 1 ELSE 0 END) AS total_consultations,
+            SUM(CASE WHEN YEAR(signoff_date) = ? THEN 1 ELSE 0 END) AS total_signoffs
         FROM consultations
-        WHERE YEAR(consultation_date) = ?
     ");
     $stmt->bind_param("ii", $currentYear, $currentYear);
     $stmt->execute();

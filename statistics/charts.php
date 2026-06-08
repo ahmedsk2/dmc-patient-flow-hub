@@ -471,33 +471,38 @@ switch ($interval) {
           $lastDateOfMonth = date("Y-m-d", strtotime("-1 day", $time));
       }
 
-      $datePlaceholders = implode(',', array_fill(0, count($dates), '?'));
-
-      $formationSQL = "SELECT ADMDATE, DISDATE, consultation_date, signoff_date,
-                      SUM(CASE WHEN ADMDATE IN (" . $datePlaceholders . ") THEN 1 ELSE 0 END) AS admittedpcount,
-                      SUM(CASE WHEN DISDATE IN (" . $datePlaceholders . ") THEN 1 ELSE 0 END) AS dischargedpcount,
-                      SUM(CASE WHEN consultation_date IN (" . $datePlaceholders . ") THEN 1 ELSE 0 END) AS newconsultscount,
-                      SUM(CASE WHEN signoff_date IN (" . $datePlaceholders . ") THEN 1 ELSE 0 END) AS signedoffcount
-                      FROM picupatients
-                      LEFT JOIN consultations ON picupatients.consultant_id = consultations.consultant_id
-                      WHERE picupatients.consultant_id=?
-                      AND (picupatients.current_location != 'ICU' OR picupatients.current_location IS NULL)
-                      AND (consultations.consultant_id = ?)";
-
-      $stmt = $mysqli->prepare($formationSQL);
-      $bindValues = array_merge($dates, $dates, $dates, $dates, [$id, $id]);
-      $bindTypes = str_repeat('s', count($dates) * 4) . 'ii';
-      $stmt->bind_param($bindTypes, ...$bindValues);
-      $stmt->execute();
-      $result1 = $stmt->get_result();
-      $data = $result1->fetch_assoc();
+      // Per-day counts for this consultant over the month. Each table is counted INDEPENDENTLY and
+      // grouped by the exact date. The old query LEFT JOINed picupatients x consultations on
+      // consultant_id and then SUM(CASE ...) with NO GROUP BY: that (1) multiplied every consultation
+      // by the consultant's patient count (and every admission by the consultation count) via the
+      // cross join, and (2) pushed the SAME inflated period total to every day (a flat line). Both are
+      // fixed here. ADMDATE/DISDATE/consultation_date/signoff_date are DATE columns, so the day key
+      // (Y-m-d) matches $dates exactly.
+      $winStart = sprintf('%04d-%02d-01', (int) $ydate1, (int) $mdate1);
+      $winEnd   = date('Y-m-d', strtotime($winStart . ' +1 month'));
+      $dayCount = function ($table, $col, $extra) use ($mysqli, $id, $winStart, $winEnd) {
+          $sql = "SELECT $col AS d, COUNT(*) AS c FROM $table
+                  WHERE $col >= ? AND $col < ? AND consultant_id = ?$extra GROUP BY $col";
+          $stmt = $mysqli->prepare($sql);
+          $stmt->bind_param('ssi', $winStart, $winEnd, $id);
+          $stmt->execute();
+          $r = $stmt->get_result();
+          $m = [];
+          while ($row = $r->fetch_assoc()) { $m[(string) $row['d']] = (int) $row['c']; }
+          return $m;
+      };
+      $nonIcu = " AND (current_location != 'ICU' OR current_location IS NULL)";
+      $admMap = $dayCount('picupatients', 'ADMDATE', $nonIcu);
+      $disMap = $dayCount('picupatients', 'DISDATE', $nonIcu);
+      $conMap = $dayCount('consultations', 'consultation_date', '');
+      $sgnMap = $dayCount('consultations', 'signoff_date', '');
 
       foreach ($dates as $date) {
           array_push($label, $date);
-          array_push($admissions, $data['admittedpcount']);
-          array_push($discharges, $data['dischargedpcount']);
-          array_push($newconsults, $data['newconsultscount']);
-          array_push($signedoff, $data['signedoffcount']);
+          array_push($admissions, $admMap[$date] ?? 0);
+          array_push($discharges, $disMap[$date] ?? 0);
+          array_push($newconsults, $conMap[$date] ?? 0);
+          array_push($signedoff, $sgnMap[$date] ?? 0);
       }
       break;
   case 'monthly':
@@ -511,7 +516,10 @@ switch ($interval) {
     while ($n < 12) {
         $month = date("m", strtotime($lastMonth));
         $m_name = date("F", strtotime($lastMonth));
-        $months[] = $month;
+        // Cast to INT so the per-month result lookup keys match MySQL's MONTH() (which returns 1-9
+        // unpadded). With the raw date("m") strings "01".."09" PHP keeps them as STRING keys that
+        // never match the integer keys in $data, so Jan-Sep silently rendered 0 in this chart.
+        $months[] = (int) $month;
         $monthNames[] = $m_name;
         $n++;
         $time = strtotime($lastMonth);
