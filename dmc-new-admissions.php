@@ -22,6 +22,7 @@ require_once 'sidebar.php';
 
   ////assignt to me
 if (isset($_POST['assign_me_btn'])) {
+  csrf_verify(); // CSRF: this is a real form POST (the footer ajaxSend hook only tokenizes AJAX)
   // receive all input values from the form
 
  $patient_id = $_POST['patientid'];
@@ -47,6 +48,7 @@ if (isset($_POST['assign_me_btn'])) {
 /// assign to consultnat
 
 if (isset($_POST['assign_to_consultant_btn'])) {
+  csrf_verify(); // CSRF: real form POST (the assignconsultant form carries csrf_field())
   require_capability('assign_access'); // Q1: assigning a patient to a CHOSEN consultant needs Can-Assign (assign-to-me below stays open to any clinical role)
   // receive all input values from the form
 
