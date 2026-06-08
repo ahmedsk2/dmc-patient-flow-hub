@@ -5,6 +5,8 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\ConsultationsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PatientsController;
+use App\Http\Controllers\RegistryController;
+use App\Http\Controllers\StatisticsController;
 use Illuminate\Support\Facades\Route;
 
 // Guest
@@ -25,4 +27,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/admissions/create', [AdmissionsController::class, 'create'])->name('admissions.create');
     Route::post('/admissions', [AdmissionsController::class, 'store'])->name('admissions.store');
     Route::get('/api/icd10', [AdmissionsController::class, 'icd10'])->name('icd10.search');
+
+    Route::get('/statistics', [StatisticsController::class, 'index'])->name('statistics.index');
+    Route::get('/registry', [RegistryController::class, 'index'])->name('registry.index');
+    Route::get('/registry/export', [RegistryController::class, 'export'])->name('registry.export');
 });
