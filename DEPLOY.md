@@ -79,6 +79,12 @@ Run from `migrations/` — e.g. `mysql <dbname> < migrations/01-audit-log.sql`. 
 - [ ] `10-icd10-id-index.sql` — **PERF, important.** Adds covering index `idx_icd10_id (id, name)` on the
       72k-row `icd10` table. Without it, every diagnosis lookup is a ~1.3 s full scan and `longterm.php`
       times out (>60 s); with it, ~0.13 ms. Additive, result-preserving. Verify with `SHOW INDEX FROM icd10`.
+- [ ] `11-consultations-mrn-type.sql` — data integrity: `consultations.MRN` `INT` → `VARCHAR(64)` so MRNs
+      that exceed INT range (clamped to 2147483647) or are non-numeric (stored as 0) are no longer corrupted.
+      In-place, non-destructive; rebuilds `idx_consultations_mrn`. Verify `COLUMN_TYPE` is now `varchar(64)`.
+- [ ] **Deploying onto a newer existing live DB?** First read [`migrations/SCHEMA-CHANGES.md`](migrations/SCHEMA-CHANGES.md)
+      — it lists every structural change with a detection query so you can skip any the live DB already has,
+      and explains rebuilding the derived `patient_diagnosis` / `patients` tables from current data.
 
 ## 4. Server / PHP configuration
 
