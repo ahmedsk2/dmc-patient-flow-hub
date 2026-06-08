@@ -180,6 +180,36 @@ if ($okShape) {
 }
 t_ok("charts.php monthly newconsults correct in EVERY month", $okShape && !$mism, $mism ? implode('; ', $mism) : ($okShape ? 'all 12 months match ground truth' : 'extract failed'));
 
+// per-element check of ALL four series for charts.php MONTHLY (catches misordering a sum would hide)
+$series4 = ['admissions'=>"AND consultant_id=$CID AND $ni", 'discharges'=>"AND consultant_id=$CID AND $ni",
+            'newconsults'=>null, 'signedoff'=>null];
+foreach ($series4 as $svar => $patWhere) {
+    $arr = js_arr_longest($body, $svar); $bad = [];
+    if (is_array($arr) && is_array($labels) && count($arr) === count($labels)) {
+        foreach ($labels as $i => $mname) {
+            $mnum = (int) date('n', strtotime($mname . ' 1 ' . $Y));
+            if ($svar === 'admissions')      $gt = gtv("SELECT COUNT(*) FROM picupatients WHERE YEAR(ADMDATE)=? AND MONTH(ADMDATE)=? $patWhere", 'ii', [$Y,$mnum]);
+            elseif ($svar === 'discharges')  $gt = gtv("SELECT COUNT(*) FROM picupatients WHERE YEAR(DISDATE)=? AND MONTH(DISDATE)=? $patWhere", 'ii', [$Y,$mnum]);
+            elseif ($svar === 'newconsults') $gt = gtv("SELECT COUNT(*) FROM consultations WHERE YEAR(consultation_date)=? AND MONTH(consultation_date)=? AND consultant_id=?", 'iii', [$Y,$mnum,$CID]);
+            else                             $gt = gtv("SELECT COUNT(*) FROM consultations WHERE YEAR(signoff_date)=? AND MONTH(signoff_date)=? AND consultant_id=?", 'iii', [$Y,$mnum,$CID]);
+            if ((int)$arr[$i] !== $gt) $bad[] = "$mname:{$arr[$i]}!=$gt";
+        }
+    } else { $bad[] = 'shape'; }
+    t_ok("charts.php monthly $svar correct in EVERY month", !$bad, $bad ? implode(' ', array_slice($bad,0,4)) : '12/12 months match');
+}
+
+// per-element check for charts.php DAILY (the cross-join/flat fix): every day matches per-day ground truth
+$bodyD = e2e_get('/statistics/charts.php?' . http_build_query(['consultant'=>$CID,'date'=>$DATE,'interval'=>'daily']), 'admin')['body'];
+$dLabels = js_arr_longest($bodyD, 'label'); $dCon = js_arr_longest($bodyD, 'newconsults'); $dAdm = js_arr_longest($bodyD, 'admissions');
+$dbad = [];
+if (is_array($dLabels) && is_array($dCon) && count($dLabels) === count($dCon)) {
+    foreach ($dLabels as $i => $day) {
+        $g = gtv("SELECT COUNT(*) FROM consultations WHERE consultation_date=? AND consultant_id=?", 'si', [$day,$CID]);
+        if ((int)$dCon[$i] !== $g) $dbad[] = "$day:{$dCon[$i]}!=$g";
+    }
+} else { $dbad[] = 'shape'; }
+t_ok("charts.php daily newconsults correct EVERY day (no flat/inflated values)", !$dbad, $dbad ? implode(' ', array_slice($dbad,0,4)) : count($dLabels).' days match');
+
 /* ================================================================= dashboard/1.php ======= */
 e2e_section('dashboard/1.php — Active Consultations doughnut [signed-off (last day), active]');
 $body = e2e_get('/dashboard/1.php', 'admin')['body'];

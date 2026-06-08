@@ -8,6 +8,8 @@ Demo.sql
 *.sql
 *.sql.gz
 !migrations/*.sql
+# structure-only (mysqldump --no-data) CI fixture — verified ZERO data rows, safe to commit:
+!tools/ci/schema.sql
 
 # --- Runtime logs ---
 php_errorlog
@@ -35,6 +37,8 @@ work-orderes/
 dev-router.php
 .claude/launch.json
 tools/stats-baselines/
+# local chart snapshots (regenerable; delivered to the user, not repo artifacts):
+tools/e2e/snaps/
 
 # --- OS / editor cruft ---
 Thumbs.db

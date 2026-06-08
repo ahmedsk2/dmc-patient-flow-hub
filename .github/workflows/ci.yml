@@ -1,9 +1,13 @@
 name: CI
 
-# Lightweight, Composer-free CI: lints every PHP file and runs the self-contained offline test
-# suite (tools/mfa_test.php via tests/run.php --unit). Integration checks that need a live DB /
-# dev server are skipped here (they run locally); this gate catches syntax errors and TOTP/crypto
-# regressions on every push/PR. Real PHPUnit can be added in a job where Composer is provisioned.
+# Composer-free CI, two jobs:
+#  - lint-and-test : lints every PHP file + runs the offline unit suite (TOTP/crypto). Fast gate.
+#  - integration   : spins up MySQL, loads a SYNTHETIC (no-PHI) fixture (tools/ci/schema.sql +
+#                    migrations + tools/ci/seed.php), starts the dev server, and runs the e2e +
+#                    statistics value-validation suites — so every displayed number stays verified
+#                    on each push. (report_data_validate is intentionally NOT run here: it diffs the
+#                    a4.php vs YearlyReport implementations, which only agree on dense real data;
+#                    it is validated locally against the prod copy.)
 
 on:
   push:
@@ -32,3 +36,65 @@ jobs:
 
       - name: Self-contained unit tests (offline)
         run: php tests/run.php --unit
+
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          # root with NO password — matches the local WAMP assumption the tools/config use.
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: dmc_ci
+        ports: [ "3306:3306" ]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=10s --health-timeout=5s --health-retries=15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, openssl, hash, mysqli, json, zip, gd, dom, curl
+          coverage: none
+
+      - name: Wait for MySQL
+        run: until mysqladmin ping -h 127.0.0.1 -uroot --silent; do sleep 2; done
+
+      - name: Load schema + migrations + synthetic seed
+        run: |
+          M="mysql -h 127.0.0.1 -uroot dmc_ci"
+          $M < tools/ci/schema.sql
+          $M < migrations/10-icd10-id-index.sql
+          $M < migrations/11-consultations-mrn-type.sql
+          DMC_DB_HOST=127.0.0.1 DMC_DB_USER=root DMC_DB_PASS= DMC_DB_NAME=dmc_ci php tools/ci/seed.php
+          $M < migrations/07-patient-diagnosis.sql   # backfill derived join table from the seed
+          $M < migrations/09-patients-entity.sql     # backfill canonical patients from the seed
+
+      - name: Write local config (points the app at the CI MySQL)
+        run: |
+          cat > config.local.php <<'PHP'
+          <?php
+          define('DB_HOST','127.0.0.1'); define('DB_USER','root'); define('DB_PASS',''); define('DB_NAME','dmc_ci');
+          define('SMTP_HOST','localhost'); define('SMTP_PORT','25'); define('SMTP_USER','ci'); define('SMTP_PASS','ci');
+          define('SMTP_FROM','noreply@localhost'); define('SMTP_FROM_NAME','DMC CI'); define('SMTP_SECURE','');
+          define('MFA_KEY','00000000000000000000000000000000000000000000000000000000000000aa');
+          define('MFA_ISSUER','DMC CI');
+          PHP
+
+      - name: Start dev server + run E2E and value-validation suites
+        env:
+          DMC_PD_DB: dmc_ci          # schema validators read the CI DB, not the local-default 'dmc'
+        run: |
+          php -S 127.0.0.1:8765 dev-router.php >/tmp/dmc-server.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8765/index.php >/dev/null && break; sleep 1; done
+          set -e
+          php tools/e2e/setup_accounts.php
+          php tools/e2e/test_functional.php
+          php tools/e2e/test_authz.php
+          php tools/e2e/test_stats.php
+          php tools/e2e/test_stats_values.php
+          php tools/patient_diagnosis_validate.php
+          php tools/patients_validate.php
