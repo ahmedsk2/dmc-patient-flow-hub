@@ -70,6 +70,7 @@ Verified row-for-row against the source (total admissions and active census matc
 | Reports — printable A4 annual report (print / save-as-PDF) | ✅ |
 | Control panel (admin) — settings, user role/capability management | ✅ |
 | Profile — edit details, change password | ✅ |
+| Two-factor auth (TOTP) — enroll (QR + recovery codes), login challenge, disable | ✅ |
 
 ### Security improvements baked in (vs legacy)
 - Authorization enforced **server-side** on every write (capability + ownership checks), not UI-only.
@@ -79,7 +80,6 @@ Verified row-for-row against the source (total admissions and active census matc
   transactions on multi-row changes (transfer), bcrypt passwords.
 
 ## Deferred / next
-- MFA (TOTP) enrollment + login challenge (columns exist; UI not yet built).
 - Server-side PDF rendering (currently browser print for A4).
 - The exact EHC palette/logo (placeholder theme until provided).
 - Fine-grained per-role read access on Statistics/Registry/Reports (currently any authenticated user;
