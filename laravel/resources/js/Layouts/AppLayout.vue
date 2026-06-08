@@ -116,13 +116,15 @@ const icons = {
                         <span class="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent-500"></span>
                     </button>
                     <div class="flex items-center gap-3 border-l border-ink-100 pl-3">
-                        <div class="grid h-9 w-9 place-items-center rounded-full bg-brand-600 text-sm font-semibold text-white">
-                            {{ (page.props.auth?.user?.name || 'DMC').slice(0, 2).toUpperCase() }}
-                        </div>
-                        <div class="hidden leading-tight sm:block">
-                            <div class="text-sm font-semibold text-ink-800">{{ page.props.auth?.user?.name || 'DMC Staff' }}</div>
-                            <div class="text-xs text-ink-400">Internal Medicine</div>
-                        </div>
+                        <Link href="/profile" class="flex items-center gap-3 rounded-xl px-1 py-1 transition hover:bg-ink-50">
+                            <div class="grid h-9 w-9 place-items-center rounded-full bg-brand-600 text-sm font-semibold text-white">
+                                {{ (page.props.auth?.user?.name || 'DMC').slice(0, 2).toUpperCase() }}
+                            </div>
+                            <div class="hidden leading-tight sm:block">
+                                <div class="text-sm font-semibold text-ink-800">{{ page.props.auth?.user?.name || 'DMC Staff' }}</div>
+                                <div class="text-xs text-ink-400">{{ page.props.auth?.user?.role_label || 'Internal Medicine' }}</div>
+                            </div>
+                        </Link>
                         <button @click="logout" title="Sign out" class="ml-1 grid h-9 w-9 place-items-center rounded-full text-ink-400 transition hover:bg-danger-100 hover:text-danger-600">
                             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" /></svg>
                         </button>

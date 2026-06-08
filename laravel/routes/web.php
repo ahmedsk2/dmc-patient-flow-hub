@@ -7,6 +7,7 @@ use App\Http\Controllers\ControlController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PatientActionController;
 use App\Http\Controllers\PatientsController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RegistryController;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\StatisticsController;
@@ -41,6 +42,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/registry', [RegistryController::class, 'index'])->name('registry.index');
     Route::get('/registry/export', [RegistryController::class, 'export'])->name('registry.export');
     Route::get('/reports', [ReportsController::class, 'index'])->name('reports.index');
+
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::put('/profile', [ProfileController::class, 'updateProfile'])->name('profile.update');
+    Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
 
     // Admin
     Route::middleware('admin')->group(function () {
