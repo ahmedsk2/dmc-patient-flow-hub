@@ -4,6 +4,7 @@ use App\Http\Controllers\AdmissionsController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\ConsultationsController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\PatientActionController;
 use App\Http\Controllers\PatientsController;
 use App\Http\Controllers\RegistryController;
 use App\Http\Controllers\StatisticsController;
@@ -22,6 +23,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
     Route::get('/patients', [PatientsController::class, 'index'])->name('patients.index');
+    Route::post('/admissions/{admission}/assign', [PatientActionController::class, 'assign'])->name('admissions.assign');
+    Route::post('/admissions/{admission}/discharge', [PatientActionController::class, 'discharge'])->name('admissions.discharge');
+    Route::post('/admissions/{admission}/transfer', [PatientActionController::class, 'transfer'])->name('admissions.transfer');
+    Route::post('/admissions/{admission}/reverse-discharge', [PatientActionController::class, 'reverseDischarge'])->name('admissions.reverse');
     Route::get('/consultations', [ConsultationsController::class, 'index'])->name('consultations.index');
 
     Route::get('/admissions/create', [AdmissionsController::class, 'create'])->name('admissions.create');

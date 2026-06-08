@@ -1,13 +1,35 @@
 <script setup>
-import { ref, watch } from 'vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { ref, watch, computed } from 'vue';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
-const props = defineProps({ admissions: Object, filters: Object, stats: Object });
+const props = defineProps({ admissions: Object, filters: Object, stats: Object, consultants: Array });
+
+const page = usePage();
+const me = computed(() => page.props.auth.user);
+const canAssign = computed(() => me.value.is_admin || me.value.can.assign);
+const canManage = (row) => me.value.is_admin || me.value.can.manage || row.consultant_id === me.value.id;
 
 const search = ref(props.filters.search || '');
 const location = ref(props.filters.location || '');
 let timer = null;
+
+// action modal
+const modal = ref(null); // { mode, row }
+const today = new Date().toISOString().slice(0, 10);
+const aForm = useForm({ consultant_id: '' });
+const dForm = useForm({ outcome: 'Alive', discharge_date: today });
+const tForm = useForm({ target: 'ICU' });
+const openModal = (mode, row) => {
+    modal.value = { mode, row };
+    if (mode === 'assign') aForm.consultant_id = row.consultant_id || '';
+    if (mode === 'transfer') tForm.target = row.location === 'ICU' ? 'Ward' : 'ICU';
+};
+const closeModal = () => (modal.value = null);
+const opts = { preserveScroll: true, onSuccess: closeModal };
+const submitAssign = () => aForm.post(`/admissions/${modal.value.row.id}/assign`, opts);
+const submitDischarge = () => dForm.post(`/admissions/${modal.value.row.id}/discharge`, opts);
+const submitTransfer = () => tForm.post(`/admissions/${modal.value.row.id}/transfer`, opts);
 
 const apply = () => router.get('/patients', { search: search.value || undefined, location: location.value || undefined },
     { preserveState: true, replace: true, preserveScroll: true });
@@ -52,7 +74,8 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                         <th class="px-3 py-3">Consultant</th>
                         <th class="px-3 py-3">Admitted</th>
                         <th class="px-3 py-3">LOS</th>
-                        <th class="px-5 py-3">Status</th>
+                        <th class="px-3 py-3">Status</th>
+                        <th class="px-5 py-3 text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-ink-50">
@@ -75,7 +98,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                             <span v-if="a.los !== null" class="nums rounded-full px-2.5 py-0.5 text-xs font-bold" :class="losTone(a.los_band)">{{ a.los }}d</span>
                             <span v-else class="text-ink-400">—</span>
                         </td>
-                        <td class="px-5 py-3">
+                        <td class="px-3 py-3">
                             <div class="flex flex-wrap gap-1">
                                 <span v-if="a.is_new" class="rounded-full bg-info-100 px-2 py-0.5 text-[11px] font-semibold text-info-500">New</span>
                                 <span v-if="a.is_longterm" class="rounded-full bg-accent-300/40 px-2 py-0.5 text-[11px] font-semibold text-accent-600">Long-term</span>
@@ -83,8 +106,22 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                                 <span v-if="a.dx_count" class="rounded-full bg-ink-50 px-2 py-0.5 text-[11px] font-semibold text-ink-500">{{ a.dx_count }} dx</span>
                             </div>
                         </td>
+                        <td class="px-5 py-3">
+                            <div class="flex items-center justify-end gap-1">
+                                <button v-if="canAssign" @click="openModal('assign', a)" title="Assign consultant" class="grid h-8 w-8 place-items-center rounded-lg text-ink-400 transition hover:bg-info-100 hover:text-info-500">
+                                    <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" /></svg>
+                                </button>
+                                <button v-if="canManage(a)" @click="openModal('transfer', a)" title="Transfer ward/ICU" class="grid h-8 w-8 place-items-center rounded-lg text-ink-400 transition hover:bg-brand-100 hover:text-brand-700">
+                                    <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg>
+                                </button>
+                                <button v-if="canManage(a)" @click="openModal('discharge', a)" title="Discharge" class="grid h-8 w-8 place-items-center rounded-lg text-ink-400 transition hover:bg-success-100 hover:text-success-600">
+                                    <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                                </button>
+                                <span v-if="!canAssign && !canManage(a)" class="text-xs text-ink-300">—</span>
+                            </div>
+                        </td>
                     </tr>
-                    <tr v-if="!admissions.data.length"><td colspan="8" class="px-5 py-10 text-center text-ink-400">No patients match your filters.</td></tr>
+                    <tr v-if="!admissions.data.length"><td colspan="9" class="px-5 py-10 text-center text-ink-400">No patients match your filters.</td></tr>
                 </tbody>
             </table>
         </div>
@@ -99,5 +136,70 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                     v-html="l.label" />
             </div>
         </div>
+        <!-- action modal -->
+        <Transition enter-active-class="transition duration-200" enter-from-class="opacity-0" leave-active-class="transition duration-150" leave-to-class="opacity-0">
+            <div v-if="modal" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="closeModal">
+                <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+                    <div class="mb-4 flex items-start justify-between">
+                        <div>
+                            <h3 class="text-lg font-bold capitalize text-ink-900">{{ modal.mode }}</h3>
+                            <p class="text-sm text-ink-400">{{ modal.row.name }} · MRN {{ modal.row.mrn }}</p>
+                        </div>
+                        <button @click="closeModal" class="text-ink-400 hover:text-ink-700">✕</button>
+                    </div>
+
+                    <!-- Assign -->
+                    <form v-if="modal.mode === 'assign'" @submit.prevent="submitAssign" class="space-y-4">
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-ink-700">Consultant</label>
+                            <select v-model="aForm.consultant_id" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500">
+                                <option value="">Select consultant…</option>
+                                <option v-for="c in consultants" :key="c.id" :value="c.id">{{ c.name }}</option>
+                            </select>
+                            <p v-if="aForm.errors.consultant_id" class="mt-1 text-xs text-danger-600">{{ aForm.errors.consultant_id }}</p>
+                        </div>
+                        <div class="flex justify-end gap-2">
+                            <button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
+                            <button type="submit" :disabled="aForm.processing || !aForm.consultant_id" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Assign</button>
+                        </div>
+                    </form>
+
+                    <!-- Discharge -->
+                    <form v-else-if="modal.mode === 'discharge'" @submit.prevent="submitDischarge" class="space-y-4">
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-ink-700">Outcome</label>
+                            <select v-model="dForm.outcome" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500">
+                                <option>Alive</option><option>Dead</option><option>LAMA</option><option>DAMA</option><option>Transferred</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-ink-700">Discharge date</label>
+                            <input v-model="dForm.discharge_date" type="date" :max="today" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" />
+                            <p v-if="dForm.errors.discharge_date" class="mt-1 text-xs text-danger-600">{{ dForm.errors.discharge_date }}</p>
+                        </div>
+                        <div class="flex justify-end gap-2">
+                            <button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
+                            <button type="submit" :disabled="dForm.processing" class="rounded-xl bg-success-600 px-5 py-2 text-sm font-semibold text-white hover:bg-success-700 disabled:opacity-50">Discharge</button>
+                        </div>
+                    </form>
+
+                    <!-- Transfer -->
+                    <form v-else @submit.prevent="submitTransfer" class="space-y-4">
+                        <p class="text-sm text-ink-600">Currently in <span class="font-semibold">{{ modal.row.location || '—' }}</span>. Transfer to:</p>
+                        <div class="flex gap-2">
+                            <label v-for="loc in ['Ward','ICU']" :key="loc" class="flex-1 cursor-pointer rounded-xl border-2 px-4 py-3 text-center text-sm font-semibold transition"
+                                :class="tForm.target === loc ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'">
+                                <input type="radio" v-model="tForm.target" :value="loc" class="hidden" /> {{ loc }}
+                            </label>
+                        </div>
+                        <p class="text-xs text-ink-400">This closes the current episode as a transfer and opens a new one at the destination (diagnoses carried forward).</p>
+                        <div class="flex justify-end gap-2">
+                            <button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
+                            <button type="submit" :disabled="tForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Transfer</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </Transition>
     </AppLayout>
 </template>

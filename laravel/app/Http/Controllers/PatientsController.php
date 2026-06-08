@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Admission;
 use App\Models\Setting;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -37,6 +38,7 @@ class PatientsController extends Controller
                     'bed' => $a->bed,
                     'location' => $a->current_location,
                     'consultant' => $a->consultant?->full_name ?? $a->consultant?->name ?? 'Unassigned',
+                    'consultant_id' => $a->consultant_id,
                     'admit_date' => optional($a->admit_date)->toDateString(),
                     'los' => $los,
                     'los_band' => $los === null ? null : ($los < $settings->short_los ? 'short' : ($los > $settings->long_los ? 'long' : 'mid')),
@@ -50,6 +52,9 @@ class PatientsController extends Controller
         return Inertia::render('Patients/Index', [
             'admissions' => $admissions,
             'filters' => $filters,
+            'consultants' => User::where('role', User::ROLE_CONSULTANT)->where('active', 1)
+                ->orderBy('full_name')->get(['id', 'full_name', 'name'])
+                ->map(fn ($u) => ['id' => $u->id, 'name' => $u->full_name ?: $u->name]),
             'stats' => [
                 'total' => Admission::active()->count(),
                 'ward' => Admission::active()->nonIcu()->count(),
