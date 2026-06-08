@@ -80,6 +80,23 @@ date_default_timezone_set('Asia/Riyadh');
                 $conds[] = "DISDATE IS NOT NULL";
             }
 
+            // Readmission filter — keep it in SQL so the COUNT(*) header, the "showing" number, and the
+            // rendered cards all agree. A row counts as a <=72h readmission when the SAME patient (MRN) had
+            // an EARLIER episode (lower ID) that was discharged within 3 days before this admission's ADMDATE.
+            // This mirrors the per-row check in the render loop below; previously it was ONLY enforced per-row
+            // in PHP, so the header counted every match while the body silently rendered only the readmissions
+            // (often zero) — the "Results Found: N but nothing shown" bug. No bound params (outer-column refs +
+            // literals), so $types/$params are unaffected.
+            if(isset($_REQUEST['readmission']) && !empty($_REQUEST['readmission'])){
+                $conds[] = "EXISTS (SELECT 1 FROM picupatients radm
+                                    WHERE radm.DISDATE + INTERVAL 3 DAY >= picupatients.ADMDATE
+                                      AND radm.ID < picupatients.ID
+                                      AND radm.MRN = picupatients.MRN
+                                      AND (radm.trans_discharge = 'discharge from ICU'
+                                           OR radm.trans_discharge = 'discharge from ward'
+                                           OR radm.trans_discharge IS NULL))";
+            }
+
             if(isset($_REQUEST['admissiondiagnosis']) && !empty($_REQUEST['admissiondiagnosis']) && is_array($_REQUEST['admissiondiagnosis'])){
 
                 // echo"ahmed";
