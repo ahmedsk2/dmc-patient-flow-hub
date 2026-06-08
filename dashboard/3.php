@@ -135,11 +135,16 @@ foreach ($activepicupatients as $patient) {
     if (isset($consultant_count[$consultant_id])) {
         $decodedadmissiondx = json_decode($patient['admissiondiagnosis'], true);
         $is_tb_patient = false;
-        foreach ($decodedadmissiondx as $dx) {
-            if (in_array($dx, $tuber_list)) {
-                $is_tb_patient = true;
-                $consultant_count[$consultant_id]['tb1']++;
-                break;
+        // Guard: a patient with NULL/empty/invalid admissiondiagnosis decodes to null. An unguarded
+        // foreach over null emits a PHP Warning, and because dashboard.php eval()s this fragment's
+        // inline <script>, that warning HTML corrupts the eval and the dashboard charts fail to render.
+        if (is_array($decodedadmissiondx)) {
+            foreach ($decodedadmissiondx as $dx) {
+                if (in_array($dx, $tuber_list)) {
+                    $is_tb_patient = true;
+                    $consultant_count[$consultant_id]['tb1']++;
+                    break;
+                }
             }
         }
 
