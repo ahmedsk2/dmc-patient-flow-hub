@@ -477,10 +477,11 @@ switch ($kpi){
   };
 
 
-  let myChartlos = new Chart(
-    document.getElementById('myChartlos'),
-    mconfig
-  );
+  // Guard: this fragment ships both the LOS and the admission chart scripts, but only ONE canvas
+  // is rendered per selected KPI. Calling new Chart() on a missing canvas throws "Failed to create
+  // chart: can't acquire context from the given item" — build the chart only when its canvas exists.
+  var losEl = document.getElementById('myChartlos');
+  if (losEl) { new Chart(losEl, mconfig); }
  
         });
 </script>
@@ -592,9 +593,7 @@ switch ($kpi){
   };
 
 
-  let myChartadmission = new Chart(
-    document.getElementById('myChartadmission'),
-    config
-  );
+  var admEl = document.getElementById('myChartadmission');
+  if (admEl) { new Chart(admEl, config); }
  })();
 </script>
