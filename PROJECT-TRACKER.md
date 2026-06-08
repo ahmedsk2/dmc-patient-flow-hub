@@ -28,6 +28,24 @@ _Last updated: 2026-06-08_
 
 ## Notes & decisions  _(newest first)_
 
+- **✅ 2026-06-08 — Post-validation hardening (suggestions 1–3) + structural schema record.**
+  1. **Data integrity — migration 11:** `consultations.MRN` `INT` → `VARCHAR(64)` (was truncating MRNs
+     > 2147483647 to 2147483647 for 13 patients, and storing ~295 non-numeric MRNs as 0). Applied to the
+     prod copy + validated (large + non-numeric MRNs now round-trip). [`migrations/11-consultations-mrn-type.sql`]
+  2. **Schema-change record (your explicit deliverable):** [`migrations/SCHEMA-CHANGES.md`] — every
+     structural delta vs the original schema (01–11), each with a detection query so it can be applied to a
+     **newer existing live DB** while skipping changes already present; plus derived-table rebuild notes and
+     the non-DDL deploy steps. Refreshed `migrations/README.md` (was stale at 01–03) and `DEPLOY.md`.
+  3. **Metrics dictionary:** [`docs/METRICS.md`] — the exact definition of every dashboard/statistics/A4
+     number (non-ICU scope, LOS, 72h-readmission, consultations-by-date vs sign-offs-by-date, mortality,
+     consultant attribution, active-patient variants). Enforced by the value harness.
+  4. **Hardening:** per-element value checks (every month / every day, all series) added to
+     `test_stats_values.php` (40/40); a **CI integration job** (`.github/workflows/ci.yml`) that loads a
+     SYNTHETIC no-PHI fixture (`tools/ci/schema.sql` structure-only + `tools/ci/seed.php` + migrations) and
+     runs the e2e + value suites on every push — validated end-to-end against a scratch `dmc_ci` locally
+     (setup 5 / functional 52 / authz 158 / stats 48 / values 40 all green). **DB/SMTP credential rotation,
+     running migrations on prod, TLS, MFA enforcement, backups remain your ops actions (documented in DEPLOY.md).**
+
 - **✅ 2026-06-08 — Statistics VALUE-validation pass (displayed numbers vs independent ground truth): 3 stat miscounts fixed, snapshots captured.**
   Built [`tools/e2e/test_stats_values.php`](tools/e2e/test_stats_values.php) (35 checks) — it extracts every chart's
   *displayed* numbers (chart-data JS arrays + KPI table cells) and compares them to an INDEPENDENT recomputation
