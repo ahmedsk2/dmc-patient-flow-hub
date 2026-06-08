@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\ConsultationsController;
 use App\Http\Controllers\ControlController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\MfaController;
 use App\Http\Controllers\PatientActionController;
 use App\Http\Controllers\PatientsController;
 use App\Http\Controllers\ProfileController;
@@ -18,6 +19,11 @@ Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'show'])->name('login');
     Route::post('/login', [AuthController::class, 'login']);
 });
+
+// MFA login challenge — reached after password but BEFORE the session is authenticated
+// (identity held in the session, not the auth guard).
+Route::get('/mfa/challenge', [MfaController::class, 'challenge'])->name('mfa.challenge');
+Route::post('/mfa/challenge', [MfaController::class, 'verifyChallenge']);
 
 // Authenticated
 Route::middleware('auth')->group(function () {
@@ -46,6 +52,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('/profile', [ProfileController::class, 'updateProfile'])->name('profile.update');
     Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
+
+    // Two-factor (TOTP) enrollment
+    Route::get('/mfa/setup', [MfaController::class, 'setup'])->name('mfa.setup');
+    Route::post('/mfa/confirm', [MfaController::class, 'confirm'])->name('mfa.confirm');
+    Route::delete('/mfa', [MfaController::class, 'disable'])->name('mfa.disable');
 
     // Admin
     Route::middleware('admin')->group(function () {

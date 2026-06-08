@@ -32,6 +32,8 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'mfa_secret' => 'encrypted',
+            'mfa_recovery_codes' => 'array',
             'mfa_enrolled_at' => 'datetime',
             'pass_exp_date' => 'date',
             'active' => 'boolean',
@@ -46,6 +48,7 @@ class User extends Authenticatable
 
     public function isAdmin(): bool { return (int) $this->role === self::ROLE_ADMIN; }
     public function roleLabel(): string { return self::ROLE_LABELS[$this->role] ?? 'User'; }
+    public function mfaEnabled(): bool { return $this->mfa_secret !== null && $this->mfa_enrolled_at !== null; }
 
     public function specialty() { return $this->belongsTo(Specialty::class); }
     public function admissions(): HasMany { return $this->hasMany(Admission::class, 'consultant_id'); }

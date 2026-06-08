@@ -106,9 +106,11 @@ class LegacyImport extends Command
                 'can_add' => (int) ($m->add_new_patient ?? 0) === 1,
                 'can_manage' => (int) ($m->manage_patient ?? 0) === 1,
                 'can_modify' => (int) ($m->modify_patient ?? 0) === 1,
-                'mfa_secret' => $m->mfa_secret ?? null,
-                'mfa_recovery_codes' => $m->mfa_recovery_codes ?? null,
-                'mfa_enrolled_at' => $m->mfa_enrolled_at ?? null,
+                // MFA is re-enrolled fresh in the Laravel app (the secret column is encrypted at rest);
+                // legacy secrets are intentionally NOT carried over.
+                'mfa_secret' => null,
+                'mfa_recovery_codes' => null,
+                'mfa_enrolled_at' => null,
                 'pass_exp_date' => $m->pass_exp_date ?? null,
                 'legacy_id' => $m->member_id,
                 'created_at' => now(), 'updated_at' => now(),

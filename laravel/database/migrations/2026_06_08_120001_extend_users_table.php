@@ -26,7 +26,7 @@ return new class extends Migration
             $table->boolean('can_manage')->default(false)->after('can_add');
             $table->boolean('can_modify')->default(false)->after('can_manage');
             // MFA (TOTP)
-            $table->string('mfa_secret')->nullable()->after('password');
+            $table->text('mfa_secret')->nullable()->after('password'); // holds the ENCRYPTED secret (not the raw base32)
             $table->text('mfa_recovery_codes')->nullable()->after('mfa_secret');
             $table->dateTime('mfa_enrolled_at')->nullable()->after('mfa_recovery_codes');
             $table->date('pass_exp_date')->nullable();

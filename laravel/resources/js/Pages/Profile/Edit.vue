@@ -1,8 +1,11 @@
 <script setup>
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
 const props = defineProps({ profile: Object });
+
+const dForm = useForm({ password: '' });
+const disableMfa = () => { if (confirm('Disable two-factor authentication for your account?')) dForm.delete('/mfa', { preserveScroll: true, onSuccess: () => dForm.reset() }); };
 
 const pForm = useForm({ full_name: props.profile.name, email: props.profile.email });
 const saveProfile = () => pForm.put('/profile', { preserveScroll: true });
@@ -54,6 +57,29 @@ const field = 'w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm out
                 <div class="mt-4 flex items-center gap-3">
                     <button @click="savePassword" :disabled="wForm.processing" class="rounded-xl bg-navy-800 px-5 py-2.5 text-sm font-semibold text-white hover:bg-navy-900 disabled:opacity-50">Update password</button>
                     <span v-if="wForm.recentlySuccessful" class="text-sm font-semibold text-success-600">Password changed ✓</span>
+                </div>
+            </section>
+
+            <!-- two-factor -->
+            <section class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h3 class="flex items-center gap-2 font-bold text-ink-800">
+                            Two-factor authentication
+                            <span v-if="profile.mfa_enabled" class="rounded-full bg-success-100 px-2 py-0.5 text-xs font-semibold text-success-600">Enabled</span>
+                            <span v-else class="rounded-full bg-ink-100 px-2 py-0.5 text-xs font-semibold text-ink-500">Off</span>
+                        </h3>
+                        <p class="mt-1 max-w-md text-sm text-ink-400">Protect your account with a time-based code from an authenticator app, in addition to your password.</p>
+                    </div>
+                    <Link v-if="!profile.mfa_enabled" href="/mfa/setup" class="shrink-0 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-brand-700">Enable</Link>
+                </div>
+                <div v-if="profile.mfa_enabled" class="mt-4 flex flex-wrap items-end gap-3 border-t border-ink-100 pt-4">
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-ink-700">Confirm password to disable</label>
+                        <input v-model="dForm.password" type="password" :class="[field, 'max-w-xs', dForm.errors.password && 'border-danger-500']" placeholder="Your password" />
+                        <p v-if="dForm.errors.password" class="mt-1 text-xs text-danger-600">{{ dForm.errors.password }}</p>
+                    </div>
+                    <button @click="disableMfa" :disabled="dForm.processing" class="rounded-xl bg-danger-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-danger-700 disabled:opacity-50">Disable two-factor</button>
                 </div>
             </section>
         </div>

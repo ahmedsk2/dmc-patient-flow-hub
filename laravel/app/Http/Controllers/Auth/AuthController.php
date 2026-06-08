@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -24,13 +26,23 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        // Authenticate by username; only ACTIVE accounts may log in (mirrors the legacy gate).
-        if (! Auth::attempt(['username' => $data['username'], 'password' => $data['password'], 'active' => 1], $request->boolean('remember'))) {
+        // Verify credentials (username, only ACTIVE accounts) WITHOUT logging in yet — so we can
+        // interpose a second factor before establishing the session.
+        $user = User::where('username', $data['username'])->where('active', 1)->first();
+        if (! $user || ! Hash::check($data['password'], $user->password)) {
             throw ValidationException::withMessages([
                 'username' => 'These credentials do not match an active account.',
             ]);
         }
 
+        // If MFA is enrolled, hold the identity in the session and challenge for a code.
+        if ($user->mfaEnabled()) {
+            $request->session()->put('mfa.pending.id', $user->id);
+            $request->session()->put('mfa.pending.remember', $request->boolean('remember'));
+            return redirect()->route('mfa.challenge');
+        }
+
+        Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
 
         return redirect()->intended(route('dashboard'));
