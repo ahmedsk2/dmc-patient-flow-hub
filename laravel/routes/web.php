@@ -30,6 +30,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/admissions/{admission}/transfer', [PatientActionController::class, 'transfer'])->name('admissions.transfer');
     Route::post('/admissions/{admission}/reverse-discharge', [PatientActionController::class, 'reverseDischarge'])->name('admissions.reverse');
     Route::get('/consultations', [ConsultationsController::class, 'index'])->name('consultations.index');
+    Route::post('/consultations', [ConsultationsController::class, 'store'])->name('consultations.store');
+    Route::post('/consultations/{consultation}/signoff', [ConsultationsController::class, 'signoff'])->name('consultations.signoff');
 
     Route::get('/admissions/create', [AdmissionsController::class, 'create'])->name('admissions.create');
     Route::post('/admissions', [AdmissionsController::class, 'store'])->name('admissions.store');

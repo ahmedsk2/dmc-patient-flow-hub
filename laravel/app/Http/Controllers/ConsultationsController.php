@@ -2,11 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\Consultation;
 use App\Models\ConsultationReason;
+use App\Models\Patient;
+use App\Models\User;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 class ConsultationsController extends Controller
 {
@@ -35,6 +41,7 @@ class ConsultationsController extends Controller
                 'from' => $c->consultation_from,
                 'to' => $c->to_service,
                 'consultant' => $c->consultant?->full_name ?? $c->consultant?->name ?? '—',
+                'consultant_id' => $c->consultant_id,
                 'date' => optional($c->consultation_date)->toDateString(),
                 'signoff' => optional($c->signoff_date)->toDateString(),
                 'reasons' => collect($c->indication ?? [])->map(fn ($id) => $reasons[$id] ?? null)->filter()->values(),
@@ -48,6 +55,59 @@ class ConsultationsController extends Controller
                 'active' => Consultation::whereNull('signoff_date')->count(),
                 'total' => Consultation::count(),
             ],
+            'reasons' => $reasons->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'consultants' => User::where('role', User::ROLE_CONSULTANT)->where('active', 1)
+                ->orderBy('full_name')->get(['id', 'full_name', 'name'])
+                ->map(fn ($u) => ['id' => $u->id, 'name' => $u->full_name ?: $u->name]),
         ]);
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        if ((int) Auth::user()->role === User::ROLE_OBSERVER) {
+            throw new AccessDeniedHttpException('Observers cannot create consultations.');
+        }
+        $data = $request->validate([
+            'mrn' => ['required', 'string', 'max:64'],
+            'patient_name' => ['required', 'string', 'max:191'],
+            'age' => ['nullable', 'integer', 'between:0,130'],
+            'bed' => ['nullable', 'string', 'max:64'],
+            'current_location' => ['nullable', 'string', 'max:32'],
+            'consultation_date' => ['required', 'date', 'before_or_equal:today'],
+            'consultation_from' => ['nullable', 'string', 'max:128'],
+            'to_service' => ['nullable', 'string', 'max:128'],
+            'consultant_id' => ['nullable', 'exists:users,id'],
+            'indication' => ['array'],
+            'indication.*' => ['integer'],
+            'other_indication' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $patient = Patient::where('mrn', $data['mrn'])->first();
+        $c = Consultation::create([
+            ...$data,
+            'patient_id' => $patient?->id,
+            'indication' => $data['indication'] ?? [],
+            'entered_by' => Auth::id(),                  // session-sourced
+        ]);
+        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'consultation.create',
+            'entity_type' => 'consultation', 'entity_id' => (string) $c->id, 'details' => ['mrn' => $data['mrn']], 'ip' => $request->ip()]);
+
+        return back()->with('flash', ['type' => 'success', 'message' => 'Consultation created.']);
+    }
+
+    public function signoff(Request $request, Consultation $consultation): RedirectResponse
+    {
+        $u = Auth::user();
+        if (! ($u->isAdmin() || $u->can_manage || (int) $consultation->consultant_id === (int) $u->id)) {
+            throw new AccessDeniedHttpException('Only the receiving consultant or a manager may sign off.');
+        }
+        if ($consultation->signoff_date) {
+            return back()->with('flash', ['type' => 'error', 'message' => 'Already signed off.']);
+        }
+        $consultation->update(['signoff_date' => now()->toDateString()]);
+        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'consultation.signoff',
+            'entity_type' => 'consultation', 'entity_id' => (string) $consultation->id, 'ip' => $request->ip()]);
+
+        return back()->with('flash', ['type' => 'success', 'message' => 'Consultation signed off.']);
     }
 }
