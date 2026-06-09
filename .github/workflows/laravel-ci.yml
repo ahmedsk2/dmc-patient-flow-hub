@@ -35,15 +35,23 @@ jobs:
 
       - name: Prepare environment
         run: |
-          cp .env.example .env || true
-          {
-            echo "DB_CONNECTION=mysql"
-            echo "DB_HOST=127.0.0.1"
-            echo "DB_PORT=3306"
-            echo "DB_DATABASE=dmc_test"
-            echo "DB_USERNAME=root"
-            echo "DB_PASSWORD="
-          } >> .env
+          cat > .env <<'EOF'
+          APP_NAME="DMC Internal Medicine"
+          APP_ENV=testing
+          APP_KEY=
+          APP_DEBUG=true
+          APP_URL=http://localhost
+          DB_CONNECTION=mysql
+          DB_HOST=127.0.0.1
+          DB_PORT=3306
+          DB_DATABASE=dmc_test
+          DB_USERNAME=root
+          DB_PASSWORD=
+          SESSION_DRIVER=array
+          CACHE_STORE=array
+          QUEUE_CONNECTION=sync
+          MAIL_MAILER=array
+          EOF
           php artisan key:generate
 
       - name: Run test suite (PHPUnit, MySQL)
