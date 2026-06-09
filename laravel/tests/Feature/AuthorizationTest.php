@@ -64,7 +64,7 @@ class AuthorizationTest extends TestCase
             ->post('/import/preview', ['rows' => "ABC,bad row\n3009999,Good One,40,M,Saudi,2024-01-01,,Alive,Ward"])
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $p) => $p
-                ->component('Import/Index')
+                ->component('Import/Index', false) // assert the name; don't require the .vue on disk (CI has no front-end build)
                 ->where('preview.valid', 1)
                 ->where('preview.invalid', 1));
     }
