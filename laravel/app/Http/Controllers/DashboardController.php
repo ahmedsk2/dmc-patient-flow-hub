@@ -111,6 +111,15 @@ class DashboardController extends Controller
             ->selectRaw('p.name name, p.mrn mrn, a.admit_date admitted, a.current_location loc, COALESCE(u.full_name, u.name) consultant')
             ->whereNull('a.discharge_date')->orderByDesc('a.id')->limit(8)->get();
 
+        // top diagnoses among admissions in the last 7 days
+        $weekStart = Carbon::today()->subDays(6)->toDateString();
+        $topDxWeek = DB::table('admission_diagnoses as ad')->join('admissions as a', 'a.id', '=', 'ad.admission_id')
+            ->leftJoin('icd10 as i', 'i.code', '=', 'ad.icd10_code')
+            ->whereBetween('a.admit_date', [$weekStart, $today])
+            ->selectRaw('ad.icd10_code code, MAX(i.name) name, COUNT(*) c')
+            ->groupBy('ad.icd10_code')->orderByDesc('c')->limit(6)->get()
+            ->map(fn ($r) => ['name' => $r->name ?: $r->code, 'count' => (int) $r->c]);
+
         return Inertia::render('Dashboard', [
             'kpis' => [
                 'census' => $active, 'ward' => $activeWard, 'icu' => $activeIcu,
@@ -123,6 +132,7 @@ class DashboardController extends Controller
             'mix' => ['hospitalist' => (int) ($mix->hosp ?? 0), 'subspecialty' => (int) ($mix->subs ?? 0), 'longterm' => (int) ($mix->longterm ?? 0)],
             'perConsultant' => $perConsultant,
             'consultantBoard' => $consultantBoard,
+            'topDxWeek' => $topDxWeek,
             'recent' => $recent,
             'generatedAt' => now()->format('D, d M Y · H:i'),
         ]);

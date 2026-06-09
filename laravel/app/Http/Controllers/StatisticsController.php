@@ -23,12 +23,14 @@ class StatisticsController extends Controller
         $data = $request->validate([
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date'],
+            'interval' => ['nullable', 'in:day,month,quarter'],
         ]);
         $to = isset($data['to']) ? Carbon::parse($data['to']) : Carbon::today();
         $from = isset($data['from']) ? Carbon::parse($data['from']) : $to->copy()->startOfYear();
         if ($from->gt($to)) { [$from, $to] = [$to, $from]; }
         $f = $from->toDateString();
         $t = $to->toDateString();
+        $interval = $data['interval'] ?? 'month';
 
         // headline KPIs
         $admissions = (int) DB::table('admissions')->whereBetween('admit_date', [$f, $t])->whereRaw($this->nonIcu)->count();
@@ -60,41 +62,51 @@ class StatisticsController extends Controller
             ->whereBetween('a.admit_date', [$f, $t])
             ->distinct()->count('a.id');
 
-        // monthly series across the 12 months ending at $to
-        $mStart = $to->copy()->startOfMonth()->subMonths(11)->toDateString();
-        $admByMonth = $this->byMonth('admissions', 'admit_date', $mStart, $t, $this->nonIcu);
-        $disByMonth = $this->byMonth('admissions', 'discharge_date', $mStart, $t, $this->nonIcu);
-        $deathByMonth = $this->byMonth('admissions', 'discharge_date', $mStart, $t, "outcome = 'Dead'");
-        $months = [];
-        $cursor = $to->copy()->startOfMonth()->subMonths(11);
-        for ($i = 0; $i < 12; $i++) { $months[] = $cursor->format('Y-m'); $cursor->addMonth(); }
-        $monthly = [
-            'labels' => array_map(fn ($m) => Carbon::createFromFormat('Y-m', $m)->format('M y'), $months),
-            'admissions' => array_map(fn ($m) => (int) ($admByMonth[$m] ?? 0), $months),
-            'discharges' => array_map(fn ($m) => (int) ($disByMonth[$m] ?? 0), $months),
-            'deaths' => array_map(fn ($m) => (int) ($deathByMonth[$m] ?? 0), $months),
-        ];
-
-        // per-month KPI grid (tabular breakdown across the 12-month window)
-        $icuByMonth = $this->byMonth('admissions', 'admit_date', $mStart, $t, "current_location = 'ICU'");
-        $consByMonth = $this->byMonth('consultations', 'consultation_date', $mStart, $t, '1=1');
-        $signByMonth = $this->byMonth('consultations', 'signoff_date', $mStart, $t, '1=1');
-        $losByMonth = DB::table('admissions')->whereBetween('discharge_date', [$mStart, $t])->whereNotNull('admit_date')
+        // time-series + KPI grid over the SELECTED range, bucketed by interval (day/month/quarter)
+        $buckets = $this->buckets($from, $to, $interval);
+        $keys = array_column($buckets, 'key');
+        $admBy = $this->seriesBy('admissions', 'admit_date', $f, $t, $interval, $this->nonIcu);
+        $disBy = $this->seriesBy('admissions', 'discharge_date', $f, $t, $interval, $this->nonIcu);
+        $deathBy = $this->seriesBy('admissions', 'discharge_date', $f, $t, $interval, "outcome = 'Dead'");
+        $icuBy = $this->seriesBy('admissions', 'admit_date', $f, $t, $interval, "current_location = 'ICU'");
+        $consBy = $this->seriesBy('consultations', 'consultation_date', $f, $t, $interval, '1=1');
+        $signBy = $this->seriesBy('consultations', 'signoff_date', $f, $t, $interval, '1=1');
+        $losBy = DB::table('admissions')->whereBetween('discharge_date', [$f, $t])->whereNotNull('admit_date')
             ->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
-            ->selectRaw("DATE_FORMAT(discharge_date, '%Y-%m') m, ROUND(AVG(DATEDIFF(discharge_date, admit_date)), 1) los")
-            ->groupBy('m')->pluck('los', 'm')->all();
-        $kpiGrid = array_map(fn ($m) => [
-            'label' => Carbon::createFromFormat('Y-m', $m)->format('M y'),
-            'admissions' => (int) ($admByMonth[$m] ?? 0), 'discharges' => (int) ($disByMonth[$m] ?? 0),
-            'icu' => (int) ($icuByMonth[$m] ?? 0), 'deaths' => (int) ($deathByMonth[$m] ?? 0),
-            'consultations' => (int) ($consByMonth[$m] ?? 0), 'signoffs' => (int) ($signByMonth[$m] ?? 0),
-            'avgLos' => (float) ($losByMonth[$m] ?? 0),
-        ], $months);
+            ->selectRaw($this->keyExpr('discharge_date', $interval) . ' k, ROUND(AVG(DATEDIFF(discharge_date, admit_date)), 1) los')
+            ->groupBy('k')->pluck('los', 'k')->all();
 
-        // discharge destinations (range) for a donut
+        $monthly = [
+            'labels' => array_column($buckets, 'label'),
+            'admissions' => array_map(fn ($k) => (int) ($admBy[$k] ?? 0), $keys),
+            'discharges' => array_map(fn ($k) => (int) ($disBy[$k] ?? 0), $keys),
+            'deaths' => array_map(fn ($k) => (int) ($deathBy[$k] ?? 0), $keys),
+        ];
+        $kpiGrid = array_map(fn ($b) => [
+            'label' => $b['label'],
+            'admissions' => (int) ($admBy[$b['key']] ?? 0), 'discharges' => (int) ($disBy[$b['key']] ?? 0),
+            'icu' => (int) ($icuBy[$b['key']] ?? 0), 'deaths' => (int) ($deathBy[$b['key']] ?? 0),
+            'consultations' => (int) ($consBy[$b['key']] ?? 0), 'signoffs' => (int) ($signBy[$b['key']] ?? 0),
+            'avgLos' => (float) ($losBy[$b['key']] ?? 0),
+        ], $buckets);
+
+        // discharge destinations (range) for a donut — overall + per-consultant
         $dest = DB::table('admissions')->whereBetween('discharge_date', [$f, $t])
             ->selectRaw("COALESCE(NULLIF(TRIM(discharge_to), ''), 'Unspecified') dest, COUNT(*) c")
             ->groupBy('dest')->orderByDesc('c')->limit(8)->get();
+
+        $byCons = [];
+        DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
+            ->whereBetween('a.discharge_date', [$f, $t])
+            ->selectRaw("COALESCE(u.full_name, u.name) name, COALESCE(NULLIF(TRIM(a.discharge_to), ''), 'Unspecified') dest, COUNT(*) c")
+            ->groupByRaw("COALESCE(u.full_name, u.name), COALESCE(NULLIF(TRIM(a.discharge_to), ''), 'Unspecified')")
+            ->get()->each(function ($r) use (&$byCons) { $byCons[$r->name][$r->dest] = (int) $r->c; });
+        uasort($byCons, fn ($a, $b) => array_sum($b) <=> array_sum($a));
+        $destByConsultant = [];
+        foreach (array_slice($byCons, 0, 12, true) as $name => $dests) {
+            arsort($dests);
+            $destByConsultant[] = ['name' => $name, 'labels' => array_keys($dests), 'data' => array_values($dests)];
+        }
 
         // LOS distribution
         $losRows = DB::table('admissions')->selectRaw('DATEDIFF(discharge_date, admit_date) los')
@@ -157,13 +169,43 @@ class StatisticsController extends Controller
             'perConsultant' => $perConsultant,
             'sourceMix' => $sourceMix,
             'kpiGrid' => $kpiGrid,
+            'interval' => $interval,
             'destinations' => ['labels' => $dest->pluck('dest'), 'data' => $dest->pluck('c')],
+            'destByConsultant' => $destByConsultant,
         ]);
     }
 
-    private function byMonth(string $table, string $col, string $from, string $to, string $extra): array
+    /** SQL bucket-key expression for the chosen interval (sargable enough; grouped over a bounded range). */
+    private function keyExpr(string $col, string $interval): string
     {
-        return DB::table($table)->whereBetween($col, [$from, $to])->whereRaw($extra)
-            ->selectRaw("DATE_FORMAT($col, '%Y-%m') m, COUNT(*) c")->groupBy('m')->pluck('c', 'm')->all();
+        return match ($interval) {
+            'day' => "DATE($col)",
+            'quarter' => "CONCAT(YEAR($col), '-Q', QUARTER($col))",
+            default => "DATE_FORMAT($col, '%Y-%m')",
+        };
+    }
+
+    private function seriesBy(string $table, string $col, string $f, string $t, string $interval, string $where): array
+    {
+        return DB::table($table)->whereBetween($col, [$f, $t])->whereRaw($where)
+            ->selectRaw($this->keyExpr($col, $interval) . ' k, COUNT(*) c')->groupBy('k')->pluck('c', 'k')->all();
+    }
+
+    /** Ordered [{key,label}] buckets spanning [from,to] at the chosen interval. */
+    private function buckets(Carbon $from, Carbon $to, string $interval): array
+    {
+        $out = [];
+        if ($interval === 'day') {
+            $c = $from->copy()->startOfDay();
+            while ($c->lte($to) && count($out) <= 370) { $out[] = ['key' => $c->toDateString(), 'label' => $c->format('d M')]; $c->addDay(); }
+        } elseif ($interval === 'quarter') {
+            $c = $from->copy()->firstOfQuarter();
+            while ($c->lte($to)) { $out[] = ['key' => $c->year . '-Q' . $c->quarter, 'label' => 'Q' . $c->quarter . ' ' . $c->year]; $c->addQuarter(); }
+        } else {
+            $c = $from->copy()->startOfMonth();
+            while ($c->lte($to)) { $out[] = ['key' => $c->format('Y-m'), 'label' => $c->format('M y')]; $c->addMonth(); }
+        }
+
+        return $out;
     }
 }

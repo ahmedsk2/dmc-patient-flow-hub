@@ -11,6 +11,7 @@ const props = defineProps({
     mix: Object,
     perConsultant: Array,
     consultantBoard: Array,
+    topDxWeek: Array,
     recent: Array,
     generatedAt: String,
 });
@@ -202,6 +203,19 @@ const refresh = () => router.reload({ only: ['kpis', 'trend', 'consults', 'los',
                     </div>
                     <p v-if="!recent.length" class="py-2 text-sm text-ink-400">No recent admissions.</p>
                 </div>
+            </div>
+        </div>
+
+        <!-- top diagnoses this week -->
+        <div class="mt-5 rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
+            <h3 class="mb-4 font-bold text-ink-800">Top diagnoses <span class="font-normal text-ink-400">(last 7 days)</span></h3>
+            <div class="grid gap-x-8 gap-y-2 sm:grid-cols-2">
+                <div v-for="(d, i) in topDxWeek" :key="i" class="flex items-center gap-3">
+                    <div class="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">{{ i + 1 }}</div>
+                    <div class="min-w-0 flex-1 truncate text-sm text-ink-700">{{ d.name }}</div>
+                    <div class="nums text-sm font-bold text-brand-700">{{ d.count }}</div>
+                </div>
+                <p v-if="!topDxWeek.length" class="text-sm text-ink-400">No admissions in the last 7 days.</p>
             </div>
         </div>
 

@@ -3,11 +3,21 @@ import { ref, computed } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
-const props = defineProps({ range: Object, kpis: Object, monthly: Object, los: Object, topDx: Array, reasons: Object, perConsultant: Array, sourceMix: Array, kpiGrid: Array, destinations: Object });
+const props = defineProps({ range: Object, kpis: Object, monthly: Object, los: Object, topDx: Array, reasons: Object, perConsultant: Array, sourceMix: Array, kpiGrid: Array, interval: String, destinations: Object, destByConsultant: Array });
 
 const from = ref(props.range.from);
 const to = ref(props.range.to);
-const apply = () => router.get('/statistics', { from: from.value, to: to.value }, { preserveState: true, preserveScroll: true });
+const interval = ref(props.interval || 'month');
+const apply = () => router.get('/statistics', { from: from.value, to: to.value, interval: interval.value }, { preserveState: true, preserveScroll: true });
+const setInterval2 = (i) => { interval.value = i; apply(); };
+
+// per-consultant discharge-destination donut (All = overall)
+const destChoice = ref('');
+const destDonut = computed(() => {
+    if (!destChoice.value) return { labels: props.destinations.labels, data: props.destinations.data };
+    const c = props.destByConsultant.find((x) => x.name === destChoice.value);
+    return c ? { labels: c.labels, data: c.data } : { labels: [], data: [] };
+});
 
 const C = { teal: '#009ca6', tealLt: '#7accc9', navy: '#00565e', gold: '#d9a23c', red: '#e0413e', blue: '#2f7fe0', slate: '#5b6a6e', green: '#16a34a' };
 
@@ -67,6 +77,11 @@ const donut = (labels) => ({
                 <input v-model="to" type="date" class="rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" />
             </div>
             <button @click="apply" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-700">Apply</button>
+            <div class="flex items-end gap-1">
+                <div class="flex gap-1 rounded-xl bg-surface p-1 ring-1 ring-ink-100">
+                    <button v-for="iv in [['day','Daily'],['month','Monthly'],['quarter','Quarterly']]" :key="iv[0]" @click="setInterval2(iv[0])" class="rounded-lg px-3 py-1.5 text-sm font-semibold transition" :class="interval === iv[0] ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ iv[1] }}</button>
+                </div>
+            </div>
             <span class="ml-auto text-sm text-ink-400">{{ range.from }} → {{ range.to }}</span>
         </div>
 
@@ -84,7 +99,7 @@ const donut = (labels) => ({
         <!-- charts -->
         <div class="grid gap-5 lg:grid-cols-2">
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60 lg:col-span-2">
-                <h3 class="mb-3 font-bold text-ink-800">Monthly admissions, discharges & mortality</h3>
+                <h3 class="mb-3 font-bold text-ink-800">{{ interval === 'day' ? 'Daily' : interval === 'quarter' ? 'Quarterly' : 'Monthly' }} admissions, discharges & mortality</h3>
                 <apexchart type="area" height="300" :options="monthlyChart" :series="monthlySeries" />
             </div>
 
@@ -97,8 +112,14 @@ const donut = (labels) => ({
                 <apexchart type="donut" height="280" :options="donut(sourceMix.map(s => s.src))" :series="sourceMix.map(s => s.c)" />
             </div>
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
-                <h3 class="mb-3 font-bold text-ink-800">Discharge destinations</h3>
-                <apexchart v-if="destinations.data.length" type="donut" height="280" :options="donut(destinations.labels)" :series="destinations.data" />
+                <div class="mb-3 flex items-center justify-between gap-2">
+                    <h3 class="font-bold text-ink-800">Discharge destinations</h3>
+                    <select v-model="destChoice" class="max-w-[55%] truncate rounded-lg border border-ink-200 px-2 py-1 text-xs outline-none focus:border-brand-500">
+                        <option value="">All consultants</option>
+                        <option v-for="c in destByConsultant" :key="c.name" :value="c.name">{{ c.name }}</option>
+                    </select>
+                </div>
+                <apexchart v-if="destDonut.data.length" type="donut" height="280" :options="donut(destDonut.labels)" :series="destDonut.data" />
                 <p v-else class="py-10 text-center text-sm text-ink-300">No discharges in range.</p>
             </div>
 

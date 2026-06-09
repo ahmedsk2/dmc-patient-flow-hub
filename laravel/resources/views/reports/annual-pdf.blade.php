@@ -11,7 +11,7 @@
     .head .sub { color: #5b6a6e; font-size: 12px; margin-top: 2px; }
     .head .org { float: right; text-align: right; color: #5b6a6e; font-size: 10px; }
     .kpis { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-    .kpis td { width: 16.6%; text-align: center; padding: 8px 4px; background: #f1f6f6; border: 2px solid #fff; }
+    .kpis td { width: 14.2%; text-align: center; padding: 8px 4px; background: #f1f6f6; border: 2px solid #fff; }
     .kpis .label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #5b6a6e; }
     .kpis .val { font-size: 17px; font-weight: bold; color: #009ca6; }
     h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: #00565e; margin: 14px 0 6px; }
@@ -42,6 +42,7 @@
             <td><div class="label">Mortality %</div><div class="val">{{ $totals['mortalityRate'] }}%</div></td>
             <td><div class="label">Ward LOS</div><div class="val">{{ $avgLos }}d</div></td>
             <td><div class="label">ICU LOS</div><div class="val">{{ $icuLos }}d</div></td>
+            <td><div class="label">Long-stay %</div><div class="val">{{ $totals['lsp'] }}%</div></td>
         </tr>
     </table>
 
@@ -68,7 +69,7 @@
     <h2>Monthly breakdown</h2>
     <table class="data">
         <thead>
-            <tr><th>Month</th><th class="r">Admissions</th><th class="r">Discharges</th><th class="r">ICU</th><th class="r">Mortality</th></tr>
+            <tr><th>Month</th><th class="r">Admissions</th><th class="r">Discharges</th><th class="r">ICU</th><th class="r">Mortality</th><th class="r">Long-stay %</th></tr>
         </thead>
         <tbody>
             @foreach ($months as $m)
@@ -78,6 +79,7 @@
                     <td class="r">{{ $m['discharges'] }}</td>
                     <td class="r">{{ $m['icu'] }}</td>
                     <td class="r">{{ $m['deaths'] }}</td>
+                    <td class="r">{{ $m['lsp'] }}%</td>
                 </tr>
             @endforeach
             <tr class="total">
@@ -86,6 +88,7 @@
                 <td class="r">{{ $totals['discharges'] }}</td>
                 <td class="r">{{ $totals['icu'] }}</td>
                 <td class="r">{{ $totals['deaths'] }}</td>
+                <td class="r">{{ $totals['lsp'] }}%</td>
             </tr>
         </tbody>
     </table>

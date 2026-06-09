@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Setting;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -48,15 +49,24 @@ class ReportsController extends Controller
         $deathByMonth = $this->byMonth('discharge_date', $start, $end, "outcome = 'Dead'");
         $icuByMonth = $this->byMonth('admit_date', $start, $end, "current_location = 'ICU'");
 
+        // long-stay = ward discharge with LOS strictly greater than the long_los threshold
+        $longLos = (int) (Setting::current()->long_los ?? 11);
+        $longStayByMonth = $this->byMonth('discharge_date', $start, $end, $this->nonIcu . " AND admit_date IS NOT NULL AND DATEDIFF(discharge_date, admit_date) > {$longLos}");
+
         $months = [];
+        $totalLongStay = 0;
         for ($m = 1; $m <= 12; $m++) {
             $key = sprintf('%04d-%02d', $year, $m);
+            $dis = (int) ($disByMonth[$key] ?? 0);
+            $long = (int) ($longStayByMonth[$key] ?? 0);
+            $totalLongStay += $long;
             $months[] = [
                 'label' => Carbon::createFromDate($year, $m, 1)->format('F'),
                 'admissions' => (int) ($admByMonth[$key] ?? 0),
-                'discharges' => (int) ($disByMonth[$key] ?? 0),
+                'discharges' => $dis,
                 'icu' => (int) ($icuByMonth[$key] ?? 0),
                 'deaths' => (int) ($deathByMonth[$key] ?? 0),
+                'lsp' => $dis > 0 ? round($long / $dis * 100, 1) : 0.0,
             ];
         }
 
@@ -67,6 +77,7 @@ class ReportsController extends Controller
             'deaths' => array_sum(array_column($months, 'deaths')),
         ];
         $totals['mortalityRate'] = $totals['discharges'] > 0 ? round($totals['deaths'] / $totals['discharges'] * 100, 1) : 0;
+        $totals['lsp'] = $totals['discharges'] > 0 ? round($totalLongStay / $totals['discharges'] * 100, 1) : 0;
 
         $avgLos = (float) DB::table('admissions')->whereBetween('discharge_date', [$start, $end])
             ->whereNotNull('admit_date')->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
