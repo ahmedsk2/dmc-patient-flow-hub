@@ -89,6 +89,20 @@ Verified row-for-row against the source (total admissions and active census matc
 - Prepared statements throughout (Eloquent / query builder), CSRF on by default, validation on all input,
   transactions on multi-row changes (transfer), bcrypt passwords.
 
+## Testing
+
+```bash
+# one-time: a dedicated MySQL test DB (migrated fresh per run by RefreshDatabase)
+mysql -u root -e "CREATE DATABASE IF NOT EXISTS dmc_test;"
+php artisan test
+```
+
+Feature tests run against **MySQL** (not sqlite) so the real SQL dialect (DATEDIFF/DATE_FORMAT/JSON)
+is exercised; the base `TestCase` stubs Vite so no front-end build is needed. Coverage focuses on the
+security-critical gates (guest redirects, observer cannot admit, non-admin cannot reach Control,
+consultant-without-Assign cannot shuffle, admin dashboard renders, import preview validation).
+CI runs the suite on every push via `.github/workflows/laravel-ci.yml` (MySQL service).
+
 ## Access policy (decided)
 - **Control panel** is admin-only (`EnsureAdmin`). **Statistics / Registry / Reports** are open to any
   authenticated user (read-only analytics); **Observers** (role 5) are read-only everywhere — they cannot

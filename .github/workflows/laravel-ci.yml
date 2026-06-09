@@ -1,0 +1,50 @@
+name: laravel-ci
+
+on:
+  push:
+    paths: ['laravel/**', '.github/workflows/laravel-ci.yml']
+  pull_request:
+    paths: ['laravel/**', '.github/workflows/laravel-ci.yml']
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_DATABASE: dmc_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    defaults:
+      run:
+        working-directory: laravel
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, mbstring, bcmath, zip, gd
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env || true
+          {
+            echo "DB_CONNECTION=mysql"
+            echo "DB_HOST=127.0.0.1"
+            echo "DB_PORT=3306"
+            echo "DB_DATABASE=dmc_test"
+            echo "DB_USERNAME=root"
+            echo "DB_PASSWORD="
+          } >> .env
+          php artisan key:generate
+
+      - name: Run test suite (PHPUnit, MySQL)
+        run: php artisan test
