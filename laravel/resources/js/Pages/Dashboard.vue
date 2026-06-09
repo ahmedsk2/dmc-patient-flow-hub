@@ -14,7 +14,7 @@ const props = defineProps({
     generatedAt: String,
 });
 
-const C = { teal: '#0d8a85', tealLight: '#2dbcb8', navy: '#173049', gold: '#efab23', pink: '#cf4b8f', red: '#e0413e', blue: '#2f7fe0', slate: '#94a3b5' };
+const C = { teal: '#009ca6', tealLight: '#38b4ba', navy: '#00565e', gold: '#d9a23c', pink: '#cf4b8f', red: '#e0413e', blue: '#2f7fe0', slate: '#5b6a6e' };
 
 const kpiCards = computed(() => [
     { label: 'Active Census', value: props.kpis.census, sub: `${props.kpis.ward} ward · ${props.kpis.icu} ICU`, icon: 'bed', tone: 'brand' },

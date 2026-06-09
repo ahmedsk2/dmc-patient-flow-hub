@@ -9,7 +9,7 @@ const from = ref(props.range.from);
 const to = ref(props.range.to);
 const apply = () => router.get('/statistics', { from: from.value, to: to.value }, { preserveState: true, preserveScroll: true });
 
-const C = { teal: '#0d8a85', tealLt: '#5fbdb6', navy: '#173049', gold: '#efab23', red: '#e1474c', blue: '#2f7fb3', slate: '#94a3b8', green: '#16a34a' };
+const C = { teal: '#009ca6', tealLt: '#7accc9', navy: '#00565e', gold: '#d9a23c', red: '#e0413e', blue: '#2f7fe0', slate: '#5b6a6e', green: '#16a34a' };
 
 const kpiCards = computed(() => [
     { label: 'Admissions', value: props.kpis.admissions, tone: 'brand' },

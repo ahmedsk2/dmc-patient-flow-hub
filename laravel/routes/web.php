@@ -48,6 +48,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/registry', [RegistryController::class, 'index'])->name('registry.index');
     Route::get('/registry/export', [RegistryController::class, 'export'])->name('registry.export');
     Route::get('/reports', [ReportsController::class, 'index'])->name('reports.index');
+    Route::get('/reports/pdf', [ReportsController::class, 'pdf'])->name('reports.pdf');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('/profile', [ProfileController::class, 'updateProfile'])->name('profile.update');

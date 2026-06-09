@@ -16,7 +16,7 @@ createInertiaApp({
             .mount(el);
     },
     progress: {
-        color: '#0d9488', // EHC teal
+        color: '#009ca6', // EHC primary teal
         showSpinner: false,
     },
 });

@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
+import EhcLogo from '@/Components/EhcLogo.vue';
 
 const logout = () => router.post('/logout');
 
@@ -54,7 +55,7 @@ const icons = {
             :class="{ 'translate-x-0': sidebarOpen }"
         >
             <div class="flex h-16 items-center gap-3 px-5 border-b border-white/5">
-                <div class="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 font-bold text-white shadow-lg shadow-brand-900/40">D</div>
+                <div class="grid h-9 w-9 place-items-center rounded-xl bg-white p-1 shadow-lg shadow-brand-950/40"><EhcLogo class="h-7 w-7" /></div>
                 <div class="leading-tight">
                     <div class="text-sm font-bold text-white tracking-wide">DMC <span class="text-brand-300">IM</span></div>
                     <div class="text-[10px] uppercase tracking-[0.18em] text-navy-400">Patient Flow</div>

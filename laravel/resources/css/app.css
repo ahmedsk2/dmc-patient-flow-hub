@@ -5,57 +5,59 @@
 @source './**/*.vue';
 
 /*
- * DMC Internal Medicine — design tokens.
- * Palette derived to be faithful to the Eastern Health Cluster (Saudi MOH) healthcare aesthetic:
- * a confident clinical TEAL primary, a deep NAVY for chrome/ink, clean light SURFACES, and a warm
- * GOLD accent for highlights. Generated as Tailwind v4 utilities (bg-brand-600, text-ink-900, …).
+ * DMC Internal Medicine — design tokens, EXACT Eastern Health Cluster (EHC) brand palette:
+ *   Primary teal #009CA6 · Deep teal #00565E · Light aqua #A9DED8 · Ink #1E2A2E · Slate #5B6A6E · Surface #F1F6F6.
+ * The chrome (sidebar/headers) uses the deep-teal "navy-*" scale; a restrained warm gold is the only
+ * secondary accent (used sparingly for highlights / data-viz contrast).
  */
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif,
         'Apple Color Emoji', 'Segoe UI Emoji';
 
-    /* Brand — teal */
-    --color-brand-50: #effcfb;
-    --color-brand-100: #c9f4f1;
-    --color-brand-200: #97e9e4;
-    --color-brand-300: #5ed7d2;
-    --color-brand-400: #2dbcb8;
-    --color-brand-500: #14a89f;
-    --color-brand-600: #0d8a85;
-    --color-brand-700: #0f6e6c;
-    --color-brand-800: #115857;
-    --color-brand-900: #134a49;
-    --color-brand-950: #042b2c;
+    /* Brand — EHC teal (500 = primary #009CA6, 800 = deep #00565E, 200 = light aqua #A9DED8) */
+    --color-brand-50: #f0fafa;
+    --color-brand-100: #d4f0ef;
+    --color-brand-200: #a9ded8;
+    --color-brand-300: #7accc9;
+    --color-brand-400: #38b4ba;
+    --color-brand-500: #009ca6;
+    --color-brand-600: #008791;
+    --color-brand-700: #00727b;
+    --color-brand-800: #00565e;
+    --color-brand-900: #004249;
+    --color-brand-950: #002b30;
 
-    /* Navy — chrome (sidebar / deep headers) */
-    --color-navy-50: #eef3f8;
-    --color-navy-100: #d3e0ec;
-    --color-navy-200: #a7c0d9;
-    --color-navy-400: #4f7396;
-    --color-navy-600: #1f3f5e;
-    --color-navy-700: #173049;
-    --color-navy-800: #102338;
-    --color-navy-900: #0b1a2b;
-    --color-navy-950: #07111d;
+    /* Chrome — EHC deep teal (kept under the "navy-*" names the layout already uses) */
+    --color-navy-50: #e8f3f3;
+    --color-navy-100: #cfe9e7;
+    --color-navy-200: #a9ded8;
+    --color-navy-300: #7fc7c4;
+    --color-navy-400: #4f9b9d;
+    --color-navy-600: #00666e;
+    --color-navy-700: #00565e;
+    --color-navy-800: #00444a;
+    --color-navy-900: #003339;
+    --color-navy-950: #00252a;
 
-    /* Ink — text (slate-navy) */
-    --color-ink-50: #f6f8fa;
-    --color-ink-100: #eaeef3;
-    --color-ink-300: #c2ccd8;
-    --color-ink-400: #94a3b5;
-    --color-ink-500: #64748b;
-    --color-ink-600: #475569;
-    --color-ink-700: #334155;
-    --color-ink-800: #1e293b;
-    --color-ink-900: #0f172a;
+    /* Ink — EHC neutrals (900 = ink #1E2A2E, 500 = slate #5B6A6E) */
+    --color-ink-50: #f1f6f6;
+    --color-ink-100: #e3eaea;
+    --color-ink-200: #cdd6d6;
+    --color-ink-300: #a6b3b3;
+    --color-ink-400: #7c8a8d;
+    --color-ink-500: #5b6a6e;
+    --color-ink-600: #46555a;
+    --color-ink-700: #344145;
+    --color-ink-800: #283538;
+    --color-ink-900: #1e2a2e;
 
-    /* Accent — warm gold */
-    --color-accent-300: #fbd982;
-    --color-accent-400: #f7c44e;
-    --color-accent-500: #efab23;
-    --color-accent-600: #d18a12;
+    /* Accent — restrained warm gold (secondary highlight only) */
+    --color-accent-300: #f3d9a0;
+    --color-accent-400: #e9bd63;
+    --color-accent-500: #d9a23c;
+    --color-accent-600: #b9842a;
 
-    /* Semantic */
+    /* Semantic (status — not brand) */
     --color-success-100: #d8f5e3;
     --color-success-500: #16a34a;
     --color-success-600: #15803d;
@@ -67,10 +69,10 @@
     --color-info-100: #d7e9fb;
     --color-info-500: #2f7fe0;
 
-    /* App surface */
-    --color-surface: #eef2f6;
+    /* App surface — EHC #F1F6F6 */
+    --color-surface: #f1f6f6;
 
-    --shadow-card: 0 1px 2px rgb(15 42 67 / 0.04), 0 6px 20px -8px rgb(15 42 67 / 0.12);
+    --shadow-card: 0 1px 2px rgb(30 42 46 / 0.05), 0 6px 20px -8px rgb(30 42 46 / 0.14);
     --radius-xl2: 1.1rem;
 }
 

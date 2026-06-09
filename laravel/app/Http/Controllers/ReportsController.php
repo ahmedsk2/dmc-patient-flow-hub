@@ -2,15 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Printable A4 annual activity report. Sargable grouped SQL over the indexed date columns; the Vue
- * page is styled for A4 print (the user prints / saves-as-PDF from the browser, matching legacy parity).
+ * Annual activity report. The Vue page is print-styled; a true server-side PDF (dompdf) is also
+ * available via /reports/pdf. Sargable grouped SQL over the indexed date columns.
  */
 class ReportsController extends Controller
 {
@@ -19,6 +21,25 @@ class ReportsController extends Controller
     public function index(Request $request): Response
     {
         $year = (int) ($request->query('year') ?: Carbon::today()->year);
+
+        return Inertia::render('Reports/Index', [
+            ...$this->gather($year),
+            'availableYears' => DB::table('admissions')->selectRaw('DISTINCT YEAR(admit_date) y')
+                ->whereNotNull('admit_date')->orderByDesc('y')->pluck('y')->filter()->values(),
+        ]);
+    }
+
+    public function pdf(Request $request): SymfonyResponse
+    {
+        $year = (int) ($request->query('year') ?: Carbon::today()->year);
+        $pdf = Pdf::loadView('reports.annual-pdf', $this->gather($year))->setPaper('a4', 'portrait');
+
+        return $pdf->download("dmc-annual-report-{$year}.pdf");
+    }
+
+    /** Shared data set for both the screen page and the PDF. */
+    private function gather(int $year): array
+    {
         $start = "{$year}-01-01";
         $end = "{$year}-12-31";
 
@@ -61,21 +82,18 @@ class ReportsController extends Controller
         $perConsultant = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
             ->whereBetween('a.admit_date', [$start, $end])
             ->selectRaw('COALESCE(u.full_name, u.name) name, COUNT(*) c')
-            ->groupByRaw('COALESCE(u.full_name, u.name)')->orderByDesc('c')->limit(15)->get();
+            ->groupByRaw('COALESCE(u.full_name, u.name)')->orderByDesc('c')->limit(15)->get()
+            ->map(fn ($r) => ['name' => $r->name, 'count' => (int) $r->c]);
 
-        $availableYears = DB::table('admissions')->selectRaw('DISTINCT YEAR(admit_date) y')
-            ->whereNotNull('admit_date')->orderByDesc('y')->pluck('y')->filter()->values();
-
-        return Inertia::render('Reports/Index', [
+        return [
             'year' => $year,
-            'availableYears' => $availableYears,
             'months' => $months,
             'totals' => $totals,
             'avgLos' => round($avgLos, 1),
             'topDx' => $topDx,
             'perConsultant' => $perConsultant,
             'generatedAt' => now()->format('D, d M Y · H:i'),
-        ]);
+        ];
     }
 
     private function byMonth(string $col, string $from, string $to, string $extra): array

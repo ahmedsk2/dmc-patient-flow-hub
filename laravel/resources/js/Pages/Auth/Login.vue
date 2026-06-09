@@ -1,5 +1,6 @@
 <script setup>
 import { Head, useForm } from '@inertiajs/vue3';
+import EhcLogo from '@/Components/EhcLogo.vue';
 
 const form = useForm({ username: '', password: '', remember: false });
 const submit = () => form.post('/login', { onFinish: () => form.reset('password') });
@@ -11,7 +12,7 @@ const submit = () => form.post('/login', { onFinish: () => form.reset('password'
         <!-- Brand panel -->
         <div class="relative hidden w-1/2 overflow-hidden bg-gradient-to-br from-navy-800 via-navy-900 to-navy-950 lg:flex lg:flex-col lg:justify-between p-12 text-white">
             <div class="flex items-center gap-3">
-                <div class="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 text-lg font-bold shadow-lg">D</div>
+                <div class="grid h-11 w-11 place-items-center rounded-2xl bg-white p-1.5 shadow-lg"><EhcLogo class="h-8 w-8" /></div>
                 <div>
                     <div class="text-lg font-bold tracking-wide">DMC <span class="text-brand-300">Internal Medicine</span></div>
                     <div class="text-[11px] uppercase tracking-[0.18em] text-navy-300">Patient-Flow Hub</div>
@@ -37,7 +38,7 @@ const submit = () => form.post('/login', { onFinish: () => form.reset('password'
         <div class="flex w-full items-center justify-center px-6 lg:w-1/2">
             <div class="w-full max-w-sm">
                 <div class="mb-8 lg:hidden">
-                    <div class="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 text-lg font-bold text-white">D</div>
+                    <div class="grid h-11 w-11 place-items-center rounded-2xl bg-brand-50 p-1.5 ring-1 ring-brand-100"><EhcLogo class="h-8 w-8" /></div>
                 </div>
                 <h2 class="text-2xl font-bold text-ink-900">Welcome back</h2>
                 <p class="mt-1 text-sm text-ink-500">Sign in to the patient-flow hub.</p>

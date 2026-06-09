@@ -5,8 +5,10 @@ Tailwind v4 + ApexCharts**, themed for the Eastern Health Cluster (EHC). It live
 existing renovated PHP app (on the `renovation` branch) without touching it; this app is on the
 `laravel-replatform` branch under `laravel/`.
 
-The exact EHC brand colors and logo are placeholders for now (teal/navy/gold healthcare palette in
-`resources/css/app.css` `@theme`) — drop the final tokens there and rebuild.
+Styled with the **EHC brand palette** (primary teal `#009CA6`, deep teal `#00565E` chrome, light aqua
+`#A9DED8`, ink `#1E2A2E`, slate `#5B6A6E`, surface `#F1F6F6`) in `resources/css/app.css` `@theme`, plus
+an approximated EHC star mark (`resources/js/Components/EhcLogo.vue`). Swap in the official logo asset
+when available; a restrained warm gold is the only secondary accent (data-viz contrast).
 
 ## Stack & architecture
 
@@ -67,7 +69,7 @@ Verified row-for-row against the source (total admissions and active census matc
 | Consultations — list, create, sign-off | ✅ |
 | Registry — historical search + streamed CSV export | ✅ |
 | Statistics — date-range KPIs + charts (sargable SQL) | ✅ |
-| Reports — printable A4 annual report (print / save-as-PDF) | ✅ |
+| Reports — A4 annual report: **server-side PDF** (dompdf) + browser print | ✅ |
 | Control panel (admin) — settings, user role/capability management | ✅ |
 | Profile — edit details, change password | ✅ |
 | Two-factor auth (TOTP) — enroll (QR + recovery codes), login challenge, disable | ✅ |
@@ -79,8 +81,13 @@ Verified row-for-row against the source (total admissions and active census matc
 - Prepared statements throughout (Eloquent / query builder), CSRF on by default, validation on all input,
   transactions on multi-row changes (transfer), bcrypt passwords.
 
+## Access policy (decided)
+- **Control panel** is admin-only (`EnsureAdmin`). **Statistics / Registry / Reports** are open to any
+  authenticated user (read-only analytics); **Observers** (role 5) are read-only everywhere — they cannot
+  admit, run flow actions, or create consultations (enforced server-side). This is a deliberate choice for
+  the re-platform; the legacy `permissions.docx` matrix was flagged dated and should be re-confirmed with
+  the clinical team before any tightening.
+
 ## Deferred / next
-- Server-side PDF rendering (currently browser print for A4).
-- The exact EHC palette/logo (placeholder theme until provided).
-- Fine-grained per-role read access on Statistics/Registry/Reports (currently any authenticated user;
-  Control is admin-only).
+- Swap the approximated `EhcLogo.vue` for the official EHC logo asset when provided.
+- Optional: richer report exports (per-consultant / per-specialty PDF packs).
