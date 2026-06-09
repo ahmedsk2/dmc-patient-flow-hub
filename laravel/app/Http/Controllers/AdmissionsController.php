@@ -20,6 +20,35 @@ use Inertia\Response;
 
 class AdmissionsController extends Controller
 {
+    /** New Admissions queue: patients admitted but not yet assigned to a consultant (unshuffled). */
+    public function index(): Response
+    {
+        $queue = Admission::query()
+            ->whereNull('discharge_date')->whereNull('consultant_id')
+            ->with('patient:id,mrn,name,gender,age')->withCount('diagnoses')
+            ->orderByDesc('admit_date')->orderByDesc('id')->get()
+            ->map(fn (Admission $a) => [
+                'id' => $a->id,
+                'name' => $a->patient?->name ?? 'Unknown',
+                'mrn' => $a->patient?->mrn,
+                'age' => $a->patient?->age,
+                'gender' => $a->patient?->gender,
+                'bed' => $a->bed,
+                'location' => $a->current_location,
+                'admitted_from' => $a->admitted_from,
+                'admit_date' => optional($a->admit_date)->toDateString(),
+                'dx_count' => $a->diagnoses_count,
+                'los' => $a->lengthOfStay(),
+            ]);
+
+        return Inertia::render('Admissions/Index', [
+            'queue' => $queue,
+            'consultants' => User::where('role', User::ROLE_CONSULTANT)->where('active', 1)
+                ->orderBy('full_name')->get(['id', 'full_name', 'name'])
+                ->map(fn ($u) => ['id' => $u->id, 'name' => $u->full_name ?: $u->name]),
+        ]);
+    }
+
     public function create(): Response
     {
         return Inertia::render('Admissions/Create', [

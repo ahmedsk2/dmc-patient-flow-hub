@@ -19,7 +19,7 @@ watch(() => page.props.flash, (f) => {
 
 const nav = [
     { label: 'Dashboard', href: '/', icon: 'grid' },
-    { label: 'New Admission', href: '/admissions/create', icon: 'plus' },
+    { label: 'New Admissions', href: '/admissions', icon: 'plus' },
     { label: 'Patients', href: '/patients', icon: 'bed' },
     { label: 'Consultations', href: '/consultations', icon: 'chat' },
     { label: 'Registry', href: '/registry', icon: 'search' },

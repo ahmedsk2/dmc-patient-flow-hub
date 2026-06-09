@@ -47,6 +47,7 @@ Route::middleware(['auth', 'mfa.enroll'])->group(function () {
     Route::post('/consultations/{consultation}/signoff', [ConsultationsController::class, 'signoff'])->name('consultations.signoff');
     Route::post('/consultations/{consultation}/reverse-signoff', [ConsultationsController::class, 'reverseSignoff'])->name('consultations.reverseSignoff');
 
+    Route::get('/admissions', [AdmissionsController::class, 'index'])->name('admissions.index');
     Route::get('/admissions/create', [AdmissionsController::class, 'create'])->name('admissions.create');
     Route::post('/admissions', [AdmissionsController::class, 'store'])->name('admissions.store');
     Route::get('/api/icd10', [AdmissionsController::class, 'icd10'])->name('icd10.search');
