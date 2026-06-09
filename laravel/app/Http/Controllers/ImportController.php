@@ -13,9 +13,10 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Bulk import of HISTORICAL admission episodes from pasted CSV (admin). Replaces the legacy
- * picupatients_temp staging flow with a parse → validate → transactional-insert in one step.
- * Columns: MRN, Name, Age, Gender, Nationality, AdmitDate, DischargeDate, Outcome, Location.
+ * Bulk import of HISTORICAL admission episodes from pasted CSV (admin). Two-step: PREVIEW parses +
+ * validates every row (no writes) and shows valid/invalid with reasons; CONFIRM commits only the
+ * valid rows in one transaction. Columns: MRN, Name, Age, Gender, Nationality, AdmitDate,
+ * DischargeDate, Outcome, Location.
  */
 class ImportController extends Controller
 {
@@ -23,59 +24,95 @@ class ImportController extends Controller
 
     public function index(): Response
     {
-        return Inertia::render('Import/Index', ['columns' => $this->columns]);
+        return Inertia::render('Import/Index', ['columns' => $this->columns, 'preview' => null, 'rows' => '']);
     }
 
+    /** Step 1 — parse + validate, return a preview WITHOUT writing anything. */
+    public function preview(Request $request): Response
+    {
+        $data = $request->validate(['rows' => ['required', 'string', 'max:500000']]);
+        $parsed = $this->parse($data['rows']);
+
+        return Inertia::render('Import/Index', [
+            'columns' => $this->columns,
+            'rows' => $data['rows'],
+            'preview' => [
+                'valid' => collect($parsed)->where('ok', true)->count(),
+                'invalid' => collect($parsed)->where('ok', false)->count(),
+                'sample' => array_slice($parsed, 0, 200),   // cap the table; counts above are full
+                'truncated' => count($parsed) > 200,
+            ],
+        ]);
+    }
+
+    /** Step 2 — commit only the valid rows. */
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate(['rows' => ['required', 'string', 'max:500000']]);
+        $parsed = $this->parse($data['rows']);
+        $valid = array_filter($parsed, fn ($r) => $r['ok']);
 
-        $lines = preg_split('/\r\n|\r|\n/', trim($data['rows']));
-        $imported = 0;
-        $skipped = 0;
-        $errors = [];
-
-        DB::transaction(function () use ($lines, &$imported, &$skipped, &$errors) {
-            foreach ($lines as $n => $line) {
-                if (trim($line) === '') { continue; }
-                $c = str_getcsv($line);
-                // tolerate a header row
-                if ($n === 0 && strtolower(trim($c[0] ?? '')) === 'mrn') { continue; }
-
-                $mrn = preg_replace('/\D/', '', trim($c[0] ?? ''));
-                if ($mrn === '' || mb_strlen($mrn) > 11) {
-                    $skipped++; $errors[] = 'Line ' . ($n + 1) . ': missing/invalid MRN'; continue;
-                }
-                $admit = $this->date($c[5] ?? null);
-                $patient = Patient::firstOrCreate(['mrn' => $mrn], [
-                    'name' => trim($c[1] ?? '') ?: null,
-                    'gender' => $this->gender($c[3] ?? null),
-                    'age' => is_numeric($c[2] ?? null) ? (int) $c[2] : null,
+        DB::transaction(function () use ($valid) {
+            foreach ($valid as $r) {
+                $patient = Patient::firstOrCreate(['mrn' => $r['mrn']], [
+                    'name' => $r['name'], 'gender' => $r['gender'], 'age' => $r['age'], 'nationality' => $r['nationality'],
                 ]);
                 DB::table('admissions')->insert([
                     'patient_id' => $patient->id,
-                    'admit_date' => $admit,
-                    'discharge_date' => $this->date($c[6] ?? null),
-                    'outcome' => trim($c[7] ?? '') ?: null,
-                    'current_location' => trim($c[8] ?? '') ?: 'Ward',
-                    'transfer_type' => ($this->date($c[6] ?? null)) ? 'discharge from ward' : null,
+                    'admit_date' => $r['admit_date'],
+                    'discharge_date' => $r['discharge_date'],
+                    'outcome' => $r['outcome'],
+                    'current_location' => $r['location'],
+                    'transfer_type' => $r['discharge_date'] ? 'discharge from ward' : null,
                     'admitted_by' => Auth::id(),
                     'created_at' => now(), 'updated_at' => now(),
                 ]);
-                if (! empty($c[4]) && ! $patient->nationality) {
-                    $patient->update(['nationality' => trim($c[4])]);
-                }
-                $imported++;
             }
         });
 
+        $n = count($valid);
+        $skipped = count($parsed) - $n;
         AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'import.bulk',
-            'entity_type' => 'admission', 'entity_id' => null, 'details' => ['imported' => $imported, 'skipped' => $skipped], 'ip' => $request->ip()]);
+            'entity_type' => 'admission', 'entity_id' => null, 'details' => ['imported' => $n, 'skipped' => $skipped], 'ip' => $request->ip()]);
 
-        $msg = "Imported {$imported} admission(s)" . ($skipped ? ", skipped {$skipped}." : '.');
+        return redirect()->route('import.index')->with('flash', ['type' => $n > 0 ? 'success' : 'error',
+            'message' => "Imported {$n} admission(s)" . ($skipped ? ", skipped {$skipped} invalid." : '.')]);
+    }
 
-        return back()->with('flash', ['type' => $imported > 0 ? 'success' : 'error',
-            'message' => $msg . ($errors ? ' ' . implode(' · ', array_slice($errors, 0, 3)) . (count($errors) > 3 ? '…' : '') : '')]);
+    /** @return array<int,array{line:int,ok:bool,error:?string,mrn:?string,name:?string,...}> */
+    private function parse(string $text): array
+    {
+        $lines = preg_split('/\r\n|\r|\n/', trim($text));
+        $out = [];
+        foreach ($lines as $i => $line) {
+            if (trim($line) === '') { continue; }
+            $c = str_getcsv($line);
+            if ($i === 0 && strtolower(trim($c[0] ?? '')) === 'mrn') { continue; } // header
+
+            $mrn = preg_replace('/\D/', '', trim($c[0] ?? ''));
+            $name = trim($c[1] ?? '') ?: null;
+            $row = [
+                'line' => $i + 1,
+                'mrn' => $mrn ?: null,
+                'name' => $name,
+                'age' => is_numeric($c[2] ?? null) ? (int) $c[2] : null,
+                'gender' => $this->gender($c[3] ?? null),
+                'nationality' => trim($c[4] ?? '') ?: null,
+                'admit_date' => $this->date($c[5] ?? null),
+                'discharge_date' => $this->date($c[6] ?? null),
+                'outcome' => trim($c[7] ?? '') ?: null,
+                'location' => trim($c[8] ?? '') ?: 'Ward',
+                'ok' => true,
+                'error' => null,
+            ];
+            if ($mrn === '' || mb_strlen($mrn) > 11) {
+                $row['ok'] = false; $row['error'] = 'MRN must be 1–11 digits';
+            } elseif (! $row['admit_date']) {
+                $row['ok'] = false; $row['error'] = 'Missing/invalid admit date';
+            }
+            $out[] = $row;
+        }
+        return $out;
     }
 
     private function date($v): ?string

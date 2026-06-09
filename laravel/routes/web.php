@@ -71,6 +71,7 @@ Route::middleware(['auth', 'mfa.enroll'])->group(function () {
     Route::middleware('admin')->group(function () {
         Route::get('/recent', [RecentController::class, 'index'])->name('recent.index');
         Route::get('/import', [ImportController::class, 'index'])->name('import.index');
+        Route::post('/import/preview', [ImportController::class, 'preview'])->name('import.preview');
         Route::post('/import', [ImportController::class, 'store'])->name('import.store');
         Route::get('/control', [ControlController::class, 'index'])->name('control.index');
         Route::put('/control/settings', [ControlController::class, 'updateSettings'])->name('control.settings');
