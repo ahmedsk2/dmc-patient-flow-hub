@@ -78,6 +78,7 @@ class AdmissionsController extends Controller
             throw new AccessDeniedHttpException('Observers cannot admit patients.');
         }
 
+        $request->merge(['mrn' => trim((string) $request->input('mrn'))]);   // strip stray whitespace before validation
         $data = $request->validate([
             'mrn' => ['required', 'string', 'regex:/^\d{1,11}$/'],   // digits only, ≤11 (clean-data rule)
             'name' => ['required', 'string', 'max:191'],
@@ -114,7 +115,7 @@ class AdmissionsController extends Controller
             ]);
 
             $seq = 1;
-            foreach (array_unique($data['diagnoses'] ?? []) as $code) {
+            foreach (array_unique(array_filter(array_map('trim', $data['diagnoses'] ?? []))) as $code) {
                 AdmissionDiagnosis::create(['admission_id' => $admission->id, 'seq' => $seq++, 'icd10_code' => $code]);
             }
 

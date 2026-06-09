@@ -202,10 +202,11 @@ class LegacyImport extends Command
                 if (! $aid) { continue; }
                 $dx = json_decode($p->admissiondiagnosis ?? '', true);
                 if (! is_array($dx)) { continue; }
-                $seq = 1;
+                $seq = 1; $seen = [];   // de-dup codes within an admission (source arrays can repeat a code)
                 foreach ($dx as $code) {
                     $code = trim((string) $code);
-                    if ($code === '') { continue; }
+                    if ($code === '' || isset($seen[$code])) { continue; }
+                    $seen[$code] = true;
                     $batch[] = ['admission_id' => $aid, 'seq' => $seq++, 'icd10_code' => $code, 'created_at' => now(), 'updated_at' => now()];
                 }
                 if (count($batch) >= 2000) { $this->insertBatched('admission_diagnoses', $batch); $batch = []; }

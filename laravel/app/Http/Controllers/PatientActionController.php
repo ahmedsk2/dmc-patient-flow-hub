@@ -43,6 +43,7 @@ class PatientActionController extends Controller
             throw new AccessDeniedHttpException('Requires the Modify capability.');
         }
         $patient = $admission->patient;
+        $request->merge(['mrn' => trim((string) $request->input('mrn'))]);   // strip stray whitespace before validation
         $data = $request->validate([
             'mrn' => ['required', 'string', 'regex:/^\d{1,11}$/', Rule::unique('patients', 'mrn')->ignore($patient->id)],
             'name' => ['required', 'string', 'max:191'],
@@ -62,7 +63,7 @@ class PatientActionController extends Controller
             $admission->update(['bed' => $data['bed'] ?? null]);
             $admission->diagnoses()->delete();
             $seq = 1;
-            foreach (array_unique($data['diagnoses'] ?? []) as $code) {
+            foreach (array_unique(array_filter(array_map('trim', $data['diagnoses'] ?? []))) as $code) {
                 $admission->diagnoses()->create(['seq' => $seq++, 'icd10_code' => $code]);
             }
         });
