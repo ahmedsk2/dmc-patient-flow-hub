@@ -123,6 +123,24 @@ class AdmissionsController extends Controller
         ]);
     }
 
+    /** Full detail for the Modify modal (demographics + current diagnoses with names). */
+    public function edit(Admission $admission): JsonResponse
+    {
+        $admission->load('patient', 'diagnoses');
+        $names = Icd10::whereIn('code', $admission->diagnoses->pluck('icd10_code'))->pluck('name', 'code');
+
+        return response()->json([
+            'id' => $admission->id,
+            'mrn' => $admission->patient?->mrn,
+            'name' => $admission->patient?->name,
+            'age' => $admission->patient?->age,
+            'gender' => $admission->patient?->gender,
+            'nationality' => $admission->patient?->nationality,
+            'bed' => $admission->bed,
+            'diagnoses' => $admission->diagnoses->map(fn ($d) => ['code' => $d->icd10_code, 'name' => $names[$d->icd10_code] ?? $d->icd10_code])->values(),
+        ]);
+    }
+
     /** ICD-10 typeahead for the diagnosis picker. */
     public function icd10(Request $request): JsonResponse
     {

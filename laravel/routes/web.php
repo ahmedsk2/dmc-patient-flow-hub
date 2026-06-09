@@ -39,13 +39,19 @@ Route::middleware(['auth', 'mfa.enroll'])->group(function () {
     Route::post('/admissions/{admission}/assign-to-me', [PatientActionController::class, 'assignToMe'])->name('admissions.assignToMe');
     Route::post('/admissions/{admission}/longterm', [PatientActionController::class, 'toggleLongterm'])->name('admissions.longterm');
     Route::post('/admissions/{admission}/assign', [PatientActionController::class, 'assign'])->name('admissions.assign');
-    Route::post('/admissions/{admission}/discharge', [PatientActionController::class, 'discharge'])->name('admissions.discharge');
+    Route::get('/admissions/{admission}/edit', [AdmissionsController::class, 'edit'])->name('admissions.edit');
+    Route::post('/admissions/{admission}/modify', [PatientActionController::class, 'modify'])->name('admissions.modify');
+    Route::post('/admissions/{admission}/medical-discharge', [PatientActionController::class, 'medicalDischarge'])->name('admissions.medicalDischarge');
+    Route::post('/admissions/{admission}/complete-discharge', [PatientActionController::class, 'completeDischarge'])->name('admissions.completeDischarge');
+    Route::post('/admissions/{admission}/icu-discharge', [PatientActionController::class, 'icuDischarge'])->name('admissions.icuDischarge');
     Route::post('/admissions/{admission}/transfer', [PatientActionController::class, 'transfer'])->name('admissions.transfer');
     Route::post('/admissions/{admission}/reverse-discharge', [PatientActionController::class, 'reverseDischarge'])->name('admissions.reverse');
     Route::get('/consultations', [ConsultationsController::class, 'index'])->name('consultations.index');
     Route::post('/consultations', [ConsultationsController::class, 'store'])->name('consultations.store');
     Route::post('/consultations/{consultation}/signoff', [ConsultationsController::class, 'signoff'])->name('consultations.signoff');
     Route::post('/consultations/{consultation}/reverse-signoff', [ConsultationsController::class, 'reverseSignoff'])->name('consultations.reverseSignoff');
+    Route::put('/consultations/{consultation}', [ConsultationsController::class, 'update'])->name('consultations.update');
+    Route::delete('/consultations/{consultation}', [ConsultationsController::class, 'destroy'])->name('consultations.destroy');
 
     Route::get('/admissions', [AdmissionsController::class, 'index'])->name('admissions.index');
     Route::get('/admissions/create', [AdmissionsController::class, 'create'])->name('admissions.create');

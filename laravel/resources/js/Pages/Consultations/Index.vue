@@ -27,6 +27,19 @@ const cForm = useForm({
 });
 const submitAdd = () => cForm.post('/consultations', { preserveScroll: true, onSuccess: () => { showAdd.value = false; cForm.reset(); } });
 
+// edit + delete
+const canEdit = (c) => me.value.is_admin || me.value.can.manage || c.consultant_id === me.value.id;
+const editing = ref(null);
+const eForm = useForm({ mrn: '', patient_name: '', age: '', bed: '', current_location: 'Ward', consultation_date: today, consultation_from: '', to_service: '', consultant_id: '', indication: [], other_indication: '' });
+const openEdit = (c) => {
+    editing.value = c;
+    eForm.mrn = c.mrn || ''; eForm.patient_name = c.name || ''; eForm.age = c.age ?? ''; eForm.bed = c.bed || '';
+    eForm.current_location = c.location || 'Ward'; eForm.consultation_date = c.date || today; eForm.consultation_from = c.from || '';
+    eForm.to_service = c.to || ''; eForm.consultant_id = c.consultant_id || ''; eForm.indication = [...(c.indication_ids || [])]; eForm.other_indication = c.other || '';
+};
+const submitEdit = () => eForm.put(`/consultations/${editing.value.id}`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
+const deleteConsult = (c) => { if (confirm(`Delete the consultation for ${c.name}? This cannot be undone.`)) router.delete(`/consultations/${c.id}`, { preserveScroll: true }); };
+
 // sign off
 const signoff = (row) => {
     if (confirm(`Sign off the consultation for ${row.name}?`)) {
@@ -89,6 +102,8 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                                 <span v-if="c.signoff" class="rounded-full bg-success-100 px-2.5 py-0.5 text-xs font-semibold text-success-600">Signed {{ c.signoff }}</span>
                                 <span v-else class="rounded-full bg-accent-300/40 px-2.5 py-0.5 text-xs font-semibold text-accent-600">Active</span>
                                 <button v-if="!c.signoff && canSignoff(c)" @click="signoff(c)" title="Sign off" class="rounded-lg px-2 py-1 text-xs font-semibold text-success-600 hover:bg-success-100">Sign off</button>
+                                <button v-if="canEdit(c)" @click="openEdit(c)" title="Edit" class="rounded-lg px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50">Edit</button>
+                                <button v-if="me.is_admin" @click="deleteConsult(c)" title="Delete" class="rounded-lg px-2 py-1 text-xs font-semibold text-danger-600 hover:bg-danger-100">Delete</button>
                             </div>
                         </td>
                     </tr>
@@ -105,6 +120,33 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                     :class="l.active ? 'bg-brand-600 text-white' : (l.url ? 'bg-white text-ink-600 ring-1 ring-ink-100 hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" />
             </div>
         </div>
+        <!-- edit consultation modal -->
+        <div v-if="editing" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="editing = null">
+            <div class="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
+                <div class="mb-4 flex items-center justify-between"><h3 class="text-lg font-bold text-ink-900">Edit consultation</h3><button @click="editing = null" class="text-ink-400 hover:text-ink-700">✕</button></div>
+                <form @submit.prevent="submitEdit" class="space-y-4">
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">MRN</label><input v-model="eForm.mrn" :class="[field, eForm.errors.mrn && 'border-danger-500']" /></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Patient name</label><input v-model="eForm.patient_name" :class="field" /></div>
+                        <div class="grid grid-cols-2 gap-3"><div><label class="mb-1 block text-sm font-semibold text-ink-700">Age</label><input v-model="eForm.age" inputmode="numeric" :class="field" /></div><div><label class="mb-1 block text-sm font-semibold text-ink-700">Bed</label><input v-model="eForm.bed" :class="field" /></div></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Location</label><select v-model="eForm.current_location" :class="field"><option>Ward</option><option>ICU</option><option>ER</option></select></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Date</label><input v-model="eForm.consultation_date" type="date" :max="today" :class="field" /></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">From service</label><input v-model="eForm.consultation_from" :class="field" /></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">To service</label><input v-model="eForm.to_service" :class="field" /></div>
+                        <div class="sm:col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Receiving consultant</label><select v-model="eForm.consultant_id" :class="field"><option value="">Unassigned</option><option v-for="c in consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-ink-700">Indication</label>
+                        <div class="flex flex-wrap gap-2">
+                            <label v-for="r in reasons" :key="r.id" class="cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold transition" :class="eForm.indication.includes(r.id) ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'"><input type="checkbox" :value="r.id" v-model="eForm.indication" class="hidden" /> {{ r.name }}</label>
+                        </div>
+                        <input v-model="eForm.other_indication" :class="[field, 'mt-2']" placeholder="Other indication (optional)" />
+                    </div>
+                    <div class="flex justify-end gap-2"><button type="button" @click="editing = null" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="eForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Update consultation</button></div>
+                </form>
+            </div>
+        </div>
+
         <!-- new consultation modal -->
         <div v-if="showAdd" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="showAdd = false">
             <div class="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-6 shadow-2xl">

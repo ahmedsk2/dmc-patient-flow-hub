@@ -10,6 +10,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 /**
@@ -32,6 +33,42 @@ class PatientActionController extends Controller
     {
         $u = Auth::user();
         return $u->isAdmin() || $u->can_manage || (int) $a->consultant_id === (int) $u->id;
+    }
+
+    /** Full edit of an admission's patient demographics + diagnoses (Modify capability). */
+    public function modify(Request $request, Admission $admission): RedirectResponse
+    {
+        $u = Auth::user();
+        if (! ($u->isAdmin() || $u->can_modify)) {
+            throw new AccessDeniedHttpException('Requires the Modify capability.');
+        }
+        $patient = $admission->patient;
+        $data = $request->validate([
+            'mrn' => ['required', 'string', 'regex:/^\d{1,11}$/', Rule::unique('patients', 'mrn')->ignore($patient->id)],
+            'name' => ['required', 'string', 'max:191'],
+            'age' => ['nullable', 'integer', 'between:0,130'],
+            'gender' => ['nullable', 'in:Male,Female'],
+            'nationality' => ['nullable', 'string', 'max:191'],
+            'bed' => ['nullable', 'string', 'max:64'],
+            'diagnoses' => ['array'],
+            'diagnoses.*' => ['string', 'max:100'],
+        ]);
+
+        DB::transaction(function () use ($admission, $patient, $data) {
+            $patient->update([
+                'mrn' => $data['mrn'], 'name' => $data['name'], 'age' => $data['age'] ?? null,
+                'gender' => $data['gender'] ?? null, 'nationality' => $data['nationality'] ?? null,
+            ]);
+            $admission->update(['bed' => $data['bed'] ?? null]);
+            $admission->diagnoses()->delete();
+            $seq = 1;
+            foreach (array_unique($data['diagnoses'] ?? []) as $code) {
+                $admission->diagnoses()->create(['seq' => $seq++, 'icd10_code' => $code]);
+            }
+        });
+        $this->audit('patient.modify', $admission, ['mrn' => $data['mrn']]);
+
+        return back()->with('flash', ['type' => 'success', 'message' => 'Patient details updated.']);
     }
 
     /** Self-assign — any consultant may take an admission onto their own list. */
@@ -115,7 +152,55 @@ class PatientActionController extends Controller
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultant assigned.']);
     }
 
-    public function discharge(Request $request, Admission $admission): RedirectResponse
+    /** Phase 1 — medical discharge: clinically done but still occupying a bed ("discharged still in"). */
+    public function medicalDischarge(Request $request, Admission $admission): RedirectResponse
+    {
+        if (! $this->canManage($admission)) {
+            throw new AccessDeniedHttpException('Only the primary consultant or a manager may discharge.');
+        }
+        $data = $request->validate([
+            'outcome' => ['required', 'in:Alive,Dead,LAMA,DAMA,Transferred'],
+            'medical_discharge_date' => ['required', 'date', 'before_or_equal:today'],
+            'discharge_to' => ['nullable', 'string', 'max:128'],
+            'delay_reason' => ['nullable', 'string', 'max:191'],
+        ]);
+        if ($admission->discharge_date) {
+            return back()->with('flash', ['type' => 'error', 'message' => 'This admission is already fully discharged.']);
+        }
+        $admission->update([
+            'medical_discharge_date' => $data['medical_discharge_date'],
+            'outcome' => $data['outcome'],
+            'discharge_to' => $data['discharge_to'] ?? null,
+            'delay_reason' => $data['delay_reason'] ?? null,
+            'discharged_by' => Auth::id(),
+        ]);
+        $this->audit('admission.medical_discharge', $admission, ['outcome' => $data['outcome']]);
+
+        return back()->with('flash', ['type' => 'success', 'message' => 'Medically discharged — awaiting bed exit.']);
+    }
+
+    /** Phase 2 — complete discharge: file closed, leaves the active board. */
+    public function completeDischarge(Request $request, Admission $admission): RedirectResponse
+    {
+        if (! $this->canManage($admission)) {
+            throw new AccessDeniedHttpException('Only the primary consultant or a manager may discharge.');
+        }
+        $data = $request->validate(['discharge_date' => ['required', 'date', 'before_or_equal:today']]);
+        if ($admission->discharge_date) {
+            return back()->with('flash', ['type' => 'error', 'message' => 'Already discharged.']);
+        }
+        $admission->update([
+            'discharge_date' => $data['discharge_date'],
+            'transfer_type' => $admission->current_location === 'ICU' ? 'discharge from ICU' : 'discharge from ward',
+            'discharged_by' => Auth::id(),
+        ]);
+        $this->audit('admission.complete_discharge', $admission, ['date' => $data['discharge_date']]);
+
+        return back()->with('flash', ['type' => 'success', 'message' => 'Discharge completed.']);
+    }
+
+    /** Single-step ICU discharge. */
+    public function icuDischarge(Request $request, Admission $admission): RedirectResponse
     {
         if (! $this->canManage($admission)) {
             throw new AccessDeniedHttpException('Only the primary consultant or a manager may discharge.');
@@ -125,18 +210,17 @@ class PatientActionController extends Controller
             'discharge_date' => ['required', 'date', 'before_or_equal:today'],
         ]);
         if ($admission->discharge_date) {
-            return back()->with('flash', ['type' => 'error', 'message' => 'This admission is already discharged.']);
+            return back()->with('flash', ['type' => 'error', 'message' => 'Already discharged.']);
         }
-
         $admission->update([
             'discharge_date' => $data['discharge_date'],
             'outcome' => $data['outcome'],
-            'transfer_type' => $admission->current_location === 'ICU' ? 'discharge from ICU' : 'discharge from ward',
+            'transfer_type' => 'discharge from ICU',
             'discharged_by' => Auth::id(),
         ]);
-        $this->audit('admission.discharge', $admission, ['outcome' => $data['outcome'], 'date' => $data['discharge_date']]);
+        $this->audit('admission.icu_discharge', $admission, ['outcome' => $data['outcome']]);
 
-        return back()->with('flash', ['type' => 'success', 'message' => "Patient discharged ({$data['outcome']})."]);
+        return back()->with('flash', ['type' => 'success', 'message' => "ICU discharge complete ({$data['outcome']})."]);
     }
 
     /** Reverse a same-day discharge (admin only) — clears the discharge fields. */

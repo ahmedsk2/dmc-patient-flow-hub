@@ -45,6 +45,7 @@ class ConsultationsController extends Controller
                 'date' => optional($c->consultation_date)->toDateString(),
                 'signoff' => optional($c->signoff_date)->toDateString(),
                 'reasons' => collect($c->indication ?? [])->map(fn ($id) => $reasons[$id] ?? null)->filter()->values(),
+                'indication_ids' => array_map('intval', $c->indication ?? []),
                 'other' => $c->other_indication,
             ]);
 
@@ -122,5 +123,47 @@ class ConsultationsController extends Controller
             'entity_type' => 'consultation', 'entity_id' => (string) $consultation->id, 'ip' => $request->ip()]);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Sign-off reversed.']);
+    }
+
+    /** Edit a consultation (receiving consultant / manager / admin). */
+    public function update(Request $request, Consultation $consultation): RedirectResponse
+    {
+        $u = Auth::user();
+        if (! ($u->isAdmin() || $u->can_manage || (int) $consultation->consultant_id === (int) $u->id)) {
+            throw new AccessDeniedHttpException('Only the receiving consultant or a manager may edit.');
+        }
+        $data = $request->validate([
+            'mrn' => ['required', 'string', 'max:64'],
+            'patient_name' => ['required', 'string', 'max:191'],
+            'age' => ['nullable', 'integer', 'between:0,130'],
+            'bed' => ['nullable', 'string', 'max:64'],
+            'current_location' => ['nullable', 'string', 'max:32'],
+            'consultation_date' => ['required', 'date', 'before_or_equal:today'],
+            'consultation_from' => ['nullable', 'string', 'max:128'],
+            'to_service' => ['nullable', 'string', 'max:128'],
+            'consultant_id' => ['nullable', 'exists:users,id'],
+            'indication' => ['array'],
+            'indication.*' => ['integer'],
+            'other_indication' => ['nullable', 'string', 'max:255'],
+        ]);
+        $consultation->update([...$data, 'indication' => $data['indication'] ?? []]);
+        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'consultation.modify',
+            'entity_type' => 'consultation', 'entity_id' => (string) $consultation->id, 'ip' => $request->ip()]);
+
+        return back()->with('flash', ['type' => 'success', 'message' => 'Consultation updated.']);
+    }
+
+    /** Delete a consultation (admin only). */
+    public function destroy(Request $request, Consultation $consultation): RedirectResponse
+    {
+        if (! Auth::user()->isAdmin()) {
+            throw new AccessDeniedHttpException('Admin only.');
+        }
+        $id = $consultation->id;
+        $consultation->delete();
+        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'consultation.delete',
+            'entity_type' => 'consultation', 'entity_id' => (string) $id, 'ip' => $request->ip()]);
+
+        return back()->with('flash', ['type' => 'success', 'message' => 'Consultation deleted.']);
     }
 }
