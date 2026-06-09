@@ -3,20 +3,23 @@ import { ref, watch, computed } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
-const props = defineProps({ consultations: Object, filters: Object, stats: Object, reasons: Array, consultants: Array });
+const props = defineProps({ consultations: Object, filters: Object, stats: Object, reasons: Array, consultants: Array, specialties: Array });
 const page = usePage();
 const me = computed(() => page.props.auth.user);
 const canSignoff = (row) => me.value.is_admin || me.value.can.manage || row.consultant_id === me.value.id;
 const canAdd = computed(() => me.value.role !== 5);
+const isConsultant = computed(() => me.value.is_admin || me.value.role === 3);
 
 const search = ref(props.filters.search || '');
 const status = ref(props.filters.status || 'active');
+const scope = ref(props.filters.scope || '');
 let timer = null;
 
-const apply = () => router.get('/consultations', { search: search.value || undefined, status: status.value },
+const apply = () => router.get('/consultations', { search: search.value || undefined, status: status.value, scope: scope.value || undefined },
     { preserveState: true, replace: true, preserveScroll: true });
 watch(search, () => { clearTimeout(timer); timer = setTimeout(apply, 300); });
 const setStatus = (s) => { status.value = s; apply(); };
+const toggleMine = () => { scope.value = scope.value === 'mine' ? '' : 'mine'; apply(); };
 
 // new consultation
 const today = new Date().toISOString().slice(0, 10);
@@ -65,6 +68,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                 <button v-for="s in [['active','Active'],['signed','Signed off'],['all','All']]" :key="s[0]" @click="setStatus(s[0])"
                     class="rounded-lg px-3 py-1.5 text-sm font-semibold transition" :class="status === s[0] ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ s[1] }}</button>
             </div>
+            <button v-if="isConsultant" @click="toggleMine" class="rounded-xl px-3 py-2 text-sm font-semibold shadow-sm ring-1 transition" :class="scope === 'mine' ? 'bg-accent-500 text-white ring-accent-500' : 'bg-white text-ink-500 ring-ink-100 hover:bg-ink-50'">My consultations</button>
             <button v-if="canAdd" @click="showAdd = true" class="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-700">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                 New Consultation
@@ -131,8 +135,8 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                         <div class="grid grid-cols-2 gap-3"><div><label class="mb-1 block text-sm font-semibold text-ink-700">Age</label><input v-model="eForm.age" inputmode="numeric" :class="field" /></div><div><label class="mb-1 block text-sm font-semibold text-ink-700">Bed</label><input v-model="eForm.bed" :class="field" /></div></div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Location</label><select v-model="eForm.current_location" :class="field"><option>Ward</option><option>ICU</option><option>ER</option></select></div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Date</label><input v-model="eForm.consultation_date" type="date" :max="today" :class="field" /></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">From service</label><input v-model="eForm.consultation_from" :class="field" /></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">To service</label><input v-model="eForm.to_service" :class="field" /></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">From service</label><input v-model="eForm.consultation_from" list="svc-list" :class="field" /></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">To service</label><input v-model="eForm.to_service" list="svc-list" :class="field" /></div>
                         <div class="sm:col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Receiving consultant</label><select v-model="eForm.consultant_id" :class="field"><option value="">Unassigned</option><option v-for="c in consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
                     </div>
                     <div>
@@ -164,8 +168,9 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                         </div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Location</label><select v-model="cForm.current_location" :class="field"><option>Ward</option><option>ICU</option><option>ER</option></select></div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Date <span class="text-danger-500">*</span></label><input v-model="cForm.consultation_date" type="date" :max="today" :class="field" /></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">From service</label><input v-model="cForm.consultation_from" :class="field" placeholder="Referring service" /></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">To service</label><input v-model="cForm.to_service" :class="field" placeholder="Consulted service" /></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">From service</label><input v-model="cForm.consultation_from" list="svc-list" :class="field" placeholder="Referring service" /></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">To service</label><input v-model="cForm.to_service" list="svc-list" :class="field" placeholder="Consulted service" /></div>
+                        <datalist id="svc-list"><option v-for="s in specialties" :key="s" :value="s" /></datalist>
                         <div class="sm:col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Receiving consultant</label><select v-model="cForm.consultant_id" :class="field"><option value="">Unassigned</option><option v-for="c in consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
                     </div>
                     <div>

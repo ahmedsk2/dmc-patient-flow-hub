@@ -171,6 +171,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                         <div class="nums text-xs text-ink-400">MRN {{ p.mrn }} · {{ p.age ?? '—' }}y · {{ (p.gender||'—').slice(0,1) }}</div>
                         <div class="mt-1.5 flex flex-wrap gap-1">
                             <span v-if="p.is_new" class="rounded-full bg-info-100 px-1.5 py-0.5 text-[10px] font-semibold text-info-500">New</span>
+                            <span v-if="p.is_readmission" class="rounded-full bg-warning-100 px-1.5 py-0.5 text-[10px] font-semibold text-warning-500">Readmit &lt;72h</span>
                             <span v-if="p.is_longterm" class="rounded-full bg-accent-300/40 px-1.5 py-0.5 text-[10px] font-semibold text-accent-600">Long-term</span>
                             <span v-if="p.is_tb" class="rounded-full bg-success-100 px-1.5 py-0.5 text-[10px] font-semibold text-success-600">TB</span>
                             <span v-if="p.medically_discharged" class="rounded-full bg-warning-100 px-1.5 py-0.5 text-[10px] font-semibold text-warning-500">Disch. still in</span>

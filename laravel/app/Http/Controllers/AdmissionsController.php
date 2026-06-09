@@ -41,8 +41,19 @@ class AdmissionsController extends Controller
                 'los' => $a->lengthOfStay(),
             ]);
 
+        // active ICU patients that can be pulled onto the ward ("Admission from ICU")
+        $icuPatients = Admission::query()
+            ->whereNull('discharge_date')->where('current_location', 'ICU')
+            ->with(['patient:id,mrn,name', 'consultant:id,full_name,name'])
+            ->orderBy('bed')->get()
+            ->map(fn (Admission $a) => [
+                'id' => $a->id, 'name' => $a->patient?->name ?? 'Unknown', 'mrn' => $a->patient?->mrn,
+                'bed' => $a->bed, 'consultant' => $a->consultant?->full_name ?? $a->consultant?->name ?? 'Unassigned',
+            ]);
+
         return Inertia::render('Admissions/Index', [
             'queue' => $queue,
+            'icuPatients' => $icuPatients,
             'consultants' => User::where('role', User::ROLE_CONSULTANT)->where('active', 1)
                 ->orderBy('full_name')->get(['id', 'full_name', 'name'])
                 ->map(fn ($u) => ['id' => $u->id, 'name' => $u->full_name ?: $u->name]),

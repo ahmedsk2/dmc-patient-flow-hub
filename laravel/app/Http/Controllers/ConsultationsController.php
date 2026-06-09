@@ -6,6 +6,7 @@ use App\Models\AuditLog;
 use App\Models\Consultation;
 use App\Models\ConsultationReason;
 use App\Models\Patient;
+use App\Models\Specialty;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,14 +19,16 @@ class ConsultationsController extends Controller
 {
     public function index(Request $request): Response
     {
-        $filters = $request->only('search', 'status');
+        $filters = $request->only('search', 'status', 'scope');
         $status = $filters['status'] ?? 'active';
+        $mine = ($filters['scope'] ?? '') === 'mine';
         $reasons = ConsultationReason::pluck('name', 'id');
 
         $consultations = Consultation::query()
             ->with('consultant:id,full_name,name')
             ->when($status === 'active', fn ($q) => $q->whereNull('signoff_date'))
             ->when($status === 'signed', fn ($q) => $q->whereNotNull('signoff_date'))
+            ->when($mine, fn ($q) => $q->where('consultant_id', Auth::id()))
             ->when($filters['search'] ?? null, fn ($q, $s) => $q->where(fn ($w) =>
                 $w->where('patient_name', 'like', "%{$s}%")->orWhere('mrn', 'like', "%{$s}%")))
             ->orderByDesc('id')
@@ -51,7 +54,8 @@ class ConsultationsController extends Controller
 
         return Inertia::render('Consultations/Index', [
             'consultations' => $consultations,
-            'filters' => ['search' => $filters['search'] ?? '', 'status' => $status],
+            'filters' => ['search' => $filters['search'] ?? '', 'status' => $status, 'scope' => $mine ? 'mine' : ''],
+            'specialties' => Specialty::orderBy('name')->pluck('name'),
             'stats' => [
                 'active' => Consultation::whereNull('signoff_date')->count(),
                 'total' => Consultation::count(),
