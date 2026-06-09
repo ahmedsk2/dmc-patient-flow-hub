@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\AdmissionsController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\PasswordResetController;
+use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\ConsultationsController;
 use App\Http\Controllers\ControlController;
 use App\Http\Controllers\DashboardController;
@@ -20,6 +22,12 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'show'])->name('login');
     Route::post('/login', [AuthController::class, 'login']);
+    Route::get('/register', [RegisterController::class, 'show'])->name('register');
+    Route::post('/register', [RegisterController::class, 'store']);
+    Route::get('/forgot-password', [PasswordResetController::class, 'request'])->name('password.request');
+    Route::post('/forgot-password', [PasswordResetController::class, 'email'])->name('password.email');
+    Route::get('/reset-password/{token}', [PasswordResetController::class, 'reset'])->name('password.reset');
+    Route::post('/reset-password', [PasswordResetController::class, 'update'])->name('password.update');
 });
 
 // MFA login challenge — reached after password but BEFORE the session is authenticated
@@ -28,7 +36,7 @@ Route::get('/mfa/challenge', [MfaController::class, 'challenge'])->name('mfa.cha
 Route::post('/mfa/challenge', [MfaController::class, 'verifyChallenge']);
 
 // Authenticated
-Route::middleware(['auth', 'mfa.enroll'])->group(function () {
+Route::middleware(['auth', 'mfa.enroll', 'pwd'])->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard.alt');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
@@ -83,5 +91,9 @@ Route::middleware(['auth', 'mfa.enroll'])->group(function () {
         Route::get('/control', [ControlController::class, 'index'])->name('control.index');
         Route::put('/control/settings', [ControlController::class, 'updateSettings'])->name('control.settings');
         Route::put('/control/users/{user}', [ControlController::class, 'updateUser'])->name('control.users.update');
+        Route::post('/control/users/{user}/reset-mfa', [ControlController::class, 'resetMfa'])->name('control.users.resetMfa');
+        Route::post('/control/users/{user}/send-reset', [ControlController::class, 'sendReset'])->name('control.users.sendReset');
+        Route::post('/control/specialties', [ControlController::class, 'addSpecialty'])->name('control.specialties.add');
+        Route::post('/control/reasons', [ControlController::class, 'addReason'])->name('control.reasons.add');
     });
 });

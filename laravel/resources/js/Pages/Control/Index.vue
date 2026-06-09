@@ -3,7 +3,7 @@ import { ref, watch } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
-const props = defineProps({ settings: Object, users: Object, filters: Object, roles: Object, counts: Object });
+const props = defineProps({ settings: Object, users: Object, filters: Object, roles: Object, counts: Object, specialties: Array, reasons: Array });
 
 const tab = ref('overview');
 
@@ -20,13 +20,21 @@ let timer = null;
 watch(q, () => { clearTimeout(timer); timer = setTimeout(() => router.get('/control', { q: q.value || undefined }, { preserveState: true, replace: true, preserveScroll: true }), 300); });
 
 const editing = ref(null);
-const uForm = useForm({ role: 5, active: true, can_assign: false, can_add: false, can_manage: false, can_modify: false });
+const uForm = useForm({ role: 5, active: true, on_service: false, specialty_id: '', can_assign: false, can_add: false, can_manage: false, can_modify: false });
 const editUser = (u) => {
     editing.value = u;
-    uForm.role = u.role; uForm.active = u.active;
+    uForm.role = u.role; uForm.active = u.active; uForm.on_service = u.on_service; uForm.specialty_id = u.specialty_id || '';
     uForm.can_assign = u.can.assign; uForm.can_add = u.can.add; uForm.can_manage = u.can.manage; uForm.can_modify = u.can.modify;
 };
 const saveUser = () => uForm.put(`/control/users/${editing.value.id}`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
+const resetMfa = (u) => { if (confirm(`Reset two-factor for ${u.username}? They'll re-enrol on next login.`)) router.post(`/control/users/${u.id}/reset-mfa`, {}, { preserveScroll: true }); };
+const sendReset = (u) => router.post(`/control/users/${u.id}/send-reset`, {}, { preserveScroll: true });
+
+// reference data
+const specForm = useForm({ name: '', is_subspecialty: true });
+const submitSpec = () => specForm.post('/control/specialties', { preserveScroll: true, onSuccess: () => specForm.reset() });
+const reasonForm = useForm({ name: '' });
+const submitReason = () => reasonForm.post('/control/reasons', { preserveScroll: true, onSuccess: () => reasonForm.reset() });
 
 const countCards = [
     ['Users', 'users'], ['Active users', 'active_users'], ['Patients', 'patients'],
@@ -40,7 +48,7 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
     <Head title="Control Panel" />
     <AppLayout title="Control Panel">
         <div class="mb-5 flex gap-1 rounded-xl bg-white p-1 shadow-sm ring-1 ring-ink-100 w-fit">
-            <button v-for="t in ['overview','settings','users']" :key="t" @click="tab = t"
+            <button v-for="t in ['overview','settings','users','reference']" :key="t" @click="tab = t"
                 class="rounded-lg px-4 py-2 text-sm font-semibold capitalize transition" :class="tab === t ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ t }}</button>
         </div>
 
@@ -107,6 +115,21 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
             </div>
         </div>
 
+        <!-- Reference data -->
+        <div v-show="tab === 'reference'" class="grid gap-5 lg:grid-cols-2">
+            <div class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+                <h3 class="mb-3 font-bold text-ink-800">Specialties</h3>
+                <div class="mb-4 flex max-h-48 flex-wrap gap-2 overflow-auto"><span v-for="s in specialties" :key="s.id" class="rounded-full bg-surface px-3 py-1 text-sm text-ink-600">{{ s.name }}</span></div>
+                <form @submit.prevent="submitSpec" class="flex gap-2"><input v-model="specForm.name" :class="field" placeholder="New specialty" /><button :disabled="specForm.processing || !specForm.name" class="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Add</button></form>
+                <label class="mt-2 flex items-center gap-2 text-xs text-ink-500"><input type="checkbox" v-model="specForm.is_subspecialty" class="rounded text-brand-600" /> Subspecialty (uncheck for hospitalist)</label>
+            </div>
+            <div class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+                <h3 class="mb-3 font-bold text-ink-800">Consultation indications</h3>
+                <div class="mb-4 flex max-h-48 flex-wrap gap-2 overflow-auto"><span v-for="r in reasons" :key="r.id" class="rounded-full bg-surface px-3 py-1 text-sm text-ink-600">{{ r.name }}</span></div>
+                <form @submit.prevent="submitReason" class="flex gap-2"><input v-model="reasonForm.name" :class="field" placeholder="New indication" /><button :disabled="reasonForm.processing || !reasonForm.name" class="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Add</button></form>
+            </div>
+        </div>
+
         <!-- edit user modal -->
         <div v-if="editing" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="editing = null">
             <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
@@ -116,7 +139,13 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
                     <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Role</span>
                         <select v-model.number="uForm.role" :class="field"><option v-for="(label, id) in roles" :key="id" :value="Number(id)">{{ label }}</option></select>
                     </label>
-                    <label class="flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" v-model="uForm.active" class="rounded text-brand-600" /> Active account</label>
+                    <div class="flex items-center gap-4">
+                        <label class="flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" v-model="uForm.active" class="rounded text-brand-600" /> Active</label>
+                        <label class="flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" v-model="uForm.on_service" class="rounded text-brand-600" /> On service</label>
+                    </div>
+                    <label v-if="uForm.role === 3" class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Specialty</span>
+                        <select v-model="uForm.specialty_id" :class="field"><option value="">—</option><option v-for="s in specialties" :key="s.id" :value="s.id">{{ s.name }}</option></select>
+                    </label>
                     <div class="grid grid-cols-2 gap-2">
                         <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_assign" class="rounded text-brand-600" /> Can assign</label>
                         <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_add" class="rounded text-brand-600" /> Can add</label>
@@ -124,7 +153,10 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
                         <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_modify" class="rounded text-brand-600" /> Can modify</label>
                     </div>
                 </div>
-                <div class="mt-6 flex justify-end gap-2">
+                <div class="mt-6 flex items-center justify-end gap-2">
+                    <button v-if="editing.email" @click="sendReset(editing)" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-600 hover:bg-ink-50">Send reset email</button>
+                    <button v-if="editing.mfa" @click="resetMfa(editing)" class="mr-auto rounded-xl px-3 py-2 text-sm font-semibold text-danger-600 hover:bg-danger-100">Reset MFA</button>
+                    <span v-if="!editing.mfa" class="mr-auto"></span>
                     <button @click="editing = null" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
                     <button @click="saveUser" :disabled="uForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save</button>
                 </div>

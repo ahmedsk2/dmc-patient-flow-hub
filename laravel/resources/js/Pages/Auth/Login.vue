@@ -1,5 +1,5 @@
 <script setup>
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, useForm, Link } from '@inertiajs/vue3';
 import EhcLogo from '@/Components/EhcLogo.vue';
 
 const form = useForm({ username: '', password: '', remember: false });
@@ -69,7 +69,11 @@ const submit = () => form.post('/login', { onFinish: () => form.reset('password'
                     </button>
                 </form>
 
-                <p class="mt-8 text-center text-xs text-ink-400">DMC Internal Medicine · secured access</p>
+                <div class="mt-6 flex items-center justify-between text-sm">
+                    <Link href="/register" class="font-semibold text-brand-600 hover:text-brand-700">Create account</Link>
+                    <Link href="/forgot-password" class="font-semibold text-ink-500 hover:text-ink-700">Forgot password?</Link>
+                </div>
+                <p class="mt-6 text-center text-xs text-ink-400">DMC Internal Medicine · secured access</p>
             </div>
         </div>
     </div>
