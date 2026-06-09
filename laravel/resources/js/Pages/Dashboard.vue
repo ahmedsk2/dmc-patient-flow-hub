@@ -31,7 +31,7 @@ const kpiCards = computed(() => [
     { label: 'Active Census', value: props.kpis.census, sub: `${props.kpis.ward} ward · ${props.kpis.icu} ICU`, icon: 'bed', tone: 'brand' },
     { label: 'Admissions Today', value: props.kpis.admissionsToday, sub: `${props.kpis.dischargesToday} discharged today`, icon: 'in', tone: 'blue' },
     { label: 'Active Consultations', value: props.kpis.activeConsults, sub: 'awaiting sign-off', icon: 'chat', tone: 'gold' },
-    { label: 'Bed Occupancy', value: props.kpis.occupancy + '%', sub: 'hospitalist capacity', icon: 'gauge', tone: 'teal' },
+    { label: 'Bed Occupancy', value: props.kpis.occupancy + '%', sub: `of ${props.kpis.wardBeds} ward beds`, icon: 'gauge', tone: 'teal' },
     { label: 'Mortality (Month)', value: props.kpis.deathsMonth, sub: 'this calendar month', icon: 'heart', tone: 'red' },
 ]);
 const toneClass = {
@@ -68,7 +68,7 @@ const gaugeOptions = computed(() => ({
     colors: [C.teal],
     plotOptions: { radialBar: {
         hollow: { size: '64%' }, track: { background: '#e6edf3', strokeWidth: '100%' },
-        dataLabels: { name: { offsetY: 22, color: '#94a3b5', fontSize: '12px' }, value: { offsetY: -14, color: '#0f172a', fontSize: '30px', fontWeight: 700, formatter: (v) => Math.round(v) + '%' } },
+        dataLabels: { name: { offsetY: 22, color: '#94a3b5', fontSize: '12px' }, value: { offsetY: -14, color: '#0f172a', fontSize: '30px', fontWeight: 700, formatter: () => props.kpis.occupancy + '%' } },
     } },
     fill: { type: 'gradient', gradient: { shade: 'dark', type: 'horizontal', gradientToColors: [C.tealLight], stops: [0, 100] } },
     stroke: { lineCap: 'round' },
@@ -150,7 +150,7 @@ const refresh = () => router.reload({ only: ['kpis', 'trend', 'consults', 'los',
             <!-- occupancy gauge -->
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
                 <h3 class="mb-2 font-bold text-ink-800">Bed Occupancy</h3>
-                <apexchart type="radialBar" height="260" :options="gaugeOptions" :series="[kpis.occupancy]" />
+                <apexchart type="radialBar" height="260" :options="gaugeOptions" :series="[kpis.occupancyGauge]" />
                 <div class="mt-1 grid grid-cols-2 gap-3 text-center">
                     <div class="rounded-xl bg-brand-50 py-2"><p class="nums text-xl font-bold text-brand-700">{{ kpis.ward }}</p><p class="text-xs text-ink-400">Ward</p></div>
                     <div class="rounded-xl bg-danger-100 py-2"><p class="nums text-xl font-bold text-danger-600">{{ kpis.icu }}</p><p class="text-xs text-ink-400">ICU</p></div>

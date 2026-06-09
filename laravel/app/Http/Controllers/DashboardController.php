@@ -24,7 +24,8 @@ class DashboardController extends Controller
         $monthStart = Carbon::today()->startOfMonth()->toDateString();
         $yearStart = Carbon::today()->startOfYear()->toDateString();
 
-        $maxHospitalist = (int) (Setting::current()->max_hospitalist ?? 30);
+        $settings = Setting::current();
+        $wardBeds = max(1, (int) ($settings->ward_beds ?? 50));   // licensed ward (non-ICU) beds — set in Control
 
         $active = (int) DB::table('admissions')->whereNull('discharge_date')->count();
         $activeIcu = (int) DB::table('admissions')->whereNull('discharge_date')->where('current_location', 'ICU')->count();
@@ -35,9 +36,10 @@ class DashboardController extends Controller
         $activeConsults = (int) DB::table('consultations')->whereNull('signoff_date')->count();
         $deathsMonth = (int) DB::table('admissions')->where('outcome', 'Dead')->whereBetween('discharge_date', [$monthStart, $today])->count();
 
-        $hospitalistCount = (int) DB::table('users')->where('role', 3)->where('active', 1)->where('on_service', 1)->where('specialty_id', 1)->count();
-        $capacity = max(1, $hospitalistCount * $maxHospitalist);
-        $occupancy = round(min(100, $activeWard / $capacity * 100), 1);
+        // real bed occupancy: active WARD (non-ICU) patients ÷ licensed ward beds. True % may exceed
+        // 100 (over-census); a separate capped value drives the radial gauge arc.
+        $occupancy = round($activeWard / $wardBeds * 100, 1);
+        $occupancyGauge = min(100, $occupancy);
 
         // 30-day admissions vs discharges (non-ICU)
         $start30 = Carbon::today()->subDays(29)->toDateString();
@@ -124,7 +126,8 @@ class DashboardController extends Controller
             'kpis' => [
                 'census' => $active, 'ward' => $activeWard, 'icu' => $activeIcu,
                 'admissionsToday' => $admissionsToday, 'dischargesToday' => $dischargesToday,
-                'activeConsults' => $activeConsults, 'deathsMonth' => $deathsMonth, 'occupancy' => $occupancy,
+                'activeConsults' => $activeConsults, 'deathsMonth' => $deathsMonth,
+                'occupancy' => $occupancy, 'occupancyGauge' => $occupancyGauge, 'wardBeds' => $wardBeds,
             ],
             'trend' => $trend,
             'consults' => $cons,

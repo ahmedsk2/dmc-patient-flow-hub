@@ -59,6 +59,8 @@ class ControlController extends Controller
             'max_subs' => ['required', 'integer', 'min:1', 'max:200'],
             'short_los' => ['required', 'integer', 'min:1', 'max:60'],
             'long_los' => ['required', 'integer', 'min:1', 'max:120'],
+            'ward_beds' => ['required', 'integer', 'min:1', 'max:2000'],
+            'icu_beds' => ['required', 'integer', 'min:0', 'max:1000'],
             'mfa_enforcement' => ['required', 'integer', 'in:0,1,2'],
         ]);
         Setting::current()->update($data);

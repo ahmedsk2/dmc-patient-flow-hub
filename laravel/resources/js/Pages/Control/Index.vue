@@ -11,6 +11,7 @@ const sForm = useForm({
     min_hospitalist: props.settings.min_hospitalist, max_hospitalist: props.settings.max_hospitalist,
     min_subs: props.settings.min_subs, max_subs: props.settings.max_subs,
     short_los: props.settings.short_los, long_los: props.settings.long_los,
+    ward_beds: props.settings.ward_beds ?? 50, icu_beds: props.settings.icu_beds ?? 10,
     mfa_enforcement: props.settings.mfa_enforcement ?? 0,
 });
 const saveSettings = () => sForm.put('/control/settings', { preserveScroll: true });
@@ -71,6 +72,8 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
                 <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Max subspecialty</span><input v-model="sForm.max_subs" type="number" :class="field" /></label>
                 <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Short LOS (days)</span><input v-model="sForm.short_los" type="number" :class="field" /></label>
                 <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Long LOS (days)</span><input v-model="sForm.long_los" type="number" :class="field" /></label>
+                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Licensed ward beds</span><input v-model="sForm.ward_beds" type="number" min="1" :class="field" /><span class="mt-1 block text-xs text-ink-400">Denominator for dashboard Bed Occupancy (non-ICU). Set to your real count.</span></label>
+                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Licensed ICU beds</span><input v-model="sForm.icu_beds" type="number" min="0" :class="field" /></label>
                 <label class="block sm:col-span-2"><span class="mb-1 block text-sm font-semibold text-ink-700">Two-factor enforcement</span>
                     <select v-model.number="sForm.mfa_enforcement" :class="field">
                         <option :value="0">Optional (users opt in)</option>
