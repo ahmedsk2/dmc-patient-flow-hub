@@ -37,7 +37,7 @@ class RegistryController extends Controller
             'mode' => $mode,
             'results' => $results,
             'filters' => $request->only(['search', 'from', 'to', 'outcome', 'location', 'gender', 'nationality',
-                'age_from', 'age_to', 'admitted_from', 'consultant_id', 'longterm', 'discharged', 'readmit72',
+                'age_from', 'age_to', 'admitted_from', 'consultant_id', 'longterm', 'discharged', 'tb', 'readmit72',
                 'dx', 'dx_match', 'keyword', 'indication', 'consultation_from', 'to_service', 'signed_only']),
             'options' => [
                 'outcomes' => ['Alive', 'Dead', 'LAMA', 'DAMA', 'Transferred'],
@@ -71,6 +71,9 @@ class RegistryController extends Controller
             ->when($request->input('age_to'), fn ($q, $a) => $q->whereHas('patient', fn ($p) => $p->where('age', '<=', (int) $a)))
             ->when($request->boolean('longterm'), fn ($q) => $q->where('is_longterm', true))
             ->when($request->boolean('discharged'), fn ($q) => $q->whereNotNull('discharge_date'))
+            ->when($request->boolean('tb'), fn ($q) => $q->whereExists(fn ($s) => $s->selectRaw('1')
+                ->from('admission_diagnoses as adt')->join('tb_diagnoses as tb', 'tb.icd10_code', '=', 'adt.icd10_code')
+                ->whereColumn('adt.admission_id', 'admissions.id')))
             ->when($request->boolean('readmit72'), fn ($q) => $q->whereExists(fn ($s) => $s->selectRaw('1')
                 ->from('admissions as prev')->whereColumn('prev.patient_id', 'admissions.patient_id')
                 ->whereColumn('prev.id', '<>', 'admissions.id')->whereColumn('prev.discharge_date', '<=', 'admissions.admit_date')

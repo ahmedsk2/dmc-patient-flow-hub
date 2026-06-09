@@ -11,12 +11,12 @@ const canModify = computed(() => me.value.is_admin || me.value.can.modify);
 
 const f = reactive({
     search: '', from: '', to: '', outcome: '', location: '', gender: '', nationality: '',
-    age_from: '', age_to: '', admitted_from: '', consultant_id: '', longterm: false, discharged: false,
+    age_from: '', age_to: '', admitted_from: '', consultant_id: '', longterm: false, discharged: false, tb: false,
     readmit72: false, dx: [], dx_match: 'or', keyword: '', indication: [], consultation_from: '', to_service: '', signed_only: false,
     ...props.filters,
 });
 // normalise booleans/arrays coming back as strings
-f.longterm = !!f.longterm; f.discharged = !!f.discharged; f.readmit72 = !!f.readmit72; f.signed_only = !!f.signed_only;
+f.longterm = !!f.longterm; f.discharged = !!f.discharged; f.tb = !!f.tb; f.readmit72 = !!f.readmit72; f.signed_only = !!f.signed_only;
 f.dx = Array.isArray(f.dx) ? f.dx : (f.dx ? [f.dx] : []);
 f.indication = Array.isArray(f.indication) ? f.indication.map(Number) : (f.indication ? [Number(f.indication)] : []);
 
@@ -90,6 +90,7 @@ const modes = [['admissions', 'Admissions'], ['consultations', 'Consultations'],
                 <div class="flex flex-wrap items-center gap-4">
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.longterm" class="rounded text-brand-600" /> Long-term</label>
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.discharged" class="rounded text-brand-600" /> Discharged only</label>
+                    <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.tb" class="rounded text-brand-600" /> TB</label>
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.readmit72" class="rounded text-brand-600" /> 72h readmissions</label>
                     <button @click="apply" class="ml-auto rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">Search</button>
                     <button @click="reset" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 hover:text-ink-700">Reset</button>

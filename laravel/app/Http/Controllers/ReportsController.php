@@ -85,15 +85,104 @@ class ReportsController extends Controller
             ->groupByRaw('COALESCE(u.full_name, u.name)')->orderByDesc('c')->limit(15)->get()
             ->map(fn ($r) => ['name' => $r->name, 'count' => (int) $r->c]);
 
+        // discharge destinations for the year
+        $destinations = DB::table('admissions')->whereBetween('discharge_date', [$start, $end])
+            ->selectRaw("COALESCE(NULLIF(TRIM(discharge_to), ''), 'Unspecified') dest, COUNT(*) c")
+            ->groupBy('dest')->orderByDesc('c')->limit(12)->get()
+            ->map(fn ($r) => ['dest' => $r->dest, 'count' => (int) $r->c]);
+
+        // average ward LOS per consultant (discharges in year)
+        $perConsultantLos = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
+            ->whereBetween('a.discharge_date', [$start, $end])->whereNotNull('a.admit_date')
+            ->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(a.discharge_date, a.admit_date) >= 0')
+            ->selectRaw('COALESCE(u.full_name, u.name) name, ROUND(AVG(DATEDIFF(a.discharge_date, a.admit_date)), 1) los, COUNT(*) n')
+            ->groupByRaw('COALESCE(u.full_name, u.name)')->orderByDesc('n')->limit(15)->get()
+            ->map(fn ($r) => ['name' => $r->name, 'los' => (float) $r->los, 'n' => (int) $r->n]);
+
+        $icuLos = (float) DB::table('admissions')->whereBetween('discharge_date', [$start, $end])
+            ->whereNotNull('admit_date')->where('current_location', 'ICU')->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
+            ->avg(DB::raw('DATEDIFF(discharge_date, admit_date)'));
+
         return [
             'year' => $year,
             'months' => $months,
             'totals' => $totals,
             'avgLos' => round($avgLos, 1),
+            'icuLos' => round($icuLos, 1),
             'topDx' => $topDx,
             'perConsultant' => $perConsultant,
+            'destinations' => $destinations,
+            'perConsultantLos' => $perConsultantLos,
             'generatedAt' => now()->format('D, d M Y · H:i'),
         ];
+    }
+
+    /** Per-day breakdown for one month (screen + PDF). */
+    public function monthly(Request $request): Response
+    {
+        $year = (int) ($request->query('year') ?: Carbon::today()->year);
+        $month = max(1, min(12, (int) ($request->query('month') ?: Carbon::today()->month)));
+
+        return Inertia::render('Reports/Monthly', [
+            ...$this->gatherMonth($year, $month),
+            'availableYears' => DB::table('admissions')->selectRaw('DISTINCT YEAR(admit_date) y')
+                ->whereNotNull('admit_date')->orderByDesc('y')->pluck('y')->filter()->values(),
+        ]);
+    }
+
+    public function monthlyPdf(Request $request): SymfonyResponse
+    {
+        $year = (int) ($request->query('year') ?: Carbon::today()->year);
+        $month = max(1, min(12, (int) ($request->query('month') ?: Carbon::today()->month)));
+        $pdf = Pdf::loadView('reports.monthly-pdf', $this->gatherMonth($year, $month))->setPaper('a4', 'portrait');
+
+        return $pdf->download("dmc-monthly-report-{$year}-" . sprintf('%02d', $month) . '.pdf');
+    }
+
+    private function gatherMonth(int $year, int $month): array
+    {
+        $start = Carbon::createFromDate($year, $month, 1)->startOfDay();
+        $end = (clone $start)->endOfMonth();
+        $s = $start->toDateString();
+        $e = $end->toDateString();
+
+        $admByDay = $this->byDay('admit_date', $s, $e, $this->nonIcu);
+        $disByDay = $this->byDay('discharge_date', $s, $e, $this->nonIcu);
+        $icuByDay = $this->byDay('admit_date', $s, $e, "current_location = 'ICU'");
+        $deathByDay = $this->byDay('discharge_date', $s, $e, "outcome = 'Dead'");
+
+        $days = [];
+        for ($d = 1; $d <= $end->day; $d++) {
+            $key = sprintf('%04d-%02d-%02d', $year, $month, $d);
+            $days[] = [
+                'day' => $d,
+                'weekday' => Carbon::createFromDate($year, $month, $d)->format('D'),
+                'admissions' => (int) ($admByDay[$key] ?? 0),
+                'discharges' => (int) ($disByDay[$key] ?? 0),
+                'icu' => (int) ($icuByDay[$key] ?? 0),
+                'deaths' => (int) ($deathByDay[$key] ?? 0),
+            ];
+        }
+
+        return [
+            'year' => $year,
+            'month' => $month,
+            'monthName' => $start->format('F'),
+            'days' => $days,
+            'totals' => [
+                'admissions' => array_sum(array_column($days, 'admissions')),
+                'discharges' => array_sum(array_column($days, 'discharges')),
+                'icu' => array_sum(array_column($days, 'icu')),
+                'deaths' => array_sum(array_column($days, 'deaths')),
+            ],
+            'generatedAt' => now()->format('D, d M Y · H:i'),
+        ];
+    }
+
+    private function byDay(string $col, string $start, string $end, string $where): array
+    {
+        return DB::table('admissions')->whereBetween($col, [$start, $end])->whereRaw($where)
+            ->selectRaw("DATE($col) k, COUNT(*) c")->groupBy('k')->pluck('c', 'k')->toArray();
     }
 
     private function byMonth(string $col, string $from, string $to, string $extra): array

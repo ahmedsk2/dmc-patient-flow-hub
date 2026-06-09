@@ -86,6 +86,26 @@ class DashboardController extends Controller
             ->whereNull('a.discharge_date')->whereRaw('(a.current_location <> "ICU" OR a.current_location IS NULL)')
             ->groupByRaw('COALESCE(u.full_name, u.name)')->orderByDesc('c')->limit(8)->get();
 
+        // per-consultant breakdown of the active census (legacy "Patient count per consultant")
+        $tbExists = "EXISTS (SELECT 1 FROM admission_diagnoses ad JOIN tb_diagnoses tb ON tb.icd10_code = ad.icd10_code WHERE ad.admission_id = a.id)";
+        $consultantBoard = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
+            ->whereNull('a.discharge_date')->where('u.active', 1)
+            ->selectRaw("COALESCE(u.full_name, u.name) name, u.on_service, u.specialty_id,
+                SUM(CASE WHEN a.is_new_assignment = 1 THEN 1 ELSE 0 END) new,
+                SUM(CASE WHEN a.is_new_assignment = 1 THEN 0 ELSE 1 END) old,
+                SUM(CASE WHEN a.current_location = 'ICU' THEN 1 ELSE 0 END) icu,
+                SUM(CASE WHEN (a.current_location <> 'ICU' OR a.current_location IS NULL) THEN 1 ELSE 0 END) ward,
+                SUM(CASE WHEN {$tbExists} THEN 1 ELSE 0 END) tb,
+                SUM(CASE WHEN (a.current_location <> 'ICU' OR a.current_location IS NULL) AND a.medical_discharge_date IS NULL AND a.is_longterm = 0 AND NOT {$tbExists} THEN 1 ELSE 0 END) active,
+                COUNT(*) total")
+            ->groupByRaw('COALESCE(u.full_name, u.name), u.on_service, u.specialty_id')
+            ->orderByDesc('total')->get()
+            ->map(fn ($r) => [
+                'name' => $r->name, 'on_service' => (bool) $r->on_service, 'specialty_id' => (int) $r->specialty_id,
+                'new' => (int) $r->new, 'old' => (int) $r->old, 'icu' => (int) $r->icu, 'ward' => (int) $r->ward,
+                'tb' => (int) $r->tb, 'active' => (int) $r->active, 'total' => (int) $r->total,
+            ]);
+
         $recent = DB::table('admissions as a')->join('patients as p', 'p.id', '=', 'a.patient_id')
             ->leftJoin('users as u', 'u.id', '=', 'a.consultant_id')
             ->selectRaw('p.name name, p.mrn mrn, a.admit_date admitted, a.current_location loc, COALESCE(u.full_name, u.name) consultant')
@@ -102,6 +122,7 @@ class DashboardController extends Controller
             'los' => ['labels' => array_keys($losBuckets), 'data' => array_values($losBuckets)],
             'mix' => ['hospitalist' => (int) ($mix->hosp ?? 0), 'subspecialty' => (int) ($mix->subs ?? 0), 'longterm' => (int) ($mix->longterm ?? 0)],
             'perConsultant' => $perConsultant,
+            'consultantBoard' => $consultantBoard,
             'recent' => $recent,
             'generatedAt' => now()->format('D, d M Y · H:i'),
         ]);

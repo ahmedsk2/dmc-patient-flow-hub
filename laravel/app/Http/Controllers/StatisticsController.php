@@ -75,6 +75,27 @@ class StatisticsController extends Controller
             'deaths' => array_map(fn ($m) => (int) ($deathByMonth[$m] ?? 0), $months),
         ];
 
+        // per-month KPI grid (tabular breakdown across the 12-month window)
+        $icuByMonth = $this->byMonth('admissions', 'admit_date', $mStart, $t, "current_location = 'ICU'");
+        $consByMonth = $this->byMonth('consultations', 'consultation_date', $mStart, $t, '1=1');
+        $signByMonth = $this->byMonth('consultations', 'signoff_date', $mStart, $t, '1=1');
+        $losByMonth = DB::table('admissions')->whereBetween('discharge_date', [$mStart, $t])->whereNotNull('admit_date')
+            ->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
+            ->selectRaw("DATE_FORMAT(discharge_date, '%Y-%m') m, ROUND(AVG(DATEDIFF(discharge_date, admit_date)), 1) los")
+            ->groupBy('m')->pluck('los', 'm')->all();
+        $kpiGrid = array_map(fn ($m) => [
+            'label' => Carbon::createFromFormat('Y-m', $m)->format('M y'),
+            'admissions' => (int) ($admByMonth[$m] ?? 0), 'discharges' => (int) ($disByMonth[$m] ?? 0),
+            'icu' => (int) ($icuByMonth[$m] ?? 0), 'deaths' => (int) ($deathByMonth[$m] ?? 0),
+            'consultations' => (int) ($consByMonth[$m] ?? 0), 'signoffs' => (int) ($signByMonth[$m] ?? 0),
+            'avgLos' => (float) ($losByMonth[$m] ?? 0),
+        ], $months);
+
+        // discharge destinations (range) for a donut
+        $dest = DB::table('admissions')->whereBetween('discharge_date', [$f, $t])
+            ->selectRaw("COALESCE(NULLIF(TRIM(discharge_to), ''), 'Unspecified') dest, COUNT(*) c")
+            ->groupBy('dest')->orderByDesc('c')->limit(8)->get();
+
         // LOS distribution
         $losRows = DB::table('admissions')->selectRaw('DATEDIFF(discharge_date, admit_date) los')
             ->whereBetween('discharge_date', [$f, $t])->whereNotNull('admit_date')->whereRaw($this->nonIcu)
@@ -135,6 +156,8 @@ class StatisticsController extends Controller
             'reasons' => ['labels' => array_keys($reasonTally), 'data' => array_values($reasonTally)],
             'perConsultant' => $perConsultant,
             'sourceMix' => $sourceMix,
+            'kpiGrid' => $kpiGrid,
+            'destinations' => ['labels' => $dest->pluck('dest'), 'data' => $dest->pluck('c')],
         ]);
     }
 

@@ -10,8 +10,18 @@ const props = defineProps({
     los: Object,
     mix: Object,
     perConsultant: Array,
+    consultantBoard: Array,
     recent: Array,
     generatedAt: String,
+});
+
+const boardSections = computed(() => {
+    const bucket = (c) => c.on_service && c.specialty_id === 1 ? 'hosp' : c.on_service ? 'subs' : 'off';
+    return [
+        { key: 'hosp', label: 'On-service · Hospitalists', rows: props.consultantBoard.filter((c) => bucket(c) === 'hosp') },
+        { key: 'subs', label: 'On-service · Subspecialists', rows: props.consultantBoard.filter((c) => bucket(c) === 'subs') },
+        { key: 'off', label: 'Off-service', rows: props.consultantBoard.filter((c) => bucket(c) === 'off') },
+    ].filter((s) => s.rows.length);
 });
 
 const C = { teal: '#009ca6', tealLight: '#38b4ba', navy: '#00565e', gold: '#d9a23c', pink: '#cf4b8f', red: '#e0413e', blue: '#2f7fe0', slate: '#5b6a6e' };
@@ -192,6 +202,33 @@ const refresh = () => router.reload({ only: ['kpis', 'trend', 'consults', 'los',
                     </div>
                     <p v-if="!recent.length" class="py-2 text-sm text-ink-400">No recent admissions.</p>
                 </div>
+            </div>
+        </div>
+
+        <!-- per-consultant breakdown table -->
+        <div class="mt-5 overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-ink-100/60">
+            <div class="border-b border-ink-100 px-5 py-3"><h3 class="font-bold text-ink-800">Patient count per consultant</h3></div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
+                        <th class="px-5 py-2.5">Consultant</th><th class="px-3 py-2.5 text-center">Old</th><th class="px-3 py-2.5 text-center">New</th><th class="px-3 py-2.5 text-center">Active</th><th class="px-3 py-2.5 text-center">Ward</th><th class="px-3 py-2.5 text-center">ICU</th><th class="px-3 py-2.5 text-center">TB</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-ink-50">
+                        <template v-for="sec in boardSections" :key="sec.key">
+                            <tr class="bg-surface/70"><td colspan="7" class="px-5 py-1.5 text-xs font-bold uppercase tracking-wide text-ink-500">{{ sec.label }}</td></tr>
+                            <tr v-for="c in sec.rows" :key="c.name" class="hover:bg-brand-50/40">
+                                <td class="px-5 py-2 font-semibold text-ink-700">Dr. {{ c.name }}</td>
+                                <td class="nums px-3 py-2 text-center text-ink-600">{{ c.old || '' }}</td>
+                                <td class="nums px-3 py-2 text-center text-info-500">{{ c.new || '' }}</td>
+                                <td class="nums px-3 py-2 text-center font-semibold text-brand-700">{{ c.active }}</td>
+                                <td class="nums px-3 py-2 text-center text-ink-600">{{ c.ward }}</td>
+                                <td class="nums px-3 py-2 text-center text-danger-600">{{ c.icu || '' }}</td>
+                                <td class="nums px-3 py-2 text-center text-ink-500">{{ c.tb || '' }}</td>
+                            </tr>
+                        </template>
+                        <tr v-if="!consultantBoard.length"><td colspan="7" class="px-5 py-6 text-center text-ink-400">No active patients assigned.</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </AppLayout>

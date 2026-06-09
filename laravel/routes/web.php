@@ -72,6 +72,8 @@ Route::middleware(['auth', 'mfa.enroll', 'pwd'])->group(function () {
     Route::get('/registry/export-xlsx', [RegistryController::class, 'exportXlsx'])->name('registry.export.xlsx');
     Route::get('/reports', [ReportsController::class, 'index'])->name('reports.index');
     Route::get('/reports/pdf', [ReportsController::class, 'pdf'])->name('reports.pdf');
+    Route::get('/reports/monthly', [ReportsController::class, 'monthly'])->name('reports.monthly');
+    Route::get('/reports/monthly/pdf', [ReportsController::class, 'monthlyPdf'])->name('reports.monthly.pdf');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('/profile', [ProfileController::class, 'updateProfile'])->name('profile.update');

@@ -39,9 +39,9 @@
             <td><div class="label">Admissions</div><div class="val">{{ number_format($totals['admissions']) }}</div></td>
             <td><div class="label">Discharges</div><div class="val">{{ number_format($totals['discharges']) }}</div></td>
             <td><div class="label">ICU</div><div class="val">{{ number_format($totals['icu']) }}</div></td>
-            <td><div class="label">Mortality</div><div class="val">{{ number_format($totals['deaths']) }}</div></td>
             <td><div class="label">Mortality %</div><div class="val">{{ $totals['mortalityRate'] }}%</div></td>
-            <td><div class="label">Avg LOS</div><div class="val">{{ $avgLos }}d</div></td>
+            <td><div class="label">Ward LOS</div><div class="val">{{ $avgLos }}d</div></td>
+            <td><div class="label">ICU LOS</div><div class="val">{{ $icuLos }}d</div></td>
         </tr>
     </table>
 
@@ -112,6 +112,35 @@
                             <tr><td>{{ $c['name'] }}</td><td class="r">{{ $c['count'] }}</td></tr>
                         @empty
                             <tr><td colspan="2">No data for {{ $year }}.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </td>
+        </tr>
+    </table>
+
+    <table class="cols">
+        <tr>
+            <td class="left">
+                <h2>Discharge destinations</h2>
+                <table class="data">
+                    <tbody>
+                        @forelse ($destinations as $d)
+                            <tr><td>{{ \Illuminate\Support\Str::limit($d['dest'], 30) }}</td><td class="r">{{ $d['count'] }}</td></tr>
+                        @empty
+                            <tr><td colspan="2">No discharges for {{ $year }}.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </td>
+            <td>
+                <h2>Avg ward LOS by consultant</h2>
+                <table class="data">
+                    <tbody>
+                        @forelse ($perConsultantLos as $c)
+                            <tr><td>{{ $c['name'] }} ({{ $c['n'] }})</td><td class="r">{{ $c['los'] }}d</td></tr>
+                        @empty
+                            <tr><td colspan="2">No discharges for {{ $year }}.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

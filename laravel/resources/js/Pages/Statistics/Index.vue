@@ -3,7 +3,7 @@ import { ref, computed } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
-const props = defineProps({ range: Object, kpis: Object, monthly: Object, los: Object, topDx: Array, reasons: Object, perConsultant: Array, sourceMix: Array });
+const props = defineProps({ range: Object, kpis: Object, monthly: Object, los: Object, topDx: Array, reasons: Object, perConsultant: Array, sourceMix: Array, kpiGrid: Array, destinations: Object });
 
 const from = ref(props.range.from);
 const to = ref(props.range.to);
@@ -96,6 +96,11 @@ const donut = (labels) => ({
                 <h3 class="mb-3 font-bold text-ink-800">Admission source</h3>
                 <apexchart type="donut" height="280" :options="donut(sourceMix.map(s => s.src))" :series="sourceMix.map(s => s.c)" />
             </div>
+            <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
+                <h3 class="mb-3 font-bold text-ink-800">Discharge destinations</h3>
+                <apexchart v-if="destinations.data.length" type="donut" height="280" :options="donut(destinations.labels)" :series="destinations.data" />
+                <p v-else class="py-10 text-center text-sm text-ink-300">No discharges in range.</p>
+            </div>
 
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
                 <h3 class="mb-3 font-bold text-ink-800">Top diagnoses</h3>
@@ -109,6 +114,29 @@ const donut = (labels) => ({
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60 lg:col-span-2">
                 <h3 class="mb-3 font-bold text-ink-800">Admissions by consultant</h3>
                 <apexchart type="bar" height="340" :options="barChart(perConsultant.map(c => c.name), C.tealLt, true)" :series="[{ name: 'Admissions', data: perConsultant.map(c => c.c) }]" />
+            </div>
+
+            <div class="overflow-hidden rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60 lg:col-span-2">
+                <h3 class="mb-3 font-bold text-ink-800">Monthly KPI grid <span class="text-sm font-normal text-ink-400">(12-month window)</span></h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
+                            <th class="px-3 py-2">Month</th><th class="px-3 py-2 text-right">Adm</th><th class="px-3 py-2 text-right">Disch</th><th class="px-3 py-2 text-right">ICU</th><th class="px-3 py-2 text-right">Mort</th><th class="px-3 py-2 text-right">Consults</th><th class="px-3 py-2 text-right">Sign-offs</th><th class="px-3 py-2 text-right">Avg LOS</th>
+                        </tr></thead>
+                        <tbody class="divide-y divide-ink-50">
+                            <tr v-for="r in kpiGrid" :key="r.label" class="hover:bg-brand-50/40">
+                                <td class="px-3 py-1.5 font-medium text-ink-700">{{ r.label }}</td>
+                                <td class="nums px-3 py-1.5 text-right">{{ r.admissions }}</td>
+                                <td class="nums px-3 py-1.5 text-right">{{ r.discharges }}</td>
+                                <td class="nums px-3 py-1.5 text-right text-danger-600">{{ r.icu }}</td>
+                                <td class="nums px-3 py-1.5 text-right">{{ r.deaths }}</td>
+                                <td class="nums px-3 py-1.5 text-right">{{ r.consultations }}</td>
+                                <td class="nums px-3 py-1.5 text-right">{{ r.signoffs }}</td>
+                                <td class="nums px-3 py-1.5 text-right">{{ r.avgLos }}d</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </AppLayout>
