@@ -14,6 +14,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -33,6 +34,10 @@ class AdmissionsController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        if ((int) Auth::user()->role === User::ROLE_OBSERVER) {
+            throw new AccessDeniedHttpException('Observers cannot admit patients.');
+        }
+
         $data = $request->validate([
             'mrn' => ['required', 'string', 'regex:/^\d{1,11}$/'],   // digits only, ≤11 (clean-data rule)
             'name' => ['required', 'string', 'max:191'],
