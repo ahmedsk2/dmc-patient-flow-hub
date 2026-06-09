@@ -14,13 +14,20 @@ class PatientsController extends Controller
     public function index(Request $request): Response
     {
         $settings = Setting::current();
-        $filters = $request->only('search', 'location');
+        $filters = $request->only('search', 'location', 'view');
+
+        // TB = the admission carries a diagnosis whose ICD-10 code is in tb_diagnoses
+        $tbExists = fn ($q) => $q->whereExists(fn ($sub) => $sub->selectRaw('1')
+            ->from('admission_diagnoses as ad')->join('tb_diagnoses as tb', 'tb.icd10_code', '=', 'ad.icd10_code')
+            ->whereColumn('ad.admission_id', 'admissions.id'));
 
         $admissions = Admission::query()
             ->whereNull('discharge_date')                       // active census
             ->with(['patient:id,mrn,name,gender,age', 'consultant:id,full_name,name'])
             ->withCount('diagnoses')
             ->when($filters['location'] ?? null, fn ($q, $loc) => $q->where('current_location', $loc))
+            ->when(($filters['view'] ?? null) === 'longterm', fn ($q) => $q->where('is_longterm', true))
+            ->when(($filters['view'] ?? null) === 'tb', $tbExists)
             ->when($filters['search'] ?? null, function ($q, $s) {
                 $q->whereHas('patient', fn ($p) => $p->where('name', 'like', "%{$s}%")->orWhere('mrn', 'like', "%{$s}%"));
             })
@@ -59,6 +66,8 @@ class PatientsController extends Controller
                 'total' => Admission::active()->count(),
                 'ward' => Admission::active()->nonIcu()->count(),
                 'icu' => Admission::active()->icu()->count(),
+                'longterm' => Admission::active()->where('is_longterm', true)->count(),
+                'tb' => Admission::active()->where($tbExists)->count(),
             ],
         ]);
     }

@@ -5,10 +5,12 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\ConsultationsController;
 use App\Http\Controllers\ControlController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ImportController;
 use App\Http\Controllers\MfaController;
 use App\Http\Controllers\PatientActionController;
 use App\Http\Controllers\PatientsController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\RecentController;
 use App\Http\Controllers\RegistryController;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\StatisticsController;
@@ -26,12 +28,16 @@ Route::get('/mfa/challenge', [MfaController::class, 'challenge'])->name('mfa.cha
 Route::post('/mfa/challenge', [MfaController::class, 'verifyChallenge']);
 
 // Authenticated
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'mfa.enroll'])->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard.alt');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
     Route::get('/patients', [PatientsController::class, 'index'])->name('patients.index');
+    Route::post('/admissions/shuffle', [PatientActionController::class, 'shuffle'])->name('admissions.shuffle');
+    Route::post('/admissions/reassign', [PatientActionController::class, 'bulkReassign'])->name('admissions.reassign');
+    Route::post('/admissions/{admission}/assign-to-me', [PatientActionController::class, 'assignToMe'])->name('admissions.assignToMe');
+    Route::post('/admissions/{admission}/longterm', [PatientActionController::class, 'toggleLongterm'])->name('admissions.longterm');
     Route::post('/admissions/{admission}/assign', [PatientActionController::class, 'assign'])->name('admissions.assign');
     Route::post('/admissions/{admission}/discharge', [PatientActionController::class, 'discharge'])->name('admissions.discharge');
     Route::post('/admissions/{admission}/transfer', [PatientActionController::class, 'transfer'])->name('admissions.transfer');
@@ -39,6 +45,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/consultations', [ConsultationsController::class, 'index'])->name('consultations.index');
     Route::post('/consultations', [ConsultationsController::class, 'store'])->name('consultations.store');
     Route::post('/consultations/{consultation}/signoff', [ConsultationsController::class, 'signoff'])->name('consultations.signoff');
+    Route::post('/consultations/{consultation}/reverse-signoff', [ConsultationsController::class, 'reverseSignoff'])->name('consultations.reverseSignoff');
 
     Route::get('/admissions/create', [AdmissionsController::class, 'create'])->name('admissions.create');
     Route::post('/admissions', [AdmissionsController::class, 'store'])->name('admissions.store');
@@ -47,6 +54,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/statistics', [StatisticsController::class, 'index'])->name('statistics.index');
     Route::get('/registry', [RegistryController::class, 'index'])->name('registry.index');
     Route::get('/registry/export', [RegistryController::class, 'export'])->name('registry.export');
+    Route::get('/registry/export-xlsx', [RegistryController::class, 'exportXlsx'])->name('registry.export.xlsx');
     Route::get('/reports', [ReportsController::class, 'index'])->name('reports.index');
     Route::get('/reports/pdf', [ReportsController::class, 'pdf'])->name('reports.pdf');
 
@@ -61,6 +69,9 @@ Route::middleware('auth')->group(function () {
 
     // Admin
     Route::middleware('admin')->group(function () {
+        Route::get('/recent', [RecentController::class, 'index'])->name('recent.index');
+        Route::get('/import', [ImportController::class, 'index'])->name('import.index');
+        Route::post('/import', [ImportController::class, 'store'])->name('import.store');
         Route::get('/control', [ControlController::class, 'index'])->name('control.index');
         Route::put('/control/settings', [ControlController::class, 'updateSettings'])->name('control.settings');
         Route::put('/control/users/{user}', [ControlController::class, 'updateUser'])->name('control.users.update');

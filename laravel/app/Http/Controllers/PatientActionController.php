@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Admission;
 use App\Models\AuditLog;
+use App\Models\User;
+use App\Services\ShuffleService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -30,6 +32,69 @@ class PatientActionController extends Controller
     {
         $u = Auth::user();
         return $u->isAdmin() || $u->can_manage || (int) $a->consultant_id === (int) $u->id;
+    }
+
+    /** Self-assign — any consultant may take an admission onto their own list. */
+    public function assignToMe(Request $request, Admission $admission): RedirectResponse
+    {
+        $u = Auth::user();
+        if (! ($u->isAdmin() || (int) $u->role === User::ROLE_CONSULTANT)) {
+            throw new AccessDeniedHttpException('Only a consultant can self-assign.');
+        }
+        $admission->update(['consultant_id' => $u->id, 'is_new_assignment' => true, 'assigned_on' => now()->toDateString()]);
+        $this->audit('admission.assign_to_me', $admission, ['consultant_id' => $u->id]);
+
+        return back()->with('flash', ['type' => 'success', 'message' => 'Assigned to you.']);
+    }
+
+    /** Label / unlabel long-term (any clinical role; observers are read-only). */
+    public function toggleLongterm(Request $request, Admission $admission): RedirectResponse
+    {
+        if ((int) Auth::user()->role === User::ROLE_OBSERVER) {
+            throw new AccessDeniedHttpException('Observers are read-only.');
+        }
+        $admission->update(['is_longterm' => ! $admission->is_longterm]);
+        $this->audit('admission.longterm', $admission, ['is_longterm' => $admission->is_longterm]);
+
+        return back()->with('flash', ['type' => 'success', 'message' => $admission->is_longterm ? 'Marked long-term.' : 'Long-term label removed.']);
+    }
+
+    /** Bulk reassign every active admission from one consultant to another. */
+    public function bulkReassign(Request $request): RedirectResponse
+    {
+        $u = Auth::user();
+        if (! ($u->isAdmin() || $u->can_assign || $u->can_manage)) {
+            throw new AccessDeniedHttpException('Requires the Assign or Manage capability.');
+        }
+        $data = $request->validate([
+            'from_consultant_id' => ['required', 'exists:users,id'],
+            'to_consultant_id' => ['required', 'exists:users,id', 'different:from_consultant_id'],
+        ]);
+        $count = Admission::whereNull('discharge_date')->where('consultant_id', $data['from_consultant_id'])
+            ->update(['consultant_id' => $data['to_consultant_id'], 'is_new_assignment' => true, 'assigned_on' => now()->toDateString()]);
+        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'admission.bulk_reassign',
+            'entity_type' => 'consultant', 'entity_id' => (string) $data['from_consultant_id'],
+            'details' => ['to' => $data['to_consultant_id'], 'count' => $count], 'ip' => $request->ip()]);
+
+        return back()->with('flash', ['type' => 'success', 'message' => "Reassigned {$count} patient(s)."]);
+    }
+
+    /** Auto-balance the unassigned queue across on-service consultants. */
+    public function shuffle(Request $request, ShuffleService $shuffle): RedirectResponse
+    {
+        $u = Auth::user();
+        if (! ($u->isAdmin() || $u->can_assign)) {
+            throw new AccessDeniedHttpException('Requires the Assign capability.');
+        }
+        $r = $shuffle->run(Auth::id());
+        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'admission.shuffle',
+            'entity_type' => 'admission', 'entity_id' => null, 'details' => $r, 'ip' => $request->ip()]);
+
+        $msg = $r['assigned'] > 0
+            ? "Shuffle assigned {$r['assigned']} patient(s) across {$r['consultants']} consultant(s)." . ($r['skipped'] ? " {$r['skipped']} skipped (at capacity)." : '')
+            : 'No unassigned patients to shuffle.';
+
+        return back()->with('flash', ['type' => $r['assigned'] > 0 ? 'success' : 'error', 'message' => $msg]);
     }
 
     public function assign(Request $request, Admission $admission): RedirectResponse

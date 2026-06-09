@@ -110,4 +110,17 @@ class ConsultationsController extends Controller
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultation signed off.']);
     }
+
+    /** Undo a recent sign-off (admin only) — clears the sign-off date. */
+    public function reverseSignoff(Request $request, Consultation $consultation): RedirectResponse
+    {
+        if (! Auth::user()->isAdmin()) {
+            throw new AccessDeniedHttpException('Admin only.');
+        }
+        $consultation->update(['signoff_date' => null]);
+        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'consultation.reverse_signoff',
+            'entity_type' => 'consultation', 'entity_id' => (string) $consultation->id, 'ip' => $request->ip()]);
+
+        return back()->with('flash', ['type' => 'success', 'message' => 'Sign-off reversed.']);
+    }
 }

@@ -11,6 +11,7 @@ const sForm = useForm({
     min_hospitalist: props.settings.min_hospitalist, max_hospitalist: props.settings.max_hospitalist,
     min_subs: props.settings.min_subs, max_subs: props.settings.max_subs,
     short_los: props.settings.short_los, long_los: props.settings.long_los,
+    mfa_enforcement: props.settings.mfa_enforcement ?? 0,
 });
 const saveSettings = () => sForm.put('/control/settings', { preserveScroll: true });
 
@@ -62,6 +63,13 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
                 <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Max subspecialty</span><input v-model="sForm.max_subs" type="number" :class="field" /></label>
                 <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Short LOS (days)</span><input v-model="sForm.short_los" type="number" :class="field" /></label>
                 <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Long LOS (days)</span><input v-model="sForm.long_los" type="number" :class="field" /></label>
+                <label class="block sm:col-span-2"><span class="mb-1 block text-sm font-semibold text-ink-700">Two-factor enforcement</span>
+                    <select v-model.number="sForm.mfa_enforcement" :class="field">
+                        <option :value="0">Optional (users opt in)</option>
+                        <option :value="1">Required for administrators</option>
+                        <option :value="2">Required for everyone</option>
+                    </select>
+                </label>
             </div>
             <div class="mt-5 flex items-center gap-3">
                 <button @click="saveSettings" :disabled="sForm.processing" class="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save settings</button>

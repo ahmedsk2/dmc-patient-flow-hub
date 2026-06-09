@@ -73,6 +73,14 @@ Verified row-for-row against the source (total admissions and active census matc
 | Control panel (admin) — settings, user role/capability management | ✅ |
 | Profile — edit details, change password | ✅ |
 | Two-factor auth (TOTP) — enroll (QR + recovery codes), login challenge, disable | ✅ |
+| Auto-assign "shuffle" — balances the unassigned queue across on-service consultants | ✅ |
+| Assign-to-me + bulk change-consultant (reassign all of A → B) | ✅ |
+| Long-term + TB board views; long-term label toggle | ✅ |
+| Recent-activity registries (≤48h) — undo discharge / sign-off (admin) | ✅ |
+| Registry export — Excel (.xlsx) and CSV | ✅ |
+| MFA enforcement (off / admins / everyone) — gated at login | ✅ |
+| Annual PDF with an embedded monthly chart | ✅ |
+| Bulk historical import (admin, CSV → transactional insert) | ✅ |
 
 ### Security improvements baked in (vs legacy)
 - Authorization enforced **server-side** on every write (capability + ownership checks), not UI-only.
@@ -89,5 +97,8 @@ Verified row-for-row against the source (total admissions and active census matc
   the clinical team before any tightening.
 
 ## Deferred / next
-- Swap the approximated `EhcLogo.vue` for the official EHC logo asset when provided.
-- Optional: richer report exports (per-consultant / per-specialty PDF packs).
+- Swap the approximated `EhcLogo.vue` for the official EHC logo asset (drop it at
+  `public/images/ehc-logo.svg` — used automatically).
+
+The core + secondary legacy workflows are now at parity. New libraries added: `barryvdh/laravel-dompdf`
+(server-side PDF) and `openspout/openspout` (xlsx) — both clean of security advisories.

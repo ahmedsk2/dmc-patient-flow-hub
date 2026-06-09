@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Admission;
 use Illuminate\Http\Request;
+use OpenSpout\Common\Entity\Row;
+use OpenSpout\Writer\XLSX\Writer as XlsxWriter;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -72,5 +75,26 @@ class RegistryController extends Controller
             });
             fclose($out);
         }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    public function exportXlsx(Request $request): BinaryFileResponse
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'reg') . '.xlsx';
+        $writer = new XlsxWriter();
+        $writer->openToFile($tmp);
+        $writer->addRow(Row::fromValues(['MRN', 'Name', 'Age', 'Gender', 'Location', 'Consultant', 'Admitted', 'Discharged', 'LOS (d)', 'Outcome', 'Status']));
+        $this->query($request)->chunk(500, function ($chunk) use ($writer) {
+            foreach ($chunk as $a) {
+                $writer->addRow(Row::fromValues([
+                    (string) $a->patient?->mrn, $a->patient?->name, $a->patient?->age, $a->patient?->gender,
+                    $a->current_location, $a->consultant?->full_name ?? $a->consultant?->name,
+                    optional($a->admit_date)->toDateString(), optional($a->discharge_date)->toDateString(),
+                    $a->lengthOfStay(), $a->outcome, $a->discharge_date ? 'Discharged' : 'Active',
+                ]));
+            }
+        });
+        $writer->close();
+
+        return response()->download($tmp, 'dmc-registry-' . now()->format('Ymd-His') . '.xlsx')->deleteFileAfterSend();
     }
 }

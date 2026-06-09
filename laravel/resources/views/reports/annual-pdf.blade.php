@@ -45,6 +45,26 @@
         </tr>
     </table>
 
+    <h2>Monthly admissions vs discharges</h2>
+    @php
+        $maxV = max(1, max(array_map(fn ($m) => max($m['admissions'], $m['discharges']), $months)));
+        $chartH = 96; $base = 112; $mw = 40;
+    @endphp
+    <svg width="510" height="140" xmlns="http://www.w3.org/2000/svg">
+        @foreach ($months as $i => $m)
+            @php
+                $mx = $i * $mw + 6;
+                $ah = round(($m['admissions'] / $maxV) * $chartH, 1);
+                $dh = round(($m['discharges'] / $maxV) * $chartH, 1);
+            @endphp
+            <rect x="{{ $mx }}" y="{{ $base - $ah }}" width="14" height="{{ $ah }}" fill="#009ca6" />
+            <rect x="{{ $mx + 16 }}" y="{{ $base - $dh }}" width="14" height="{{ $dh }}" fill="#7accc9" />
+            <text x="{{ $mx + 15 }}" y="126" font-size="8" fill="#5b6a6e" text-anchor="middle">{{ substr($m['label'], 0, 3) }}</text>
+        @endforeach
+        <rect x="6" y="132" width="9" height="6" fill="#009ca6" /><text x="18" y="138" font-size="8" fill="#5b6a6e">Admissions</text>
+        <rect x="86" y="132" width="9" height="6" fill="#7accc9" /><text x="98" y="138" font-size="8" fill="#5b6a6e">Discharges</text>
+    </svg>
+
     <h2>Monthly breakdown</h2>
     <table class="data">
         <thead>

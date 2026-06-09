@@ -53,6 +53,7 @@ class ControlController extends Controller
             'max_subs' => ['required', 'integer', 'min:1', 'max:200'],
             'short_los' => ['required', 'integer', 'min:1', 'max:60'],
             'long_los' => ['required', 'integer', 'min:1', 'max:120'],
+            'mfa_enforcement' => ['required', 'integer', 'in:0,1,2'],
         ]);
         Setting::current()->update($data);
         AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'settings.update',

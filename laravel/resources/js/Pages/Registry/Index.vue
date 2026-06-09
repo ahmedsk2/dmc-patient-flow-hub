@@ -11,7 +11,9 @@ const form = ref({
 });
 const apply = () => router.get('/registry', { ...form.value }, { preserveState: true, preserveScroll: true });
 const reset = () => { form.value = { search: '', from: '', to: '', outcome: '', location: '' }; apply(); };
-const exportUrl = computed(() => '/registry/export?' + new URLSearchParams(Object.fromEntries(Object.entries(form.value).filter(([, v]) => v))).toString());
+const qs = computed(() => new URLSearchParams(Object.fromEntries(Object.entries(form.value).filter(([, v]) => v))).toString());
+const exportUrl = computed(() => '/registry/export?' + qs.value);
+const exportXlsxUrl = computed(() => '/registry/export-xlsx?' + qs.value);
 
 const field = 'rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20';
 const outcomeTone = (o) => o === 'Dead' ? 'bg-danger-100 text-danger-600' : o === 'Alive' ? 'bg-success-100 text-success-600' : 'bg-ink-100 text-ink-500';
@@ -45,10 +47,13 @@ const outcomeTone = (o) => o === 'Dead' ? 'bg-danger-100 text-danger-600' : o ==
                 </div>
                 <button @click="apply" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-700">Search</button>
                 <button @click="reset" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 hover:text-ink-700">Reset</button>
-                <a :href="exportUrl" class="ml-auto inline-flex items-center gap-2 rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-success-700">
-                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /></svg>
-                    Export CSV
-                </a>
+                <div class="ml-auto flex gap-2">
+                    <a :href="exportXlsxUrl" class="inline-flex items-center gap-2 rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-success-700">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /></svg>
+                        Excel
+                    </a>
+                    <a :href="exportUrl" class="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-ink-600 shadow ring-1 ring-ink-200 transition hover:bg-ink-50">CSV</a>
+                </div>
             </div>
         </div>
 
