@@ -145,12 +145,12 @@ const refresh = () => router.reload({ only: ['kpis', 'trend', 'consults', 'los',
                     <h3 class="font-bold text-ink-800">Admissions vs Discharges</h3>
                     <span class="rounded-full bg-ink-50 px-3 py-1 text-xs font-semibold text-ink-500">Last 30 days</span>
                 </div>
-                <apexchart type="area" height="300" :options="areaOptions" :series="areaSeries" />
+                <apexchart type="area" height="300" :options="areaOptions" :series="areaSeries" role="img" aria-label="Area chart: admissions versus discharges over the last 30 days" />
             </div>
             <!-- occupancy gauge -->
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
                 <h3 class="mb-2 font-bold text-ink-800">Bed Occupancy</h3>
-                <apexchart type="radialBar" height="260" :options="gaugeOptions" :series="[kpis.occupancyGauge]" />
+                <apexchart type="radialBar" height="260" :options="gaugeOptions" :series="[kpis.occupancyGauge]" role="img" :aria-label="`Gauge: bed occupancy ${kpis.occupancy}% (${kpis.ward} ward patients of ${kpis.wardBeds} beds)`" />
                 <div class="mt-1 grid grid-cols-2 gap-3 text-center">
                     <div class="rounded-xl bg-brand-50 py-2"><p class="nums text-xl font-bold text-brand-700">{{ kpis.ward }}</p><p class="text-xs text-ink-400">Ward</p></div>
                     <div class="rounded-xl bg-danger-100 py-2"><p class="nums text-xl font-bold text-danger-600">{{ kpis.icu }}</p><p class="text-xs text-ink-400">ICU</p></div>
@@ -161,15 +161,15 @@ const refresh = () => router.reload({ only: ['kpis', 'trend', 'consults', 'los',
         <div class="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
                 <h3 class="mb-2 font-bold text-ink-800">Consultations</h3>
-                <apexchart type="bar" height="260" :options="colOptions(consults.labels, [C.teal, C.gold])" :series="consultsSeries" />
+                <apexchart type="bar" height="260" :options="colOptions(consults.labels, [C.teal, C.gold])" :series="consultsSeries" role="img" aria-label="Bar chart: consultations received and signed off" />
             </div>
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
                 <h3 class="mb-2 font-bold text-ink-800">Length of Stay <span class="font-normal text-ink-400">(this year)</span></h3>
-                <apexchart type="bar" height="260" :options="colOptions(los.labels, [C.navy])" :series="losSeries" />
+                <apexchart type="bar" height="260" :options="colOptions(los.labels, [C.navy])" :series="losSeries" role="img" aria-label="Bar chart: length-of-stay distribution this year" />
             </div>
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
                 <h3 class="mb-2 font-bold text-ink-800">Census by Service</h3>
-                <apexchart type="donut" height="260" :options="donutOptions" :series="donutSeries" />
+                <apexchart type="donut" height="260" :options="donutOptions" :series="donutSeries" role="img" aria-label="Donut chart: active census by service" />
             </div>
         </div>
 
@@ -225,7 +225,7 @@ const refresh = () => router.reload({ only: ['kpis', 'trend', 'consults', 'los',
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
-                        <th class="px-5 py-2.5">Consultant</th><th class="px-3 py-2.5 text-center">Old</th><th class="px-3 py-2.5 text-center">New</th><th class="px-3 py-2.5 text-center">Active</th><th class="px-3 py-2.5 text-center">Ward</th><th class="px-3 py-2.5 text-center">ICU</th><th class="px-3 py-2.5 text-center">TB</th>
+                        <th scope="col" class="px-5 py-2.5">Consultant</th><th scope="col" class="px-3 py-2.5 text-center">Old</th><th scope="col" class="px-3 py-2.5 text-center">New</th><th scope="col" class="px-3 py-2.5 text-center">Active</th><th scope="col" class="px-3 py-2.5 text-center">Ward</th><th scope="col" class="px-3 py-2.5 text-center">ICU</th><th scope="col" class="px-3 py-2.5 text-center">TB</th>
                     </tr></thead>
                     <tbody class="divide-y divide-ink-50">
                         <template v-for="sec in boardSections" :key="sec.key">

@@ -100,16 +100,16 @@ const donut = (labels) => ({
         <div class="grid gap-5 lg:grid-cols-2">
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60 lg:col-span-2">
                 <h3 class="mb-3 font-bold text-ink-800">{{ interval === 'day' ? 'Daily' : interval === 'quarter' ? 'Quarterly' : 'Monthly' }} admissions, discharges & mortality</h3>
-                <apexchart type="area" height="300" :options="monthlyChart" :series="monthlySeries" />
+                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="area" height="300" :options="monthlyChart" :series="monthlySeries" />
             </div>
 
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
                 <h3 class="mb-3 font-bold text-ink-800">Length of stay distribution</h3>
-                <apexchart type="bar" height="280" :options="barChart(los.labels, C.teal)" :series="[{ name: 'Discharges', data: los.data }]" />
+                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="bar" height="280" :options="barChart(los.labels, C.teal)" :series="[{ name: 'Discharges', data: los.data }]" />
             </div>
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
                 <h3 class="mb-3 font-bold text-ink-800">Admission source</h3>
-                <apexchart type="donut" height="280" :options="donut(sourceMix.map(s => s.src))" :series="sourceMix.map(s => s.c)" />
+                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="donut" height="280" :options="donut(sourceMix.map(s => s.src))" :series="sourceMix.map(s => s.c)" />
             </div>
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
                 <div class="mb-3 flex items-center justify-between gap-2">
@@ -119,22 +119,22 @@ const donut = (labels) => ({
                         <option v-for="c in destByConsultant" :key="c.name" :value="c.name">{{ c.name }}</option>
                     </select>
                 </div>
-                <apexchart v-if="destDonut.data.length" type="donut" height="280" :options="donut(destDonut.labels)" :series="destDonut.data" />
+                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" v-if="destDonut.data.length" type="donut" height="280" :options="donut(destDonut.labels)" :series="destDonut.data" />
                 <p v-else class="py-10 text-center text-sm text-ink-300">No discharges in range.</p>
             </div>
 
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
                 <h3 class="mb-3 font-bold text-ink-800">Top diagnoses</h3>
-                <apexchart type="bar" height="320" :options="barChart(topDx.map(d => d.label), C.navy, true)" :series="[{ name: 'Admissions', data: topDx.map(d => d.value) }]" />
+                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="bar" height="320" :options="barChart(topDx.map(d => d.label), C.navy, true)" :series="[{ name: 'Admissions', data: topDx.map(d => d.value) }]" />
             </div>
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
                 <h3 class="mb-3 font-bold text-ink-800">Consultation indications</h3>
-                <apexchart type="bar" height="320" :options="barChart(reasons.labels, C.gold, true)" :series="[{ name: 'Consultations', data: reasons.data }]" />
+                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="bar" height="320" :options="barChart(reasons.labels, C.gold, true)" :series="[{ name: 'Consultations', data: reasons.data }]" />
             </div>
 
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60 lg:col-span-2">
                 <h3 class="mb-3 font-bold text-ink-800">Admissions by consultant</h3>
-                <apexchart type="bar" height="340" :options="barChart(perConsultant.map(c => c.name), C.tealLt, true)" :series="[{ name: 'Admissions', data: perConsultant.map(c => c.c) }]" />
+                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="bar" height="340" :options="barChart(perConsultant.map(c => c.name), C.tealLt, true)" :series="[{ name: 'Admissions', data: perConsultant.map(c => c.c) }]" />
             </div>
 
             <div class="overflow-hidden rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60 lg:col-span-2">
@@ -142,7 +142,7 @@ const donut = (labels) => ({
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
-                            <th class="px-3 py-2">Month</th><th class="px-3 py-2 text-right">Adm</th><th class="px-3 py-2 text-right">Disch</th><th class="px-3 py-2 text-right">ICU</th><th class="px-3 py-2 text-right">Mort</th><th class="px-3 py-2 text-right">Consults</th><th class="px-3 py-2 text-right">Sign-offs</th><th class="px-3 py-2 text-right">Avg LOS</th>
+                            <th scope="col" class="px-3 py-2">Month</th><th scope="col" class="px-3 py-2 text-right">Adm</th><th scope="col" class="px-3 py-2 text-right">Disch</th><th scope="col" class="px-3 py-2 text-right">ICU</th><th scope="col" class="px-3 py-2 text-right">Mort</th><th scope="col" class="px-3 py-2 text-right">Consults</th><th scope="col" class="px-3 py-2 text-right">Sign-offs</th><th scope="col" class="px-3 py-2 text-right">Avg LOS</th>
                         </tr></thead>
                         <tbody class="divide-y divide-ink-50">
                             <tr v-for="r in kpiGrid" :key="r.label" class="hover:bg-brand-50/40">

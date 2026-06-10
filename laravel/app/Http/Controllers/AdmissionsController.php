@@ -54,45 +54,24 @@ class AdmissionsController extends Controller
         return Inertia::render('Admissions/Index', [
             'queue' => $queue,
             'icuPatients' => $icuPatients,
-            'consultants' => User::where('role', User::ROLE_CONSULTANT)->where('active', 1)
-                ->orderBy('full_name')->get(['id', 'full_name', 'name'])
-                ->map(fn ($u) => ['id' => $u->id, 'name' => $u->full_name ?: $u->name]),
+            'consultants' => User::consultantOptions(),
         ]);
     }
 
     public function create(): Response
     {
         return Inertia::render('Admissions/Create', [
-            'consultants' => User::where('role', User::ROLE_CONSULTANT)->where('active', 1)
-                ->orderBy('full_name')->get(['id', 'full_name', 'name'])
-                ->map(fn ($u) => ['id' => $u->id, 'name' => $u->full_name ?: $u->name]),
+            'consultants' => User::consultantOptions(),
             'countries' => Country::orderBy('name')->pluck('name'),
             'locations' => ['ER', 'Ward', 'ICU'],
             'admitFrom' => ['ER', 'Clinic', 'Referral', 'Transfer', 'Direct'],
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(\App\Http\Requests\StoreAdmissionRequest $request): RedirectResponse
     {
-        if ((int) Auth::user()->role === User::ROLE_OBSERVER) {
-            throw new AccessDeniedHttpException('Observers cannot admit patients.');
-        }
-
-        $request->merge(['mrn' => trim((string) $request->input('mrn'))]);   // strip stray whitespace before validation
-        $data = $request->validate([
-            'mrn' => ['required', 'string', 'regex:/^\d{1,11}$/'],   // digits only, ≤11 (clean-data rule)
-            'name' => ['required', 'string', 'max:191'],
-            'age' => ['nullable', 'integer', 'between:0,130'],
-            'gender' => ['nullable', 'in:Male,Female'],
-            'nationality' => ['nullable', 'string', 'max:191'],
-            'bed' => ['nullable', 'string', 'max:64'],
-            'admit_date' => ['required', 'date', 'before_or_equal:today'],
-            'admitted_from' => ['nullable', 'string', 'max:64'],
-            'current_location' => ['required', 'in:ER,Ward,ICU'],
-            'consultant_id' => ['nullable', 'exists:users,id'],
-            'diagnoses' => ['array'],
-            'diagnoses.*' => ['string', 'max:100'],
-        ]);
+        // role gate lives in StoreAdmissionRequest::authorize() (403 before validation)
+        $data = $request->validated();
 
         $admission = DB::transaction(function () use ($data) {
             $patient = Patient::firstOrCreate(

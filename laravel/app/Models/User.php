@@ -50,6 +50,18 @@ class User extends Authenticatable
     public function roleLabel(): string { return self::ROLE_LABELS[$this->role] ?? 'User'; }
     public function mfaEnabled(): bool { return $this->mfa_secret !== null && $this->mfa_enrolled_at !== null; }
 
+    /**
+     * Consultant-picker options [{id, name}] — the one definition for every dropdown.
+     * Registry passes $activeOnly=false: historical admissions reference inactive consultants.
+     */
+    public static function consultantOptions(bool $activeOnly = true)
+    {
+        return static::where('role', self::ROLE_CONSULTANT)
+            ->when($activeOnly, fn ($q) => $q->where('active', 1))
+            ->orderBy('full_name')->get(['id', 'full_name', 'name'])
+            ->map(fn ($u) => ['id' => $u->id, 'name' => $u->full_name ?: $u->name]);
+    }
+
     public function specialty() { return $this->belongsTo(Specialty::class); }
     public function admissions(): HasMany { return $this->hasMany(Admission::class, 'consultant_id'); }
     public function consultations(): HasMany { return $this->hasMany(Consultation::class, 'consultant_id'); }

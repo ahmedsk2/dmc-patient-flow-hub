@@ -48,7 +48,7 @@ const example = 'MRN,Name,Age,Gender,Nationality,AdmitDate,DischargeDate,Outcome
                 <div class="max-h-96 overflow-auto rounded-xl ring-1 ring-ink-100">
                     <table class="w-full text-xs">
                         <thead class="sticky top-0 bg-ink-50 text-left font-semibold uppercase tracking-wide text-ink-400">
-                            <tr><th class="px-3 py-2">#</th><th class="px-3 py-2">MRN</th><th class="px-3 py-2">Name</th><th class="px-3 py-2">Admit</th><th class="px-3 py-2">Discharge</th><th class="px-3 py-2">Outcome</th><th class="px-3 py-2">Loc</th><th class="px-3 py-2">Status</th></tr>
+                            <tr><th scope="col" class="px-3 py-2">#</th><th scope="col" class="px-3 py-2">MRN</th><th scope="col" class="px-3 py-2">Name</th><th scope="col" class="px-3 py-2">Admit</th><th scope="col" class="px-3 py-2">Discharge</th><th scope="col" class="px-3 py-2">Outcome</th><th scope="col" class="px-3 py-2">Loc</th><th scope="col" class="px-3 py-2">Status</th></tr>
                         </thead>
                         <tbody class="divide-y divide-ink-50">
                             <tr v-for="r in preview.sample" :key="r.line" :class="r.ok ? '' : 'bg-danger-100/40'">

@@ -133,7 +133,7 @@ const modes = [['admissions', 'Admissions'], ['consultations', 'Consultations'],
         <!-- results -->
         <div class="overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-ink-100/60">
             <table v-if="mode === 'consultations'" class="w-full text-sm">
-                <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400"><th class="px-5 py-3">Patient</th><th class="px-3 py-3">Location</th><th class="px-3 py-3">From → To</th><th class="px-3 py-3">Indication</th><th class="px-3 py-3">Consultant</th><th class="px-3 py-3">Date</th><th class="px-5 py-3">Status</th></tr></thead>
+                <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400"><th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Location</th><th scope="col" class="px-3 py-3">From → To</th><th scope="col" class="px-3 py-3">Indication</th><th scope="col" class="px-3 py-3">Consultant</th><th scope="col" class="px-3 py-3">Date</th><th scope="col" class="px-5 py-3">Status</th></tr></thead>
                 <tbody class="divide-y divide-ink-50">
                     <tr v-for="c in results.data" :key="c.id" class="hover:bg-brand-50/40">
                         <td class="px-5 py-3"><div class="font-semibold text-ink-800">{{ c.name }}</div><div class="nums text-xs text-ink-400">MRN {{ c.mrn }} · {{ c.age ?? '—' }}y</div></td>
@@ -148,7 +148,7 @@ const modes = [['admissions', 'Admissions'], ['consultations', 'Consultations'],
                 </tbody>
             </table>
             <table v-else class="w-full text-sm">
-                <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400"><th class="px-5 py-3">Patient</th><th class="px-3 py-3">Age/Sex</th><th class="px-3 py-3">Location</th><th class="px-3 py-3">Consultant</th><th class="px-3 py-3">Admitted</th><th class="px-3 py-3">Discharged</th><th class="px-3 py-3">LOS</th><th class="px-3 py-3">Outcome</th><th class="px-5 py-3 text-right">Edit</th></tr></thead>
+                <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400"><th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Age/Sex</th><th scope="col" class="px-3 py-3">Location</th><th scope="col" class="px-3 py-3">Consultant</th><th scope="col" class="px-3 py-3">Admitted</th><th scope="col" class="px-3 py-3">Discharged</th><th scope="col" class="px-3 py-3">LOS</th><th scope="col" class="px-3 py-3">Outcome</th><th scope="col" class="px-5 py-3 text-right">Edit</th></tr></thead>
                 <tbody class="divide-y divide-ink-50">
                     <tr v-for="r in results.data" :key="r.id" class="hover:bg-brand-50/40">
                         <td class="px-5 py-3"><div class="font-semibold text-ink-800">{{ r.name }}</div><div class="nums text-xs text-ink-400">MRN {{ r.mrn }}</div></td>

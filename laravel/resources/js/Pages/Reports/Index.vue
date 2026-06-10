@@ -54,7 +54,7 @@ const print = () => window.print();
             <h2 class="mb-2 text-sm font-bold uppercase tracking-wide text-navy-800">Monthly breakdown</h2>
             <table class="mb-6 w-full border-collapse text-sm">
                 <thead><tr class="bg-navy-900 text-left text-xs font-semibold uppercase tracking-wide text-white print:bg-ink-100 print:text-ink-700">
-                    <th class="px-3 py-2">Month</th><th class="px-3 py-2 text-right">Admissions</th><th class="px-3 py-2 text-right">Discharges</th><th class="px-3 py-2 text-right">ICU</th><th class="px-3 py-2 text-right">Mortality</th><th class="px-3 py-2 text-right">Long-stay %</th>
+                    <th scope="col" class="px-3 py-2">Month</th><th scope="col" class="px-3 py-2 text-right">Admissions</th><th scope="col" class="px-3 py-2 text-right">Discharges</th><th scope="col" class="px-3 py-2 text-right">ICU</th><th scope="col" class="px-3 py-2 text-right">Mortality</th><th scope="col" class="px-3 py-2 text-right">Long-stay %</th>
                 </tr></thead>
                 <tbody>
                     <tr v-for="(m, i) in months" :key="m.label" :class="i % 2 ? 'bg-surface/60 print:bg-white' : ''">

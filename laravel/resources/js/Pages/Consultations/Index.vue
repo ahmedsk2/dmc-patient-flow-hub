@@ -79,9 +79,9 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
             <table class="w-full text-sm">
                 <thead>
                     <tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
-                        <th class="px-5 py-3">Patient</th><th class="px-3 py-3">Location</th>
-                        <th class="px-3 py-3">From → To</th><th class="px-3 py-3">Indication</th>
-                        <th class="px-3 py-3">Consultant</th><th class="px-3 py-3">Date</th><th class="px-5 py-3">Status</th>
+                        <th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Location</th>
+                        <th scope="col" class="px-3 py-3">From → To</th><th scope="col" class="px-3 py-3">Indication</th>
+                        <th scope="col" class="px-3 py-3">Consultant</th><th scope="col" class="px-3 py-3">Date</th><th scope="col" class="px-5 py-3">Status</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-ink-50">

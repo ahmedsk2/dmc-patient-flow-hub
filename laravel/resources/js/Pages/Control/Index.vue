@@ -122,7 +122,7 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
             <div class="overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-ink-100/60">
                 <table class="w-full text-sm">
                     <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
-                        <th class="px-5 py-3">User</th><th class="px-3 py-3">Role</th><th class="px-3 py-3">Capabilities</th><th class="px-3 py-3">Status</th><th class="px-5 py-3 text-right">Edit</th>
+                        <th scope="col" class="px-5 py-3">User</th><th scope="col" class="px-3 py-3">Role</th><th scope="col" class="px-3 py-3">Capabilities</th><th scope="col" class="px-3 py-3">Status</th><th scope="col" class="px-5 py-3 text-right">Edit</th>
                     </tr></thead>
                     <tbody class="divide-y divide-ink-50">
                         <tr v-for="u in users.data" :key="u.id" class="hover:bg-brand-50/40">

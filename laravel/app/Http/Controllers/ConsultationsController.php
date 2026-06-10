@@ -61,31 +61,14 @@ class ConsultationsController extends Controller
                 'total' => Consultation::count(),
             ],
             'reasons' => $reasons->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
-            'consultants' => User::where('role', User::ROLE_CONSULTANT)->where('active', 1)
-                ->orderBy('full_name')->get(['id', 'full_name', 'name'])
-                ->map(fn ($u) => ['id' => $u->id, 'name' => $u->full_name ?: $u->name]),
+            'consultants' => User::consultantOptions(),
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(\App\Http\Requests\ConsultationRequest $request): RedirectResponse
     {
-        if ((int) Auth::user()->role === User::ROLE_OBSERVER) {
-            throw new AccessDeniedHttpException('Observers cannot create consultations.');
-        }
-        $data = $request->validate([
-            'mrn' => ['required', 'string', 'max:64'],
-            'patient_name' => ['required', 'string', 'max:191'],
-            'age' => ['nullable', 'integer', 'between:0,130'],
-            'bed' => ['nullable', 'string', 'max:64'],
-            'current_location' => ['nullable', 'string', 'max:32'],
-            'consultation_date' => ['required', 'date', 'before_or_equal:today'],
-            'consultation_from' => ['nullable', 'string', 'max:128'],
-            'to_service' => ['nullable', 'string', 'max:128'],
-            'consultant_id' => ['nullable', 'exists:users,id'],
-            'indication' => ['array'],
-            'indication.*' => ['integer'],
-            'other_indication' => ['nullable', 'string', 'max:255'],
-        ]);
+        // Observer gate lives in ConsultationRequest::authorize() (403 before validation)
+        $data = $request->validated();
 
         $patient = Patient::where('mrn', $data['mrn'])->first();
         $c = Consultation::create([
@@ -130,26 +113,10 @@ class ConsultationsController extends Controller
     }
 
     /** Edit a consultation (receiving consultant / manager / admin). */
-    public function update(Request $request, Consultation $consultation): RedirectResponse
+    public function update(\App\Http\Requests\ConsultationRequest $request, Consultation $consultation): RedirectResponse
     {
-        $u = Auth::user();
-        if (! ($u->isAdmin() || $u->can_manage || (int) $consultation->consultant_id === (int) $u->id)) {
-            throw new AccessDeniedHttpException('Only the receiving consultant or a manager may edit.');
-        }
-        $data = $request->validate([
-            'mrn' => ['required', 'string', 'max:64'],
-            'patient_name' => ['required', 'string', 'max:191'],
-            'age' => ['nullable', 'integer', 'between:0,130'],
-            'bed' => ['nullable', 'string', 'max:64'],
-            'current_location' => ['nullable', 'string', 'max:32'],
-            'consultation_date' => ['required', 'date', 'before_or_equal:today'],
-            'consultation_from' => ['nullable', 'string', 'max:128'],
-            'to_service' => ['nullable', 'string', 'max:128'],
-            'consultant_id' => ['nullable', 'exists:users,id'],
-            'indication' => ['array'],
-            'indication.*' => ['integer'],
-            'other_indication' => ['nullable', 'string', 'max:255'],
-        ]);
+        // ownership gate (receiving consultant / manager / admin) lives in ConsultationRequest::authorize()
+        $data = $request->validated();
         $consultation->update([...$data, 'indication' => $data['indication'] ?? []]);
         AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'consultation.modify',
             'entity_type' => 'consultation', 'entity_id' => (string) $consultation->id, 'ip' => $request->ip()]);

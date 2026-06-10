@@ -46,7 +46,7 @@ const print = () => window.print();
 
             <table class="w-full border-collapse text-sm">
                 <thead><tr class="bg-navy-900 text-left text-xs font-semibold uppercase tracking-wide text-white print:bg-ink-100 print:text-ink-700">
-                    <th class="px-3 py-2">Day</th><th class="px-3 py-2 text-right">Admissions</th><th class="px-3 py-2 text-right">Discharges</th><th class="px-3 py-2 text-right">ICU</th><th class="px-3 py-2 text-right">Mortality</th>
+                    <th scope="col" class="px-3 py-2">Day</th><th scope="col" class="px-3 py-2 text-right">Admissions</th><th scope="col" class="px-3 py-2 text-right">Discharges</th><th scope="col" class="px-3 py-2 text-right">ICU</th><th scope="col" class="px-3 py-2 text-right">Mortality</th>
                 </tr></thead>
                 <tbody>
                     <tr v-for="(d, i) in days" :key="d.day" :class="['Sat','Sun'].includes(d.weekday) ? 'bg-accent-300/15' : (i % 2 ? 'bg-surface/60 print:bg-white' : '')">

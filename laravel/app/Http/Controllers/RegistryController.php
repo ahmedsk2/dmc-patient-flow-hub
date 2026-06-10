@@ -44,8 +44,7 @@ class RegistryController extends Controller
                 'locations' => ['Ward', 'ICU', 'ER'],
                 'admittedFrom' => ['ER', 'Clinic', 'Referral', 'Transfer', 'Direct'],
                 'countries' => Country::orderBy('name')->pluck('name'),
-                'consultants' => User::where('role', User::ROLE_CONSULTANT)->orderBy('full_name')
-                    ->get(['id', 'full_name', 'name'])->map(fn ($u) => ['id' => $u->id, 'name' => $u->full_name ?: $u->name]),
+                'consultants' => User::consultantOptions(activeOnly: false),   // registry filters span inactive consultants
                 'reasons' => ConsultationReason::orderBy('name')->get(['id', 'name']),
                 'readmitWindow' => max(0, (int) (\App\Models\Setting::current()->readmission_window_days ?? 3)),
             ],

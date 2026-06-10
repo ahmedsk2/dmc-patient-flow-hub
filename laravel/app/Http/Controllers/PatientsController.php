@@ -112,9 +112,7 @@ class PatientsController extends Controller
             'groups' => $groups,
             'filters' => $filters,
             'readmitWindow' => $readmitWindow,
-            'consultants' => User::where('role', User::ROLE_CONSULTANT)->where('active', 1)
-                ->orderBy('full_name')->get(['id', 'full_name', 'name'])
-                ->map(fn ($u) => ['id' => $u->id, 'name' => $u->full_name ?: $u->name]),
+            'consultants' => User::consultantOptions(),
             'stats' => [
                 'total' => Admission::active()->whereNotNull('consultant_id')->count(),
                 'ward' => Admission::active()->whereNotNull('consultant_id')->nonIcu()->count(),

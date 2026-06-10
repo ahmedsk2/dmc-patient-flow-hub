@@ -138,7 +138,7 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
                 <div class="mb-4 flex items-center justify-between"><h3 class="text-lg font-bold text-ink-900">Admit from ICU</h3><button @click="showIcu = false" class="text-ink-400 hover:text-ink-700">✕</button></div>
                 <p class="mb-3 text-sm text-ink-400">Pull a current ICU patient onto the ward (keeps their consultant).</p>
                 <table class="w-full text-sm">
-                    <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400"><th class="px-3 py-2">MRN</th><th class="px-3 py-2">Patient</th><th class="px-3 py-2">Bed</th><th class="px-3 py-2">Consultant</th><th class="px-3 py-2"></th></tr></thead>
+                    <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400"><th scope="col" class="px-3 py-2">MRN</th><th scope="col" class="px-3 py-2">Patient</th><th scope="col" class="px-3 py-2">Bed</th><th scope="col" class="px-3 py-2">Consultant</th><th scope="col" class="px-3 py-2"></th></tr></thead>
                     <tbody class="divide-y divide-ink-50">
                         <tr v-for="p in icuPatients" :key="p.id" class="hover:bg-brand-50/40">
                             <td class="nums px-3 py-2 text-ink-500">{{ p.mrn }}</td>

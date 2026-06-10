@@ -40,6 +40,9 @@ Set in `.env` (never commit it):
 | `LEGACY_DB_*` | only needed if you will run `legacy:import` on this server; otherwise remove/leave unused |
 | `MAIL_*` | the SMTP relay (password-reset emails); **rotated** SMTP credentials |
 | `SESSION_SECURE_COOKIE` | `true` (HTTPS only) |
+| `APP_TIMEZONE` | the hospital's zone (e.g. `Asia/Riyadh`) — date columns are timezone-naive; "today" metrics drift near midnight if app/DB zones differ |
+| `LOG_CHANNEL` / `LOG_LEVEL` | `daily` / `warning` (rotated; stock `single` grows unbounded) |
+| `SENTRY_DSN` | optional but recommended: `composer require sentry/sentry-laravel` on the server, set the DSN, and unhandled exceptions get alerted instead of dying silently in a log file (the SDK is inert while the DSN is empty) |
 
 ## 3. Database
 
@@ -76,7 +79,7 @@ Pick **one**:
 - [ ] Admit a test patient → appears on New Admissions → assign → appears on Active board → discharge
       (medical → complete) → appears in Registry → **delete/clean the test record**
 - [ ] PDF download works (Reports → Download PDF)
-- [ ] `php artisan test` on a staging copy is green (22 tests)
+- [ ] `php artisan test` on a staging copy is green (49 tests / 325 assertions as of 2026-06-10)
 
 ## Rollback
 

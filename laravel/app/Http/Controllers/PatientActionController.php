@@ -36,24 +36,11 @@ class PatientActionController extends Controller
     }
 
     /** Full edit of an admission's patient demographics + diagnoses (Modify capability). */
-    public function modify(Request $request, Admission $admission): RedirectResponse
+    public function modify(\App\Http\Requests\ModifyAdmissionRequest $request, Admission $admission): RedirectResponse
     {
-        $u = Auth::user();
-        if (! ($u->isAdmin() || $u->can_modify)) {
-            throw new AccessDeniedHttpException('Requires the Modify capability.');
-        }
+        // capability gate lives in ModifyAdmissionRequest::authorize() (403 before validation)
         $patient = $admission->patient;
-        $request->merge(['mrn' => trim((string) $request->input('mrn'))]);   // strip stray whitespace before validation
-        $data = $request->validate([
-            'mrn' => ['required', 'string', 'regex:/^\d{1,11}$/', Rule::unique('patients', 'mrn')->ignore($patient->id)],
-            'name' => ['required', 'string', 'max:191'],
-            'age' => ['nullable', 'integer', 'between:0,130'],
-            'gender' => ['nullable', 'in:Male,Female'],
-            'nationality' => ['nullable', 'string', 'max:191'],
-            'bed' => ['nullable', 'string', 'max:64'],
-            'diagnoses' => ['array'],
-            'diagnoses.*' => ['string', 'max:100'],
-        ]);
+        $data = $request->validated();
 
         DB::transaction(function () use ($admission, $patient, $data) {
             $patient->update([
@@ -231,11 +218,19 @@ class PatientActionController extends Controller
         return back()->with('flash', ['type' => 'success', 'message' => "ICU discharge complete ({$data['outcome']})."]);
     }
 
-    /** Reverse a same-day discharge (admin only) — clears the discharge fields. */
+    /** Reverse a recent discharge (admin only) — clears the discharge fields. */
     public function reverseDischarge(Admission $admission): RedirectResponse
     {
         if (! Auth::user()->isAdmin()) {
             throw new AccessDeniedHttpException('Admin only.');
+        }
+        // Undo is for correcting recent mistakes (the 48h Recent registry), not silently
+        // reopening months-old closed episodes — that would corrupt historical statistics.
+        if (! $admission->discharge_date) {
+            return back()->with('flash', ['type' => 'error', 'message' => 'This admission is not discharged.']);
+        }
+        if ($admission->discharge_date->lt(now()->subDays(2)->startOfDay())) {
+            return back()->with('flash', ['type' => 'error', 'message' => 'Only discharges from the last 48 hours can be reversed.']);
         }
         $admission->update(['discharge_date' => null, 'medical_discharge_date' => null, 'outcome' => null, 'transfer_type' => null, 'discharged_by' => null]);
         $this->audit('admission.reverse_discharge', $admission);
@@ -254,17 +249,23 @@ class PatientActionController extends Controller
         }
 
         $new = DB::transaction(function () use ($admission, $data) {
-            // close the current episode as a transfer (continuation of care, not a discharge)
+            // close the current episode as a transfer (continuation of care, not a discharge);
+            // a pending phase-1 medical discharge is superseded by the transfer, so clear its
+            // fields rather than leaving a stale outcome/delay on a transfer-closed row
             $admission->update([
                 'discharge_date' => now()->toDateString(),
                 'transfer_type' => $admission->current_location === 'ICU' ? 'Transfer from ICU' : 'other transfer',
+                'medical_discharge_date' => null,
+                'outcome' => null,
+                'delay_reason' => null,
                 'discharged_by' => Auth::id(),
             ]);
 
-            // open the receiving episode for the same patient
+            // open the receiving episode for the same patient; bed is NOT carried — the old
+            // location's bed number is meaningless after a ward<->ICU move (assign on arrival)
             $new = Admission::create([
                 'patient_id' => $admission->patient_id,
-                'bed' => $admission->bed,
+                'bed' => null,
                 'admitted_from' => 'Transfer',
                 'admit_date' => now()->toDateString(),
                 'current_location' => $data['target'],

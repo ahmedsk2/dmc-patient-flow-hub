@@ -75,6 +75,40 @@ class WaveBTest extends TestCase
         $this->assertTrue($a->assigned_at->greaterThanOrEqualTo(now()->subMinute()));
     }
 
+    public function test_reverse_discharge_blocked_after_48_hours(): void
+    {
+        $old = $this->admission(['admit_date' => '2024-01-01', 'discharge_date' => '2024-01-10',
+            'outcome' => 'Alive', 'transfer_type' => 'discharge from ward']);
+        $this->actingAs($this->admin())->post("/admissions/{$old->id}/reverse-discharge")->assertRedirect();
+        $this->assertNotNull($old->fresh()->discharge_date, 'months-old discharges must not be silently reopened');
+
+        $recent = $this->admission(['discharge_date' => now()->toDateString(),
+            'outcome' => 'Alive', 'transfer_type' => 'discharge from ward']);
+        $this->actingAs($this->admin())->post("/admissions/{$recent->id}/reverse-discharge")->assertRedirect();
+        $this->assertNull($recent->fresh()->discharge_date, 'recent (≤48h) discharges remain reversible');
+    }
+
+    public function test_transfer_clears_stale_medical_discharge_and_bed(): void
+    {
+        $c = User::create(['username' => 'wb_c3', 'name' => 'Transfer Cons', 'password' => 'secret12345',
+            'role' => User::ROLE_CONSULTANT, 'active' => 1]);
+        $a = $this->admission(['consultant_id' => $c->id, 'bed' => 'W-12',
+            'medical_discharge_date' => now()->toDateString(), 'outcome' => 'Alive', 'delay_reason' => 'bed']);
+
+        $this->actingAs($this->admin())->post("/admissions/{$a->id}/transfer", ['target' => 'ICU'])->assertRedirect();
+
+        $a->refresh();
+        $this->assertNotNull($a->discharge_date);
+        $this->assertNull($a->medical_discharge_date, 'transfer supersedes the pending medical discharge');
+        $this->assertNull($a->outcome, 'a transfer-closed row must not carry a discharge outcome');
+
+        $new = Admission::where('patient_id', $a->patient_id)->whereNull('discharge_date')->first();
+        $this->assertNotNull($new);
+        $this->assertSame('ICU', $new->current_location);
+        $this->assertNull($new->bed, 'bed is not carried across a ward<->ICU move');
+        $this->assertSame($c->id, (int) $new->consultant_id, 'consultant continuity preserved');
+    }
+
     public function test_bulk_import_classifies_icu_discharge_by_location(): void
     {
         $rows = "3001001,Ward Disch,40,M,Saudi,2024-01-01,2024-01-05,Alive,Ward\n"

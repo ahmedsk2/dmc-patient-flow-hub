@@ -27,7 +27,7 @@ const outcomeTone = (o) => o === 'Dead' ? 'bg-danger-100 text-danger-600' : o ==
         <div v-show="tab === 'discharges'" class="overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-ink-100/60">
             <table class="w-full text-sm">
                 <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
-                    <th class="px-5 py-3">Patient</th><th class="px-3 py-3">Discharged</th><th class="px-3 py-3">From</th><th class="px-3 py-3">Outcome</th><th class="px-3 py-3">By</th><th class="px-5 py-3 text-right">Undo</th>
+                    <th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Discharged</th><th scope="col" class="px-3 py-3">From</th><th scope="col" class="px-3 py-3">Outcome</th><th scope="col" class="px-3 py-3">By</th><th scope="col" class="px-5 py-3 text-right">Undo</th>
                 </tr></thead>
                 <tbody class="divide-y divide-ink-50">
                     <tr v-for="d in discharges" :key="d.id" class="hover:bg-brand-50/40">
@@ -47,7 +47,7 @@ const outcomeTone = (o) => o === 'Dead' ? 'bg-danger-100 text-danger-600' : o ==
         <div v-show="tab === 'signoffs'" class="overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-ink-100/60">
             <table class="w-full text-sm">
                 <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
-                    <th class="px-5 py-3">Patient</th><th class="px-3 py-3">Signed off</th><th class="px-3 py-3">Service</th><th class="px-3 py-3">Consultant</th><th class="px-5 py-3 text-right">Undo</th>
+                    <th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Signed off</th><th scope="col" class="px-3 py-3">Service</th><th scope="col" class="px-3 py-3">Consultant</th><th scope="col" class="px-5 py-3 text-right">Undo</th>
                 </tr></thead>
                 <tbody class="divide-y divide-ink-50">
                     <tr v-for="s in signoffs" :key="s.id" class="hover:bg-brand-50/40">
