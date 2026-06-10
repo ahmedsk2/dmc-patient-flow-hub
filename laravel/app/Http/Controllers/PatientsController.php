@@ -40,12 +40,13 @@ class PatientsController extends Controller
             ->orderBy('admit_date')
             ->get();
 
-        // 72h-readmission flag: which of these were admitted within 3 days of a prior REAL discharge
+        // readmission flag: admitted within the configured window of a prior REAL discharge
+        $readmitWindow = max(0, (int) ($settings->readmission_window_days ?? 3));
         $readmitIds = Admission::query()->whereIn('id', $admissions->pluck('id'))
             ->whereExists(fn ($s) => $s->selectRaw('1')->from('admissions as prev')
                 ->whereColumn('prev.patient_id', 'admissions.patient_id')->whereColumn('prev.id', '<>', 'admissions.id')
                 ->whereColumn('prev.discharge_date', '<=', 'admissions.admit_date')
-                ->whereRaw('DATEDIFF(admissions.admit_date, prev.discharge_date) BETWEEN 0 AND 3')
+                ->whereRaw('DATEDIFF(admissions.admit_date, prev.discharge_date) BETWEEN 0 AND ?', [$readmitWindow])
                 ->whereIn('prev.transfer_type', ['discharge from ward', 'discharge from ICU']))
             ->pluck('id')->flip();
 
@@ -108,6 +109,7 @@ class PatientsController extends Controller
         return Inertia::render('Patients/Index', [
             'groups' => $groups,
             'filters' => $filters,
+            'readmitWindow' => $readmitWindow,
             'consultants' => User::where('role', User::ROLE_CONSULTANT)->where('active', 1)
                 ->orderBy('full_name')->get(['id', 'full_name', 'name'])
                 ->map(fn ($u) => ['id' => $u->id, 'name' => $u->full_name ?: $u->name]),

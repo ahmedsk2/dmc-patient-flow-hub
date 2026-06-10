@@ -9,7 +9,8 @@ const fieldLabels = {
     min_hospitalist: 'Min hospitalist census', max_hospitalist: 'Max hospitalist census',
     min_subs: 'Min subspecialty', max_subs: 'Max subspecialty',
     short_los: 'Short LOS', long_los: 'Long LOS',
-    ward_beds: 'Licensed ward beds', icu_beds: 'Licensed ICU beds', mfa_enforcement: 'MFA enforcement',
+    ward_beds: 'Licensed ward beds', icu_beds: 'Licensed ICU beds',
+    readmission_window_days: 'Readmission window (days)', mfa_enforcement: 'MFA enforcement',
 };
 
 const tab = ref('overview');
@@ -19,6 +20,7 @@ const sForm = useForm({
     min_subs: props.settings.min_subs, max_subs: props.settings.max_subs,
     short_los: props.settings.short_los, long_los: props.settings.long_los,
     ward_beds: props.settings.ward_beds ?? 50, icu_beds: props.settings.icu_beds ?? 10,
+    readmission_window_days: props.settings.readmission_window_days ?? 3,
     mfa_enforcement: props.settings.mfa_enforcement ?? 0,
 });
 const saveSettings = () => sForm.put('/control/settings', { preserveScroll: true });
@@ -82,6 +84,7 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
                 <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Long LOS (days)</span><input v-model="sForm.long_los" type="number" :class="field" /></label>
                 <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Licensed ward beds</span><input v-model="sForm.ward_beds" type="number" min="1" :class="field" /><span class="mt-1 block text-xs text-ink-400">Denominator for dashboard Bed Occupancy (non-ICU). Set to your real count.</span></label>
                 <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Licensed ICU beds</span><input v-model="sForm.icu_beds" type="number" min="0" :class="field" /></label>
+                <label class="block sm:col-span-2"><span class="mb-1 block text-sm font-semibold text-ink-700">Readmission window (days)</span><input v-model="sForm.readmission_window_days" type="number" min="0" max="30" :class="field" /><span class="mt-1 block text-xs text-ink-400">A new admission within this many days of a prior real discharge counts as a readmission (default 3 = the 72-hour rule). Drives the stats KPI, the board badge, and the registry filter.</span></label>
                 <label class="block sm:col-span-2"><span class="mb-1 block text-sm font-semibold text-ink-700">Two-factor enforcement</span>
                     <select v-model.number="sForm.mfa_enforcement" :class="field">
                         <option :value="0">Optional (users opt in)</option>

@@ -65,6 +65,7 @@ class ControlController extends Controller
             'long_los' => ['required', 'integer', 'min:1', 'max:120'],
             'ward_beds' => ['required', 'integer', 'min:1', 'max:2000'],
             'icu_beds' => ['required', 'integer', 'min:0', 'max:1000'],
+            'readmission_window_days' => ['required', 'integer', 'min:0', 'max:30'],
             'mfa_enforcement' => ['required', 'integer', 'in:0,1,2'],
         ]);
         $settings = Setting::current();

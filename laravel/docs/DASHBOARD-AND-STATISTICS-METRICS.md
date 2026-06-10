@@ -18,14 +18,17 @@
 | **Length of stay (LOS)** | `DATEDIFF(discharge_date, admit_date)` in **days**, only counting rows where the result is `>= 0`. Whole days (a same-day discharge = 0). |
 | **Avg LOS** | `AVG(DATEDIFF(discharge_date, admit_date))` over **discharges in the period**, **non-ICU**. ICU LOS is the same over ICU rows. |
 | **Mortality %** | `deaths / discharges × 100` (deaths counted by `outcome='Dead'`). |
-| **72-hour readmission** | A new admission whose `admit_date` is **0–3 days** after the **same patient's** prior **real** discharge (`prev.transfer_type IN ('discharge from ward','discharge from ICU')`). Ward↔ICU and specialty transfers are continuations of care and are **excluded**, so same-day transfer rows don't inflate it. |
+| **Readmission** | A new admission whose `admit_date` is within **`readmission_window_days`** (settings; default 3 = the "72-hour" rule, **clinically confirmed 2026-06-09**, admin-tunable in Control) of the **same patient's** prior **real** discharge (`prev.transfer_type IN ('discharge from ward','discharge from ICU')`). Ward↔ICU and specialty transfers are continuations of care and are **excluded**, so same-day transfer rows don't inflate it. UI labels (stats KPI, board badge, registry filter) display the configured window. |
 | **Admissions counted by** | `admit_date` in range. **Discharges / deaths by** `discharge_date` in range. **Consultations by** `consultation_date`; **sign-offs by** `signoff_date`. |
 
-Operational inputs come from the single `settings` row (editable in **Control → Settings**):
-`short_los` (5), `long_los` (11), **`ward_beds`**, `icu_beds`, `min/max_hospitalist`, `min/max_subs`.
+Operational inputs come from the single `settings` row (editable in **Control → Settings**, every
+change recorded in `setting_changes`): `short_los` (5), `long_los` (11), **`ward_beds`**, `icu_beds`,
+`readmission_window_days` (3), `min/max_hospitalist`, `min/max_subs`.
 
-⚠️ **Values you must confirm for your unit** (currently placeholders / [NEEDS CLINICAL REVIEW]):
-`ward_beds` (drives Bed Occupancy — see §1), `long_los` (drives Long-Stay-%), `short_los`/`long_los` (LOS band colours), the 72-hour readmission window (fixed at 3 days).
+✅ **Clinically confirmed (2026-06-09):** `short_los`=5 / `long_los`=11, the readmission window
+default of 3 days (now admin-tunable), and the shuffle min/max values.
+⚠️ **Still placeholder:** `ward_beds` / `icu_beds` — set the real licensed counts in Control
+(drives Bed Occupancy — see §1).
 
 ---
 

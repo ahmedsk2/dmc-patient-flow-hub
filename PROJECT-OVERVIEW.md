@@ -106,7 +106,7 @@ unique MRN, consultant must exist, no duplicate diagnoses per admission).
 
 - `ward_beds` / `icu_beds` defaults are placeholders until the admin sets the real licensed counts
   (Control → Settings; changes are tracked in the on-page history).
-- Clinical thresholds carried from the legacy system (`short_los`=5, `long_los`=11, 72-hour
-  readmission window = 3 days, shuffle min/max) are operational conventions awaiting clinical sign-off.
+- Clinical thresholds are **signed off** (2026-06-09): `short_los`=5, `long_los`=11, shuffle min/max
+  confirmed; the readmission window (default 3 days) is admin-tunable in Control → Settings.
 - The EHC logo in the UI is a recreated approximation pending the official asset.
 - Deployment (credential rotation, TLS, backups) is documented but executed by the operator, not in CI.

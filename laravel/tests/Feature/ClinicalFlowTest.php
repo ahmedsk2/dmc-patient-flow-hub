@@ -118,6 +118,31 @@ class ClinicalFlowTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page->where('interval', 'month')->has('kpiGrid', 3));
     }
 
+    public function test_readmission_window_is_tunable(): void
+    {
+        $admin = $this->admin();
+        // same patient: real discharge 4 days before the new admission
+        $p = Patient::create(['mrn' => '77777777', 'name' => 'Window Patient']);
+        Admission::create([
+            'patient_id' => $p->id, 'admit_date' => now()->subDays(10)->toDateString(),
+            'discharge_date' => now()->subDays(4)->toDateString(), 'transfer_type' => 'discharge from ward',
+            'current_location' => 'Ward', 'is_longterm' => 0, 'is_new_assignment' => 0,
+        ]);
+        Admission::create([
+            'patient_id' => $p->id, 'admit_date' => now()->toDateString(),
+            'current_location' => 'Ward', 'is_longterm' => 0, 'is_new_assignment' => 0,
+        ]);
+
+        // default window (3 days): a 4-day gap is NOT a readmission
+        $this->actingAs($admin)->get('/registry?mode=admissions&readmit72=1')
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('results.total', 0));
+
+        // widen the window to 5 days: now it IS
+        Setting::current()->update(['readmission_window_days' => 5]);
+        $this->actingAs($admin)->get('/registry?mode=admissions&readmit72=1')
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('results.total', 1));
+    }
+
     public function test_settings_change_is_recorded_in_history(): void
     {
         $admin = $this->admin();
@@ -128,6 +153,7 @@ class ClinicalFlowTest extends TestCase
             'min_subs' => $s->min_subs, 'max_subs' => $s->max_subs,
             'short_los' => $s->short_los, 'long_los' => $s->long_los,
             'ward_beds' => 64, 'icu_beds' => $s->icu_beds,
+            'readmission_window_days' => $s->readmission_window_days ?? 3,
             'mfa_enforcement' => $s->mfa_enforcement ?? 0,
         ])->assertRedirect();
 

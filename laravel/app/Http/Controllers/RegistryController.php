@@ -47,6 +47,7 @@ class RegistryController extends Controller
                 'consultants' => User::where('role', User::ROLE_CONSULTANT)->orderBy('full_name')
                     ->get(['id', 'full_name', 'name'])->map(fn ($u) => ['id' => $u->id, 'name' => $u->full_name ?: $u->name]),
                 'reasons' => ConsultationReason::orderBy('name')->get(['id', 'name']),
+                'readmitWindow' => max(0, (int) (\App\Models\Setting::current()->readmission_window_days ?? 3)),
             ],
         ]);
     }
@@ -77,7 +78,8 @@ class RegistryController extends Controller
             ->when($request->boolean('readmit72'), fn ($q) => $q->whereExists(fn ($s) => $s->selectRaw('1')
                 ->from('admissions as prev')->whereColumn('prev.patient_id', 'admissions.patient_id')
                 ->whereColumn('prev.id', '<>', 'admissions.id')->whereColumn('prev.discharge_date', '<=', 'admissions.admit_date')
-                ->whereRaw('DATEDIFF(admissions.admit_date, prev.discharge_date) BETWEEN 0 AND 3')
+                ->whereRaw('DATEDIFF(admissions.admit_date, prev.discharge_date) BETWEEN 0 AND ?',
+                    [max(0, (int) (\App\Models\Setting::current()->readmission_window_days ?? 3))])
                 ->whereIn('prev.transfer_type', ['discharge from ward', 'discharge from ICU'])))
             ->when($dx, function ($q) use ($dx, $request) {
                 if ($request->input('dx_match') === 'and') {

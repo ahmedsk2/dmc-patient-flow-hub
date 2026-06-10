@@ -47,15 +47,17 @@ class StatisticsController extends Controller
         $avgLos = round((float) ($losAgg->avg_los ?? 0), 1);
         $mortalityRate = $discharges > 0 ? round($deaths / $discharges * 100, 1) : 0.0;
 
-        // 72-hour readmissions: a new admission within 72h of a prior REAL discharge for the same
-        // patient. The prior episode must have ended in an actual discharge ('discharge from ward/ICU')
-        // — ward<->ICU and specialty transfers are continuations of care, not discharges, so they are
-        // excluded (otherwise same-day transfer rows inflate the metric). [definition: docs/METRICS.md]
+        // readmissions: a new admission within the CONFIGURED window of a prior REAL discharge for
+        // the same patient (settings.readmission_window_days; clinically confirmed default 3 = the
+        // "72-hour" rule). The prior episode must have ended in an actual discharge ('discharge from
+        // ward/ICU') — ward<->ICU and specialty transfers are continuations of care, not discharges,
+        // so they are excluded (otherwise same-day transfer rows inflate the metric).
+        $readmitWindow = max(0, (int) (\App\Models\Setting::current()->readmission_window_days ?? 3));
         $readmissions = (int) DB::table('admissions as a')
-            ->join('admissions as prev', function ($j) {
+            ->join('admissions as prev', function ($j) use ($readmitWindow) {
                 $j->on('prev.patient_id', '=', 'a.patient_id')
                   ->whereColumn('prev.discharge_date', '<=', 'a.admit_date')
-                  ->whereRaw('DATEDIFF(a.admit_date, prev.discharge_date) BETWEEN 0 AND 3')
+                  ->whereRaw('DATEDIFF(a.admit_date, prev.discharge_date) BETWEEN 0 AND ?', [$readmitWindow])
                   ->whereColumn('prev.id', '<>', 'a.id')
                   ->whereIn('prev.transfer_type', ['discharge from ward', 'discharge from ICU']);
             })
@@ -170,6 +172,7 @@ class StatisticsController extends Controller
             'sourceMix' => $sourceMix,
             'kpiGrid' => $kpiGrid,
             'interval' => $interval,
+            'readmitWindow' => $readmitWindow,
             'destinations' => ['labels' => $dest->pluck('dest'), 'data' => $dest->pluck('c')],
             'destByConsultant' => $destByConsultant,
         ]);

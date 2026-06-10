@@ -3,7 +3,7 @@ import { ref, computed } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
-const props = defineProps({ range: Object, kpis: Object, monthly: Object, los: Object, topDx: Array, reasons: Object, perConsultant: Array, sourceMix: Array, kpiGrid: Array, interval: String, destinations: Object, destByConsultant: Array });
+const props = defineProps({ range: Object, kpis: Object, monthly: Object, los: Object, topDx: Array, reasons: Object, perConsultant: Array, sourceMix: Array, kpiGrid: Array, interval: String, destinations: Object, destByConsultant: Array, readmitWindow: Number });
 
 const from = ref(props.range.from);
 const to = ref(props.range.to);
@@ -29,7 +29,7 @@ const kpiCards = computed(() => [
     { label: 'Avg LOS', value: props.kpis.avgLos, sub: 'days', tone: 'accent' },
     { label: 'Consultations', value: props.kpis.consultations, tone: 'brand' },
     { label: 'Sign-offs', value: props.kpis.signoffs, tone: 'info' },
-    { label: '72h readmits', value: props.kpis.readmissions, tone: 'danger' },
+    { label: `≤${props.readmitWindow ?? 3}d readmits`, value: props.kpis.readmissions, tone: 'danger' },
 ]);
 const toneClass = (t) => ({
     brand: 'text-brand-700', info: 'text-info-500', danger: 'text-danger-600', accent: 'text-accent-600', ink: 'text-ink-700',
