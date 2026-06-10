@@ -50,18 +50,27 @@ class Totp
     /** Verify a user-entered code, tolerating +/- $window time-steps for clock drift. */
     public static function verify(string $secret, string $code, int $window = 1, ?int $timestamp = null): bool
     {
+        return self::verifyWithCounter($secret, $code, $window, $timestamp) !== null;
+    }
+
+    /**
+     * Verify and return the matched time-step counter (for replay protection), or null on failure.
+     * Callers should reject a counter <= the last one they accepted for the user, then persist it.
+     */
+    public static function verifyWithCounter(string $secret, string $code, int $window = 1, ?int $timestamp = null): ?int
+    {
         $code = preg_replace('/\s+/', '', $code);
         if (! preg_match('/^\d{6}$/', $code)) {
-            return false;
+            return null;
         }
         $timestamp ??= time();
         $counter = intdiv($timestamp, self::PERIOD);
         for ($i = -$window; $i <= $window; $i++) {
             if (hash_equals(self::code($secret, $counter + $i), $code)) {
-                return true;
+                return $counter + $i;
             }
         }
-        return false;
+        return null;
     }
 
     private static function code(string $secret, int $counter): string

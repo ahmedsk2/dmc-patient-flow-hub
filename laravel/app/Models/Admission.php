@@ -18,6 +18,7 @@ class Admission extends Model
             'discharge_date' => 'date',
             'medical_discharge_date' => 'date',
             'assigned_on' => 'date',
+            'assigned_at' => 'datetime',
             'is_longterm' => 'boolean',
             'is_new_assignment' => 'boolean',
         ];

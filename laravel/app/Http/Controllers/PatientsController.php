@@ -50,6 +50,8 @@ class PatientsController extends Controller
                 ->whereIn('prev.transfer_type', ['discharge from ward', 'discharge from ICU']))
             ->pluck('id')->flip();
 
+        $newCutoff = now()->subDay();   // "New" = assigned within the last 24h (rolling)
+
         $groups = [];
         foreach ($admissions as $a) {
             $cid = (int) $a->consultant_id;
@@ -82,7 +84,7 @@ class PatientsController extends Controller
                 'los_band' => $los === null ? null : ($los < $settings->short_los ? 'short' : ($los > $settings->long_los ? 'long' : 'mid')),
                 'dx_count' => $a->diagnoses_count,
                 'is_longterm' => (bool) $a->is_longterm,
-                'is_new' => (bool) $a->is_new_assignment,
+                'is_new' => $a->assigned_at !== null && $a->assigned_at->greaterThanOrEqualTo($newCutoff),
                 'is_tb' => $isTb,
                 'is_readmission' => $readmitIds->has($a->id),
                 'medically_discharged' => $medDischarged,
@@ -90,7 +92,7 @@ class PatientsController extends Controller
 
             $c = &$groups[$cid]['counts'];
             $c['total']++;
-            if ($a->is_new_assignment) $c['new']++;
+            if ($a->assigned_at !== null && $a->assigned_at->greaterThanOrEqualTo($newCutoff)) $c['new']++;
             if ($isIcu) { $c['icu']++; } else { $c['ward']++; }
             if ($isTb) $c['tb']++;
             if (! $isIcu && ! $medDischarged && ! $a->is_longterm && ! $isTb) $c['active']++;

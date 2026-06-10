@@ -79,7 +79,7 @@ class PatientActionController extends Controller
         if (! ($u->isAdmin() || (int) $u->role === User::ROLE_CONSULTANT)) {
             throw new AccessDeniedHttpException('Only a consultant can self-assign.');
         }
-        $admission->update(['consultant_id' => $u->id, 'is_new_assignment' => true, 'assigned_on' => now()->toDateString()]);
+        $admission->update(['consultant_id' => $u->id, 'is_new_assignment' => true, 'assigned_on' => now()->toDateString(), 'assigned_at' => now()]);
         $this->audit('admission.assign_to_me', $admission, ['consultant_id' => $u->id]);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Assigned to you.']);
@@ -109,7 +109,7 @@ class PatientActionController extends Controller
             'to_consultant_id' => ['required', 'exists:users,id', 'different:from_consultant_id'],
         ]);
         $count = Admission::whereNull('discharge_date')->where('consultant_id', $data['from_consultant_id'])
-            ->update(['consultant_id' => $data['to_consultant_id'], 'is_new_assignment' => true, 'assigned_on' => now()->toDateString()]);
+            ->update(['consultant_id' => $data['to_consultant_id'], 'is_new_assignment' => true, 'assigned_on' => now()->toDateString(), 'assigned_at' => now()]);
         AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'admission.bulk_reassign',
             'entity_type' => 'consultant', 'entity_id' => (string) $data['from_consultant_id'],
             'details' => ['to' => $data['to_consultant_id'], 'count' => $count], 'ip' => $request->ip()]);
@@ -147,6 +147,7 @@ class PatientActionController extends Controller
             'consultant_id' => $data['consultant_id'],
             'is_new_assignment' => true,
             'assigned_on' => now()->toDateString(),
+            'assigned_at' => now(),
         ]);
         $this->audit('admission.assign', $admission, ['consultant_id' => $data['consultant_id']]);
 
@@ -189,6 +190,12 @@ class PatientActionController extends Controller
         $data = $request->validate(['discharge_date' => ['required', 'date', 'before_or_equal:today']]);
         if ($admission->discharge_date) {
             return back()->with('flash', ['type' => 'error', 'message' => 'Already discharged.']);
+        }
+        // Phase 2 only follows phase 1: outcome is captured at medical discharge. Without this guard
+        // a direct POST could close the file with outcome=NULL — counted in discharges but invisible
+        // to the deaths metric. (ICU patients use the single-step icu-discharge, which sets outcome.)
+        if (! $admission->medical_discharge_date) {
+            return back()->with('flash', ['type' => 'error', 'message' => 'Record a medical discharge first (it captures the outcome).']);
         }
         $admission->update([
             'discharge_date' => $data['discharge_date'],

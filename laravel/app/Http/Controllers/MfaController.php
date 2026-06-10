@@ -45,7 +45,8 @@ class MfaController extends Controller
             return redirect()->route('mfa.setup')->with('flash', ['type' => 'error', 'message' => 'Setup expired — start again.']);
         }
         $request->validate(['code' => ['required', 'string']]);
-        if (! Totp::verify($secret, $request->input('code'))) {
+        $counter = Totp::verifyWithCounter($secret, $request->input('code'));
+        if ($counter === null) {
             throw ValidationException::withMessages(['code' => 'That code is incorrect — check your authenticator and try again.']);
         }
 
@@ -53,6 +54,7 @@ class MfaController extends Controller
             'mfa_secret' => $secret,
             'mfa_recovery_codes' => array_map(fn ($c) => Hash::make($c), $codes),
             'mfa_enrolled_at' => now(),
+            'mfa_last_counter' => $counter,   // the enrollment code can't be replayed as the first challenge
         ]);
         $request->session()->forget(['mfa.setup.secret', 'mfa.setup.codes']);
         $this->audit($user, 'mfa.enable');
@@ -91,11 +93,14 @@ class MfaController extends Controller
         $request->validate(['code' => ['required', 'string']]);
         $input = trim($request->input('code'));
 
-        $ok = $user->mfa_secret && Totp::verify($user->mfa_secret, $input);
-        if (! $ok) {
-            $ok = $this->consumeRecoveryCode($user, $input);
-        }
-        if (! $ok) {
+        $counter = $user->mfa_secret ? Totp::verifyWithCounter($user->mfa_secret, $input) : null;
+        if ($counter !== null) {
+            // replay guard: a code (time-step) accepted once cannot be reused within its window
+            if ($user->mfa_last_counter !== null && $counter <= $user->mfa_last_counter) {
+                throw ValidationException::withMessages(['code' => 'That code was already used — wait for the next one.']);
+            }
+            $user->update(['mfa_last_counter' => $counter]);
+        } elseif (! $this->consumeRecoveryCode($user, $input)) {
             throw ValidationException::withMessages(['code' => 'Invalid authentication code.']);
         }
 

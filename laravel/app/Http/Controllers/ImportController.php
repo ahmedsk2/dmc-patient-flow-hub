@@ -63,7 +63,11 @@ class ImportController extends Controller
                     'discharge_date' => $r['discharge_date'],
                     'outcome' => $r['outcome'],
                     'current_location' => $r['location'],
-                    'transfer_type' => $r['discharge_date'] ? 'discharge from ward' : null,
+                    // derive the discharge type from location so ICU imports classify correctly
+                    // (feeds the readmission filter + recent-discharge views, which key on these strings)
+                    'transfer_type' => $r['discharge_date']
+                        ? ($r['location'] === 'ICU' ? 'discharge from ICU' : 'discharge from ward')
+                        : null,
                     'admitted_by' => Auth::id(),
                     'created_at' => now(), 'updated_at' => now(),
                 ]);

@@ -90,16 +90,17 @@ class DashboardController extends Controller
 
         // per-consultant breakdown of the active census (legacy "Patient count per consultant")
         $tbExists = "EXISTS (SELECT 1 FROM admission_diagnoses ad JOIN tb_diagnoses tb ON tb.icd10_code = ad.icd10_code WHERE ad.admission_id = a.id)";
+        $newCutoff = now()->subDay();   // "New" = assigned within the last 24h (rolling)
         $consultantBoard = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
             ->whereNull('a.discharge_date')->where('u.active', 1)
             ->selectRaw("COALESCE(u.full_name, u.name) name, u.on_service, u.specialty_id,
-                SUM(CASE WHEN a.is_new_assignment = 1 THEN 1 ELSE 0 END) new,
-                SUM(CASE WHEN a.is_new_assignment = 1 THEN 0 ELSE 1 END) old,
+                SUM(CASE WHEN a.assigned_at >= ? THEN 1 ELSE 0 END) new,
+                SUM(CASE WHEN a.assigned_at >= ? THEN 0 ELSE 1 END) old,
                 SUM(CASE WHEN a.current_location = 'ICU' THEN 1 ELSE 0 END) icu,
                 SUM(CASE WHEN (a.current_location <> 'ICU' OR a.current_location IS NULL) THEN 1 ELSE 0 END) ward,
                 SUM(CASE WHEN {$tbExists} THEN 1 ELSE 0 END) tb,
                 SUM(CASE WHEN (a.current_location <> 'ICU' OR a.current_location IS NULL) AND a.medical_discharge_date IS NULL AND a.is_longterm = 0 AND NOT {$tbExists} THEN 1 ELSE 0 END) active,
-                COUNT(*) total")
+                COUNT(*) total", [$newCutoff, $newCutoff])
             ->groupByRaw('COALESCE(u.full_name, u.name), u.on_service, u.specialty_id')
             ->orderByDesc('total')->get()
             ->map(fn ($r) => [

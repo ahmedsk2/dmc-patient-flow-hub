@@ -112,6 +112,7 @@ class AdmissionsController extends Controller
                 'admitted_by' => Auth::id(),                 // session-sourced (NOT client-supplied)
                 'is_new_assignment' => ! empty($data['consultant_id']),
                 'assigned_on' => ! empty($data['consultant_id']) ? now()->toDateString() : null,
+                'assigned_at' => ! empty($data['consultant_id']) ? now() : null,
             ]);
 
             $seq = 1;
