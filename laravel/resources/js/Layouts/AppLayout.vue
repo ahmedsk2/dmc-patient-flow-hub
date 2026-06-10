@@ -107,7 +107,7 @@ const icons = {
         <!-- Main -->
         <div class="lg:pl-64">
             <header class="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-ink-100 bg-white/80 px-5 backdrop-blur">
-                <button class="lg:hidden text-ink-500" @click="sidebarOpen = true">
+                <button class="lg:hidden text-ink-500" @click="sidebarOpen = true" aria-label="Open navigation menu">
                     <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" /></svg>
                 </button>
                 <div class="min-w-0">
@@ -118,7 +118,7 @@ const icons = {
                         <span class="relative flex h-2 w-2"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-success-500 opacity-60"></span><span class="relative inline-flex h-2 w-2 rounded-full bg-success-500"></span></span>
                         Live
                     </div>
-                    <button class="relative grid h-10 w-10 place-items-center rounded-full text-ink-500 hover:bg-ink-50">
+                    <button class="relative grid h-10 w-10 place-items-center rounded-full text-ink-500 hover:bg-ink-50" aria-label="Notifications">
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" :d="icons.bell" /></svg>
                         <span class="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent-500"></span>
                     </button>
@@ -132,7 +132,7 @@ const icons = {
                                 <div class="text-xs text-ink-400">{{ page.props.auth?.user?.role_label || 'Internal Medicine' }}</div>
                             </div>
                         </Link>
-                        <button @click="logout" title="Sign out" class="ml-1 grid h-9 w-9 place-items-center rounded-full text-ink-400 transition hover:bg-danger-100 hover:text-danger-600">
+                        <button @click="logout" title="Sign out" aria-label="Sign out" class="ml-1 grid h-9 w-9 place-items-center rounded-full text-ink-400 transition hover:bg-danger-100 hover:text-danger-600">
                             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" /></svg>
                         </button>
                     </div>

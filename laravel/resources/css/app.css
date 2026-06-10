@@ -4,6 +4,17 @@
 @source '../../storage/framework/views/*.php';
 @source './**/*.vue';
 
+/* Accessibility: honor a user's "reduce motion" OS setting — neutralize animations,
+ * transitions, and smooth-scroll (covers the dashboard auto-refresh + chart animations). */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
 /*
  * DMC Internal Medicine — design tokens, EXACT Eastern Health Cluster (EHC) brand palette:
  *   Primary teal #009CA6 · Deep teal #00565E · Light aqua #A9DED8 · Ink #1E2A2E · Slate #5B6A6E · Surface #F1F6F6.
