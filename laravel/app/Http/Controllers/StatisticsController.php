@@ -16,7 +16,7 @@ use Inertia\Response;
  */
 class StatisticsController extends Controller
 {
-    private string $nonIcu = "(current_location <> 'ICU' OR current_location IS NULL)";
+    private string $nonIcu = \App\Models\Admission::NON_ICU_SQL;
 
     public function index(Request $request): Response
     {
@@ -59,7 +59,7 @@ class StatisticsController extends Controller
                   ->whereColumn('prev.discharge_date', '<=', 'a.admit_date')
                   ->whereRaw('DATEDIFF(a.admit_date, prev.discharge_date) BETWEEN 0 AND ?', [$readmitWindow])
                   ->whereColumn('prev.id', '<>', 'a.id')
-                  ->whereIn('prev.transfer_type', ['discharge from ward', 'discharge from ICU']);
+                  ->whereIn('prev.transfer_type', \App\Models\Admission::REAL_DISCHARGE_TYPES);
             })
             ->whereBetween('a.admit_date', [$f, $t])
             ->distinct()->count('a.id');

@@ -16,7 +16,7 @@ use Inertia\Response;
  */
 class DashboardController extends Controller
 {
-    private string $nonIcu = "(current_location <> 'ICU' OR current_location IS NULL)";
+    private string $nonIcu = \App\Models\Admission::NON_ICU_SQL;
 
     public function index(): Response
     {

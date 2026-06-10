@@ -9,6 +9,20 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Admission extends Model
 {
+    /**
+     * Canonical "not in ICU" predicate — raw SQL form for the DB::table() analytics
+     * (Dashboard/Statistics/Reports). Eloquent callers use scopeNonIcu(), which encodes
+     * the SAME rule. Single source of truth: a definition change here moves every metric.
+     */
+    public const NON_ICU_SQL = "(current_location <> 'ICU' OR current_location IS NULL)";
+
+    /**
+     * transfer_type values that are REAL discharges — the only valid readmission anchors.
+     * Ward<->ICU / specialty transfers are continuations of care, never readmission anchors.
+     * Used identically by Statistics, Registry and the board badge (guarded by StatisticsValueTest).
+     */
+    public const REAL_DISCHARGE_TYPES = ['discharge from ward', 'discharge from ICU'];
+
     protected $guarded = ['id'];
 
     protected function casts(): array

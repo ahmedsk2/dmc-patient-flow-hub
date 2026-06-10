@@ -17,7 +17,7 @@ use Inertia\Response;
  */
 class ReportsController extends Controller
 {
-    private string $nonIcu = "(current_location <> 'ICU' OR current_location IS NULL)";
+    private string $nonIcu = \App\Models\Admission::NON_ICU_SQL;
 
     public function index(Request $request): Response
     {

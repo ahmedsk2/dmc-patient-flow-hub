@@ -80,7 +80,7 @@ class RegistryController extends Controller
                 ->whereColumn('prev.id', '<>', 'admissions.id')->whereColumn('prev.discharge_date', '<=', 'admissions.admit_date')
                 ->whereRaw('DATEDIFF(admissions.admit_date, prev.discharge_date) BETWEEN 0 AND ?',
                     [max(0, (int) (\App\Models\Setting::current()->readmission_window_days ?? 3))])
-                ->whereIn('prev.transfer_type', ['discharge from ward', 'discharge from ICU'])))
+                ->whereIn('prev.transfer_type', Admission::REAL_DISCHARGE_TYPES)))
             ->when($dx, function ($q) use ($dx, $request) {
                 if ($request->input('dx_match') === 'and') {
                     foreach ($dx as $code) {

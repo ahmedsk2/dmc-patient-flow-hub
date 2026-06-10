@@ -47,7 +47,7 @@ class PatientsController extends Controller
                 ->whereColumn('prev.patient_id', 'admissions.patient_id')->whereColumn('prev.id', '<>', 'admissions.id')
                 ->whereColumn('prev.discharge_date', '<=', 'admissions.admit_date')
                 ->whereRaw('DATEDIFF(admissions.admit_date, prev.discharge_date) BETWEEN 0 AND ?', [$readmitWindow])
-                ->whereIn('prev.transfer_type', ['discharge from ward', 'discharge from ICU']))
+                ->whereIn('prev.transfer_type', Admission::REAL_DISCHARGE_TYPES))
             ->pluck('id')->flip();
 
         $newCutoff = now()->subDay();   // "New" = assigned within the last 24h (rolling)
