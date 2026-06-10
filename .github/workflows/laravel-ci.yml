@@ -56,3 +56,21 @@ jobs:
 
       - name: Run test suite (PHPUnit, MySQL)
         run: php artisan test
+
+      - name: Dependency advisories (composer)
+        # advisory-only for now (won't block on an as-yet-unvetted CVE); promote to a hard gate
+        # once a clean run is confirmed.
+        run: composer audit --no-interaction || true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: laravel/package-lock.json
+
+      - name: Build front-end (catches Vue/Inertia build breakage)
+        run: npm ci && npm run build
+
+      - name: Dependency advisories (npm, production)
+        run: npm audit --omit=dev

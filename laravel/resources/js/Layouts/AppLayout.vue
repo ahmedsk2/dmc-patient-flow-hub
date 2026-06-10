@@ -22,11 +22,13 @@ const nav = [
     { label: 'New Admissions', href: '/admissions', icon: 'plus' },
     { label: 'Patients', href: '/patients', icon: 'bed' },
     { label: 'Consultations', href: '/consultations', icon: 'chat' },
+];
+// Admin-only — Registry/Statistics/Reports + exports are restricted (PHI exposure control);
+// non-admins' only analytics is the Dashboard.
+const admin = [
     { label: 'Registry', href: '/registry', icon: 'search' },
     { label: 'Statistics', href: '/statistics', icon: 'chart' },
     { label: 'Reports', href: '/reports', icon: 'doc' },
-];
-const admin = [
     { label: 'Recent Activity', href: '/recent', icon: 'clock' },
     { label: 'Bulk Import', href: '/import', icon: 'upload' },
     { label: 'Control Panel', href: '/control', icon: 'cog' },

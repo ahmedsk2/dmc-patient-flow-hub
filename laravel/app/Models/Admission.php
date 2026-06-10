@@ -46,6 +46,8 @@ class Admission extends Model
             return null;
         }
         $end = $this->discharge_date ?? $this->medical_discharge_date ?? now();
-        return $this->admit_date->diffInDays($end);
+        // Carbon 3 returns a float from diffInDays(); cast explicitly (whole days) to avoid the
+        // implicit float->int deprecation that fired once per active patient on the board.
+        return (int) $this->admit_date->diffInDays($end);
     }
 }

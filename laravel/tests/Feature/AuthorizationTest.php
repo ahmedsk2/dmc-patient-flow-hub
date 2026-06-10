@@ -58,6 +58,35 @@ class AuthorizationTest extends TestCase
             ->assertOk();
     }
 
+    /**
+     * #1 access policy: Statistics / Registry / Reports + all exports are ADMIN-ONLY.
+     * Non-admins' only analytics is the dashboard. Drives the PHI-export tightening.
+     */
+    public function test_non_admin_cannot_reach_analytics_or_export(): void
+    {
+        $routes = ['/statistics', '/registry', '/registry/export', '/registry/export-xlsx',
+            '/reports', '/reports/pdf', '/reports/monthly', '/reports/monthly/pdf'];
+        $consultant = $this->user(User::ROLE_CONSULTANT);
+        $observer = $this->user(User::ROLE_OBSERVER);
+        foreach ($routes as $route) {
+            $this->actingAs($consultant)->get($route)->assertForbidden();
+            $this->actingAs($observer)->get($route)->assertForbidden();
+        }
+    }
+
+    public function test_admin_can_reach_analytics(): void
+    {
+        $admin = $this->user(User::ROLE_ADMIN);
+        $this->actingAs($admin)->get('/statistics')->assertOk();
+        $this->actingAs($admin)->get('/registry')->assertOk();
+        $this->actingAs($admin)->get('/reports')->assertOk();
+    }
+
+    public function test_non_admin_still_sees_dashboard(): void
+    {
+        $this->actingAs($this->user(User::ROLE_CONSULTANT))->get('/')->assertOk();
+    }
+
     public function test_import_preview_flags_invalid_rows(): void
     {
         $this->actingAs($this->user(User::ROLE_ADMIN))

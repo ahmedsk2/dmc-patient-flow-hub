@@ -21,11 +21,11 @@ use Illuminate\Support\Facades\Route;
 // Guest
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'show'])->name('login');
-    Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');   // brute-force guard
     Route::get('/register', [RegisterController::class, 'show'])->name('register');
     Route::post('/register', [RegisterController::class, 'store']);
     Route::get('/forgot-password', [PasswordResetController::class, 'request'])->name('password.request');
-    Route::post('/forgot-password', [PasswordResetController::class, 'email'])->name('password.email');
+    Route::post('/forgot-password', [PasswordResetController::class, 'email'])->name('password.email')->middleware('throttle:5,1');
     Route::get('/reset-password/{token}', [PasswordResetController::class, 'reset'])->name('password.reset');
     Route::post('/reset-password', [PasswordResetController::class, 'update'])->name('password.update');
 });
@@ -33,7 +33,7 @@ Route::middleware('guest')->group(function () {
 // MFA login challenge — reached after password but BEFORE the session is authenticated
 // (identity held in the session, not the auth guard).
 Route::get('/mfa/challenge', [MfaController::class, 'challenge'])->name('mfa.challenge');
-Route::post('/mfa/challenge', [MfaController::class, 'verifyChallenge']);
+Route::post('/mfa/challenge', [MfaController::class, 'verifyChallenge'])->middleware('throttle:5,1');   // brute-force guard on the 6-digit code
 
 // Authenticated
 Route::middleware(['auth', 'mfa.enroll', 'pwd'])->group(function () {
@@ -66,15 +66,6 @@ Route::middleware(['auth', 'mfa.enroll', 'pwd'])->group(function () {
     Route::post('/admissions', [AdmissionsController::class, 'store'])->name('admissions.store');
     Route::get('/api/icd10', [AdmissionsController::class, 'icd10'])->name('icd10.search');
 
-    Route::get('/statistics', [StatisticsController::class, 'index'])->name('statistics.index');
-    Route::get('/registry', [RegistryController::class, 'index'])->name('registry.index');
-    Route::get('/registry/export', [RegistryController::class, 'export'])->name('registry.export');
-    Route::get('/registry/export-xlsx', [RegistryController::class, 'exportXlsx'])->name('registry.export.xlsx');
-    Route::get('/reports', [ReportsController::class, 'index'])->name('reports.index');
-    Route::get('/reports/pdf', [ReportsController::class, 'pdf'])->name('reports.pdf');
-    Route::get('/reports/monthly', [ReportsController::class, 'monthly'])->name('reports.monthly');
-    Route::get('/reports/monthly/pdf', [ReportsController::class, 'monthlyPdf'])->name('reports.monthly.pdf');
-
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('/profile', [ProfileController::class, 'updateProfile'])->name('profile.update');
     Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
@@ -84,8 +75,18 @@ Route::middleware(['auth', 'mfa.enroll', 'pwd'])->group(function () {
     Route::post('/mfa/confirm', [MfaController::class, 'confirm'])->name('mfa.confirm');
     Route::delete('/mfa', [MfaController::class, 'disable'])->name('mfa.disable');
 
-    // Admin
+    // Admin — analytics + registry + reports + all exports are admin-only (PHI exposure control;
+    // non-admins' only statistics is the dashboard).
     Route::middleware('admin')->group(function () {
+        Route::get('/statistics', [StatisticsController::class, 'index'])->name('statistics.index');
+        Route::get('/registry', [RegistryController::class, 'index'])->name('registry.index');
+        Route::get('/registry/export', [RegistryController::class, 'export'])->name('registry.export');
+        Route::get('/registry/export-xlsx', [RegistryController::class, 'exportXlsx'])->name('registry.export.xlsx');
+        Route::get('/reports', [ReportsController::class, 'index'])->name('reports.index');
+        Route::get('/reports/pdf', [ReportsController::class, 'pdf'])->name('reports.pdf');
+        Route::get('/reports/monthly', [ReportsController::class, 'monthly'])->name('reports.monthly');
+        Route::get('/reports/monthly/pdf', [ReportsController::class, 'monthlyPdf'])->name('reports.monthly.pdf');
+
         Route::get('/recent', [RecentController::class, 'index'])->name('recent.index');
         Route::get('/import', [ImportController::class, 'index'])->name('import.index');
         Route::post('/import/preview', [ImportController::class, 'preview'])->name('import.preview');
