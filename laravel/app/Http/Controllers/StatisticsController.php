@@ -100,9 +100,11 @@ class StatisticsController extends Controller
         $byCons = [];
         DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
             ->whereBetween('a.discharge_date', [$f, $t])
-            ->selectRaw("COALESCE(u.full_name, u.name) name, COALESCE(NULLIF(TRIM(a.discharge_to), ''), 'Unspecified') dest, COUNT(*) c")
-            ->groupByRaw("COALESCE(u.full_name, u.name), COALESCE(NULLIF(TRIM(a.discharge_to), ''), 'Unspecified')")
-            ->get()->each(function ($r) use (&$byCons) { $byCons[$r->name][$r->dest] = (int) $r->c; });
+            // 'consultant' alias avoids the users.name column collision (MySQL groups by the column
+            // under only_full_group_by; MariaDB can't match repeated raw expressions) — see Dashboard
+            ->selectRaw("COALESCE(u.full_name, u.name) consultant, COALESCE(NULLIF(TRIM(a.discharge_to), ''), 'Unspecified') dest, COUNT(*) c")
+            ->groupBy('consultant', 'dest')
+            ->get()->each(function ($r) use (&$byCons) { $byCons[$r->consultant][$r->dest] = (int) $r->c; });
         uasort($byCons, fn ($a, $b) => array_sum($b) <=> array_sum($a));
         $destByConsultant = [];
         foreach (array_slice($byCons, 0, 12, true) as $name => $dests) {
@@ -148,8 +150,9 @@ class StatisticsController extends Controller
         // per-consultant admissions (range)
         $perConsultant = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
             ->whereBetween('a.admit_date', [$f, $t])
-            ->selectRaw('COALESCE(u.full_name, u.name) name, COUNT(*) c')
-            ->groupByRaw('COALESCE(u.full_name, u.name)')->orderByDesc('c')->limit(10)->get();
+            ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
+            ->groupBy('consultant')->orderByDesc('c')->limit(10)->get()
+            ->map(fn ($r) => (object) ['name' => $r->consultant, 'c' => (int) $r->c]);
 
         // admission source mix
         $sourceMix = DB::table('admissions')->whereBetween('admit_date', [$f, $t])

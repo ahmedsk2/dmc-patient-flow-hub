@@ -83,17 +83,21 @@ class DashboardController extends Controller
                 SUM(CASE WHEN a.is_longterm = 1 THEN 1 ELSE 0 END) longterm")
             ->whereNull('a.discharge_date')->whereRaw('(a.current_location <> "ICU" OR a.current_location IS NULL)')->first();
 
+        // alias must NOT collide with a real column (users.name): MySQL resolves GROUP BY to the
+        // column (only_full_group_by error), MariaDB can't match repeated raw expressions either.
+        // A unique alias resolves identically on both engines. Re-keyed below to keep the UI shape.
         $perConsultant = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
-            ->selectRaw('COALESCE(u.full_name, u.name) name, COUNT(*) c')
+            ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
             ->whereNull('a.discharge_date')->whereRaw('(a.current_location <> "ICU" OR a.current_location IS NULL)')
-            ->groupByRaw('COALESCE(u.full_name, u.name)')->orderByDesc('c')->limit(8)->get();
+            ->groupBy('consultant')->orderByDesc('c')->limit(8)->get()
+            ->map(fn ($r) => (object) ['name' => $r->consultant, 'c' => (int) $r->c]);
 
         // per-consultant breakdown of the active census (legacy "Patient count per consultant")
         $tbExists = "EXISTS (SELECT 1 FROM admission_diagnoses ad JOIN tb_diagnoses tb ON tb.icd10_code = ad.icd10_code WHERE ad.admission_id = a.id)";
         $newCutoff = now()->subDay();   // "New" = assigned within the last 24h (rolling)
         $consultantBoard = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
             ->whereNull('a.discharge_date')->where('u.active', 1)
-            ->selectRaw("COALESCE(u.full_name, u.name) name, u.on_service, u.specialty_id,
+            ->selectRaw("COALESCE(u.full_name, u.name) consultant, u.on_service, u.specialty_id,
                 SUM(CASE WHEN a.assigned_at >= ? THEN 1 ELSE 0 END) new,
                 SUM(CASE WHEN a.assigned_at >= ? THEN 0 ELSE 1 END) old,
                 SUM(CASE WHEN a.current_location = 'ICU' THEN 1 ELSE 0 END) icu,
@@ -101,10 +105,10 @@ class DashboardController extends Controller
                 SUM(CASE WHEN {$tbExists} THEN 1 ELSE 0 END) tb,
                 SUM(CASE WHEN (a.current_location <> 'ICU' OR a.current_location IS NULL) AND a.medical_discharge_date IS NULL AND a.is_longterm = 0 AND NOT {$tbExists} THEN 1 ELSE 0 END) active,
                 COUNT(*) total", [$newCutoff, $newCutoff])
-            ->groupByRaw('COALESCE(u.full_name, u.name), u.on_service, u.specialty_id')
+            ->groupByRaw('consultant, u.on_service, u.specialty_id')
             ->orderByDesc('total')->get()
             ->map(fn ($r) => [
-                'name' => $r->name, 'on_service' => (bool) $r->on_service, 'specialty_id' => (int) $r->specialty_id,
+                'name' => $r->consultant, 'on_service' => (bool) $r->on_service, 'specialty_id' => (int) $r->specialty_id,
                 'new' => (int) $r->new, 'old' => (int) $r->old, 'icu' => (int) $r->icu, 'ward' => (int) $r->ward,
                 'tb' => (int) $r->tb, 'active' => (int) $r->active, 'total' => (int) $r->total,
             ]);

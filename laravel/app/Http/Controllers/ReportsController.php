@@ -92,9 +92,9 @@ class ReportsController extends Controller
 
         $perConsultant = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
             ->whereBetween('a.admit_date', [$start, $end])
-            ->selectRaw('COALESCE(u.full_name, u.name) name, COUNT(*) c')
-            ->groupByRaw('COALESCE(u.full_name, u.name)')->orderByDesc('c')->limit(15)->get()
-            ->map(fn ($r) => ['name' => $r->name, 'count' => (int) $r->c]);
+            ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')   // non-colliding alias (cross-engine GROUP BY)
+            ->groupBy('consultant')->orderByDesc('c')->limit(15)->get()
+            ->map(fn ($r) => ['name' => $r->consultant, 'count' => (int) $r->c]);
 
         // discharge destinations for the year
         $destinations = DB::table('admissions')->whereBetween('discharge_date', [$start, $end])
@@ -106,9 +106,9 @@ class ReportsController extends Controller
         $perConsultantLos = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
             ->whereBetween('a.discharge_date', [$start, $end])->whereNotNull('a.admit_date')
             ->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(a.discharge_date, a.admit_date) >= 0')
-            ->selectRaw('COALESCE(u.full_name, u.name) name, ROUND(AVG(DATEDIFF(a.discharge_date, a.admit_date)), 1) los, COUNT(*) n')
-            ->groupByRaw('COALESCE(u.full_name, u.name)')->orderByDesc('n')->limit(15)->get()
-            ->map(fn ($r) => ['name' => $r->name, 'los' => (float) $r->los, 'n' => (int) $r->n]);
+            ->selectRaw('COALESCE(u.full_name, u.name) consultant, ROUND(AVG(DATEDIFF(a.discharge_date, a.admit_date)), 1) los, COUNT(*) n')
+            ->groupBy('consultant')->orderByDesc('n')->limit(15)->get()
+            ->map(fn ($r) => ['name' => $r->consultant, 'los' => (float) $r->los, 'n' => (int) $r->n]);
 
         $icuLos = (float) DB::table('admissions')->whereBetween('discharge_date', [$start, $end])
             ->whereNotNull('admit_date')->where('current_location', 'ICU')->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
