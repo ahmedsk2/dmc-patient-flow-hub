@@ -38,6 +38,10 @@ class ControlController extends Controller
             'roles' => User::ROLE_LABELS,
             'specialties' => Specialty::orderBy('name')->get(['id', 'name']),
             'reasons' => ConsultationReason::orderBy('name')->get(['id', 'name']),
+            'settingHistory' => DB::table('setting_changes as sc')->leftJoin('users as u', 'u.id', '=', 'sc.changed_by')
+                ->orderByDesc('sc.id')->limit(25)
+                ->selectRaw('sc.field, sc.old_value, sc.new_value, COALESCE(u.full_name, u.name) changed_by, sc.created_at')
+                ->get(),
             'counts' => [
                 'users' => User::count(),
                 'active_users' => User::where('active', 1)->count(),
@@ -63,7 +67,25 @@ class ControlController extends Controller
             'icu_beds' => ['required', 'integer', 'min:0', 'max:1000'],
             'mfa_enforcement' => ['required', 'integer', 'in:0,1,2'],
         ]);
-        Setting::current()->update($data);
+        $settings = Setting::current();
+
+        // append-only history: one row per field that actually changed (tracks e.g. ward
+        // capacity over time — queryable later, unlike the JSON blob in audit_logs)
+        foreach ($data as $field => $new) {
+            $old = $settings->{$field};
+            if ($old !== null && (string) $old === (string) $new) {
+                continue;
+            }
+            DB::table('setting_changes')->insert([
+                'field' => $field,
+                'old_value' => $old === null ? null : (string) $old,
+                'new_value' => (string) $new,
+                'changed_by' => Auth::id(),
+                'created_at' => now(),
+            ]);
+        }
+
+        $settings->update($data);
         AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'settings.update',
             'entity_type' => 'settings', 'entity_id' => '1', 'details' => $data, 'ip' => $request->ip()]);
 

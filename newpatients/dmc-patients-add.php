@@ -21,8 +21,8 @@ require_once ('../dbconnect.php');
 
    $admfrom_new = $_REQUEST['admfrom_new']; 
 
-   $admissiondiagnosis_new1 = $_REQUEST['admissiondiagnosis_new']; 
-   $admissiondiagnosis = json_encode($admissiondiagnosis_new1); 
+   $admissiondiagnosis_new1 = $_REQUEST['admissiondiagnosis_new'];
+   $admissiondiagnosis = dx_normalize($admissiondiagnosis_new1); // trim + drop blanks + de-dup codes
    
    $patient_check_query = "SELECT * FROM picupatients WHERE MRN=? AND DISDATE IS NULL LIMIT 1";
    $stmt = $mysqli->prepare($patient_check_query);

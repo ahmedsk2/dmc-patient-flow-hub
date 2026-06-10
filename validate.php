@@ -106,4 +106,40 @@ if (!function_exists('v_required')) {
         }
         return '';
     }
+
+    // Consultant/member reference must be a positive integer that EXISTS in `members`.
+    // Closes the legacy data-quality hole where consultant_id=0 (or any non-existent id)
+    // could be written and the patient then vanished under a ghost consultant.
+    function v_consultant_exists(mysqli $mysqli, $value, $label = 'Consultant') {
+        $v = trim((string) $value);
+        if ($v === '' || !preg_match('/^\d+$/', $v) || (int) $v <= 0) {
+            return "$label is required.";
+        }
+        $stmt = $mysqli->prepare('SELECT 1 FROM members WHERE member_id = ? LIMIT 1');
+        if (!$stmt) {
+            return "$label could not be verified.";
+        }
+        $id = (int) $v;
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $exists = (bool) $stmt->get_result()->fetch_row();
+        $stmt->close();
+        return $exists ? '' : "$label does not exist.";
+    }
+
+    // Normalize a submitted diagnosis list into a clean JSON array string:
+    // trims every code, drops blanks, removes duplicates (keeps first occurrence, preserves
+    // order). Prevents duplicate/blank ICD codes from ever being stored in admissiondiagnosis.
+    function dx_normalize($raw) {
+        $list = is_array($raw) ? $raw : ($raw === null || $raw === '' ? [] : [$raw]);
+        $out = [];
+        foreach ($list as $code) {
+            $code = trim((string) $code);
+            if ($code === '' || in_array($code, $out, true)) {
+                continue;
+            }
+            $out[] = $code;
+        }
+        return json_encode(array_values($out));
+    }
 }

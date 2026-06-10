@@ -18,7 +18,7 @@ if (!empty($admdate1)){
   }
 
   $admissiondiagnosis1 = $_REQUEST['admissiondiagnosis'];
-  $admissiondiagnosis = json_encode($admissiondiagnosis1);
+  $admissiondiagnosis = dx_normalize($admissiondiagnosis1); // trim + drop blanks + de-dup codes
 
 // W3: validate only the field that actually changed, so an unrelated inline edit is never
 // blocked by already-stored data in the other (unchanged) fields.

@@ -12,7 +12,7 @@ $id = $_REQUEST['id_modify'];
    $nationality_modify=$_REQUEST['nationality_modify']; 
    
    $admissiondiagnosis_modify1 = $_REQUEST['admissiondiagnosis_modify'];
-   $admissiondiagnosis = json_encode($admissiondiagnosis_modify1);
+   $admissiondiagnosis = dx_normalize($admissiondiagnosis_modify1); // trim + drop blanks + de-dup codes
 
    // CLIN-MRN: canonical MRN format is digits-only (<=11). ~1.4% of legacy records hold a
    // non-conforming MRN from data-entry errors (names/beds typed into the field); enforcing the

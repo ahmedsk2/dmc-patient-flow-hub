@@ -10,6 +10,14 @@ if (isset($_REQUEST['patient_ids']) && is_array($_REQUEST['patient_ids']) && iss
     $ids = $_REQUEST['patient_ids'];
     $primary_modify = $_REQUEST['primary_modify'];
 
+    // Data-quality guard: the target consultant must be a real member (blocks 0/orphan ids).
+    $verr = v_consultant_exists($mysqli, $primary_modify, 'Consultant');
+    if ($verr !== '') {
+        $response["message"] = $verr;
+        echo json_encode($response);
+        exit;
+    }
+
     // Prepare SQL statement
     $sql = "UPDATE picupatients SET consultant_id = ? WHERE ID = ?";
     $stmt = $mysqli->prepare($sql);

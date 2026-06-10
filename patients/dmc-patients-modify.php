@@ -22,7 +22,7 @@ $id = $_REQUEST['id_modify'];
    $admfrom_modify = $_REQUEST['admfrom_modify']; 
    
    $admissiondiagnosis_modify1 = $_REQUEST['admissiondiagnosis_modify'];
-   $admissiondiagnosis = json_encode($admissiondiagnosis_modify1);
+   $admissiondiagnosis = dx_normalize($admissiondiagnosis_modify1); // trim + drop blanks + de-dup codes
 
    // CLIN-MRN: canonical MRN format is digits-only (<=11). ~1.4% of legacy records hold a
    // non-conforming MRN from data-entry errors (names/beds typed into the field); enforcing the
@@ -47,7 +47,7 @@ $id = $_REQUEST['id_modify'];
        v_required($nationality_modify, 'Nationality'),
        v_required($admfrom_modify, 'Admitted from'),
        v_required($current_location_modify, 'Patient location'),
-       v_required($primary_modify, 'Primary consultant'),
+       v_consultant_exists($mysqli, $primary_modify, 'Primary consultant'), // must be a real member (no 0/orphan)
    ]);
    if ($verr !== '') { echo "<a>Error: " . htmlspecialchars($verr, ENT_QUOTES, 'UTF-8') . "</a>"; exit; }
 

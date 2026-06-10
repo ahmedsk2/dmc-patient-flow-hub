@@ -72,3 +72,32 @@ The dashboard shows 130 ward patients ÷ **50** beds = 260% because `ward_beds` 
 The Laravel re-platform **faithfully represents the live data** and **produces the same numbers** as the legacy system. Every core entity count and clinical metric matches exactly; the only differences are (D1) a data-cleaning win, (D2) a no-consultant cohort surfaced for assignment instead of hidden, and (D3) one immaterial link — plus the pending `ward_beds` config. No corrective code change is required.
 
 *Re-run:* load the dump → `dmc_prod`, `php artisan legacy:import`, then the queries in `_recon.sql` (kept local, not committed).
+
+---
+
+## Addendum — re-run on the CORRECTED dump (2026-06-09 evening)
+
+The maintainer fixed the source data (assigned the 14 ghost-consultant patients, removed the 4
+blank-MRN episodes, normalized the whitespace MRN) and supplied a new dump (35,848 episodes).
+Result: **19/20 metrics match exactly**, including diagnosis links (38,017 = 38,017) and active
+unassigned (7 = 7 — these are **today's new admissions awaiting assignment**, i.e. normal queue
+state, not dirty data; legacy writes `NULL` for them which maps 1:1).
+
+The single remaining delta — distinct MRN 16,586 vs patients 16,583 — was traced to **4 historical
+MRNs containing a leading TAB character** (IDs 1222, 1394, 1429, 21581). SQL `TRIM()` keeps tabs, so
+legacy counts them as distinct; the importer's PHP `trim()` strips them and correctly merges each
+with its clean twin. All four episodes are discharged history; zero data loss. Optional source fix:
+
+```sql
+UPDATE picupatients
+SET MRN = TRIM(REPLACE(REPLACE(REPLACE(MRN, CHAR(9), ''), CHAR(10), ''), CHAR(13), ''))
+WHERE MRN REGEXP '[[:cntrl:]]';
+```
+
+Also noted (pre-existing, tolerated): **112 distinct non-digit free-text MRNs** on old records
+(names/beds typed into the MRN field in the legacy era). They import fine and only block edits when
+someone tries to *change* an MRN to a non-conforming value. Fix at source at leisure.
+
+Recurrence prevention now exists in **both** systems: the Laravel guards (validation + FK + unique
+index) and equivalent legacy-PHP guards (`v_consultant_exists`, `dx_normalize`, MRN trim+digits)
+added to all write endpoints.

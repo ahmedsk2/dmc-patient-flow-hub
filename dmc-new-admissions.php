@@ -54,8 +54,12 @@ if (isset($_POST['assign_to_consultant_btn'])) {
 
  $patient_id = $_POST['patientid1'];
  $consultant_id = $_POST['consultantid'];
- 
- 
+
+  // Data-quality guard: the chosen consultant must be a real member (blocks 0/orphan ids).
+  $verr = v_consultant_exists($mysqli, $consultant_id, 'Consultant');
+  if ($verr !== '') {
+    echo "<div class='alert alert-danger'>" . htmlspecialchars($verr, ENT_QUOTES, 'UTF-8') . "</div>";
+  } else
   if (isset($_POST['newpt'])){
 
     $query = "UPDATE  picupatients SET consultant_id=?, newassign='1', assigned_on=? WHERE ID=?";

@@ -3,7 +3,14 @@ import { ref, watch } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
-const props = defineProps({ settings: Object, users: Object, filters: Object, roles: Object, counts: Object, specialties: Array, reasons: Array });
+const props = defineProps({ settings: Object, users: Object, filters: Object, roles: Object, counts: Object, specialties: Array, reasons: Array, settingHistory: Array });
+
+const fieldLabels = {
+    min_hospitalist: 'Min hospitalist census', max_hospitalist: 'Max hospitalist census',
+    min_subs: 'Min subspecialty', max_subs: 'Max subspecialty',
+    short_los: 'Short LOS', long_los: 'Long LOS',
+    ward_beds: 'Licensed ward beds', icu_beds: 'Licensed ICU beds', mfa_enforcement: 'MFA enforcement',
+};
 
 const tab = ref('overview');
 
@@ -62,7 +69,8 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
         </div>
 
         <!-- Settings -->
-        <div v-show="tab === 'settings'" class="max-w-2xl rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+        <div v-show="tab === 'settings'" class="max-w-2xl">
+        <div class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
             <h3 class="mb-1 font-bold text-ink-800">Operational thresholds</h3>
             <p class="mb-5 text-sm text-ink-400">Drive the shuffle/assignment balance and LOS bands across the app.</p>
             <div class="grid gap-4 sm:grid-cols-2">
@@ -86,6 +94,23 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
                 <button @click="saveSettings" :disabled="sForm.processing" class="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save settings</button>
                 <span v-if="sForm.recentlySuccessful" class="text-sm font-semibold text-success-600">Saved ✓</span>
             </div>
+        </div>
+
+        <!-- change history (append-only; tracks e.g. ward capacity over time) -->
+        <div class="mt-5 rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+            <h3 class="mb-1 font-bold text-ink-800">Change history</h3>
+            <p class="mb-4 text-sm text-ink-400">Every settings change is recorded — who changed what, from what, to what, and when.</p>
+            <div v-if="settingHistory.length" class="divide-y divide-ink-50">
+                <div v-for="(h, i) in settingHistory" :key="i" class="flex flex-wrap items-baseline gap-x-2 py-2 text-sm">
+                    <span class="font-semibold text-ink-700">{{ fieldLabels[h.field] || h.field }}</span>
+                    <span class="nums text-ink-400 line-through">{{ h.old_value ?? '—' }}</span>
+                    <span class="text-ink-300">→</span>
+                    <span class="nums font-bold text-brand-700">{{ h.new_value }}</span>
+                    <span class="ml-auto text-xs text-ink-400">{{ h.changed_by || 'system' }} · {{ h.created_at?.slice(0, 16).replace('T', ' ') }}</span>
+                </div>
+            </div>
+            <p v-else class="text-sm text-ink-300">No changes recorded yet.</p>
+        </div>
         </div>
 
         <!-- Users -->
