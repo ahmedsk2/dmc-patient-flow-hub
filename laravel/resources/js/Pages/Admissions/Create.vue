@@ -49,19 +49,23 @@ const field = 'w-full rounded-xl border border-ink-200 bg-white px-3.5 py-2.5 te
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="mb-1 block text-sm font-semibold text-ink-700">Age</label>
+                            <label class="mb-1 block text-sm font-semibold text-ink-700">Age <span class="text-danger-500">*</span></label>
                             <input v-model="form.age" :class="[field, form.errors.age && 'border-danger-500']" inputmode="numeric" placeholder="Years" />
                             <p v-if="form.errors.age" class="mt-1 text-xs text-danger-600">{{ form.errors.age }}</p>
                         </div>
                         <div>
-                            <label class="mb-1 block text-sm font-semibold text-ink-700">Gender</label>
-                            <select v-model="form.gender" :class="field"><option value="">—</option><option>Male</option><option>Female</option></select>
+                            <label class="mb-1 block text-sm font-semibold text-ink-700">Gender <span class="text-danger-500">*</span></label>
+                            <select v-model="form.gender" :class="[field, form.errors.gender && 'border-danger-500']"><option value="">—</option><option>Male</option><option>Female</option></select>
+                            <p v-if="form.errors.gender" class="mt-1 text-xs text-danger-600">{{ form.errors.gender }}</p>
                         </div>
                     </div>
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-ink-700">Nationality</label>
-                        <input v-model="form.nationality" :class="field" list="countries" placeholder="Country" />
-                        <datalist id="countries"><option v-for="c in countries" :key="c" :value="c" /></datalist>
+                        <label class="mb-1 block text-sm font-semibold text-ink-700">Nationality <span class="text-danger-500">*</span></label>
+                        <select v-model="form.nationality" :class="[field, form.errors.nationality && 'border-danger-500']">
+                            <option value="">Select country…</option>
+                            <option v-for="c in countries" :key="c">{{ c }}</option>
+                        </select>
+                        <p v-if="form.errors.nationality" class="mt-1 text-xs text-danger-600">{{ form.errors.nationality }}</p>
                     </div>
                 </div>
             </section>
@@ -86,8 +90,9 @@ const field = 'w-full rounded-xl border border-ink-200 bg-white px-3.5 py-2.5 te
                         <select v-model="form.current_location" :class="field"><option v-for="l in locations" :key="l">{{ l }}</option></select>
                     </div>
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-ink-700">Bed</label>
-                        <input v-model="form.bed" :class="field" placeholder="Bed / room" />
+                        <label class="mb-1 block text-sm font-semibold text-ink-700">Bed <span class="text-danger-500">*</span></label>
+                        <input v-model="form.bed" :class="[field, form.errors.bed && 'border-danger-500']" placeholder="Bed / room" />
+                        <p v-if="form.errors.bed" class="mt-1 text-xs text-danger-600">{{ form.errors.bed }}</p>
                     </div>
                     <div class="sm:col-span-2">
                         <label class="mb-1 block text-sm font-semibold text-ink-700">Consultant</label>
@@ -102,7 +107,7 @@ const field = 'w-full rounded-xl border border-ink-200 bg-white px-3.5 py-2.5 te
             <!-- Diagnoses -->
             <section class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
                 <h2 class="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-brand-700">
-                    <span class="grid h-6 w-6 place-items-center rounded-lg bg-brand-100 text-brand-700">3</span> Admission diagnosis (ICD-10)
+                    <span class="grid h-6 w-6 place-items-center rounded-lg bg-brand-100 text-brand-700">3</span> Admission diagnosis (ICD-10) <span class="text-danger-500">*</span>
                 </h2>
                 <IcdTypeahead :input-class="field" placeholder="Type a code or description (≥2 chars)…" @select="addDx" />
                 <div v-if="selectedDx.length" class="mt-3 flex flex-wrap gap-2">
@@ -111,7 +116,8 @@ const field = 'w-full rounded-xl border border-ink-200 bg-white px-3.5 py-2.5 te
                         <button type="button" @click="removeDx(d.code)" class="text-brand-500 hover:text-danger-600">✕</button>
                     </span>
                 </div>
-                <p v-else class="mt-3 text-sm text-ink-400">No diagnoses added yet.</p>
+                <p v-else class="mt-3 text-sm text-ink-400">No diagnoses added yet — at least one is required.</p>
+                <p v-if="form.errors.diagnoses" class="mt-2 text-xs text-danger-600">{{ form.errors.diagnoses }}</p>
             </section>
 
             <div class="flex items-center justify-end gap-3">

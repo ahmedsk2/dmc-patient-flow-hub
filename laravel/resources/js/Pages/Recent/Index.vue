@@ -20,7 +20,7 @@ const outcomeTone = (o) => o === 'Dead' ? 'bg-danger-100 text-danger-600' : o ==
                 <button @click="tab = 'discharges'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="tab === 'discharges' ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">Discharges ({{ discharges.length }})</button>
                 <button @click="tab = 'signoffs'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="tab === 'signoffs' ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">Sign-offs ({{ signoffs.length }})</button>
             </div>
-            <span class="text-sm text-ink-400">since {{ since }} · undo is admin-only</span>
+            <span class="text-sm text-ink-400">yesterday + today (since {{ since }}) · undo is admin-only, same-day only</span>
         </div>
 
         <!-- discharges -->
@@ -42,9 +42,12 @@ const outcomeTone = (o) => o === 'Dead' ? 'bg-danger-100 text-danger-600' : o ==
                         <td class="px-3 py-3"><span v-if="d.outcome" class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="outcomeTone(d.outcome)">{{ d.outcome }}</span></td>
                         <td class="px-3 py-3 text-ink-600">{{ d.admitter || '—' }}</td>
                         <td class="px-3 py-3 text-ink-600">{{ d.actor || '—' }}</td>
-                        <td class="px-5 py-3 text-right"><button @click="undoDischarge(d.id)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-danger-600 hover:bg-danger-100">Undo</button></td>
+                        <td class="px-5 py-3 text-right">
+                            <button v-if="d.reversible" @click="undoDischarge(d.id)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-danger-600 hover:bg-danger-100">Undo</button>
+                            <span v-else class="text-xs text-ink-300" title="Undo is same-day only">—</span>
+                        </td>
                     </tr>
-                    <tr v-if="!discharges.length"><td colspan="11" class="px-5 py-10 text-center text-ink-400">No discharges in the last 48 hours.</td></tr>
+                    <tr v-if="!discharges.length"><td colspan="11" class="px-5 py-10 text-center text-ink-400">No discharges yesterday or today.</td></tr>
                 </tbody>
             </table>
             </div>
@@ -62,9 +65,12 @@ const outcomeTone = (o) => o === 'Dead' ? 'bg-danger-100 text-danger-600' : o ==
                         <td class="nums px-3 py-3 text-ink-500">{{ s.signoff_date }}</td>
                         <td class="px-3 py-3 text-ink-600">{{ s.to_service || '—' }}</td>
                         <td class="px-3 py-3 text-ink-600">{{ s.consultant || '—' }}</td>
-                        <td class="px-5 py-3 text-right"><button @click="undoSignoff(s.id)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-danger-600 hover:bg-danger-100">Undo</button></td>
+                        <td class="px-5 py-3 text-right">
+                            <button v-if="s.reversible" @click="undoSignoff(s.id)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-danger-600 hover:bg-danger-100">Undo</button>
+                            <span v-else class="text-xs text-ink-300" title="Undo is same-day only">—</span>
+                        </td>
                     </tr>
-                    <tr v-if="!signoffs.length"><td colspan="5" class="px-5 py-10 text-center text-ink-400">No sign-offs in the last 48 hours.</td></tr>
+                    <tr v-if="!signoffs.length"><td colspan="5" class="px-5 py-10 text-center text-ink-400">No sign-offs yesterday or today.</td></tr>
                 </tbody>
             </table>
         </div>

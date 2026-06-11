@@ -54,10 +54,10 @@ default of 3 days (now admin-tunable), and the shuffle min/max values.
 | **30-day admissions vs discharges** | For each of the last 30 days: admissions by `admit_date`, discharges by `discharge_date`, both non-ICU. |
 | **Consultations (6 months)** | Per calendar month: new = `COUNT(consultation_date in month)`, signed = `COUNT(signoff_date in month)`. |
 | **Length of stay (this year)** | Discharges this year, non-ICU, LOS bucketed into `0–2 / 3–5 / 6–10 / 11–20 / 21+` days. |
-| **Census by service** (donut) | Active non-ICU split into: hospitalist (`specialty_id=1`, not long-term), subspecialty (other specialties, not long-term), long-term (`is_longterm=1`). |
+| **Census by service** (donut) | Active non-ICU **assigned** rows (unassigned/`consultant_id IS NULL` excluded — legacy INNER JOIN `members`; H2/B10) split into: hospitalist (`specialty_id=1`, not long-term), subspecialty (other specialties, not long-term), long-term (`is_longterm=1`). |
 | **Active load by consultant** | `COUNT(active non-ICU admissions)` grouped by consultant, top 8. |
-| **Top diagnoses (last 7 days)** | Admissions with `admit_date` in the last 7 days; count of each ICD-10 code (joined to `icd10.name`), top 6. |
-| **Patient count per consultant** (table) | For each on-service-then-off-service consultant, over their **active** admissions: **Old** (`is_new_assignment≠1`), **New** (`=1`), **Ward** (non-ICU), **ICU**, **TB** (any diagnosis ∈ `tb_diagnoses`), **Active** (non-ICU AND not medically-discharged AND not long-term AND not TB), **Total**. Grouped: on-service hospitalists (specialty 1) → on-service subspecialists → off-service. |
+| **Top diagnoses (week N, all years)** | Admissions whose `WEEK(admit_date)` equals `WEEK(today)` — the SAME calendar week-number across ALL years (legacy `dashboard/3.php` seasonal view; H2/B8 — was "last 7 days"); count of each ICD-10 code (joined to `icd10.name`), top 5. |
+| **Patient count per consultant** (table) | USERS-driven (H2/B9): every **active** user that is an on-service consultant — INCLUDING zero-census ones — plus any user still holding active patients (off-service appears only with patients). Per row, over their **active** admissions: **Old** (assigned >24h ago/never), **New** (assigned within 24h), **Ward** (non-ICU), **ICU**, **TB** (any diagnosis ∈ `tb_diagnoses`), **Active** (non-ICU AND not medically-discharged AND not long-term AND not TB), **Total**. Grouped: on-service hospitalists (specialty 1) → on-service subspecialists → off-service. |
 
 ---
 

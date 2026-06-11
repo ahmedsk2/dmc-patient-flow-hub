@@ -75,8 +75,9 @@ class WaveBTest extends TestCase
         $this->assertTrue($a->assigned_at->greaterThanOrEqualTo(now()->subMinute()));
     }
 
-    public function test_reverse_discharge_blocked_after_48_hours(): void
+    public function test_reverse_discharge_blocked_when_not_same_day(): void
     {
+        // H2/B4: tightened from 48h to legacy SAME-DAY undo (48discharge.php)
         $old = $this->admission(['admit_date' => '2024-01-01', 'discharge_date' => '2024-01-10',
             'outcome' => 'Alive', 'transfer_type' => 'discharge from ward']);
         $this->actingAs($this->admin())->post("/admissions/{$old->id}/reverse-discharge")->assertRedirect();
@@ -85,7 +86,7 @@ class WaveBTest extends TestCase
         $recent = $this->admission(['discharge_date' => now()->toDateString(),
             'outcome' => 'Alive', 'transfer_type' => 'discharge from ward']);
         $this->actingAs($this->admin())->post("/admissions/{$recent->id}/reverse-discharge")->assertRedirect();
-        $this->assertNull($recent->fresh()->discharge_date, 'recent (≤48h) discharges remain reversible');
+        $this->assertNull($recent->fresh()->discharge_date, 'same-day discharges remain reversible');
     }
 
     public function test_transfer_clears_stale_medical_discharge_and_bed(): void

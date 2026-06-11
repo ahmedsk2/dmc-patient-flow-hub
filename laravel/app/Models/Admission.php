@@ -93,13 +93,17 @@ class Admission extends Model
 
     public function scopeIcu(Builder $q): Builder { return $q->where('current_location', 'ICU'); }
 
-    /** Length of stay in days (discharge or today vs admit). */
+    /**
+     * Length of stay in days: admit → physical discharge, or TODAY while the file is open.
+     * A phase-1 medical discharge does NOT freeze it — legacy kept counting for the
+     * "discharged still in" patients until the bed was actually vacated (B6).
+     */
     public function lengthOfStay(): ?int
     {
         if (! $this->admit_date) {
             return null;
         }
-        $end = $this->discharge_date ?? $this->medical_discharge_date ?? now();
+        $end = $this->discharge_date ?? now();
         // Carbon 3 returns a float from diffInDays(); cast explicitly (whole days) to avoid the
         // implicit float->int deprecation that fired once per active patient on the board.
         return (int) $this->admit_date->diffInDays($end);

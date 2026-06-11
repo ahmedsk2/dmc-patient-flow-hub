@@ -28,9 +28,13 @@ class DataIntegrityTest extends TestCase
 
     private function payload(array $overrides = []): array
     {
+        // B1 (legacy Fill-All): age/gender/nationality/bed + ≥1 diagnosis are REQUIRED on admit
+        \App\Models\Country::firstOrCreate(['name' => 'Saudi Arabia'], ['code' => 'SA']);
+
         return array_merge([
             'mrn' => '12345', 'name' => 'Test Patient', 'age' => 50, 'gender' => 'Male',
-            'current_location' => 'Ward', 'admit_date' => now()->toDateString(), 'diagnoses' => [],
+            'nationality' => 'Saudi Arabia', 'bed' => 'W-1',
+            'current_location' => 'Ward', 'admit_date' => now()->toDateString(), 'diagnoses' => ['J18.9'],
         ], $overrides);
     }
 

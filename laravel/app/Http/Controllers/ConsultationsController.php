@@ -101,19 +101,19 @@ class ConsultationsController extends Controller
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultation signed off.']);
     }
 
-    /** Undo a recent sign-off (admin only) — clears the sign-off date. */
+    /** Undo a same-day sign-off (admin only) — clears the sign-off date. */
     public function reverseSignoff(Request $request, Consultation $consultation): RedirectResponse
     {
         if (! Auth::user()->isAdmin()) {
             throw new AccessDeniedHttpException('Admin only.');
         }
-        // Undo is for correcting recent mistakes (the 48h Recent registry), not silently
-        // reopening months-old sign-offs — mirrors the reverse-discharge window.
+        // Undo corrects a SAME-DAY mistake (legacy 48consultation.php undo) — mirrors the
+        // same-day reverse-discharge guard; older sign-offs are history.
         if (! $consultation->signoff_date) {
             return back()->with('flash', ['type' => 'error', 'message' => 'This consultation is not signed off.']);
         }
-        if ($consultation->signoff_date->lt(now()->subDays(2)->startOfDay())) {
-            return back()->with('flash', ['type' => 'error', 'message' => 'Only sign-offs from the last 48 hours can be reversed.']);
+        if (! $consultation->signoff_date->isToday()) {
+            return back()->with('flash', ['type' => 'error', 'message' => 'Only same-day sign-offs can be reversed.']);
         }
         $consultation->update(['signoff_date' => null]);
         AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'consultation.reverse_signoff',

@@ -70,17 +70,17 @@ class GapWave4bTest extends TestCase
         foreach (['MRN', 'Diagnoses', 'Admitted From', 'Clinical Discharge Date', 'Discharged To', 'Delay Reason', 'Transfer Type', 'Long-term'] as $h) {
             $this->assertContains($h, $headers, "missing export column {$h}");
         }
-        $this->assertStringNotContainsString('Secret Person', $csv);
+        $this->assertStringNotContainsStringIgnoringCase('Secret Person', $csv);
         $this->assertStringContainsString('80000001', $csv);
-        // diagnoses joined as ICD-10 NAMES in seq order
-        $this->assertStringContainsString('Pneumonia, unspecified organism; Type 2 diabetes mellitus without complications', $csv);
+        // H2/C6 legacy export compat: values UPPERCASED, diagnoses (ICD-10 NAMES, seq order) joined ' || '
+        $this->assertStringContainsString('PNEUMONIA, UNSPECIFIED ORGANISM || TYPE 2 DIABETES MELLITUS WITHOUT COMPLICATIONS', $csv);
         $row = str_getcsv($lines[1]);
         $byHeader = array_combine($headers, $row);
-        $this->assertSame('Home', $byHeader['Discharged To']);
+        $this->assertSame('HOME', $byHeader['Discharged To']);
         $this->assertSame('2024-05-07', $byHeader['Clinical Discharge Date']);
-        $this->assertSame('bed availability', $byHeader['Delay Reason']);
-        $this->assertSame('discharge from ward', $byHeader['Transfer Type']);
-        $this->assertSame('Yes', $byHeader['Long-term']);
+        $this->assertSame('BED AVAILABILITY', $byHeader['Delay Reason']);
+        $this->assertSame('DISCHARGE FROM WARD', $byHeader['Transfer Type']);
+        $this->assertSame('YES', $byHeader['Long-term']);
         $this->assertSame('ER', $byHeader['Admitted From']);
     }
 
@@ -117,8 +117,9 @@ class GapWave4bTest extends TestCase
         $this->assertContains('To Service', $headers);
         $this->assertContains('Signoff', $headers);
         $this->assertStringContainsString('80000021', $csv);
-        $this->assertStringContainsString('Cardiology', $csv);
-        $this->assertStringContainsString('Dr Consult Export', $csv);
+        // H2/C6 legacy export compat: values UPPERCASED
+        $this->assertStringContainsString('CARDIOLOGY', $csv);
+        $this->assertStringContainsString('DR CONSULT EXPORT', $csv);
     }
 
     // ---- 2. import: optional trailing clinical columns ----------------------------------------

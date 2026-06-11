@@ -1,0 +1,19 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="DMC Internal Medicine">
+  <!-- EHC 5-point flame star + central medallion (vector recreation from EhcLogo.vue) -->
+  <defs>
+    <linearGradient id="ehcFlame" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2f97c4"/>
+      <stop offset="55%" stop-color="#1f86bf"/>
+      <stop offset="100%" stop-color="#0e6fa6"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#ehcFlame)">
+    <path d="M50,50 C 40,40 36,22 50,7 C 64,22 60,40 50,50 Z"/>
+    <path d="M50,50 C 40,40 36,22 50,7 C 64,22 60,40 50,50 Z" transform="rotate(72 50 50)"/>
+    <path d="M50,50 C 40,40 36,22 50,7 C 64,22 60,40 50,50 Z" transform="rotate(144 50 50)"/>
+    <path d="M50,50 C 40,40 36,22 50,7 C 64,22 60,40 50,50 Z" transform="rotate(216 50 50)"/>
+    <path d="M50,50 C 40,40 36,22 50,7 C 64,22 60,40 50,50 Z" transform="rotate(288 50 50)"/>
+  </g>
+  <circle cx="50" cy="50" r="10.5" fill="#eaf4f4" stroke="#2f97c4" stroke-width="1.4"/>
+  <circle cx="50" cy="50" r="3.4" fill="#7fa8bd"/>
+</svg>

@@ -41,6 +41,10 @@ return [
         'web' => [
             'driver' => 'session',
             'provider' => 'users',
+            // "Keep me signed in" recaller cookie TTL in MINUTES — 30 days, matching the legacy
+            // remember-me token expiry (tbl_token_auth) instead of the framework's 400-day default.
+            // AuthManager passes this to SessionGuard::setRememberDuration().
+            'remember' => 43200,
         ],
     ],
 

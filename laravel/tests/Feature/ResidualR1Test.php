@@ -173,17 +173,19 @@ class ResidualR1Test extends TestCase
             'discharge_date' => now()->subDays(5)->toDateString(), 'current_location' => 'Ward',
             'outcome' => 'Alive', 'transfer_type' => 'discharge from ward']);
 
+        \App\Models\Country::firstOrCreate(['name' => 'Saudi Arabia'], ['code' => 'SA']);
         $this->actingAs($this->admin())->post('/admissions', [
-            'mrn' => '55667799', 'name' => 'Readmit Test',
+            'mrn' => '55667799', 'name' => 'Readmit Test', 'age' => 50, 'gender' => 'Male',
+            'nationality' => 'Saudi Arabia', 'bed' => 'W-1', 'diagnoses' => ['J18.9'],   // B1 Fill-All
             'admit_date' => now()->toDateString(), 'current_location' => 'Ward',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertSame(2, Admission::where('patient_id', $p->id)->count(), 'readmission after discharge must be allowed');
     }
 
-    // ---- 4. reverse-signoff 48h guard --------------------------------------------------------
+    // ---- 4. reverse-signoff same-day guard (H2/B4: was 48h, tightened to legacy same-day) ------
 
-    public function test_reverse_signoff_blocked_after_48_hours(): void
+    public function test_reverse_signoff_blocked_when_not_same_day(): void
     {
         $old = Consultation::create(['mrn' => '1001', 'patient_name' => 'Old Signoff',
             'consultation_date' => now()->subDays(12)->toDateString(), 'signoff_date' => now()->subDays(10)->toDateString()]);
@@ -193,7 +195,7 @@ class ResidualR1Test extends TestCase
         $recent = Consultation::create(['mrn' => '1002', 'patient_name' => 'Recent Signoff',
             'consultation_date' => now()->subDay()->toDateString(), 'signoff_date' => now()->toDateString()]);
         $this->actingAs($this->admin())->post("/consultations/{$recent->id}/reverse-signoff")->assertRedirect();
-        $this->assertNull($recent->fresh()->signoff_date, 'recent (≤48h) sign-offs remain reversible');
+        $this->assertNull($recent->fresh()->signoff_date, 'same-day sign-offs remain reversible');
     }
 
     // ---- 5. edit JSON gate --------------------------------------------------------------------

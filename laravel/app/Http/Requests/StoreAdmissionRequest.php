@@ -21,6 +21,9 @@ class StoreAdmissionRequest extends FormRequest
         $this->merge(['mrn' => trim((string) $this->input('mrn'))]);   // strip stray whitespace before validation
     }
 
+    /** The legacy ADMFROM vocabulary — the Create select and (on change) the Modify datalist. */
+    public const ADMIT_FROM = ['ER', 'Clinic', 'OPD', 'OR', 'ICU', 'Referral', 'Transfer', 'Direct', 'Other service'];
+
     /** Shared patient-demographics rules (MRN clean-data policy: digits only, ≤11). */
     public static function demographicRules(): array
     {
@@ -36,13 +39,34 @@ class StoreAdmissionRequest extends FormRequest
         ];
     }
 
+    /**
+     * NEW admissions enforce the legacy Fill-All policy: age, gender, nationality, bed and at
+     * least one diagnosis are REQUIRED, and nationality/admitted_from come from controlled
+     * vocabularies (countries table / legacy ADMFROM enum). Modify keeps the relaxed
+     * demographicRules() + validate-only-on-change so dirty legacy records stay editable.
+     */
     public function rules(): array
     {
-        return self::demographicRules() + [
+        return array_merge(self::demographicRules(), [
+            'age' => ['required', 'integer', 'between:0,130'],
+            'gender' => ['required', 'in:Male,Female'],
+            'nationality' => ['required', 'string', 'max:191', 'exists:countries,name'],
+            'bed' => ['required', 'string', 'max:64'],
+            'diagnoses' => ['required', 'array', 'min:1'],
+            'diagnoses.*' => ['required', 'string', 'max:100'],
             'admit_date' => ['required', 'date', 'before_or_equal:today'],
-            'admitted_from' => ['nullable', 'string', 'max:64'],
+            'admitted_from' => ['nullable', 'string', 'max:64', 'in:' . implode(',', self::ADMIT_FROM)],
             'current_location' => ['required', 'in:ER,Ward,ICU'],
             'consultant_id' => ['nullable', 'exists:users,id'],
+        ]);
+    }
+
+    public function messages(): array
+    {
+        return [
+            'diagnoses.required' => 'Add at least one admission diagnosis.',
+            'diagnoses.min' => 'Add at least one admission diagnosis.',
+            'nationality.exists' => 'Pick a nationality from the list.',
         ];
     }
 

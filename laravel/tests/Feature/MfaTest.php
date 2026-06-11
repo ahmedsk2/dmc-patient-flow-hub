@@ -11,6 +11,7 @@ use Tests\TestCase;
 /**
  * Two-factor (TOTP) flow: a valid code authenticates, the SAME code cannot be replayed within its
  * window (#7 replay guard), and recovery codes are single-use.
+ * Fixtures carry mfa.pending.at since H2/C3 — a pending challenge identity expires after 5 min.
  */
 class MfaTest extends TestCase
 {
@@ -46,14 +47,14 @@ class MfaTest extends TestCase
         $code = $this->currentCode($secret);
 
         // first use: authenticates
-        $this->withSession(['mfa.pending.id' => $user->id])
+        $this->withSession(['mfa.pending.id' => $user->id, 'mfa.pending.at' => now()->getTimestamp()])
             ->post('/mfa/challenge', ['code' => $code])
             ->assertRedirect(route('dashboard'));
         $this->assertAuthenticatedAs($user);
 
         // replay the same code in a fresh challenge: rejected, not authenticated
         $this->post('/logout');
-        $this->withSession(['mfa.pending.id' => $user->id])
+        $this->withSession(['mfa.pending.id' => $user->id, 'mfa.pending.at' => now()->getTimestamp()])
             ->post('/mfa/challenge', ['code' => $code])
             ->assertSessionHasErrors('code');
         $this->assertGuest();
@@ -63,13 +64,13 @@ class MfaTest extends TestCase
     {
         [$user, , $plain] = $this->enrolledUser(['ZZZZ-9999']);
 
-        $this->withSession(['mfa.pending.id' => $user->id])
+        $this->withSession(['mfa.pending.id' => $user->id, 'mfa.pending.at' => now()->getTimestamp()])
             ->post('/mfa/challenge', ['code' => $plain[0]])
             ->assertRedirect(route('dashboard'));
         $this->assertAuthenticatedAs($user);
 
         $this->post('/logout');
-        $this->withSession(['mfa.pending.id' => $user->id])
+        $this->withSession(['mfa.pending.id' => $user->id, 'mfa.pending.at' => now()->getTimestamp()])
             ->post('/mfa/challenge', ['code' => $plain[0]])
             ->assertSessionHasErrors('code');
         $this->assertGuest();

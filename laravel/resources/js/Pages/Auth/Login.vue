@@ -1,9 +1,13 @@
 <script setup>
-import { Head, useForm, Link } from '@inertiajs/vue3';
+import { computed } from 'vue';
+import { Head, useForm, Link, usePage } from '@inertiajs/vue3';
 import EhcLogo from '@/Components/EhcLogo.vue';
 
 const form = useForm({ username: '', password: '', remember: false });
 const submit = () => form.post('/login', { onFinish: () => form.reset('password') });
+
+// guest-side flash (e.g. "sign-in expired" / "too many codes" from a rejected MFA challenge)
+const flash = computed(() => usePage().props.flash);
 </script>
 
 <template>
@@ -42,6 +46,11 @@ const submit = () => form.post('/login', { onFinish: () => form.reset('password'
                 </div>
                 <h2 class="text-2xl font-bold text-ink-900">Welcome back</h2>
                 <p class="mt-1 text-sm text-ink-500">Sign in to the patient-flow hub.</p>
+
+                <p v-if="flash?.message" class="mt-4 rounded-xl px-3.5 py-2.5 text-sm font-semibold"
+                    :class="flash.type === 'error' ? 'bg-danger-100 text-danger-600' : 'bg-success-100 text-success-600'">
+                    {{ flash.message }}
+                </p>
 
                 <form @submit.prevent="submit" class="mt-8 space-y-5">
                     <div>

@@ -178,7 +178,12 @@ class PatientActionController extends Controller
         return back()->with('flash', ['type' => 'success', 'message' => $admission->is_longterm ? 'Marked long-term.' : 'Long-term label removed.']);
     }
 
-    /** Bulk reassign every active admission from one consultant to another. */
+    /**
+     * Bulk reassign active admissions from one consultant to another. The preflight modal lists
+     * the consultant's patients with per-patient checkboxes — `admission_ids[]` selects the
+     * SUBSET to move (omitted = legacy move-everything). Every submitted id must be an ACTIVE
+     * admission of the from-consultant; the handover gate + signatures apply per selected patient.
+     */
     public function bulkReassign(Request $request): RedirectResponse
     {
         $u = Auth::user();
@@ -189,14 +194,29 @@ class PatientActionController extends Controller
             'from_consultant_id' => ['required', 'exists:users,id'],
             'to_consultant_id' => ['required', 'exists:users,id', 'different:from_consultant_id'],
             'mark_new' => ['nullable', 'boolean'],
+            'admission_ids' => ['nullable', 'array'],
+            'admission_ids.*' => ['integer'],
         ]);
         // mark_new=false (legacy "New Patient?" unchecked) = quiet administrative move:
         // the new-assignment fields are left UNTOUCHED, preserving any existing assigned_at
         $markNew = $request->boolean('mark_new', true);
 
-        // every moving patient needs a handover updated TODAY (use the preflight endpoint /
-        // bulk modal editors to bring them current before confirming)
         $moving = Admission::whereNull('discharge_date')->where('consultant_id', $data['from_consultant_id'])->get();
+
+        // subset selection: every submitted id must belong to the from-consultant AND be active
+        if (array_key_exists('admission_ids', $data) && $data['admission_ids'] !== null) {
+            $selected = collect($data['admission_ids'])->map(fn ($id) => (int) $id)->unique();
+            $owned = $moving->pluck('id')->flip();
+            if ($selected->contains(fn ($id) => ! $owned->has($id))) {
+                throw ValidationException::withMessages([
+                    'admission_ids' => 'Every selected patient must be an active patient of the outgoing consultant.',
+                ]);
+            }
+            $moving = $moving->whereIn('id', $selected->all())->values();
+        }
+
+        // every SELECTED patient needs a handover updated TODAY (use the preflight endpoint /
+        // bulk modal editors to bring them current before confirming)
         $freshIds = Handover::whereIn('admission_id', $moving->pluck('id'))
             ->whereDate('updated_at', today())->pluck('admission_id')->flip();
         if ($moving->contains(fn ($a) => ! $freshIds->has($a->id))) {
@@ -204,7 +224,7 @@ class PatientActionController extends Controller
         }
 
         [$count, $sigIds] = DB::transaction(function () use ($data, $markNew, $moving) {
-            $count = Admission::whereNull('discharge_date')->where('consultant_id', $data['from_consultant_id'])
+            $count = Admission::whereIn('id', $moving->pluck('id'))
                 ->update(['consultant_id' => $data['to_consultant_id']]
                     + ($markNew ? ['is_new_assignment' => true, 'assigned_on' => now()->toDateString(), 'assigned_at' => now()] : []));
             // one signature per moved admission, ONE notification for the receiving consultant
@@ -440,19 +460,19 @@ class PatientActionController extends Controller
         return back()->with('flash', ['type' => 'success', 'message' => "ICU discharge complete ({$data['outcome']})."]);
     }
 
-    /** Reverse a recent discharge (admin only) — clears the discharge fields. */
+    /** Reverse a same-day discharge (admin only) — clears the discharge fields. */
     public function reverseDischarge(Admission $admission): RedirectResponse
     {
         if (! Auth::user()->isAdmin()) {
             throw new AccessDeniedHttpException('Admin only.');
         }
-        // Undo is for correcting recent mistakes (the 48h Recent registry), not silently
-        // reopening months-old closed episodes — that would corrupt historical statistics.
+        // Undo corrects a SAME-DAY mistake (legacy 48discharge.php showed the undo only while
+        // DISDATE == today); anything older is history — reopening it would corrupt statistics.
         if (! $admission->discharge_date) {
             return back()->with('flash', ['type' => 'error', 'message' => 'This admission is not discharged.']);
         }
-        if ($admission->discharge_date->lt(now()->subDays(2)->startOfDay())) {
-            return back()->with('flash', ['type' => 'error', 'message' => 'Only discharges from the last 48 hours can be reversed.']);
+        if (! $admission->discharge_date->isToday()) {
+            return back()->with('flash', ['type' => 'error', 'message' => 'Only same-day discharges can be reversed.']);
         }
         $admission->update(['discharge_date' => null, 'medical_discharge_date' => null, 'outcome' => null, 'discharge_to' => null, 'transfer_type' => null, 'discharged_by' => null]);
         $this->audit('admission.reverse_discharge', $admission);

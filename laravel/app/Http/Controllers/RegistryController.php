@@ -250,13 +250,19 @@ class RegistryController extends Controller
 
     /* ---------- Exports (mode-aware, de-identified) ---------- */
 
+    /** Legacy export filename — downstream spreadsheets key on Export-DD-MM-YYYY (C6). */
+    private function exportFilename(string $ext): string
+    {
+        return 'Export-' . now()->format('d-m-Y') . '.' . $ext;
+    }
+
     public function export(Request $request): StreamedResponse
     {
         return response()->streamDownload(function () use ($request) {
             $out = fopen('php://output', 'w');
             $this->writeExport($request, fn (array $row) => fputcsv($out, $row));
             fclose($out);
-        }, 'dmc-registry-' . now()->format('Ymd-His') . '.csv', ['Content-Type' => 'text/csv']);
+        }, $this->exportFilename('csv'), ['Content-Type' => 'text/csv']);
     }
 
     public function exportXlsx(Request $request): BinaryFileResponse
@@ -268,18 +274,26 @@ class RegistryController extends Controller
             array_map(fn ($v) => $v ?? '', $row))));
         $writer->close();
 
-        return response()->download($tmp, 'dmc-registry-' . now()->format('Ymd-His') . '.xlsx')->deleteFileAfterSend();
+        return response()->download($tmp, $this->exportFilename('xlsx'))->deleteFileAfterSend();
     }
 
     /**
      * Emit header + rows for the CURRENT mode through $write — shared by CSV and XLSX so the two
      * formats can never drift. Exports are DE-IDENTIFIED (no patient name — legacy parity; MRN is
      * the clinical identifier) and carry the legacy clinical column set.
+     *
+     * Legacy downstream compatibility (C6): data VALUES are UPPERCASED and diagnoses joined with
+     * ' || ' exactly as registry/export-results-exel.php produced them (header row keeps its
+     * clinical Title Case — the legacy header row was never uppercased either).
      */
     private function writeExport(Request $request, callable $write): void
     {
+        // uppercase string VALUES only — headers go through $write directly
+        $emit = fn (array $row) => $write(array_map(
+            fn ($v) => is_string($v) ? mb_strtoupper($v, 'UTF-8') : $v, $row));
+
         if ($this->mode($request) === 'consultations') {
-            $this->writeConsultationExport($request, $write);
+            $this->writeConsultationExport($request, $write, $emit);
 
             return;
         }
@@ -289,15 +303,15 @@ class RegistryController extends Controller
             'Long-term', 'LOS (d)', 'Consultant', 'Status']);
 
         $query = $this->mode($request) === 'diagnosis' ? $this->diagnosisQuery($request) : $this->admissionQuery($request);
-        $query->chunk(500, function ($chunk) use ($write) {
+        $query->chunk(500, function ($chunk) use ($emit) {
             // diagnosis names: load the chunk's codes once (one whereIn), not one query per row
             $chunk->load('diagnoses');
             $codes = $chunk->flatMap(fn ($a) => $a->diagnoses->pluck('icd10_code'))->unique()->values();
             $names = $codes->isEmpty() ? collect() : Icd10::whereIn('code', $codes)->pluck('name', 'code');
             foreach ($chunk as $a) {
-                $write([
+                $emit([
                     (string) $a->patient?->mrn, $a->patient?->age, $a->patient?->gender, $a->patient?->nationality,
-                    $a->diagnoses->sortBy('seq')->map(fn ($d) => $names[$d->icd10_code] ?? $d->icd10_code)->implode('; '),
+                    $a->diagnoses->sortBy('seq')->map(fn ($d) => $names[$d->icd10_code] ?? $d->icd10_code)->implode(' || '),
                     optional($a->admit_date)->toDateString(), $a->admitted_from, $a->current_location,
                     optional($a->medical_discharge_date)->toDateString(), optional($a->discharge_date)->toDateString(),
                     $a->discharge_to, $a->outcome, $a->delay_reason, $a->transfer_type,
@@ -309,13 +323,13 @@ class RegistryController extends Controller
         });
     }
 
-    private function writeConsultationExport(Request $request, callable $write): void
+    private function writeConsultationExport(Request $request, callable $write, callable $emit): void
     {
         $write(['MRN', 'Age', 'Location', 'From', 'To Service', 'Consultant', 'Date', 'Signoff', 'Reasons']);
         $reasons = ConsultationReason::pluck('name', 'id');
-        $this->consultationQuery($request)->chunk(500, function ($chunk) use ($write, $reasons) {
+        $this->consultationQuery($request)->chunk(500, function ($chunk) use ($emit, $reasons) {
             foreach ($chunk as $c) {
-                $write([
+                $emit([
                     (string) $c->mrn, $c->age, $c->current_location, $c->consultation_from, $c->to_service,
                     $c->consultant?->full_name ?? $c->consultant?->name,
                     optional($c->consultation_date)->toDateString(), optional($c->signoff_date)->toDateString(),

@@ -2,11 +2,22 @@
 import { Head } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
-// Printable read-only census board: the same D1-scoped dataset as the Active Patients board,
-// every group expanded, diagnosis names listed, no action buttons.
+// Printable read-only census board — UNSCOPED (every consultant, for every role: the legacy
+// active-list.php whole-ward census), every group expanded, diagnosis names listed, no action
+// buttons, headed by the legacy "Patient Count per Consultant" table incl. the OFF-service section.
 const props = defineProps({ groups: Array, readmitWindow: Number, generatedAt: String });
 
 const totals = props.groups.reduce((t, g) => t + g.counts.total, 0);
+const wardTotal = props.groups.reduce((t, g) => t + g.counts.ward, 0);
+
+// counts-table sections: on-service hospitalists → on-service subspecialists → OFF-service
+const bucket = (g) => g.on_service && g.specialty_id === 1 ? 'hosp' : g.on_service ? 'subs' : 'off';
+const sections = [
+    { key: 'hosp', label: 'On-service · Hospitalists', rows: props.groups.filter((g) => bucket(g) === 'hosp') },
+    { key: 'subs', label: 'On-service · Subspecialists', rows: props.groups.filter((g) => bucket(g) === 'subs') },
+    { key: 'off', label: 'OFF Service', rows: props.groups.filter((g) => bucket(g) === 'off') },
+].filter((s) => s.rows.length);
+
 const print = () => window.print();
 const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER' ? 'bg-warning-100 text-warning-500' : 'bg-brand-100 text-brand-700';
 </script>
@@ -32,9 +43,37 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
                 </div>
                 <div class="text-right text-xs text-ink-400">
                     <p>Eastern Health Cluster</p><p class="text-brand-600">تجمع الشرقية الصحي</p>
-                    <p class="mt-1">Generated {{ generatedAt }} · <span class="nums font-semibold text-ink-600">{{ totals }}</span> patient(s)</p>
+                    <p class="mt-1">Generated {{ generatedAt }} · <span class="nums font-semibold text-ink-600">{{ totals }}</span> patient(s) · <span class="nums font-semibold text-ink-600">{{ wardTotal }}</span> non-ICU</p>
                 </div>
             </header>
+
+            <!-- legacy "Patient Count per Consultant" summary (active-list.php), incl. OFF-service -->
+            <section v-if="groups.length" class="group-block mb-6">
+                <h2 class="mb-1.5 border-b border-ink-100 pb-1 text-sm font-bold uppercase tracking-wide text-navy-800">Patient count per consultant</h2>
+                <table class="w-full border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-surface/80 text-left font-semibold uppercase tracking-wide text-ink-500 print:bg-ink-100">
+                            <th scope="col" class="px-2 py-1.5">Consultant</th><th scope="col" class="px-2 py-1.5 text-center">Old</th><th scope="col" class="px-2 py-1.5 text-center">New</th>
+                            <th scope="col" class="px-2 py-1.5 text-center">Active</th><th scope="col" class="px-2 py-1.5 text-center">Ward</th>
+                            <th scope="col" class="px-2 py-1.5 text-center">ICU</th><th scope="col" class="px-2 py-1.5 text-center">TB</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template v-for="sec in sections" :key="sec.key">
+                            <tr><td colspan="7" class="border-b border-ink-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide" :class="sec.key === 'off' ? 'text-danger-600' : 'text-ink-500'">{{ sec.label }}</td></tr>
+                            <tr v-for="g in sec.rows" :key="g.id" class="border-b border-ink-50">
+                                <td class="px-2 py-1 font-semibold text-ink-700">Dr. {{ g.name }}</td>
+                                <td class="nums px-2 py-1 text-center">{{ g.counts.old }}</td>
+                                <td class="nums px-2 py-1 text-center">{{ g.counts.new }}</td>
+                                <td class="nums px-2 py-1 text-center font-semibold text-brand-700">{{ g.counts.active }}</td>
+                                <td class="nums px-2 py-1 text-center">{{ g.counts.ward }}</td>
+                                <td class="nums px-2 py-1 text-center text-danger-600">{{ g.counts.icu || '' }}</td>
+                                <td class="nums px-2 py-1 text-center">{{ g.counts.tb || '' }}</td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </section>
 
             <section v-for="g in groups" :key="g.id" class="group-block mb-5">
                 <div class="mb-1.5 flex items-baseline justify-between border-b border-ink-100 pb-1">
@@ -50,6 +89,7 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
                         </tr>
                     </thead>
                     <tbody>
+                        <tr v-if="!g.patients.length"><td colspan="9" class="px-2 py-2 text-ink-300">No patients.</td></tr>
                         <tr v-for="p in g.patients" :key="p.id" class="border-b border-ink-50 align-top">
                             <td class="nums px-2 py-1.5 font-semibold text-ink-700">{{ p.bed || '—' }}</td>
                             <td class="nums px-2 py-1.5">{{ p.mrn }}</td>

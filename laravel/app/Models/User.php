@@ -27,6 +27,21 @@ class User extends Authenticatable
 
     protected $hidden = ['password', 'remember_token', 'mfa_secret', 'mfa_recovery_codes'];
 
+    /**
+     * Stamp the password-set date on creation: NULL pass_exp_date means "password age unknown"
+     * and the pwd middleware treats it as EXPIRED (legacy parity), so every app-created account
+     * starts its 3-month clock today. The legacy importer writes users via DB::table (no model
+     * events) and keeps NULL for unknown-age rows — those are forced to change on first login.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (self $user) {
+            if (! array_key_exists('pass_exp_date', $user->getAttributes())) {
+                $user->pass_exp_date = now()->toDateString();
+            }
+        });
+    }
+
     protected function casts(): array
     {
         return [

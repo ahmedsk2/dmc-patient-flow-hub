@@ -19,6 +19,27 @@ use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\StatisticsController;
 use Illuminate\Support\Facades\Route;
 
+// Legacy URL compatibility — bookmarks / printed links / muscle memory from the old file-based
+// app land on their replacements (301: permanent, cacheable). index.php usually resolves to '/'
+// at the front controller already; the explicit route covers setups that pass it through.
+foreach ([
+    '/dashboard.php' => '/',
+    '/dmc-patients.php' => '/patients',
+    '/dmc-new-admissions.php' => '/admissions',
+    '/active-list.php' => '/active-list',
+    '/dmc-new-consultation.php' => '/consultations',
+    '/48discharge.php' => '/recent',
+    '/48consultation.php' => '/recent',
+    '/search.php' => '/registry',
+    '/statistics.php' => '/statistics',
+    '/allstat.php' => '/statistics',
+    '/control.php' => '/control',
+    '/profile.php' => '/profile',
+    '/index.php' => '/login',
+] as $legacy => $target) {
+    Route::redirect($legacy, $target, 301);
+}
+
 // Guest
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'show'])->name('login');

@@ -35,7 +35,8 @@ class ModifyAdmissionRequest extends FormRequest
     public function rules(): array
     {
         $rules = StoreAdmissionRequest::demographicRules();
-        $patient = $this->route('admission')?->patient;
+        $admission = $this->route('admission');
+        $patient = $admission?->patient;
 
         // validate-only-on-change (legacy decision): untouched dirty values stay save-able
         if ($patient) {
@@ -48,11 +49,18 @@ class ModifyAdmissionRequest extends FormRequest
             if (! $this->changed('gender', $patient->gender)) {
                 $rules['gender'] = ['nullable', 'string', 'max:32'];
             }
+            // a CHANGED nationality must come from the countries list; untouched dirty stays
+            if ($this->changed('nationality', $patient->nationality)) {
+                $rules['nationality'] = ['nullable', 'string', 'max:191', 'exists:countries,name'];
+            }
         }
 
-        // data-correction fields (wrong admit date / source / location on the existing episode)
+        // data-correction fields (wrong admit date / source / location on the existing episode);
+        // a CHANGED admitted_from must come from the legacy ADMFROM enum, untouched dirty stays
         $rules['admit_date'] = ['required', 'date', 'before_or_equal:today'];
-        $rules['admitted_from'] = ['nullable', 'string', 'max:64'];
+        $rules['admitted_from'] = ($admission && $this->changed('admitted_from', $admission->admitted_from))
+            ? ['nullable', 'string', 'max:64', 'in:' . implode(',', StoreAdmissionRequest::ADMIT_FROM)]
+            : ['nullable', 'string', 'max:64'];
         $rules['current_location'] = ['required', 'in:ER,Ward,ICU'];
 
         return $rules;

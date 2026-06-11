@@ -15,8 +15,12 @@ use Illuminate\Support\Facades\DB;
  *   round 3 — hospitalists up to MAX_hospitalist
  *   round 4 — subspecialists up to MAX_subs
  *   round 5 — overflow: least-loaded overall (so the queue never stalls when everyone's at cap)
- * "Load" = the consultant's active NON-ICU patients (long-term included; ICU excluded) — the
- * ward census the shuffle is meant to balance. Deterministic and race-free (one transaction).
+ * "Load" = the consultant's active NON-ICU patients, EXCLUDING medically-discharged ("discharged
+ * still in") and TB patients (legacy dmc-patients-shuffle.php:107-141 counted neither; long-term
+ * stays included per the 2026-06-09 owner sign-off) — the ward census the shuffle balances.
+ * An unassigned ICU queue row is only ever given to a HOSPITALIST (legacy lines 76-102 distributed
+ * ICU rows round-robin across hospitalists; subspecialists never receive ICU patients).
+ * Deterministic and race-free (one transaction).
  */
 class ShuffleService
 {
@@ -39,10 +43,15 @@ class ShuffleService
                 return ['assigned' => 0, 'consultants' => 0, 'skipped' => $unassigned->count()];
             }
 
-            // current active load per consultant = active NON-ICU patients (long-term included,
-            // ICU excluded) — the ward census the balance works against.
+            // current active load per consultant = active NON-ICU patients, excluding the
+            // medically-discharged ("discharged still in") and TB patients (legacy parity) —
+            // the ward census the balance works against. Long-term stays included (owner sign-off).
             $load = DB::table('admissions')->whereNull('discharge_date')->whereNotNull('consultant_id')
                 ->where(fn ($w) => $w->where('current_location', '<>', 'ICU')->orWhereNull('current_location'))
+                ->whereNull('medical_discharge_date')
+                ->whereRaw('NOT EXISTS (SELECT 1 FROM admission_diagnoses ad
+                    JOIN tb_diagnoses tb ON tb.icd10_code = ad.icd10_code
+                    WHERE ad.admission_id = admissions.id)')
                 ->selectRaw('consultant_id, COUNT(*) c')->groupBy('consultant_id')->pluck('c', 'consultant_id')->all();
             foreach ($onService as $u) {
                 $load[$u->id] = (int) ($load[$u->id] ?? 0);
@@ -58,11 +67,17 @@ class ShuffleService
             $assigned = 0;
             $touched = [];
             foreach ($unassigned as $adm) {
-                $pick = $this->leastLoadedUnder($hosp, $load, $minHosp)   // round 1: hospitalists → min
-                    ?? $this->leastLoadedUnder($subs, $load, $minSubs)    // round 2: subs → min
-                    ?? $this->leastLoadedUnder($hosp, $load, $maxHosp)    // round 3: hospitalists → max
-                    ?? $this->leastLoadedUnder($subs, $load, $maxSubs)    // round 4: subs → max
-                    ?? $this->leastLoaded(array_merge($hosp, $subs), $load); // round 5: overflow
+                // an ICU queue row only ever goes to a hospitalist (legacy); a queue without
+                // hospitalists skips it rather than handing ICU care to a subspecialist
+                $pick = $adm->current_location === 'ICU'
+                    ? ($this->leastLoadedUnder($hosp, $load, $minHosp)
+                        ?? $this->leastLoadedUnder($hosp, $load, $maxHosp)
+                        ?? $this->leastLoaded($hosp, $load))
+                    : ($this->leastLoadedUnder($hosp, $load, $minHosp)   // round 1: hospitalists → min
+                        ?? $this->leastLoadedUnder($subs, $load, $minSubs)    // round 2: subs → min
+                        ?? $this->leastLoadedUnder($hosp, $load, $maxHosp)    // round 3: hospitalists → max
+                        ?? $this->leastLoadedUnder($subs, $load, $maxSubs)    // round 4: subs → max
+                        ?? $this->leastLoaded(array_merge($hosp, $subs), $load)); // round 5: overflow
 
                 if ($pick === null) {
                     continue;
@@ -73,7 +88,9 @@ class ShuffleService
                     'assigned_on' => now()->toDateString(),
                     'assigned_at' => now(),
                 ]);
-                $load[$pick]++;
+                if ($adm->current_location !== 'ICU') {
+                    $load[$pick]++;   // ICU rows never count toward the ward load (legacy)
+                }
                 $touched[$pick] = true;
                 $assigned++;
             }

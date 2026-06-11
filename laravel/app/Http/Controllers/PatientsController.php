@@ -22,15 +22,16 @@ class PatientsController extends Controller
     {
         $settings = Setting::current();
         $filters = $request->only('search', 'location', 'view');
-        $scope = $this->boardScope($request);
+        [$scope, $ownOnlyId] = $this->boardScope($request);
         $tbExists = $this->tbExists();
-        [$groups, $readmitWindow] = $this->boardGroups($filters, $settings, $scope, $tbExists);
+        [$groups, $readmitWindow] = $this->boardGroups($filters, $settings, $scope, $tbExists, $ownOnlyId);
 
         return Inertia::render('Patients/Index', [
             'groups' => $groups,
             'filters' => $filters,
             'readmitWindow' => $readmitWindow,
             'consultants' => User::consultantOptions(),
+            'countries' => \App\Models\Country::orderBy('name')->pluck('name'),   // Modify modal nationality select
             'specialties' => Specialty::where('is_external', false)->orderBy('name')->get(['id', 'name']),
             'externalServices' => Specialty::where('is_external', true)->orderBy('name')->pluck('name'),
             'stats' => [
@@ -47,13 +48,14 @@ class PatientsController extends Controller
     }
 
     /**
-     * Printable read-only census board (all roles) — the SAME D1-scoped board dataset as the
-     * interactive list, unfiltered, rendered print-styled with every group expanded.
+     * Printable read-only census board (all roles) — UNSCOPED: the legacy active-list.php
+     * showed every consultant's list to every logged-in user (it is the printed ward census),
+     * so unlike the interactive board there is NO D1 consultant scoping here (B11).
      */
     public function activeList(Request $request): Response
     {
         [$groups, $readmitWindow] = $this->boardGroups(
-            [], Setting::current(), $this->boardScope($request), $this->tbExists());
+            [], Setting::current(), fn ($q) => $q, $this->tbExists(), null);
 
         return Inertia::render('ActiveList', [
             'groups' => $groups,
@@ -65,13 +67,15 @@ class PatientsController extends Controller
     /**
      * D1 (legacy endorsement scope [0,2,4]): a consultant sees only THEIR OWN group;
      * admin/registrar/resident/observer see the whole board.
+     *
+     * @return array{0: \Closure, 1: ?int} [scope closure, own-only consultant id (null = unscoped)]
      */
-    private function boardScope(Request $request): \Closure
+    private function boardScope(Request $request): array
     {
         $u = $request->user();
         $ownOnly = (int) $u->role === User::ROLE_CONSULTANT && ! $u->isAdmin();
 
-        return fn ($q) => $ownOnly ? $q->where('consultant_id', $u->id) : $q;
+        return [fn ($q) => $ownOnly ? $q->where('consultant_id', $u->id) : $q, $ownOnly ? (int) $u->id : null];
     }
 
     /** Active-TB predicate (diagnosis on the tb_diagnoses list). */
@@ -87,9 +91,14 @@ class PatientsController extends Controller
      * counts, ordered on-service hospitalists → on-service subspecialists → off-service.
      * Shared by the interactive board (index) and the printable census (activeList).
      *
+     * On the UNFILTERED board, active ON-SERVICE consultants with ZERO patients still get a
+     * group (legacy active-list built the table from the members list, so a freshly on-service
+     * consultant shows up with zeros); off-service consultants appear only while they hold
+     * patients (B9). $ownOnlyId keeps the injection inside the D1 consultant scope.
+     *
      * @return array{0: array, 1: int} [$groups, $readmitWindow]
      */
-    private function boardGroups(array $filters, Setting $settings, \Closure $scope, \Closure $tbExists): array
+    private function boardGroups(array $filters, Setting $settings, \Closure $scope, \Closure $tbExists, ?int $ownOnlyId): array
     {
         $tbCodes = DB::table('tb_diagnoses')->pluck('icd10_code')->flip();
 
@@ -199,6 +208,26 @@ class PatientsController extends Controller
             if ($isTb) $c['tb']++;
             if (! $discharged && ! $isIcu && ! $medDischarged && ! $a->is_longterm && ! $isTb) $c['active']++;
             unset($c);
+        }
+
+        // zero-census on-service consultants get an empty group on the UNFILTERED board only —
+        // a search / location / view filter shouldn't drown its hits in empty sections
+        if (empty($filters['search']) && empty($filters['location']) && empty($filters['view'])) {
+            $zeroCensus = User::where('role', User::ROLE_CONSULTANT)->where('active', 1)->where('on_service', 1)
+                ->when($ownOnlyId !== null, fn ($q) => $q->where('id', $ownOnlyId))
+                ->get(['id', 'full_name', 'name', 'specialty_id', 'on_service']);
+            foreach ($zeroCensus as $u) {
+                if (! isset($groups[$u->id])) {
+                    $groups[$u->id] = [
+                        'id' => (int) $u->id,
+                        'name' => $u->full_name ?: $u->name,
+                        'specialty_id' => (int) ($u->specialty_id ?? 0),
+                        'on_service' => true,
+                        'patients' => [],
+                        'counts' => ['new' => 0, 'old' => 0, 'active' => 0, 'ward' => 0, 'icu' => 0, 'tb' => 0, 'total' => 0],
+                    ];
+                }
+            }
         }
 
         // order: on-service hospitalist (specialty 1) → on-service subspecialty → off-service

@@ -4,7 +4,7 @@ import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
 
-const props = defineProps({ groups: Array, filters: Object, stats: Object, consultants: Array, specialties: Array, externalServices: Array, readmitWindow: Number });
+const props = defineProps({ groups: Array, filters: Object, stats: Object, consultants: Array, specialties: Array, externalServices: Array, readmitWindow: Number, countries: Array });
 
 const page = usePage();
 const me = computed(() => page.props.auth.user);
@@ -58,8 +58,11 @@ const saveBed = (p) => {
 // shuffle + reassign + action modal
 const shuffle = () => { if (confirm('Auto-assign all unassigned patients across on-service consultants?')) router.post('/admissions/shuffle', {}, { preserveScroll: true }); };
 const reassign = ref(false);
-const rForm = useForm({ from_consultant_id: '', to_consultant_id: '', mark_new: true });
-const submitReassign = () => rForm.post('/admissions/reassign', { preserveScroll: true, onSuccess: () => { reassign.value = false; rForm.reset(); } });
+const rForm = useForm({ from_consultant_id: '', to_consultant_id: '', mark_new: true, admission_ids: [] });
+const submitReassign = () => {
+    rForm.admission_ids = [...selectedIds.value];   // SUBSET move: only the checked patients travel
+    rForm.post('/admissions/reassign', { preserveScroll: true, onSuccess: () => { reassign.value = false; rForm.reset(); selectedIds.value = new Set(); } });
+};
 
 // ---- handover: board icon + modal + transfer-gate editors -------------------------------------
 const fmtAt = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
@@ -102,27 +105,33 @@ const saveGateThen = async (retry) => {
     try { if (await saveHandoverInline(modal.value.row.id, body)) { gateBody.value = ''; retry(); } } finally { gateBusy.value = false; }
 };
 
-// bulk-reassign preflight: which of the consultant's patients still need today's handover —
-// stale ones get an editor each; Confirm unlocks once every handover is current
+// bulk-reassign preflight: lists the consultant's patients with per-patient CHECKBOXES (all
+// checked by default — uncheck to leave someone behind). Only SELECTED stale handovers need
+// today's text; Confirm unlocks once every selected handover is current and ≥1 is selected.
 const preflight = ref(null);   // null | { loading, rows: [{id,name,mrn,handover_today,body}] }
 const preflightBodies = ref({});
+const selectedIds = ref(new Set());
+const toggleSelected = (id) => { selectedIds.value.has(id) ? selectedIds.value.delete(id) : selectedIds.value.add(id); selectedIds.value = new Set(selectedIds.value); };
 const loadPreflight = async (id) => {
     preflight.value = { loading: true, rows: [] };
     const rows = await (await fetch(`/handovers/preflight?from_consultant_id=${id}`, { headers: { Accept: 'application/json' } })).json();
     preflightBodies.value = Object.fromEntries(rows.filter((r) => !r.handover_today).map((r) => [r.id, r.body || '']));
+    selectedIds.value = new Set(rows.map((r) => r.id));   // all checked by default (legacy move-everything)
     preflight.value = { loading: false, rows };
 };
-watch(() => rForm.from_consultant_id, (id) => { preflight.value = null; if (id) loadPreflight(id); });
-const staleRows = computed(() => (preflight.value?.rows || []).filter((r) => !r.handover_today));
-const preflightReady = computed(() => !!preflight.value && !preflight.value.loading && staleRows.value.length === 0);
+watch(() => rForm.from_consultant_id, (id) => { preflight.value = null; selectedIds.value = new Set(); if (id) loadPreflight(id); });
+const staleRows = computed(() => (preflight.value?.rows || []).filter((r) => !r.handover_today && selectedIds.value.has(r.id)));
+const preflightReady = computed(() => !!preflight.value && !preflight.value.loading && selectedIds.value.size > 0 && staleRows.value.length === 0);
 const allStaleFilled = computed(() => staleRows.value.every((r) => (preflightBodies.value[r.id] || '').trim().length > 0));
 const savingAll = ref(false);
 const saveAllStale = async () => {
     if (!allStaleFilled.value) return;
     savingAll.value = true;
     try {
+        const keep = new Set(selectedIds.value);
         for (const r of staleRows.value) await saveHandoverInline(r.id, preflightBodies.value[r.id].trim());
         await loadPreflight(rForm.from_consultant_id);   // re-check — flips handover_today, unlocks Confirm
+        selectedIds.value = keep;                        // reload defaults to all — restore the user's picks
     } finally { savingAll.value = false; }
 };
 
@@ -279,7 +288,8 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                 <h3 class="font-bold text-ink-800">Dr. {{ g.name }} <span class="ml-1 text-sm font-normal text-ink-400">· {{ g.counts.total }} patient(s)</span></h3>
                 <button @click="toggle(g.id)" title="Collapse" aria-label="Collapse" class="text-ink-400 hover:text-ink-700"><svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" /></svg></button>
             </div>
-            <div class="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <p v-if="!g.patients.length" class="px-5 py-4 text-sm text-ink-400">No patients on this list yet.</p>
+            <div v-else class="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 <div v-for="p in g.patients" :key="p.id" class="rounded-xl ring-1 ring-ink-100">
                     <div class="flex items-center justify-between rounded-t-xl bg-surface/60 px-3 py-2">
                         <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="locTone(p.location)">
@@ -441,33 +451,51 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
 
         <!-- bulk reassign modal -->
         <div v-if="reassign" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="reassign = false">
-            <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div class="max-h-[90vh] w-full max-w-md overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
                 <h3 class="text-lg font-bold text-ink-900">Reassign a consultant's patients</h3>
-                <p class="mb-4 text-sm text-ink-400">Moves every active patient from one consultant to another.</p>
+                <p class="mb-4 text-sm text-ink-400">Moves the selected active patients from one consultant to another.</p>
                 <form @submit.prevent="submitReassign" class="space-y-4">
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">From</label><select v-model="rForm.from_consultant_id" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select…</option><option v-for="c in consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">To <span class="font-normal text-ink-400">(on-service only)</span></label><select v-model="rForm.to_consultant_id" title="On-service consultants only" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select…</option><option v-for="c in onServiceConsultants" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="rForm.mark_new" class="rounded text-brand-600" /> Mark as new patients <span class="text-xs text-ink-400">(uncheck to keep their current “New” status)</span></label>
 
-                    <!-- handover preflight: every moving patient needs a handover updated TODAY -->
+                    <!-- preflight: pick WHO moves (all checked by default); every SELECTED patient
+                         needs a handover updated TODAY before the move unlocks -->
                     <div v-if="preflight" class="rounded-xl bg-surface/70 p-3 ring-1 ring-ink-100">
                         <p v-if="preflight.loading" class="text-sm text-ink-400">Checking handovers…</p>
-                        <template v-else-if="staleRows.length">
-                            <p class="text-xs font-semibold text-warning-500">{{ staleRows.length }} of {{ preflight.rows.length }} patient(s) need today's handover before the move:</p>
-                            <div v-for="r in staleRows" :key="r.id" class="mt-2">
-                                <p class="text-xs font-semibold text-ink-700">{{ r.name }} <span class="nums font-normal text-ink-400">MRN {{ r.mrn }}</span></p>
-                                <textarea v-model="preflightBodies[r.id]" rows="2" maxlength="5000" :aria-label="`Handover for ${r.name}`" placeholder="Write today's handover…" class="mt-1 w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
-                            </div>
-                            <div class="mt-2 flex justify-end"><button type="button" @click="saveAllStale" :disabled="savingAll || !allStaleFilled" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50">{{ savingAll ? 'Saving…' : 'Save all handovers' }}</button></div>
+                        <template v-else-if="preflight.rows.length">
+                            <p class="text-xs font-semibold text-ink-600">{{ selectedIds.size }} of {{ preflight.rows.length }} patient(s) selected to move — uncheck to leave someone behind.</p>
+                            <ul class="mt-2 max-h-44 space-y-1 overflow-auto">
+                                <li v-for="r in preflight.rows" :key="r.id">
+                                    <label class="flex items-center gap-2 text-sm text-ink-700">
+                                        <input type="checkbox" :checked="selectedIds.has(r.id)" @change="toggleSelected(r.id)" class="rounded text-brand-600" />
+                                        <span class="font-semibold">{{ r.name }}</span>
+                                        <span class="nums text-xs text-ink-400">MRN {{ r.mrn }}</span>
+                                        <span v-if="!r.handover_today" class="ml-auto rounded-full bg-warning-100 px-2 py-0.5 text-[10px] font-semibold text-warning-500">handover stale</span>
+                                        <span v-else class="ml-auto rounded-full bg-success-100 px-2 py-0.5 text-[10px] font-semibold text-success-600">today ✓</span>
+                                    </label>
+                                </li>
+                            </ul>
+                            <template v-if="staleRows.length">
+                                <p class="mt-3 text-xs font-semibold text-warning-500">{{ staleRows.length }} selected patient(s) need today's handover before the move:</p>
+                                <div v-for="r in staleRows" :key="'h' + r.id" class="mt-2">
+                                    <p class="text-xs font-semibold text-ink-700">{{ r.name }} <span class="nums font-normal text-ink-400">MRN {{ r.mrn }}</span></p>
+                                    <textarea v-model="preflightBodies[r.id]" rows="2" maxlength="5000" :aria-label="`Handover for ${r.name}`" placeholder="Write today's handover…" class="mt-1 w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
+                                </div>
+                                <div class="mt-2 flex justify-end"><button type="button" @click="saveAllStale" :disabled="savingAll || !allStaleFilled" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50">{{ savingAll ? 'Saving…' : 'Save all handovers' }}</button></div>
+                            </template>
+                            <p v-else-if="selectedIds.size" class="mt-2 flex items-center gap-1.5 text-xs font-semibold text-success-600">
+                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                                All {{ selectedIds.size }} selected handover(s) updated today — ready to move.
+                            </p>
+                            <p v-else class="mt-2 text-xs font-semibold text-warning-500">Select at least one patient to move.</p>
                         </template>
-                        <p v-else class="flex items-center gap-1.5 text-xs font-semibold text-success-600">
-                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-                            {{ preflight.rows.length ? `All ${preflight.rows.length} handover(s) updated today — ready to move.` : 'No active patients under this consultant.' }}
-                        </p>
+                        <p v-else class="text-xs text-ink-400">No active patients under this consultant.</p>
                     </div>
                     <p v-if="rForm.errors.handover" class="text-xs font-semibold text-danger-600">{{ rForm.errors.handover }}</p>
+                    <p v-if="rForm.errors.admission_ids" class="text-xs font-semibold text-danger-600">{{ rForm.errors.admission_ids }}</p>
 
-                    <div class="flex justify-end gap-2"><button type="button" @click="reassign = false" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="rForm.processing || !rForm.from_consultant_id || !rForm.to_consultant_id || !preflightReady" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Reassign all</button></div>
+                    <div class="flex justify-end gap-2"><button type="button" @click="reassign = false" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="rForm.processing || !rForm.from_consultant_id || !rForm.to_consultant_id || !preflightReady" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Reassign {{ selectedIds.size || '' }} selected</button></div>
                 </form>
             </div>
         </div>
@@ -522,7 +550,14 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                         <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Name</label><input v-model="mForm.name" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" :class="{ 'border-danger-500': mForm.errors.name }" /></div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Age</label><input v-model="mForm.age" inputmode="numeric" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" /></div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Gender</label><select v-model="mForm.gender" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500"><option value="">—</option><option>Male</option><option>Female</option></select></div>
-                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Nationality</label><input v-model="mForm.nationality" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" /></div>
+                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Nationality</label>
+                            <select v-model="mForm.nationality" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500">
+                                <option value="">—</option>
+                                <!-- keep a dirty legacy value selectable (validate-only-on-change) -->
+                                <option v-if="mForm.nationality && !countries.includes(mForm.nationality)" :value="mForm.nationality">{{ mForm.nationality }} (legacy)</option>
+                                <option v-for="c in countries" :key="c">{{ c }}</option>
+                            </select>
+                            <p v-if="mForm.errors.nationality" class="mt-1 text-xs text-danger-600">{{ mForm.errors.nationality }}</p></div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Admit date</label><input v-model="mForm.admit_date" type="date" :max="today" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" :class="{ 'border-danger-500': mForm.errors.admit_date }" /><p v-if="mForm.errors.admit_date" class="mt-1 text-xs text-danger-600">{{ mForm.errors.admit_date }}</p></div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Location</label><select v-model="mForm.current_location" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500"><option>ER</option><option>Ward</option><option>ICU</option></select></div>
                         <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Admitted from</label><input v-model="mForm.admitted_from" list="admit-from-options" placeholder="ER, Clinic, Referral…" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" /><datalist id="admit-from-options"><option v-for="o in admitFromOptions" :key="o" :value="o" /></datalist></div>

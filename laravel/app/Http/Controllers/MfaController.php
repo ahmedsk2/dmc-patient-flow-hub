@@ -75,11 +75,37 @@ class MfaController extends Controller
         return redirect()->route('profile.edit')->with('flash', ['type' => 'success', 'message' => 'Two-factor authentication disabled.']);
     }
 
+    /** Pending-challenge TTL and guess budget — a parked login screen must not stay live. */
+    private const PENDING_TTL_SECONDS = 300;   // 5 minutes after the password step
+    private const MAX_ATTEMPTS = 8;            // per pending session
+
+    /**
+     * Is the session's pending MFA identity still usable? Missing/stale timestamps fail closed
+     * (the only writer — AuthController::login — always stamps mfa.pending.at).
+     */
+    private function pendingFresh(Request $request): bool
+    {
+        $at = $request->session()->get('mfa.pending.at');
+
+        return is_numeric($at) && (now()->getTimestamp() - (int) $at) <= self::PENDING_TTL_SECONDS;
+    }
+
+    /** Kill the pending identity and bounce to login with a fresh-start message. */
+    private function rejectPending(Request $request, string $message): RedirectResponse
+    {
+        $request->session()->forget(['mfa.pending.id', 'mfa.pending.at', 'mfa.pending.attempts', 'mfa.pending.remember']);
+
+        return redirect()->route('login')->with('flash', ['type' => 'error', 'message' => $message]);
+    }
+
     /** The post-password login challenge (user is NOT yet authenticated; identity held in session). */
     public function challenge(Request $request): Response|RedirectResponse
     {
         if (! $request->session()->has('mfa.pending.id')) {
             return redirect()->route('login');
+        }
+        if (! $this->pendingFresh($request)) {
+            return $this->rejectPending($request, 'Your sign-in expired — please log in again.');
         }
         return Inertia::render('Auth/MfaChallenge');
     }
@@ -89,6 +115,15 @@ class MfaController extends Controller
         $id = $request->session()->get('mfa.pending.id');
         if (! $id || ! ($user = User::find($id))) {
             return redirect()->route('login');
+        }
+        if (! $this->pendingFresh($request)) {
+            return $this->rejectPending($request, 'Your sign-in expired — please log in again.');
+        }
+        // guess budget: 8 attempts per pending session, then back to the password step
+        $attempts = (int) $request->session()->get('mfa.pending.attempts', 0) + 1;
+        $request->session()->put('mfa.pending.attempts', $attempts);
+        if ($attempts > self::MAX_ATTEMPTS) {
+            return $this->rejectPending($request, 'Too many incorrect codes — please log in again.');
         }
         $request->validate(['code' => ['required', 'string']]);
         $input = trim($request->input('code'));
@@ -105,7 +140,7 @@ class MfaController extends Controller
         }
 
         Auth::login($user, (bool) $request->session()->get('mfa.pending.remember', false));
-        $request->session()->forget(['mfa.pending.id', 'mfa.pending.remember']);
+        $request->session()->forget(['mfa.pending.id', 'mfa.pending.at', 'mfa.pending.attempts', 'mfa.pending.remember']);
         $request->session()->regenerate();
         $this->audit($user, 'login.mfa');
 

@@ -181,8 +181,10 @@ class ResidualR3Test extends TestCase
         $this->actingAs($this->user(User::ROLE_OBSERVER))->get('/active-list')->assertOk();
     }
 
-    public function test_active_list_keeps_d1_scoping_for_consultants(): void
+    public function test_active_list_shows_every_consultant_to_consultants(): void
     {
+        // H2/B11 deliberately REMOVED the D1 scoping here: the legacy active-list.php was the
+        // printed whole-ward census, visible in full to every logged-in user.
         $own = $this->user(User::ROLE_CONSULTANT, ['full_name' => 'Dr Own']);
         $other = $this->user(User::ROLE_CONSULTANT, ['full_name' => 'Dr Other']);
         $this->admission(['consultant_id' => $own->id]);
@@ -191,8 +193,8 @@ class ResidualR3Test extends TestCase
         $this->actingAs($own)->get('/active-list')
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $p) => $p
-                ->count('groups', 1)
-                ->where('groups.0.name', 'Dr Own'));
+                ->count('groups', 2)
+                ->where('groups', fn ($g) => collect($g)->pluck('name')->sort()->values()->all() === ['Dr Other', 'Dr Own']));
     }
 
     // ---- 4. username edit ---------------------------------------------------------------------------

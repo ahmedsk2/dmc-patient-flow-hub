@@ -82,8 +82,9 @@ class DashboardController extends Controller
             elseif ($l <= 10) $losBuckets['6–10']++; elseif ($l <= 20) $losBuckets['11–20']++; else $losBuckets['21+']++;
         }
 
-        // census by service (active non-ICU)
-        $mix = DB::table('admissions as a')->leftJoin('users as u', 'u.id', '=', 'a.consultant_id')
+        // census by service (active non-ICU, ASSIGNED only — the legacy donut INNER JOINed
+        // members, so unassigned rows never counted; they live on the New Admissions queue)
+        $mix = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
             ->selectRaw("
                 SUM(CASE WHEN u.specialty_id = 1 AND a.is_longterm = 0 THEN 1 ELSE 0 END) hosp,
                 SUM(CASE WHEN (u.specialty_id <> 1 OR u.specialty_id IS NULL) AND a.is_longterm = 0 THEN 1 ELSE 0 END) subs,
@@ -99,19 +100,28 @@ class DashboardController extends Controller
             ->groupBy('consultant')->orderByDesc('c')->limit(8)->get()
             ->map(fn ($r) => (object) ['name' => $r->consultant, 'c' => (int) $r->c]);
 
-        // per-consultant breakdown of the active census (legacy "Patient count per consultant")
+        // per-consultant breakdown of the active census (legacy "Patient count per consultant").
+        // USERS-driven (left join) so an on-service consultant with ZERO patients still appears
+        // — like the legacy table built from the members list; off-service users only show
+        // while they still hold patients. The SUM cases guard a.id IS NOT NULL so the empty
+        // left-join row contributes nothing.
         $tbExists = "EXISTS (SELECT 1 FROM admission_diagnoses ad JOIN tb_diagnoses tb ON tb.icd10_code = ad.icd10_code WHERE ad.admission_id = a.id)";
         $newCutoff = now()->subDay();   // "New" = assigned within the last 24h (rolling)
-        $consultantBoard = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
-            ->whereNull('a.discharge_date')->where('u.active', 1)
+        $consultantBoard = DB::table('users as u')
+            ->leftJoin('admissions as a', fn ($j) => $j->on('u.id', '=', 'a.consultant_id')->whereNull('a.discharge_date'))
+            ->where('u.active', 1)
+            ->where(fn ($w) => $w
+                ->where(fn ($w2) => $w2->where('u.on_service', 1)->where('u.role', \App\Models\User::ROLE_CONSULTANT))
+                ->orWhereExists(fn ($s) => $s->selectRaw('1')->from('admissions as ax')
+                    ->whereColumn('ax.consultant_id', 'u.id')->whereNull('ax.discharge_date')))
             ->selectRaw("COALESCE(u.full_name, u.name) consultant, u.on_service, u.specialty_id,
-                SUM(CASE WHEN a.assigned_at >= ? THEN 1 ELSE 0 END) new,
-                SUM(CASE WHEN a.assigned_at >= ? THEN 0 ELSE 1 END) old,
+                SUM(CASE WHEN a.id IS NOT NULL AND a.assigned_at >= ? THEN 1 ELSE 0 END) new,
+                SUM(CASE WHEN a.id IS NOT NULL AND (a.assigned_at IS NULL OR a.assigned_at < ?) THEN 1 ELSE 0 END) old,
                 SUM(CASE WHEN a.current_location = 'ICU' THEN 1 ELSE 0 END) icu,
-                SUM(CASE WHEN (a.current_location <> 'ICU' OR a.current_location IS NULL) THEN 1 ELSE 0 END) ward,
-                SUM(CASE WHEN {$tbExists} THEN 1 ELSE 0 END) tb,
-                SUM(CASE WHEN (a.current_location <> 'ICU' OR a.current_location IS NULL) AND a.medical_discharge_date IS NULL AND a.is_longterm = 0 AND NOT {$tbExists} THEN 1 ELSE 0 END) active,
-                COUNT(*) total", [$newCutoff, $newCutoff])
+                SUM(CASE WHEN a.id IS NOT NULL AND (a.current_location <> 'ICU' OR a.current_location IS NULL) THEN 1 ELSE 0 END) ward,
+                SUM(CASE WHEN a.id IS NOT NULL AND {$tbExists} THEN 1 ELSE 0 END) tb,
+                SUM(CASE WHEN a.id IS NOT NULL AND (a.current_location <> 'ICU' OR a.current_location IS NULL) AND a.medical_discharge_date IS NULL AND a.is_longterm = 0 AND NOT {$tbExists} THEN 1 ELSE 0 END) active,
+                COUNT(a.id) total", [$newCutoff, $newCutoff])
             ->groupByRaw('consultant, u.on_service, u.specialty_id')
             ->orderByDesc('total')->get()
             ->map(fn ($r) => [
@@ -154,13 +164,16 @@ class DashboardController extends Controller
             ->selectRaw('p.name name, p.mrn mrn, a.admit_date admitted, a.current_location loc, COALESCE(u.full_name, u.name) consultant')
             ->whereNull('a.discharge_date')->orderByDesc('a.id')->limit(8)->get();
 
-        // top diagnoses among admissions in the last 7 days
-        $weekStart = Carbon::today()->subDays(6)->toDateString();
+        // top 5 diagnoses for THIS calendar week-number across ALL years — the legacy card
+        // (dashboard/3.php: WEEK(ADMDATE) = WEEK(today)) is a seasonal "what does this week of
+        // the year admit" view, not a rolling last-7-days window. DELIBERATE definition change
+        // back to legacy (was: last 7 days).
+        $topDxWeekNum = (int) DB::selectOne('SELECT WEEK(CURDATE()) wk')->wk;
         $topDxWeek = DB::table('admission_diagnoses as ad')->join('admissions as a', 'a.id', '=', 'ad.admission_id')
             ->leftJoin('icd10 as i', 'i.code', '=', 'ad.icd10_code')
-            ->whereBetween('a.admit_date', [$weekStart, $today])
+            ->whereRaw('WEEK(a.admit_date) = WEEK(CURDATE())')
             ->selectRaw('ad.icd10_code code, MAX(i.name) name, COUNT(*) c')
-            ->groupBy('ad.icd10_code')->orderByDesc('c')->limit(6)->get()
+            ->groupBy('ad.icd10_code')->orderByDesc('c')->limit(5)->get()
             ->map(fn ($r) => ['name' => $r->name ?: $r->code, 'count' => (int) $r->c]);
 
         return Inertia::render('Dashboard', [
@@ -179,6 +192,7 @@ class DashboardController extends Controller
             'activity24h' => $activity24h,
             'ytd' => $ytd,
             'topDxWeek' => $topDxWeek,
+            'topDxWeekNum' => $topDxWeekNum,
             'recent' => $recent,
             'generatedAt' => now()->format('D, d M Y · H:i'),
         ]);

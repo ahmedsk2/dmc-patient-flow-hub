@@ -106,7 +106,7 @@ A re-admission or a ward↔ICU transfer creates a **new** row, so one patient = 
 
 - **Page access** by `role`: clinical pages = Admin/Registrar/Consultant/Resident; Observer (5) = read-only board; admin pages (Registry, Statistics, Reports, Recent, Import, Control) = Admin only on the routes guarded by `admin` middleware.
 - **Per-action** by capability: `can_assign` (assign to a chosen consultant, shuffle, bulk reassign), `can_add` (admit / admission-from-ICU), `can_manage` (transfer/discharge any patient), `can_modify` (Modify patient details). The **primary consultant** of an admission can manage/discharge their own patient even without `can_manage`.
-- **Middleware:** `auth` → `mfa.enroll` (forces TOTP setup if the policy requires it) → `pwd` (forces password change if `pass_exp_date` > 3 months old). Every state-changing endpoint re-checks authorization server-side (not just hidden buttons).
+- **Middleware:** `auth` → `mfa.enroll` (forces TOTP setup if the policy requires it) → `pwd` (forces password change if `pass_exp_date` > 3 months old **or NULL** — unknown password age counts as expired; app-created users are stamped on create; H2/C2). Every state-changing endpoint re-checks authorization server-side (not just hidden buttons).
 
 ---
 
@@ -136,8 +136,8 @@ A re-admission or a ward↔ICU transfer creates a **new** row, so one patient = 
 | **Discharge** (ward, not yet medically discharged) | POST `/admissions/{id}/medical-discharge` | UPDATE `medical_discharge_date`, `outcome`, `discharge_to`, `delay_reason`, `discharged_by`. (Patient stays on the board as "discharged still in".) |
 | **Complete discharge** | POST `/admissions/{id}/complete-discharge` | UPDATE `discharge_date`, `transfer_type` (`discharge from ward`/`ICU`), `discharged_by`. Leaves the board. |
 | **ICU discharge** (ICU patients) | POST `/admissions/{id}/icu-discharge` | UPDATE `discharge_date`, `outcome`, `transfer_type='discharge from ICU'`, `discharged_by`. |
-| **Reverse discharge** (Admin) | POST `/admissions/{id}/reverse-discharge` | UPDATE clears `discharge_date`, `medical_discharge_date`, `delay_reason`, `outcome` (back to active). |
-| **Shuffle / Bulk reassign** (toolbar) | POST `/admissions/shuffle` · `/admissions/reassign` | Shuffle (above); Bulk reassign UPDATE `consultant_id` from one consultant to another across their active admissions. |
+| **Reverse discharge** (Admin) | POST `/admissions/{id}/reverse-discharge` | UPDATE clears `discharge_date`, `medical_discharge_date`, `delay_reason`, `outcome` (back to active). **Same-day discharges only** (legacy undo; H2/B4). |
+| **Shuffle / Bulk reassign** (toolbar) | POST `/admissions/shuffle` · `/admissions/reassign` | Shuffle (above); Bulk reassign UPDATE `consultant_id` for the **selected subset** (`admission_ids[]`, all pre-checked; H2/B3) of one consultant's active admissions. |
 
 ### Consultations  (`/consultations`)
 | Button / field | Endpoint | Database effect |
@@ -155,11 +155,11 @@ A re-admission or a ward↔ICU transfer creates a **new** row, so one patient = 
 | **Edit** (from a result row) | POST `/admissions/{id}/modify` | Same as Modify above. |
 | **Excel / CSV** | GET `/registry/export-xlsx` · `/registry/export` | Read only; streams a file (no DB change). |
 
-### Recent activity  (`/recent`, Admin)
+### Recent activity  (`/recent`, Admin) — lists YESTERDAY + TODAY (legacy 48discharge window; H2/B4)
 | Button | Endpoint | Database effect |
 |---|---|---|
-| **Undo discharge** | POST `/admissions/{id}/reverse-discharge` | Clears discharge fields (above). |
-| **Undo sign-off** | POST `/consultations/{id}/reverse-signoff` | UPDATE `signoff_date`=NULL. |
+| **Undo discharge** | POST `/admissions/{id}/reverse-discharge` | Clears discharge fields (above). Same-day rows only. |
+| **Undo sign-off** | POST `/consultations/{id}/reverse-signoff` | UPDATE `signoff_date`=NULL. Same-day rows only. |
 
 ### Bulk import  (`/import`, Admin)
 | Step | Endpoint | Database effect |
@@ -184,7 +184,7 @@ A re-admission or a ward↔ICU transfer creates a **new** row, so one patient = 
 | **Change password** | PUT `/profile/password` | UPDATE `password` + `pass_exp_date`=today. |
 | **Enable 2FA** | POST `/mfa/confirm` | UPDATE `mfa_secret`, `mfa_recovery_codes`, `mfa_enrolled_at`. |
 | **Disable 2FA** | DELETE `/mfa` | UPDATE clears the MFA columns. |
-| **Login** | POST `/login` | Reads `users`; on success regenerates the session and (if "remember me") sets `remember_token`. |
+| **Login** | POST `/login` | Reads `users`; on success regenerates the session and (if "remember me") sets `remember_token` (recaller cookie lives **30 days**; H2/C1). With MFA enrolled, the pending challenge expires after **5 min** and allows **8 code attempts** (H2/C3). |
 | **Register** | POST `/register` | INSERT `users` with `active=0` (pending admin activation), `role` ∈ {2,3,4,5} (never admin), `pass_exp_date`=today. |
 | **Forgot / reset password** | POST `/forgot-password` · `/reset-password` | Forgot: INSERT `password_reset_tokens` + email. Reset: UPDATE `password` + `pass_exp_date`. |
 

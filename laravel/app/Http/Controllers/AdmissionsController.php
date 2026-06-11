@@ -20,13 +20,16 @@ use Inertia\Response;
 
 class AdmissionsController extends Controller
 {
-    /** New Admissions queue: patients admitted but not yet assigned to a consultant (unshuffled). */
+    /**
+     * New Admissions queue: patients admitted but not yet assigned to a consultant (unshuffled).
+     * FIFO — oldest admission first (legacy queue order), so the longest-waiting patient is on top.
+     */
     public function index(): Response
     {
         $queue = Admission::query()
             ->whereNull('discharge_date')->whereNull('consultant_id')
             ->with('patient:id,mrn,name,gender,age')->withCount('diagnoses')
-            ->orderByDesc('admit_date')->orderByDesc('id')->get()
+            ->orderBy('admit_date')->orderBy('id')->get()
             ->map(fn (Admission $a) => [
                 'id' => $a->id,
                 'name' => $a->patient?->name ?? 'Unknown',
@@ -55,6 +58,7 @@ class AdmissionsController extends Controller
             'queue' => $queue,
             'icuPatients' => $icuPatients,
             'consultants' => User::consultantOptions(),
+            'countries' => Country::orderBy('name')->pluck('name'),   // Modify modal nationality select
         ]);
     }
 
@@ -64,7 +68,7 @@ class AdmissionsController extends Controller
             'consultants' => User::consultantOptions(),
             'countries' => Country::orderBy('name')->pluck('name'),
             'locations' => ['ER', 'Ward', 'ICU'],
-            'admitFrom' => ['ER', 'Clinic', 'OPD', 'OR', 'ICU', 'Referral', 'Transfer', 'Direct', 'Other service'],   // full legacy ADMFROM vocabulary
+            'admitFrom' => \App\Http\Requests\StoreAdmissionRequest::ADMIT_FROM,   // full legacy ADMFROM vocabulary
         ]);
     }
 
@@ -76,10 +80,13 @@ class AdmissionsController extends Controller
         $admission = DB::transaction(function () use ($data) {
             $patient = Patient::firstOrCreate(
                 ['mrn' => $data['mrn']],
-                ['name' => $data['name'], 'gender' => $data['gender'] ?? null, 'age' => $data['age'] ?? null]
+                ['name' => $data['name'], 'gender' => $data['gender'] ?? null, 'age' => $data['age'] ?? null,
+                    'nationality' => $data['nationality'] ?? null]
             );
             // refresh demographics on the canonical record
-            $patient->fill(['name' => $data['name'], 'gender' => $data['gender'] ?? $patient->gender, 'age' => $data['age'] ?? $patient->age])->save();
+            $patient->fill(['name' => $data['name'], 'gender' => $data['gender'] ?? $patient->gender,
+                'age' => $data['age'] ?? $patient->age,
+                'nationality' => $data['nationality'] ?? $patient->nationality])->save();
 
             $admission = Admission::create([
                 'patient_id' => $patient->id,
