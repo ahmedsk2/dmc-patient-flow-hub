@@ -63,7 +63,9 @@ const submitComplete = () => cdForm.post(`/admissions/${modal.value.row.id}/comp
 const submitIcu = () => icuForm.post(`/admissions/${modal.value.row.id}/icu-discharge`, opts);
 const submitTransfer = () => tForm.post(`/admissions/${modal.value.row.id}/transfer`, opts);
 const longterm = (row) => router.post(`/admissions/${row.id}/longterm`, {}, { preserveScroll: true });
-const reverse = (row) => { if (confirm('Reverse this discharge and return the patient to active?')) router.post(`/admissions/${row.id}/reverse-discharge`, {}, { preserveScroll: true }); };
+// the board shows active patients only, so the undo here is the phase-1 (medical) one;
+// reversing a COMPLETED discharge lives on the admin Recent registry
+const undoMedical = (row) => { if (confirm('Undo the medical discharge and return the patient to active?')) router.post(`/admissions/${row.id}/undo-medical-discharge`, {}, { preserveScroll: true }); };
 
 // modify (full edit) — fetches detail, then edits demographics + diagnoses
 const canModify = computed(() => me.value.is_admin || me.value.can.modify);
@@ -187,7 +189,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                             <button v-if="p.location === 'ICU'" @click="openModal('icu', p)" title="ICU discharge" aria-label="ICU discharge" class="ml-auto grid h-7 w-7 place-items-center rounded-lg text-ink-400 hover:bg-success-100 hover:text-success-600"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg></button>
                             <template v-else-if="p.medically_discharged">
                                 <button @click="openModal('complete', p)" title="Complete discharge" aria-label="Complete discharge" class="ml-auto grid h-7 w-7 place-items-center rounded-lg text-success-600 hover:bg-success-100"><svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm13.36-1.814a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l3.75-5.25Z" clip-rule="evenodd" /></svg></button>
-                                <button v-if="me.is_admin" @click="reverse(p)" title="Reverse discharge" aria-label="Reverse discharge" class="grid h-7 w-7 place-items-center rounded-lg text-ink-400 hover:bg-danger-100 hover:text-danger-600"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" /></svg></button>
+                                <button @click="undoMedical(p)" title="Undo medical discharge" aria-label="Undo medical discharge" class="grid h-7 w-7 place-items-center rounded-lg text-ink-400 hover:bg-danger-100 hover:text-danger-600"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" /></svg></button>
                             </template>
                             <button v-else @click="openModal('medical', p)" title="Discharge" aria-label="Discharge" class="ml-auto grid h-7 w-7 place-items-center rounded-lg text-ink-400 hover:bg-success-100 hover:text-success-600"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg></button>
                         </template>

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
@@ -18,6 +18,11 @@ const destDonut = computed(() => {
     const c = props.destByConsultant.find((x) => x.name === destChoice.value);
     return c ? { labels: c.labels, data: c.data } : { labels: [], data: [] };
 });
+// a new range can drop the selected consultant from the list — fall back to All instead of
+// showing a misleading empty donut for a stale choice
+watch(() => props.destByConsultant, (list) => {
+    if (destChoice.value && !(list || []).some((x) => x.name === destChoice.value)) destChoice.value = '';
+});
 
 const C = { teal: '#009ca6', tealLt: '#7accc9', navy: '#00565e', gold: '#d9a23c', red: '#e0413e', blue: '#2f7fe0', slate: '#5b6a6e', green: '#16a34a' };
 
@@ -35,19 +40,24 @@ const toneClass = (t) => ({
     brand: 'text-brand-700', info: 'text-info-500', danger: 'text-danger-600', accent: 'text-accent-600', ink: 'text-ink-700',
 }[t]);
 
-const monthlyChart = {
+// computed (not plain consts): Apply/interval re-fetches with preserveState, so props change
+// in place — every prop-derived chart input must be reactive or the chart keeps stale data
+const monthlyChart = computed(() => ({
     chart: { type: 'area', toolbar: { show: false }, fontFamily: 'inherit' },
     colors: [C.teal, C.blue, C.red], stroke: { width: [3, 3, 2], curve: 'smooth' },
     fill: { type: 'gradient', gradient: { opacityFrom: 0.25, opacityTo: 0.02 } },
     dataLabels: { enabled: false }, legend: { position: 'top', horizontalAlign: 'right' },
     xaxis: { categories: props.monthly.labels, labels: { style: { colors: '#94a3b8' } } },
     yaxis: { labels: { style: { colors: '#94a3b8' } } }, grid: { borderColor: '#eef2f6' },
-};
-const monthlySeries = [
+}));
+const monthlySeries = computed(() => [
     { name: 'Admissions', data: props.monthly.admissions },
     { name: 'Discharges', data: props.monthly.discharges },
     { name: 'Mortality', data: props.monthly.deaths },
-];
+]);
+
+// KPI-grid header tracks the selected interval + actual applied range
+const gridTitle = computed(() => ({ day: 'Daily', quarter: 'Quarterly' }[props.interval] ?? 'Monthly') + ' KPI grid');
 
 const barChart = (cats, color, horizontal = false) => ({
     chart: { type: 'bar', toolbar: { show: false }, fontFamily: 'inherit' },
@@ -120,7 +130,7 @@ const donut = (labels) => ({
                     </select>
                 </div>
                 <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" v-if="destDonut.data.length" type="donut" height="280" :options="donut(destDonut.labels)" :series="destDonut.data" />
-                <p v-else class="py-10 text-center text-sm text-ink-300">No discharges in range.</p>
+                <p v-else class="py-10 text-center text-sm text-ink-300">{{ destChoice ? 'No discharges for this consultant in range.' : 'No discharges in range.' }}</p>
             </div>
 
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
@@ -138,11 +148,11 @@ const donut = (labels) => ({
             </div>
 
             <div class="overflow-hidden rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60 lg:col-span-2">
-                <h3 class="mb-3 font-bold text-ink-800">Monthly KPI grid <span class="text-sm font-normal text-ink-400">(12-month window)</span></h3>
+                <h3 class="mb-3 font-bold text-ink-800">{{ gridTitle }} <span class="nums text-sm font-normal text-ink-400">({{ range.from }} – {{ range.to }})</span></h3>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
-                            <th scope="col" class="px-3 py-2">Month</th><th scope="col" class="px-3 py-2 text-right">Adm</th><th scope="col" class="px-3 py-2 text-right">Disch</th><th scope="col" class="px-3 py-2 text-right">ICU</th><th scope="col" class="px-3 py-2 text-right">Mort</th><th scope="col" class="px-3 py-2 text-right">Consults</th><th scope="col" class="px-3 py-2 text-right">Sign-offs</th><th scope="col" class="px-3 py-2 text-right">Avg LOS</th>
+                            <th scope="col" class="px-3 py-2">Period</th><th scope="col" class="px-3 py-2 text-right">Adm</th><th scope="col" class="px-3 py-2 text-right">Disch</th><th scope="col" class="px-3 py-2 text-right">ICU</th><th scope="col" class="px-3 py-2 text-right">Mort</th><th scope="col" class="px-3 py-2 text-right">Consults</th><th scope="col" class="px-3 py-2 text-right">Sign-offs</th><th scope="col" class="px-3 py-2 text-right">Avg LOS</th>
                         </tr></thead>
                         <tbody class="divide-y divide-ink-50">
                             <tr v-for="r in kpiGrid" :key="r.label" class="hover:bg-brand-50/40">

@@ -53,7 +53,9 @@ Route::middleware(['auth', 'mfa.enroll', 'pwd'])->group(function () {
     Route::post('/admissions/{admission}/complete-discharge', [PatientActionController::class, 'completeDischarge'])->name('admissions.completeDischarge');
     Route::post('/admissions/{admission}/icu-discharge', [PatientActionController::class, 'icuDischarge'])->name('admissions.icuDischarge');
     Route::post('/admissions/{admission}/transfer', [PatientActionController::class, 'transfer'])->name('admissions.transfer');
+    Route::post('/admissions/{admission}/icu-pull', [PatientActionController::class, 'icuPull'])->name('admissions.icuPull');
     Route::post('/admissions/{admission}/reverse-discharge', [PatientActionController::class, 'reverseDischarge'])->name('admissions.reverse');
+    Route::post('/admissions/{admission}/undo-medical-discharge', [PatientActionController::class, 'undoMedicalDischarge'])->name('admissions.undoMedical');
     Route::get('/consultations', [ConsultationsController::class, 'index'])->name('consultations.index');
     Route::post('/consultations', [ConsultationsController::class, 'store'])->name('consultations.store');
     Route::post('/consultations/{consultation}/signoff', [ConsultationsController::class, 'signoff'])->name('consultations.signoff');

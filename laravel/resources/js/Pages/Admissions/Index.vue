@@ -31,9 +31,9 @@ const openAssign = (p) => { assigning.value = p; aForm.consultant_id = ''; };
 const submitAssign = () => aForm.post(`/admissions/${assigning.value.id}/assign`, { preserveScroll: true, onSuccess: () => (assigning.value = null) });
 const assignToMe = (p) => router.post(`/admissions/${p.id}/assign-to-me`, {}, { preserveScroll: true });
 
-// admission from ICU
+// admission from ICU — dedicated icu-pull endpoint (Add capability; new episode is unassigned)
 const showIcu = ref(false);
-const fromIcu = (p) => { if (confirm(`Admit ${p.name} (MRN ${p.mrn}) from ICU to the ward?`)) router.post(`/admissions/${p.id}/transfer`, { target: 'Ward' }, { preserveScroll: true, onSuccess: () => (showIcu.value = false) }); };
+const fromIcu = (p) => { if (confirm(`Admit ${p.name} (MRN ${p.mrn}) from ICU to the ward?`)) router.post(`/admissions/${p.id}/icu-pull`, {}, { preserveScroll: true, onSuccess: () => (showIcu.value = false) }); };
 
 // modify a queued (unassigned) patient — reuses /admissions/{id}/edit + /modify
 const editing = ref(null);
@@ -136,7 +136,7 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
         <div v-if="showIcu" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="showIcu = false">
             <div class="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
                 <div class="mb-4 flex items-center justify-between"><h3 class="text-lg font-bold text-ink-900">Admit from ICU</h3><button @click="showIcu = false" class="text-ink-400 hover:text-ink-700">✕</button></div>
-                <p class="mb-3 text-sm text-ink-400">Pull a current ICU patient onto the ward (keeps their consultant).</p>
+                <p class="mb-3 text-sm text-ink-400">Pull a current ICU patient onto the ward — they enter the assignment queue for a (new) consultant.</p>
                 <table class="w-full text-sm">
                     <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400"><th scope="col" class="px-3 py-2">MRN</th><th scope="col" class="px-3 py-2">Patient</th><th scope="col" class="px-3 py-2">Bed</th><th scope="col" class="px-3 py-2">Consultant</th><th scope="col" class="px-3 py-2"></th></tr></thead>
                     <tbody class="divide-y divide-ink-50">

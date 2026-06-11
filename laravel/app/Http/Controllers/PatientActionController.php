@@ -238,6 +238,25 @@ class PatientActionController extends Controller
         return back()->with('flash', ['type' => 'success', 'message' => 'Discharge reversed.']);
     }
 
+    /** Undo a phase-1 medical discharge ("discharged still in") — returns the row to plain active. */
+    public function undoMedicalDischarge(Admission $admission): RedirectResponse
+    {
+        if (! $this->canManage($admission)) {
+            throw new AccessDeniedHttpException('Only the primary consultant or a manager may undo a medical discharge.');
+        }
+        // a fully-discharged file is out of scope here — that correction is reverseDischarge (admin, ≤48h)
+        if ($admission->discharge_date) {
+            return back()->with('flash', ['type' => 'error', 'message' => 'Already fully discharged — use reverse discharge instead.']);
+        }
+        if (! $admission->medical_discharge_date) {
+            return back()->with('flash', ['type' => 'error', 'message' => 'This admission has no medical discharge to undo.']);
+        }
+        $admission->update(['medical_discharge_date' => null, 'outcome' => null, 'discharge_to' => null, 'delay_reason' => null, 'discharged_by' => null]);
+        $this->audit('admission.undo_medical_discharge', $admission);
+
+        return back()->with('flash', ['type' => 'success', 'message' => 'Medical discharge undone.']);
+    }
+
     public function transfer(Request $request, Admission $admission): RedirectResponse
     {
         if (! $this->canManage($admission)) {
@@ -283,5 +302,58 @@ class PatientActionController extends Controller
         $this->audit('admission.transfer', $admission, ['to' => $data['target'], 'new_admission_id' => $new->id]);
 
         return back()->with('flash', ['type' => 'success', 'message' => "Patient transferred to {$data['target']}."]);
+    }
+
+    /**
+     * "Admission from ICU" — pull an active ICU patient onto the ward (legacy D2 behavior):
+     * gated by the Add capability (not Manage), and the new ward episode is UNASSIGNED so the
+     * patient re-enters the assignment queue instead of keeping the ICU consultant.
+     */
+    public function icuPull(Request $request, Admission $admission): RedirectResponse
+    {
+        $u = Auth::user();
+        if (! ($u->isAdmin() || $u->can_add)) {
+            throw new AccessDeniedHttpException('Requires the Add capability.');
+        }
+        if ($admission->discharge_date || $admission->current_location !== 'ICU') {
+            return back()->with('flash', ['type' => 'error', 'message' => 'Only an active ICU patient can be admitted from ICU.']);
+        }
+
+        $new = DB::transaction(function () use ($admission) {
+            // close the ICU episode as a transfer-out (continuation of care, not a discharge);
+            // any pending phase-1 medical discharge is superseded — clear its fields like transfer()
+            $admission->update([
+                'discharge_date' => now()->toDateString(),
+                'transfer_type' => 'Transfer from ICU',
+                'medical_discharge_date' => null,
+                'outcome' => null,
+                'delay_reason' => null,
+                'discharged_by' => Auth::id(),
+            ]);
+
+            // open the ward episode unassigned (no consultant, no bed yet — assign on arrival)
+            $new = Admission::create([
+                'patient_id' => $admission->patient_id,
+                'bed' => null,
+                'admitted_from' => 'ICU',
+                'admit_date' => now()->toDateString(),
+                'current_location' => 'Ward',
+                'consultant_id' => null,
+                'is_new_assignment' => false,
+                'assigned_on' => null,
+                'assigned_at' => null,
+                'admitted_by' => Auth::id(),
+            ]);
+
+            // carry the diagnoses forward
+            foreach ($admission->diagnoses as $dx) {
+                $new->diagnoses()->create(['seq' => $dx->seq, 'icd10_code' => $dx->icd10_code]);
+            }
+
+            return $new;
+        });
+        $this->audit('admission.icu_pull', $admission, ['new_admission_id' => $new->id]);
+
+        return back()->with('flash', ['type' => 'success', 'message' => 'Patient admitted from ICU — now in the assignment queue.']);
     }
 }
