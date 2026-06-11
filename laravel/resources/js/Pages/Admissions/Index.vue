@@ -99,7 +99,7 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
 
         <!-- queue grouped by admit date -->
         <div v-for="[date, patients] in byDate" :key="date" class="mb-5">
-            <h3 class="mb-2 text-sm font-semibold text-ink-500">{{ dayName(date) }} <span class="text-ink-400">· {{ date }}</span> <span class="text-ink-300">({{ patients.length }})</span></h3>
+            <h3 class="mb-2 text-sm font-semibold text-ink-500">{{ dayName(date) }} <span class="text-ink-400">— {{ date }}</span> <span class="text-ink-300">({{ patients.length }})</span></h3>
             <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 <div v-for="p in patients" :key="p.id" class="rounded-2xl bg-white p-4 shadow-card ring-1 ring-ink-100/60">
                     <div class="flex items-start justify-between">

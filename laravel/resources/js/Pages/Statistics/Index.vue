@@ -78,21 +78,38 @@ const monthlySeries = computed(() => [
 // KPI-grid header tracks the selected interval + actual applied range
 const gridTitle = computed(() => ({ day: 'Daily', quarter: 'Quarterly' }[props.interval] ?? 'Monthly') + ' KPI grid');
 
-// per-consultant chart KPI modes (Admissions | Avg LOS | window readmissions)
+// per-consultant chart KPI modes (Admissions | Avg LOS | window readmissions | 4-series Activity)
 const consMode = ref('admissions');
 const consModes = computed(() => [
     ['admissions', 'Admissions'],
     ['avgLos', 'Avg LOS'],
     ['readmits', `${props.readmitWindow ?? 3}d readmits`],
+    ['activity', 'Activity'],
 ]);
 const consModeColor = computed(() => ({ admissions: C.tealLt, avgLos: C.gold, readmits: C.red }[consMode.value]));
 const consCats = computed(() => props.perConsultant.map((c) => c.name));
-const consSeries = computed(() => [{
-    name: consModes.value.find((m) => m[0] === consMode.value)?.[1] ?? '',
-    data: props.perConsultant.map((c) => c[consMode.value]),
-}]);
+// the canonical 4-series activity palette + names — shared by the by-consultant Activity mode
+// and the physician drill-down time-series so the two read identically
+const activityDefs = [['admissions', 'Admissions', C.teal], ['discharges', 'Discharges', C.blue], ['consultations', 'Consultations', C.gold], ['signoffs', 'Sign-offs', C.slate]];
+const consSeries = computed(() => consMode.value === 'activity'
+    ? activityDefs.map(([key, name]) => ({ name, data: props.perConsultant.map((c) => c[key]) }))
+    : [{
+        name: consModes.value.find((m) => m[0] === consMode.value)?.[1] ?? '',
+        data: props.perConsultant.map((c) => c[consMode.value]),
+    }]);
+const consOptions = computed(() => consMode.value === 'activity'
+    ? {
+        ...barChart(consCats.value, C.teal, true),
+        colors: activityDefs.map((d) => d[2]),
+        legend: { position: 'top', horizontalAlign: 'right' },
+        plotOptions: { bar: { horizontal: true, borderRadius: 2, barHeight: '80%' } },
+    }
+    : barChart(consCats.value, consModeColor.value, true));
 // the list is no longer capped at 10 — grow the chart with the roster so bars stay readable
-const consHeight = computed(() => Math.max(340, props.perConsultant.length * 28 + 60));
+// (activity mode draws 4 grouped bars per consultant, so it needs more vertical room)
+const consHeight = computed(() => consMode.value === 'activity'
+    ? Math.max(360, props.perConsultant.length * 72 + 80)
+    : Math.max(340, props.perConsultant.length * 28 + 60));
 
 // drill-down (computed, like every prop-derived chart input — see note above)
 const physDonutSeries = computed(() => props.physician?.destinations?.data ?? []);
@@ -105,6 +122,19 @@ const physNumbers = computed(() => props.physician ? [
     ['Avg LOS', props.physician.numbers.avgLos + 'd'],
     [`≤${props.readmitWindow ?? 3}d readmits`, props.physician.numbers.readmissions],
 ] : []);
+// bucketed 4-series activity for the selected physician (interval-aligned with the page)
+const physSeries = computed(() => props.physician?.series
+    ? activityDefs.map(([key, name]) => ({ name, data: props.physician.series[key] }))
+    : []);
+const physSeriesOptions = computed(() => ({
+    chart: { type: 'bar', toolbar: dlToolbar, fontFamily: 'inherit' },
+    colors: activityDefs.map((d) => d[2]),
+    plotOptions: { bar: { borderRadius: 2, columnWidth: '60%' } },
+    dataLabels: { enabled: false }, legend: { position: 'top', horizontalAlign: 'right' },
+    xaxis: { categories: props.physician?.series?.labels ?? [], labels: { style: { colors: '#94a3b8' } } },
+    yaxis: { labels: { style: { colors: '#94a3b8' } } }, grid: { borderColor: '#eef2f6' },
+}));
+const physHasActivity = computed(() => physSeries.value.some((s) => s.data.some((v) => v > 0)));
 
 const barChart = (cats, color, horizontal = false) => ({
     chart: { type: 'bar', toolbar: dlToolbar, fontFamily: 'inherit' },
@@ -202,7 +232,7 @@ const donut = (labels) => ({
                         <button v-for="m in consModes" :key="m[0]" @click="consMode = m[0]" class="rounded-lg px-3 py-1.5 text-xs font-semibold transition" :class="consMode === m[0] ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ m[1] }}</button>
                     </div>
                 </div>
-                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="bar" :height="consHeight" :options="barChart(consCats, consModeColor, true)" :series="consSeries" />
+                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="bar" :height="consHeight" :options="consOptions" :series="consSeries" />
             </div>
 
             <!-- per-physician drill-down -->
@@ -237,6 +267,11 @@ const donut = (labels) => ({
                             </ol>
                             <p v-else class="py-10 text-center text-sm text-ink-300">No diagnoses recorded in range.</p>
                         </div>
+                    </div>
+                    <div>
+                        <h4 class="mb-2 text-sm font-semibold text-ink-600">Activity over range <span class="font-normal text-ink-400">({{ interval === 'day' ? 'daily' : interval === 'quarter' ? 'quarterly' : 'monthly' }})</span></h4>
+                        <apexchart v-if="physHasActivity" role="img" :aria-label="`Bucketed admissions, discharges, consultations and sign-offs for ${physician.name}`" type="bar" height="240" :options="physSeriesOptions" :series="physSeries" />
+                        <p v-else class="py-8 text-center text-sm text-ink-300">No activity in range.</p>
                     </div>
                 </div>
                 <p v-else class="py-8 text-center text-sm text-ink-300">Pick a consultant to see their destinations, top diagnoses and KPIs for this range.</p>

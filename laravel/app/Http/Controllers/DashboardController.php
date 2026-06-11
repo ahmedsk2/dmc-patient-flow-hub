@@ -36,6 +36,13 @@ class DashboardController extends Controller
         $activeConsults = (int) DB::table('consultations')->whereNull('signoff_date')->count();
         $deathsMonth = (int) DB::table('admissions')->where('outcome', 'Dead')->whereBetween('discharge_date', [$monthStart, $today])->count();
 
+        // current-month average LOS over non-ICU discharges — the Statistics avgLos formula family
+        // (AVG(DATEDIFF) with the >= 0 guard), month-scoped like deathsMonth above
+        $avgLosMonth = round((float) (DB::table('admissions')
+            ->whereBetween('discharge_date', [$monthStart, $today])->whereNotNull('admit_date')
+            ->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
+            ->selectRaw('AVG(DATEDIFF(discharge_date, admit_date)) v')->value('v') ?? 0), 1);
+
         // real bed occupancy: active WARD (non-ICU) patients ÷ licensed ward beds. True % may exceed
         // 100 (over-census); a separate capped value drives the radial gauge arc.
         $occupancy = round($activeWard / $wardBeds * 100, 1);
@@ -160,7 +167,7 @@ class DashboardController extends Controller
             'kpis' => [
                 'census' => $active, 'ward' => $activeWard, 'icu' => $activeIcu,
                 'admissionsToday' => $admissionsToday, 'dischargesToday' => $dischargesToday,
-                'activeConsults' => $activeConsults, 'deathsMonth' => $deathsMonth,
+                'activeConsults' => $activeConsults, 'deathsMonth' => $deathsMonth, 'avgLosMonth' => $avgLosMonth,
                 'occupancy' => $occupancy, 'occupancyGauge' => $occupancyGauge, 'wardBeds' => $wardBeds,
             ],
             'trend' => $trend,

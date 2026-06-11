@@ -38,7 +38,7 @@ class RegistryController extends Controller
             'filters' => $request->only(['search', 'from', 'to', 'outcome', 'location', 'gender', 'nationality',
                 'age_from', 'age_to', 'admitted_from', 'discharged_to', 'delay', 'consultant_id', 'longterm',
                 'discharged', 'tb', 'readmit72',
-                'dx', 'dx_match', 'keyword', 'indication', 'consultation_from', 'to_service', 'signed_only']),
+                'dx', 'dx_match', 'keyword', 'indication', 'ind_match', 'consultation_from', 'to_service', 'signed_only']),
             'options' => [
                 // option lists reflect the values actually present in the data (legacy approach),
                 // so historical vocabularies (old sources/outcomes) stay filterable
@@ -113,14 +113,64 @@ class RegistryController extends Controller
             ->orderByDesc('admit_date')->orderByDesc('id');
     }
 
+    /** transfer_type -> human transfer label (real discharges get NO label). */
+    private const TRANSFER_LABELS = [
+        'transfer to other speciality' => 'Intra-dept transfer',
+        'other transfer' => 'Out-dept transfer',
+        'Transfer from ICU' => 'Back from ICU',
+    ];
+
     private function admissionResults(Request $request)
     {
-        return $this->admissionQuery($request)->paginate(20)->withQueryString()->through(fn (Admission $a) => [
+        $page = $this->admissionQuery($request)->paginate(20)->withQueryString();
+
+        // expandable-row detail payload, computed for the CURRENT PAGE only (≤20 rows):
+        // one diagnoses load + one icd10 name lookup, one users lookup (admitted_by/discharged_by),
+        // one readmit whereIn-exists, one TB whereIn — no per-row queries.
+        $rows = $page->getCollection();
+        $ids = $rows->pluck('id');
+        $rows->load('diagnoses:id,admission_id,seq,icd10_code');
+        $codes = $rows->flatMap(fn ($a) => $a->diagnoses->pluck('icd10_code'))->unique()->values();
+        $dxNames = $codes->isEmpty() ? collect() : Icd10::whereIn('code', $codes)->pluck('name', 'code');
+
+        $userIds = $rows->pluck('admitted_by')->merge($rows->pluck('discharged_by'))->filter()->unique()->values();
+        $userNames = $userIds->isEmpty() ? collect() : User::whereIn('id', $userIds)
+            ->get(['id', 'full_name', 'name'])->mapWithKeys(fn ($u) => [$u->id => $u->full_name ?: $u->name]);
+
+        $window = max(0, (int) (\App\Models\Setting::current()->readmission_window_days ?? 3));
+        $readmitIds = $ids->isEmpty() ? collect() : Admission::whereIn('id', $ids)
+            ->whereExists(fn ($s) => $s->selectRaw('1')->from('admissions as prev')
+                ->whereColumn('prev.patient_id', 'admissions.patient_id')->whereColumn('prev.id', '<>', 'admissions.id')
+                ->whereColumn('prev.discharge_date', '<=', 'admissions.admit_date')
+                ->whereRaw('DATEDIFF(admissions.admit_date, prev.discharge_date) BETWEEN 0 AND ?', [$window])
+                ->whereIn('prev.transfer_type', Admission::REAL_DISCHARGE_TYPES))
+            ->pluck('id')->flip();
+
+        $tbIds = $ids->isEmpty() ? collect() : \Illuminate\Support\Facades\DB::table('admission_diagnoses as ad')
+            ->join('tb_diagnoses as tb', 'tb.icd10_code', '=', 'ad.icd10_code')
+            ->whereIn('ad.admission_id', $ids)->distinct()->pluck('ad.admission_id')->flip();
+
+        return $page->through(fn (Admission $a) => [
             'id' => $a->id, 'name' => $a->patient?->name ?? 'Unknown', 'mrn' => $a->patient?->mrn,
             'age' => $a->patient?->age, 'gender' => $a->patient?->gender, 'nationality' => $a->patient?->nationality,
             'location' => $a->current_location, 'consultant' => $a->consultant?->full_name ?? $a->consultant?->name ?? '—',
             'admit_date' => optional($a->admit_date)->toDateString(), 'discharge_date' => optional($a->discharge_date)->toDateString(),
             'outcome' => $a->outcome, 'los' => $a->lengthOfStay(), 'status' => $a->discharge_date ? 'Discharged' : 'Active',
+            // detail-panel fields
+            'diagnoses' => $a->diagnoses->sortBy('seq')->values()
+                ->map(fn ($d) => ['code' => $d->icd10_code, 'name' => $dxNames[$d->icd10_code] ?? $d->icd10_code])->all(),
+            'admitted_by' => $a->admitted_by ? ($userNames[$a->admitted_by] ?? null) : null,
+            'discharged_by' => $a->discharged_by ? ($userNames[$a->discharged_by] ?? null) : null,
+            'admitted_from' => $a->admitted_from,
+            'medical_discharge_date' => optional($a->medical_discharge_date)->toDateString(),
+            'discharge_to' => $a->discharge_to,
+            'delay_reason' => $a->delay_reason,
+            'transfer_label' => self::TRANSFER_LABELS[$a->transfer_type] ?? null,
+            // badges
+            'is_tb' => $tbIds->has($a->id),
+            'is_readmission' => $readmitIds->has($a->id),
+            'is_longterm' => (bool) $a->is_longterm,
+            'disch_still_in' => $a->medical_discharge_date !== null && $a->discharge_date === null,
         ]);
     }
 
@@ -140,9 +190,17 @@ class RegistryController extends Controller
             ->when($request->input('age_from'), fn ($q, $a) => $q->where('age', '>=', (int) $a))
             ->when($request->input('age_to'), fn ($q, $a) => $q->where('age', '<=', (int) $a))
             ->when($request->boolean('signed_only'), fn ($q) => $q->whereNotNull('signoff_date'))
-            ->when($indication, fn ($q) => $q->where(function ($w) use ($indication) {
-                foreach ($indication as $id) { $w->orWhereJsonContains('indication', (int) $id); }
-            }))
+            // ind_match=and: EVERY selected indication must be present (chained whereJsonContains);
+            // default 'or': any selected indication matches (same pattern as dx_match in admissions)
+            ->when($indication, function ($q) use ($indication, $request) {
+                if ($request->input('ind_match') === 'and') {
+                    foreach ($indication as $id) { $q->whereJsonContains('indication', (int) $id); }
+                } else {
+                    $q->where(function ($w) use ($indication) {
+                        foreach ($indication as $id) { $w->orWhereJsonContains('indication', (int) $id); }
+                    });
+                }
+            })
             ->orderByDesc('consultation_date')->orderByDesc('id');
     }
 

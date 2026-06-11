@@ -34,17 +34,19 @@ const kpiCards = computed(() => [
     { label: 'Admissions Today', value: props.kpis.admissionsToday, sub: `${props.kpis.dischargesToday} discharged today`, icon: 'in', tone: 'blue' },
     { label: 'Active Consultations', value: props.kpis.activeConsults, sub: 'awaiting sign-off', icon: 'chat', tone: 'gold' },
     { label: 'Bed Occupancy', value: props.kpis.occupancy + '%', sub: `of ${props.kpis.wardBeds} ward beds`, icon: 'gauge', tone: 'teal' },
+    { label: 'Avg LOS (month)', value: props.kpis.avgLosMonth, sub: 'days · non-ICU discharges', icon: 'clock', tone: 'navy' },
     { label: 'Mortality (Month)', value: props.kpis.deathsMonth, sub: 'this calendar month', icon: 'trendDown', tone: 'red' },
 ]);
 const toneClass = {
     brand: 'from-brand-500 to-brand-700', blue: 'from-info-500 to-blue-700', gold: 'from-accent-400 to-accent-600',
-    teal: 'from-brand-400 to-brand-600', red: 'from-danger-500 to-danger-600',
+    teal: 'from-brand-400 to-brand-600', red: 'from-danger-500 to-danger-600', navy: 'from-navy-700 to-navy-900',
 };
 const kpiIcons = {
     bed: 'M3 7.5h13.5a3 3 0 0 1 3 3V18M3 7.5V18m0-10.5V6m18 12H3',
     in: 'M3 12h13.5m0 0-4.5-4.5M16.5 12 12 16.5M21 4.5v15',
     chat: 'M8.25 8.25h7.5m-7.5 3.75h4.5m4.94 4.06a8.25 8.25 0 1 0-3.32 2.0L21 21Z',
     gauge: 'M12 3a9 9 0 1 0 9 9M12 12l4.5-4.5M21 12h-2M5 12H3m9-7v2',
+    clock: 'M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
     trendDown: 'M2.25 6 9 12.75l4.286-4.286a11.948 11.948 0 0 1 4.306 6.43l.776 2.898m0 0 3.182-5.511m-3.182 5.51-5.511-3.181',
 };
 
@@ -148,7 +150,7 @@ onUnmounted(() => clearInterval(autoRefresh));
         </div>
 
         <!-- KPI hero row -->
-        <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
+        <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
             <div v-for="c in kpiCards" :key="c.label" class="relative overflow-hidden rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
                 <div class="flex items-start justify-between">
                     <div>

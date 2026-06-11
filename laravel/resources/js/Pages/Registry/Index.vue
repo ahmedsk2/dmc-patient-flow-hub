@@ -12,7 +12,7 @@ const canModify = computed(() => me.value.is_admin || me.value.can.modify);
 const f = reactive({
     search: '', from: '', to: '', outcome: '', location: '', gender: '', nationality: '',
     age_from: '', age_to: '', admitted_from: '', discharged_to: '', delay: '', consultant_id: '', longterm: false, discharged: false, tb: false,
-    readmit72: false, dx: [], dx_match: 'or', keyword: '', indication: [], consultation_from: '', to_service: '', signed_only: false,
+    readmit72: false, dx: [], dx_match: 'or', keyword: '', indication: [], ind_match: 'or', consultation_from: '', to_service: '', signed_only: false,
     ...props.filters,
 });
 // normalise booleans/arrays coming back as strings
@@ -53,6 +53,14 @@ const submitEdit = () => mForm.post(`/admissions/${editing.value.id}/modify`, { 
 const fld = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20';
 const outcomeTone = (o) => o === 'Dead' ? 'bg-danger-100 text-danger-600' : o === 'Alive' ? 'bg-success-100 text-success-600' : 'bg-ink-100 text-ink-500';
 const modes = [['admissions', 'Admissions'], ['consultations', 'Consultations'], ['diagnosis', 'Diagnosis (free text)']];
+
+// expandable row detail (admissions mode) — fresh Set per toggle so Vue picks up the change
+const expanded = ref(new Set());
+const toggleExpand = (id) => {
+    const s = new Set(expanded.value);
+    s.has(id) ? s.delete(id) : s.add(id);
+    expanded.value = s;
+};
 </script>
 
 <template>
@@ -111,8 +119,12 @@ const modes = [['admissions', 'Admissions'], ['consultations', 'Consultations'],
                     <div><label class="text-xs text-ink-400">From</label><input v-model="f.from" type="date" :class="fld" /></div>
                     <div><label class="text-xs text-ink-400">to</label><input v-model="f.to" type="date" :class="fld" /></div>
                 </div>
-                <div class="flex flex-wrap gap-2">
+                <div class="flex flex-wrap items-center gap-2">
                     <label v-for="r in options.reasons" :key="r.id" class="cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold transition" :class="f.indication.includes(r.id) ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'"><input type="checkbox" class="hidden" :checked="f.indication.includes(r.id)" @change="toggleInd(r.id)" /> {{ r.name }}</label>
+                    <template v-if="f.indication.length">
+                        <label class="ml-2 flex items-center gap-1 text-xs text-ink-500"><input type="radio" value="or" v-model="f.ind_match" /> any</label>
+                        <label class="flex items-center gap-1 text-xs text-ink-500"><input type="radio" value="and" v-model="f.ind_match" /> all</label>
+                    </template>
                 </div>
                 <div class="flex items-center gap-4">
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.signed_only" class="rounded text-brand-600" /> Signed off only</label>
@@ -154,20 +166,58 @@ const modes = [['admissions', 'Admissions'], ['consultations', 'Consultations'],
                 </tbody>
             </table>
             <table v-else class="w-full text-sm">
-                <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400"><th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Age/Sex</th><th scope="col" class="px-3 py-3">Location</th><th scope="col" class="px-3 py-3">Consultant</th><th scope="col" class="px-3 py-3">Admitted</th><th scope="col" class="px-3 py-3">Discharged</th><th scope="col" class="px-3 py-3">LOS</th><th scope="col" class="px-3 py-3">Outcome</th><th scope="col" class="px-5 py-3 text-right">Edit</th></tr></thead>
+                <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400"><th v-if="mode === 'admissions'" scope="col" class="w-10 px-2 py-3"><span class="sr-only">Details</span></th><th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Age/Sex</th><th scope="col" class="px-3 py-3">Location</th><th scope="col" class="px-3 py-3">Consultant</th><th scope="col" class="px-3 py-3">Admitted</th><th scope="col" class="px-3 py-3">Discharged</th><th scope="col" class="px-3 py-3">LOS</th><th scope="col" class="px-3 py-3">Outcome</th><th scope="col" class="px-5 py-3 text-right">Edit</th></tr></thead>
                 <tbody class="divide-y divide-ink-50">
-                    <tr v-for="r in results.data" :key="r.id" class="hover:bg-brand-50/40">
-                        <td class="px-5 py-3"><div class="font-semibold text-ink-800">{{ r.name }}</div><div class="nums text-xs text-ink-400">MRN {{ r.mrn }}</div></td>
-                        <td class="nums px-3 py-3 text-ink-600">{{ r.age ?? '—' }} · {{ (r.gender||'—').slice(0,1) }}</td>
-                        <td class="px-3 py-3 text-ink-600">{{ r.location || '—' }}</td>
-                        <td class="px-3 py-3 text-ink-600">{{ r.consultant }}</td>
-                        <td class="nums px-3 py-3 text-ink-500">{{ r.admit_date || '—' }}</td>
-                        <td class="nums px-3 py-3 text-ink-500">{{ r.discharge_date || '—' }}</td>
-                        <td class="nums px-3 py-3 text-ink-600">{{ r.los !== null ? r.los + 'd' : '—' }}</td>
-                        <td class="px-3 py-3"><span v-if="r.outcome" class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="outcomeTone(r.outcome)">{{ r.outcome }}</span><span v-else class="text-ink-300">—</span></td>
-                        <td class="px-5 py-3 text-right"><button v-if="canModify" @click="openEdit(r.id)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50">Edit</button></td>
-                    </tr>
-                    <tr v-if="!results.data.length"><td colspan="9" class="px-5 py-10 text-center text-ink-400">No admissions match.</td></tr>
+                    <template v-for="r in results.data" :key="r.id">
+                        <tr class="hover:bg-brand-50/40">
+                            <td v-if="mode === 'admissions'" class="px-2 py-3">
+                                <button @click="toggleExpand(r.id)" :aria-expanded="expanded.has(r.id) ? 'true' : 'false'" :aria-label="`Toggle details for ${r.name}`" class="grid h-7 w-7 place-items-center rounded-lg text-ink-400 ring-1 ring-ink-100 transition hover:bg-brand-50 hover:text-brand-700">
+                                    <svg class="h-4 w-4 transition-transform" :class="expanded.has(r.id) && 'rotate-90'" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+                                </button>
+                            </td>
+                            <td class="px-5 py-3"><div class="font-semibold text-ink-800">{{ r.name }}</div><div class="nums text-xs text-ink-400">MRN {{ r.mrn }}</div></td>
+                            <td class="nums px-3 py-3 text-ink-600">{{ r.age ?? '—' }} · {{ (r.gender||'—').slice(0,1) }}</td>
+                            <td class="px-3 py-3 text-ink-600">{{ r.location || '—' }}</td>
+                            <td class="px-3 py-3 text-ink-600">{{ r.consultant }}</td>
+                            <td class="nums px-3 py-3 text-ink-500">{{ r.admit_date || '—' }}</td>
+                            <td class="nums px-3 py-3 text-ink-500">{{ r.discharge_date || '—' }}</td>
+                            <td class="nums px-3 py-3 text-ink-600">{{ r.los !== null ? r.los + 'd' : '—' }}</td>
+                            <td class="px-3 py-3"><span v-if="r.outcome" class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="outcomeTone(r.outcome)">{{ r.outcome }}</span><span v-else class="text-ink-300">—</span></td>
+                            <td class="px-5 py-3 text-right"><button v-if="canModify" @click="openEdit(r.id)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50">Edit</button></td>
+                        </tr>
+                        <!-- expandable detail panel (admissions mode) -->
+                        <tr v-if="mode === 'admissions' && expanded.has(r.id)" class="bg-surface/60">
+                            <td></td>
+                            <td colspan="9" class="px-5 py-4">
+                                <div v-if="r.is_tb || r.is_readmission || r.is_longterm || r.disch_still_in" class="mb-3 flex flex-wrap gap-1.5">
+                                    <span v-if="r.is_tb" class="rounded-full bg-danger-100 px-2.5 py-0.5 text-xs font-semibold text-danger-600">TB</span>
+                                    <span v-if="r.is_readmission" class="rounded-full bg-warning-100 px-2.5 py-0.5 text-xs font-semibold text-warning-500">≤{{ options.readmitWindow ?? 3 }}d readmit</span>
+                                    <span v-if="r.is_longterm" class="rounded-full bg-accent-300/40 px-2.5 py-0.5 text-xs font-semibold text-accent-600">Long-term</span>
+                                    <span v-if="r.disch_still_in" class="rounded-full bg-warning-100 px-2.5 py-0.5 text-xs font-semibold text-warning-500">Disch. still in</span>
+                                </div>
+                                <dl class="grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                                    <div class="sm:col-span-2 lg:col-span-4">
+                                        <dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Diagnoses</dt>
+                                        <dd class="mt-1">
+                                            <ul v-if="r.diagnoses?.length" class="space-y-0.5">
+                                                <li v-for="d in r.diagnoses" :key="d.code" class="text-ink-700"><span class="nums mr-2 font-semibold text-brand-700">{{ d.code }}</span>{{ d.name }}</li>
+                                            </ul>
+                                            <span v-else class="text-ink-300">—</span>
+                                        </dd>
+                                    </div>
+                                    <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Admitted by</dt><dd class="mt-0.5 text-ink-700">{{ r.admitted_by || '—' }}</dd></div>
+                                    <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Discharged by</dt><dd class="mt-0.5 text-ink-700">{{ r.discharged_by || '—' }}</dd></div>
+                                    <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Admitted from</dt><dd class="mt-0.5 text-ink-700">{{ r.admitted_from || '—' }}</dd></div>
+                                    <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Discharged to</dt><dd class="mt-0.5 text-ink-700">{{ r.discharge_to || '—' }}</dd></div>
+                                    <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Clinical discharge</dt><dd class="nums mt-0.5 text-ink-700">{{ r.medical_discharge_date || '—' }}</dd></div>
+                                    <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Physical discharge</dt><dd class="nums mt-0.5 text-ink-700">{{ r.discharge_date || '—' }}</dd></div>
+                                    <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Delay reason</dt><dd class="mt-0.5 text-ink-700">{{ r.delay_reason || '—' }}</dd></div>
+                                    <div v-if="r.transfer_label"><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Transfer</dt><dd class="mt-0.5"><span class="rounded-full bg-info-500/10 px-2.5 py-0.5 text-xs font-semibold text-info-500">{{ r.transfer_label }}</span></dd></div>
+                                </dl>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr v-if="!results.data.length"><td :colspan="mode === 'admissions' ? 10 : 9" class="px-5 py-10 text-center text-ink-400">No admissions match.</td></tr>
                 </tbody>
             </table>
         </div>

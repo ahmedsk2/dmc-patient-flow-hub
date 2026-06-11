@@ -183,13 +183,32 @@ class StatisticsController extends Controller
             ->whereBetween('a.admit_date', [$f, $t])
             ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(DISTINCT a.id) c')
             ->groupBy('consultant')->pluck('c', 'consultant')->all();
+        // 'activity' mode values: discharges + consultations + sign-offs per consultant over the
+        // range (admissions reuses $admByCons) — one grouped query each, same 'consultant' alias
+        $disByCons = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
+            ->whereBetween('a.discharge_date', [$f, $t])
+            ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
+            ->groupBy('consultant')->pluck('c', 'consultant')->all();
+        $consByCons = DB::table('consultations as co')->join('users as u', 'u.id', '=', 'co.consultant_id')
+            ->whereBetween('co.consultation_date', [$f, $t])
+            ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
+            ->groupBy('consultant')->pluck('c', 'consultant')->all();
+        $signByCons = DB::table('consultations as co')->join('users as u', 'u.id', '=', 'co.consultant_id')
+            ->whereBetween('co.signoff_date', [$f, $t])
+            ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
+            ->groupBy('consultant')->pluck('c', 'consultant')->all();
         $perConsultant = collect(array_keys($admByCons))
-            ->merge(array_keys($losByCons))->merge(array_keys($readmitByCons))->unique()
+            ->merge(array_keys($losByCons))->merge(array_keys($readmitByCons))
+            ->merge(array_keys($disByCons))->merge(array_keys($consByCons))->merge(array_keys($signByCons))
+            ->unique()
             ->map(fn ($name) => [
                 'name' => $name,
                 'admissions' => (int) ($admByCons[$name] ?? 0),
                 'avgLos' => (float) ($losByCons[$name] ?? 0),
                 'readmits' => (int) ($readmitByCons[$name] ?? 0),
+                'discharges' => (int) ($disByCons[$name] ?? 0),
+                'consultations' => (int) ($consByCons[$name] ?? 0),
+                'signoffs' => (int) ($signByCons[$name] ?? 0),
             ])->sortByDesc('admissions')->values();
 
         // admission source mix
@@ -199,7 +218,7 @@ class StatisticsController extends Controller
 
         $physician = empty($data['consultant_id'])
             ? null
-            : $this->physician((int) $data['consultant_id'], $f, $t, $readmitWindow);
+            : $this->physician((int) $data['consultant_id'], $f, $t, $readmitWindow, $interval, $buckets);
 
         return Inertia::render('Statistics/Index', [
             'range' => ['from' => $f, 'to' => $t],
@@ -228,11 +247,21 @@ class StatisticsController extends Controller
 
     /**
      * Per-physician drill-down: the legacy charts.php view — destination buckets over CLOSED
-     * episodes, top-5 diagnoses, and the headline KPI formulas scoped to one consultant.
+     * episodes, top-5 diagnoses, the headline KPI formulas scoped to one consultant, and a
+     * bucketed 4-series (admissions/discharges/consultations/sign-offs) over the range.
      */
-    private function physician(int $consultantId, string $f, string $t, int $readmitWindow): array
+    private function physician(int $consultantId, string $f, string $t, int $readmitWindow, string $interval, array $buckets): array
     {
         $u = \App\Models\User::findOrFail($consultantId);
+
+        // bucketed activity time-series, scoped to this consultant (reuses the page's
+        // interval buckets; $consultantId is validated+cast, safe in the raw predicate)
+        $keys = array_column($buckets, 'key');
+        $own = "consultant_id = {$consultantId}";
+        $admS = $this->seriesBy('admissions', 'admit_date', $f, $t, $interval, $own);
+        $disS = $this->seriesBy('admissions', 'discharge_date', $f, $t, $interval, $own);
+        $consS = $this->seriesBy('consultations', 'consultation_date', $f, $t, $interval, $own);
+        $signS = $this->seriesBy('consultations', 'signoff_date', $f, $t, $interval, $own);
 
         // legacy transfer-type buckets (charts.php): fixed order, zero-filled
         $destMap = [
@@ -273,6 +302,13 @@ class StatisticsController extends Controller
                     ->join('admissions as prev', $this->readmissionJoin($readmitWindow))
                     ->where('a.consultant_id', $consultantId)->whereBetween('a.admit_date', [$f, $t])
                     ->distinct()->count('a.id'),
+            ],
+            'series' => [
+                'labels' => array_column($buckets, 'label'),
+                'admissions' => array_map(fn ($k) => (int) ($admS[$k] ?? 0), $keys),
+                'discharges' => array_map(fn ($k) => (int) ($disS[$k] ?? 0), $keys),
+                'consultations' => array_map(fn ($k) => (int) ($consS[$k] ?? 0), $keys),
+                'signoffs' => array_map(fn ($k) => (int) ($signS[$k] ?? 0), $keys),
             ],
         ];
     }
