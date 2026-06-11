@@ -1,7 +1,8 @@
 <script setup>
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import IcdTypeahead from '@/Components/IcdTypeahead.vue';
 
 const props = defineProps({ groups: Array, filters: Object, stats: Object, consultants: Array, specialties: Array, externalServices: Array, readmitWindow: Number });
 
@@ -44,7 +45,7 @@ const toggleDx = (id) => (dxOpen.value = dxOpen.value === id ? null : id);
 // inline bed edit (canManage) — saves on blur/Enter, Esc cancels
 const vFocus = { mounted: (el) => el.focus() };
 const bedEdit = ref(null);
-const startBed = (p) => { if (canManage(p) && !isObserver.value) bedEdit.value = { id: p.id, value: p.bed || '' }; };
+const startBed = (p) => { if (canManage(p) && !isObserver.value && !p.discharged) bedEdit.value = { id: p.id, value: p.bed || '' }; };
 const cancelBed = () => (bedEdit.value = null);
 const saveBed = (p) => {
     if (!bedEdit.value || bedEdit.value.id !== p.id) return;
@@ -141,12 +142,16 @@ const openModal = (mode, row) => {
     if (mode === 'icu') icuForm.reset();
     if (mode === 'transfer') { tForm.reset(); tForm.target = row.location === 'ICU' ? 'Ward' : 'ICU'; }
 };
-// controlled destination vocabulary (legacy "Discharged to" list); a death locks to Mortuary
+// controlled destination vocabulary (legacy "Discharged to" list); a death locks to Mortuary.
+// Status (outcome) is strictly Alive/Dead — LAMA/Absconded are DESTINATIONS, not outcomes.
 const destinations = ['Home', 'Other Facility', 'LAMA', 'Absconded', 'Mortuary'];
+const statuses = ['Alive', 'Dead'];
 watch(() => mdForm.outcome, (o) => { if (o === 'Dead') mdForm.discharge_to = 'Mortuary'; else if (mdForm.discharge_to === 'Mortuary') mdForm.discharge_to = ''; });
 watch(() => cdForm.outcome, (o) => { if (o === 'Dead') cdForm.discharge_to = 'Mortuary'; else if (cdForm.discharge_to === 'Mortuary') cdForm.discharge_to = ''; });
 watch(() => icuForm.outcome, (o) => { if (o === 'Dead') icuForm.discharge_to = 'Mortuary'; else if (icuForm.discharge_to === 'Mortuary') icuForm.discharge_to = ''; });
-watch(() => mdForm.complete, (c) => { if (c) mdForm.delay_reason = ''; });   // a closed file has no "still-in" delay
+// a closed file has no "still-in" delay; medical-only locks the status to Alive (legacy phase-1 —
+// the status + destination are asked at the COMPLETE step instead)
+watch(() => mdForm.complete, (c) => { if (c) { mdForm.delay_reason = ''; } else { mdForm.outcome = 'Alive'; mdForm.discharge_to = ''; } });
 // internal-specialty handover: consultants offered are the ON-SERVICE ones of the chosen specialty
 const specConsultants = computed(() => props.consultants.filter((c) => c.specialty_id === tForm.specialty_id && c.on_service));
 // bulk reassign: the RECEIVING consultant must be on service ('from' stays unfiltered — patients
@@ -175,9 +180,6 @@ const admitFromOptions = ['ER', 'Clinic', 'OPD', 'OR', 'ICU', 'Referral', 'Trans
 const editing = ref(null);
 const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '', bed: '', admit_date: '', admitted_from: '', current_location: 'Ward', diagnoses: [] });
 const selectedDx = ref([]);
-const dxQuery = ref('');
-const dxResults = ref([]);
-let dxTimer = null;
 const openModify = async (p) => {
     const d = await (await fetch(`/admissions/${p.id}/edit`, { headers: { Accept: 'application/json' } })).json();
     editing.value = { id: p.id };
@@ -187,14 +189,15 @@ const openModify = async (p) => {
     selectedDx.value = d.diagnoses || [];
     mForm.diagnoses = selectedDx.value.map((x) => x.code);
 };
-watch(dxQuery, (q) => {
-    clearTimeout(dxTimer);
-    if (q.trim().length < 2) { dxResults.value = []; return; }
-    dxTimer = setTimeout(async () => { dxResults.value = await (await fetch(`/api/icd10?q=${encodeURIComponent(q.trim())}`, { headers: { Accept: 'application/json' } })).json(); }, 250);
-});
-const addDx = (d) => { if (!selectedDx.value.find((x) => x.code === d.code)) { selectedDx.value.push(d); mForm.diagnoses.push(d.code); } dxQuery.value = ''; dxResults.value = []; };
+const addDx = (d) => { if (!selectedDx.value.find((x) => x.code === d.code)) { selectedDx.value.push(d); mForm.diagnoses.push(d.code); } };
 const removeDx = (code) => { selectedDx.value = selectedDx.value.filter((x) => x.code !== code); mForm.diagnoses = mForm.diagnoses.filter((c) => c !== code); };
 const submitModify = () => mForm.post(`/admissions/${editing.value.id}/modify`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
+
+// Esc closes whichever modal is open (the ICD typeahead swallows the first Esc while its
+// dropdown is showing, so a second press closes the modal)
+const onEsc = (e) => { if (e.key === 'Escape') { modal.value = null; reassign.value = false; hModal.value = null; editing.value = null; } };
+onMounted(() => window.addEventListener('keydown', onEsc));
+onUnmounted(() => window.removeEventListener('keydown', onEsc));
 
 // hard delete (admin only — server re-checks)
 const destroyAdmission = (row) => {
@@ -284,7 +287,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                             <input v-if="bedEdit && bedEdit.id === p.id" v-model="bedEdit.value" v-focus maxlength="64"
                                 aria-label="Bed" class="w-14 rounded border border-ink-200 bg-white px-1 py-0 text-[11px] font-semibold text-ink-700 outline-none focus:border-brand-500"
                                 @blur="saveBed(p)" @keydown.enter.prevent="$event.target.blur()" @keydown.esc.prevent="cancelBed" />
-                            <button v-else-if="canManage(p) && !isObserver" type="button" @click="startBed(p)" title="Edit bed" aria-label="Edit bed"
+                            <button v-else-if="canManage(p) && !isObserver && !p.discharged" type="button" @click="startBed(p)" title="Edit bed" aria-label="Edit bed"
                                 class="rounded underline decoration-dotted underline-offset-2 hover:opacity-75">{{ p.bed || '—' }}</button>
                             <template v-else>{{ p.bed || '—' }}</template>
                         </span>
@@ -304,7 +307,9 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                             <span v-if="p.is_readmission" class="rounded-full bg-warning-100 px-1.5 py-0.5 text-[10px] font-semibold text-warning-500">Readmit ≤{{ readmitWindow ?? 3 }}d</span>
                             <span v-if="p.is_longterm" class="rounded-full bg-accent-300/40 px-1.5 py-0.5 text-[10px] font-semibold text-accent-600">Long-term</span>
                             <span v-if="p.is_tb" class="rounded-full bg-danger-100 px-1.5 py-0.5 text-[10px] font-semibold text-danger-600">TB</span>
-                            <span v-if="p.medically_discharged" class="rounded-full bg-warning-100 px-1.5 py-0.5 text-[10px] font-semibold text-warning-500">Disch. still in</span>
+                            <!-- long-term view lists closed episodes too — read-only card with a Discharged chip -->
+                            <span v-if="p.discharged" class="rounded-full bg-ink-100 px-1.5 py-0.5 text-[10px] font-semibold text-ink-500">Discharged {{ p.discharge_date }}</span>
+                            <span v-else-if="p.medically_discharged" class="rounded-full bg-warning-100 px-1.5 py-0.5 text-[10px] font-semibold text-warning-500">Disch. still in</span>
                             <Link v-if="p.sign_pending" href="/handovers" title="Handover awaiting your signature" class="rounded-full bg-brand-100 px-1.5 py-0.5 text-[10px] font-semibold text-brand-700 hover:bg-brand-200">Sign pending</Link>
                             <button v-if="p.dx_count" type="button" @click="toggleDx(p.id)" :aria-expanded="dxOpen === p.id"
                                 :aria-label="`${p.dx_count} diagnoses — ${dxOpen === p.id ? 'hide' : 'show'} names`"
@@ -315,7 +320,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                             <li v-for="d in p.diagnoses" :key="d.code"><span class="nums font-semibold text-brand-700">{{ d.code }}</span> {{ d.name }}</li>
                         </ul>
                     </div>
-                    <div v-if="!isObserver" class="flex gap-1 border-t border-ink-50 px-2 py-1.5">
+                    <div v-if="!isObserver && !p.discharged" class="flex gap-1 border-t border-ink-50 px-2 py-1.5">
                         <button v-if="canAssign" @click="openModal('assign', p)" title="Reassign consultant" aria-label="Reassign consultant" class="grid h-7 w-7 place-items-center rounded-lg text-ink-400 hover:bg-info-100 hover:text-info-500"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18 7.5v6m3-3h-6m-3.75-1.875a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" /></svg></button>
                         <button v-if="canModify" @click="openModify(p)" title="Modify details" aria-label="Modify details" class="grid h-7 w-7 place-items-center rounded-lg text-ink-400 hover:bg-brand-100 hover:text-brand-700"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" /></svg></button>
                         <button @click="longterm(p)" :title="p.is_longterm ? 'Remove long-term' : 'Mark long-term'" :aria-label="p.is_longterm ? 'Remove long-term' : 'Mark long-term'" class="grid h-7 w-7 place-items-center rounded-lg hover:bg-accent-300/40" :class="p.is_longterm ? 'text-accent-600' : 'text-ink-400 hover:text-accent-600'"><svg class="h-4 w-4" :fill="p.is_longterm ? 'currentColor' : 'none'" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5m-9-6h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm0 2.25h.008v.008H12v-.008ZM9.75 15h.008v.008H9.75V15Zm0 2.25h.008v.008H9.75v-.008ZM7.5 15h.008v.008H7.5V15Zm0 2.25h.008v.008H7.5v-.008Zm6.75-4.5h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V15Zm0 2.25h.008v.008h-.008v-.008Zm2.25-4.5h.008v.008H16.5v-.008Zm0 2.25h.008v.008H16.5V15Z" /></svg></button>
@@ -358,17 +363,20 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                             <label v-for="t in [[false, 'Medical only (still in bed)'], [true, 'Complete (leaving now)']]" :key="String(t[0])" class="flex-1 cursor-pointer rounded-xl border-2 px-3 py-2.5 text-center text-sm font-semibold transition" :class="mdForm.complete === t[0] ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'"><input type="radio" v-model="mdForm.complete" :value="t[0]" class="hidden" /> {{ t[1] }}</label>
                         </div>
                     </div>
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Outcome</label><select v-model="mdForm.outcome" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option>Alive</option><option>Dead</option><option>LAMA</option><option>DAMA</option><option>Transferred</option></select></div>
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Medical discharge date</label><input v-model="mdForm.medical_discharge_date" type="date" :max="today" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" /><p v-if="mdForm.errors.medical_discharge_date" class="mt-1 text-xs text-danger-600">{{ mdForm.errors.medical_discharge_date }}</p></div>
-                    <div class="grid grid-cols-2 gap-3">
+                    <!-- one-step close asks Status + Destination; medical-only locks Alive (asked at completion) -->
+                    <div v-if="mdForm.complete" class="grid grid-cols-2 gap-3">
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Status</label>
+                            <select v-model="mdForm.outcome" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option v-for="s in statuses" :key="s">{{ s }}</option></select>
+                            <p v-if="mdForm.errors.outcome" class="mt-1 text-xs text-danger-600">{{ mdForm.errors.outcome }}</p></div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge to</label>
                             <select v-model="mdForm.discharge_to" :disabled="mdForm.outcome === 'Dead'" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">—</option><option v-for="d in destinations" :key="d">{{ d }}</option></select>
                             <p v-if="mdForm.errors.discharge_to" class="mt-1 text-xs text-danger-600">{{ mdForm.errors.discharge_to }}</p></div>
-                        <div v-if="!mdForm.complete"><label class="mb-1 block text-sm font-semibold text-ink-700">Delay reason</label>
-                            <select v-model="mdForm.delay_reason" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">—</option><option value="Physical">Physical bed availability</option><option value="System">System</option></select>
-                            <p v-if="mdForm.errors.delay_reason" class="mt-1 text-xs text-danger-600">{{ mdForm.errors.delay_reason }}</p></div>
                     </div>
-                    <p class="text-xs text-ink-400">{{ mdForm.complete ? 'Closes the file and frees the bed in one step.' : 'Marks the patient clinically discharged but still in a bed. Use Complete discharge when they physically leave.' }}</p>
+                    <div v-else><label class="mb-1 block text-sm font-semibold text-ink-700">Delay reason</label>
+                        <select v-model="mdForm.delay_reason" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">—</option><option value="Physical">Physical bed availability</option><option value="System">System</option></select>
+                        <p v-if="mdForm.errors.delay_reason" class="mt-1 text-xs text-danger-600">{{ mdForm.errors.delay_reason }}</p></div>
+                    <p class="text-xs text-ink-400">{{ mdForm.complete ? 'Closes the file and frees the bed in one step.' : 'Marks the patient clinically discharged but still in a bed. Status and destination are recorded at Complete discharge, when they physically leave.' }}</p>
                     <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mdForm.processing" class="rounded-xl px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50" :class="mdForm.complete ? 'bg-success-600 hover:bg-success-700' : 'bg-warning-500'">{{ mdForm.complete ? 'Discharge & close file' : 'Medical discharge' }}</button></div>
                 </form>
                 <form v-else-if="modal.mode === 'complete'" @submit.prevent="submitComplete" class="space-y-4">
@@ -377,7 +385,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                     <!-- optional override of the phase-1 outcome/destination (prefilled with the current values) -->
                     <div class="grid grid-cols-2 gap-3">
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Status</label>
-                            <select v-model="cdForm.outcome" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">—</option><option>Alive</option><option>Dead</option><option>LAMA</option><option>DAMA</option><option>Transferred</option></select>
+                            <select v-model="cdForm.outcome" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">—</option><option v-for="s in statuses" :key="s">{{ s }}</option></select>
                             <p v-if="cdForm.errors.outcome" class="mt-1 text-xs text-danger-600">{{ cdForm.errors.outcome }}</p></div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Destination</label>
                             <select v-model="cdForm.discharge_to" :disabled="cdForm.outcome === 'Dead'" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">—</option><option v-for="d in destinations" :key="d">{{ d }}</option></select>
@@ -387,7 +395,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                     <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="cdForm.processing" class="rounded-xl bg-success-600 px-5 py-2 text-sm font-semibold text-white hover:bg-success-700 disabled:opacity-50">Complete discharge</button></div>
                 </form>
                 <form v-else-if="modal.mode === 'icu'" @submit.prevent="submitIcu" class="space-y-4">
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Outcome</label><select v-model="icuForm.outcome" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option>Alive</option><option>Dead</option><option>LAMA</option><option>DAMA</option><option>Transferred</option></select></div>
+                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Status</label><select v-model="icuForm.outcome" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option v-for="s in statuses" :key="s">{{ s }}</option></select></div>
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge to</label>
                         <select v-model="icuForm.discharge_to" :disabled="icuForm.outcome === 'Dead'" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">—</option><option v-for="d in destinations" :key="d">{{ d }}</option></select>
                         <p v-if="icuForm.errors.discharge_to" class="mt-1 text-xs text-danger-600">{{ icuForm.errors.discharge_to }}</p></div>
@@ -521,12 +529,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                     </div>
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-ink-700">Diagnoses</label>
-                        <div class="relative">
-                            <input v-model="dxQuery" placeholder="Search ICD-10 (≥2 chars)…" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" />
-                            <ul v-if="dxResults.length" class="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-ink-100 bg-white py-1 shadow-lg">
-                                <li v-for="d in dxResults" :key="d.code" @click="addDx(d)" class="cursor-pointer px-3 py-1.5 text-sm hover:bg-brand-50"><span class="nums font-semibold text-brand-700">{{ d.code }}</span> · {{ d.name }}</li>
-                            </ul>
-                        </div>
+                        <IcdTypeahead @select="addDx" />
                         <div v-if="selectedDx.length" class="mt-2 flex flex-wrap gap-1.5">
                             <span v-for="d in selectedDx" :key="d.code" class="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700"><span class="nums">{{ d.code }}</span> {{ d.name }} <button type="button" @click="removeDx(d.code)" class="text-brand-500 hover:text-danger-600">✕</button></span>
                         </div>

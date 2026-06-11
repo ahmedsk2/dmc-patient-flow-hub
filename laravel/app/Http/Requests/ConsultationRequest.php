@@ -32,10 +32,24 @@ class ConsultationRequest extends FormRequest
             'consultation_date' => ['required', 'date', 'before_or_equal:today'],
             'consultation_from' => ['required', 'string', 'max:128'],
             'to_service' => ['required', 'string', 'max:128'],
-            'consultant_id' => ['required', 'exists:users,id'],
+            // a receiving consultant only exists for an INTERNAL specialty; external / free-text
+            // services store none (legacy shape — imported NULL-consultant rows stay re-savable)
+            'consultant_id' => [$this->toServiceIsInternal() ? 'required' : 'nullable', 'exists:users,id'],
             'indication' => ['required', 'array', 'min:1'],
             'indication.*' => ['integer'],
             'other_indication' => ['nullable', 'string', 'max:255'],
         ];
+    }
+
+    /** Does the submitted to_service name an INTERNAL specialty (case-insensitive)? */
+    private function toServiceIsInternal(): bool
+    {
+        $wanted = mb_strtolower(trim((string) $this->input('to_service')));
+        if ($wanted === '') {
+            return false;
+        }
+
+        return \App\Models\Specialty::where('is_external', false)->pluck('name')
+            ->contains(fn ($name) => mb_strtolower(trim($name)) === $wanted);
     }
 }

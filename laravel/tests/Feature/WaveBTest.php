@@ -100,7 +100,9 @@ class WaveBTest extends TestCase
         $a->refresh();
         $this->assertNotNull($a->discharge_date);
         $this->assertNull($a->medical_discharge_date, 'transfer supersedes the pending medical discharge');
-        $this->assertNull($a->outcome, 'a transfer-closed row must not carry a discharge outcome');
+        // H1 revert: legacy stamps MORTALITY='Alive' + the destination on every transfer-closed row
+        $this->assertSame('Alive', $a->outcome, 'transfer-closed rows carry the legacy Alive stamp');
+        $this->assertSame('Intensive Care (ICU)', $a->discharge_to);
 
         $new = Admission::where('patient_id', $a->patient_id)->whereNull('discharge_date')->first();
         $this->assertNotNull($new);

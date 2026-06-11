@@ -54,6 +54,8 @@ class ResidualR3Test extends TestCase
     {
         $consultant = $this->user(User::ROLE_CONSULTANT, ['full_name' => 'Dr Receiver']);
         $reason = ConsultationReason::create(['name' => 'R3 Reason']);
+        // H1: a consultant is required only for an INTERNAL to_service — make Cardiology one
+        \App\Models\Specialty::firstOrCreate(['name' => 'Cardiology'], ['is_subspecialty' => true, 'is_external' => false]);
 
         return array_merge([
             'mrn' => '30001234', 'patient_name' => 'Consult Pt', 'age' => 41, 'bed' => 'B-07',

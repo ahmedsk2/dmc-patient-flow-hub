@@ -93,8 +93,12 @@ class PatientsController extends Controller
     {
         $tbCodes = DB::table('tb_diagnoses')->pluck('icd10_code')->flip();
 
+        // view=longterm lists ALL long-term rows like legacy (the long-term registry is mostly
+        // discharged episodes); every other view shows open episodes only
+        $includeDischarged = ($filters['view'] ?? null) === 'longterm';
+
         $admissions = Admission::query()
-            ->whereNull('discharge_date')
+            ->when(! $includeDischarged, fn ($q) => $q->whereNull('discharge_date'))
             ->whereNotNull('consultant_id')                       // assigned only (unassigned → New Admissions)
             ->tap($scope)
             ->with(['patient:id,mrn,name,gender,age', 'consultant:id,full_name,name,specialty_id,on_service', 'diagnoses:id,admission_id,seq,icd10_code'])
@@ -152,6 +156,7 @@ class PatientsController extends Controller
             $isIcu = $a->current_location === 'ICU';
             $los = $a->lengthOfStay();
             $medDischarged = $a->medical_discharge_date !== null;
+            $discharged = $a->discharge_date !== null;   // only possible under view=longterm
 
             $groups[$cid]['patients'][] = [
                 'id' => $a->id,
@@ -173,6 +178,9 @@ class PatientsController extends Controller
                 'is_tb' => $isTb,
                 'is_readmission' => $readmitIds->has($a->id),
                 'medically_discharged' => $medDischarged,
+                // closed episode shown on the long-term view — card renders a chip, no actions
+                'discharged' => $discharged,
+                'discharge_date' => optional($a->discharge_date)->toDateString(),
                 // phase-1 values — prefill the complete-discharge modal's optional override selects
                 'outcome' => $a->outcome,
                 'discharge_to' => $a->discharge_to,
@@ -189,7 +197,7 @@ class PatientsController extends Controller
             if ($a->assigned_at !== null && $a->assigned_at->greaterThanOrEqualTo($newCutoff)) { $c['new']++; } else { $c['old']++; }
             if ($isIcu) { $c['icu']++; } else { $c['ward']++; }
             if ($isTb) $c['tb']++;
-            if (! $isIcu && ! $medDischarged && ! $a->is_longterm && ! $isTb) $c['active']++;
+            if (! $discharged && ! $isIcu && ! $medDischarged && ! $a->is_longterm && ! $isTb) $c['active']++;
             unset($c);
         }
 

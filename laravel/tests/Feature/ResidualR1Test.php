@@ -96,10 +96,13 @@ class ResidualR1Test extends TestCase
 
     public function test_dead_outcome_forces_mortuary_on_medical_discharge(): void
     {
+        // H1 revert: medical-only locks the outcome to Alive (legacy phase-1), so a death is
+        // recorded on the COMPLETE step — here via the one-step close (complete=true)
         $a = $this->admission();
         $this->actingAs($this->admin())->post("/admissions/{$a->id}/medical-discharge", [
             'outcome' => 'Dead', 'medical_discharge_date' => now()->toDateString(),
             'discharge_to' => 'Home',   // tampered client value — server must override
+            'complete' => true,
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertSame('Mortuary', $a->fresh()->discharge_to);

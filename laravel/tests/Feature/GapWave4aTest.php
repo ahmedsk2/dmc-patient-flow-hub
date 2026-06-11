@@ -62,7 +62,7 @@ class GapWave4aTest extends TestCase
         $this->assertSame('transfer to other speciality', $a->transfer_type);
         $this->assertSame('Cardiology', $a->discharge_to);
         $this->assertNull($a->medical_discharge_date, 'pending phase-1 discharge is superseded');
-        $this->assertNull($a->outcome);
+        $this->assertSame('Alive', $a->outcome, 'H1 revert: legacy stamps MORTALITY=Alive on transfer-closed rows');
         $this->assertNull($a->delay_reason);
         $this->assertSame($admin->id, (int) $a->discharged_by);
 
@@ -109,7 +109,7 @@ class GapWave4aTest extends TestCase
         $this->assertSame('other transfer', $a->transfer_type);
         $this->assertSame('Psychiatry (external)', $a->discharge_to);
         $this->assertNull($a->medical_discharge_date);
-        $this->assertNull($a->outcome);
+        $this->assertSame('Alive', $a->outcome, 'H1 revert: legacy stamps MORTALITY=Alive on transfer-closed rows');
         $this->assertSame($admin->id, (int) $a->discharged_by);
         $this->assertSame(1, Admission::where('patient_id', $a->patient_id)->count(), 'NO new episode for an external transfer');
         $this->assertTrue(AuditLog::where('action', 'admission.transfer_external')->where('entity_id', (string) $a->id)->exists());

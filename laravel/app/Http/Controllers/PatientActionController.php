@@ -86,22 +86,52 @@ class PatientActionController extends Controller
         HandoverSignature::voidPendingFor($a->id);
     }
 
-    /** Full edit of an admission's patient demographics + diagnoses (Modify capability). */
+    /**
+     * Full edit of an admission's patient demographics + diagnoses (Modify capability).
+     *
+     * Duplicate-MRN repoint (legacy duplicate-MRN-is-normal shape): when the MRN is CHANGED to
+     * another existing patient's MRN, the admission is RE-POINTED to that patient instead of
+     * failing a uniqueness check; demographics then update THAT patient only where the user
+     * deliberately changed them (vs. the record loaded into the form).
+     */
     public function modify(\App\Http\Requests\ModifyAdmissionRequest $request, Admission $admission): RedirectResponse
     {
         // capability gate lives in ModifyAdmissionRequest::authorize() (403 before validation)
         $patient = $admission->patient;
         $data = $request->validated();
 
+        $target = ((string) $data['mrn'] !== (string) $patient->mrn)
+            ? \App\Models\Patient::where('mrn', $data['mrn'])->where('id', '<>', $patient->id)->first()
+            : null;
+
         // data correction may move the admit date — keep the old one in the audit trail
         $oldAdmitDate = optional($admission->admit_date)->toDateString();
         $newAdmitDate = \Carbon\Carbon::parse($data['admit_date'])->toDateString();
 
-        DB::transaction(function () use ($admission, $patient, $data, $newAdmitDate) {
-            $patient->update([
-                'mrn' => $data['mrn'], 'name' => $data['name'], 'age' => $data['age'] ?? null,
-                'gender' => $data['gender'] ?? null, 'nationality' => $data['nationality'] ?? null,
-            ]);
+        DB::transaction(function () use ($admission, $patient, $target, $data, $newAdmitDate) {
+            if ($target) {
+                $admission->update(['patient_id' => $target->id]);
+                $this->audit('patient.repoint', $admission, [
+                    'from_patient_id' => $patient->id, 'to_patient_id' => $target->id, 'mrn' => $target->mrn,
+                ]);
+                // only deliberately-changed fields propagate — the form was prefilled from the
+                // ORIGINAL patient, so unchanged values must not clobber the target's record
+                $changes = [];
+                foreach (['name', 'age', 'gender', 'nationality'] as $field) {
+                    $submitted = $data[$field] ?? null;
+                    if ((string) ($submitted ?? '') !== (string) ($patient->{$field} ?? '')) {
+                        $changes[$field] = $submitted;
+                    }
+                }
+                if ($changes) {
+                    $target->update($changes);
+                }
+            } else {
+                $patient->update([
+                    'mrn' => $data['mrn'], 'name' => $data['name'], 'age' => $data['age'] ?? null,
+                    'gender' => $data['gender'] ?? null, 'nationality' => $data['nationality'] ?? null,
+                ]);
+            }
             $admission->update([
                 'bed' => $data['bed'] ?? null,
                 'admit_date' => $newAdmitDate,
@@ -280,14 +310,20 @@ class PatientActionController extends Controller
      * Phase 1 — medical discharge: clinically done but still occupying a bed ("discharged still in").
      * With complete=true (legacy "both") the SAME request also closes the file — discharge_date
      * mirrors the medical discharge date and the transfer_type follows the current location.
+     *
+     * Outcome vocabulary is strictly Alive/Dead (maintainer-confirmed; LAMA/Absconded are
+     * DESTINATIONS). The medical-only path LOCKS the outcome to Alive like legacy phase-1 —
+     * the status is (re-)asked at the COMPLETE step, where Dead forces the Mortuary destination.
      */
     public function medicalDischarge(Request $request, Admission $admission): RedirectResponse
     {
         if (! $this->canManage($admission)) {
             throw new AccessDeniedHttpException('Only the primary consultant or a manager may discharge.');
         }
+        $complete = $request->boolean('complete');
         $data = $request->validate([
-            'outcome' => ['required', 'in:Alive,Dead,LAMA,DAMA,Transferred'],
+            // medical-only carries no status (forced Alive below); the one-step close asks it
+            'outcome' => [$complete ? 'required' : 'nullable', 'in:Alive,Dead'],
             'medical_discharge_date' => ['required', 'date', 'before_or_equal:today'],
             'discharge_to' => ['nullable', self::DISCHARGE_DESTINATIONS],
             'delay_reason' => ['nullable', 'in:Physical,System'],
@@ -296,13 +332,15 @@ class PatientActionController extends Controller
         if ($admission->discharge_date) {
             return back()->with('flash', ['type' => 'error', 'message' => 'This admission is already fully discharged.']);
         }
-        $complete = (bool) ($data['complete'] ?? false);
-        DB::transaction(function () use ($admission, $data, $complete) {
+        // legacy phase-1 stored Alive always — any client-sent status on medical-only is ignored
+        $outcome = $complete ? $data['outcome'] : 'Alive';
+        DB::transaction(function () use ($admission, $data, $complete, $outcome) {
             $admission->update([
                 'medical_discharge_date' => $data['medical_discharge_date'],
-                'outcome' => $data['outcome'],
-                // a death can only go to the mortuary — enforced here, not just in the UI
-                'discharge_to' => $data['outcome'] === 'Dead' ? 'Mortuary' : ($data['discharge_to'] ?? null),
+                'outcome' => $outcome,
+                // a death can only go to the mortuary — enforced here, not just in the UI;
+                // medical-only stores NO destination (it is asked at the COMPLETE step, like legacy)
+                'discharge_to' => ! $complete ? null : ($outcome === 'Dead' ? 'Mortuary' : ($data['discharge_to'] ?? null)),
                 // a closed file has no "still-in" delay — only the medical-only path keeps the reason
                 'delay_reason' => $complete ? null : ($data['delay_reason'] ?? null),
                 'discharged_by' => Auth::id(),
@@ -315,7 +353,7 @@ class PatientActionController extends Controller
                 $this->voidPendingSignatures($admission);
             }
         });
-        $this->audit($complete ? 'admission.discharge_both' : 'admission.medical_discharge', $admission, ['outcome' => $data['outcome']]);
+        $this->audit($complete ? 'admission.discharge_both' : 'admission.medical_discharge', $admission, ['outcome' => $outcome]);
 
         return back()->with('flash', ['type' => 'success', 'message' => $complete
             ? 'Patient discharged — file closed.'
@@ -334,7 +372,7 @@ class PatientActionController extends Controller
         }
         $data = $request->validate([
             'discharge_date' => ['required', 'date', 'before_or_equal:today'],
-            'outcome' => ['nullable', 'in:Alive,Dead,LAMA,DAMA,Transferred'],
+            'outcome' => ['nullable', 'in:Alive,Dead'],   // strict vocabulary — LAMA etc. are destinations
             'discharge_to' => ['nullable', self::DISCHARGE_DESTINATIONS],
         ]);
         if ($admission->discharge_date) {
@@ -379,7 +417,7 @@ class PatientActionController extends Controller
             throw new AccessDeniedHttpException('Only the primary consultant or a manager may discharge.');
         }
         $data = $request->validate([
-            'outcome' => ['required', 'in:Alive,Dead,LAMA,DAMA,Transferred'],
+            'outcome' => ['required', 'in:Alive,Dead'],   // strict vocabulary — LAMA etc. are destinations
             'discharge_date' => ['required', 'date', 'before_or_equal:today'],
             'discharge_to' => ['nullable', self::DISCHARGE_DESTINATIONS],
         ]);
@@ -487,13 +525,14 @@ class PatientActionController extends Controller
         $sig = null;
         $new = DB::transaction(function () use ($admission, $data, $specialty, $gated, $oldConsultant, &$sig) {
             // close the episode as a specialty handover (continuation of care); a pending phase-1
-            // medical discharge is superseded — clear its fields like the location transfer does
+            // medical discharge is superseded — clear its fields like the location transfer does.
+            // Legacy stamps MORTALITY='Alive' on every transfer-closed row (dmc-patients.php:120).
             $admission->update([
                 'discharge_date' => now()->toDateString(),
                 'transfer_type' => 'transfer to other speciality',
                 'discharge_to' => $specialty->name,
                 'medical_discharge_date' => null,
-                'outcome' => null,
+                'outcome' => 'Alive',
                 'delay_reason' => null,
                 'discharged_by' => Auth::id(),
             ]);
@@ -548,12 +587,13 @@ class PatientActionController extends Controller
             'service' => ['required', 'string', 'max:128', Rule::exists('specialties', 'name')->where('is_external', true)],
         ]);
 
+        // legacy stamps MORTALITY='Alive' on every transfer-closed row (dmc-patients.php:43)
         $admission->update([
             'discharge_date' => now()->toDateString(),
             'transfer_type' => 'other transfer',
             'discharge_to' => $data['service'],
             'medical_discharge_date' => null,
-            'outcome' => null,
+            'outcome' => 'Alive',
             'delay_reason' => null,
             'discharged_by' => Auth::id(),
         ]);
@@ -573,12 +613,15 @@ class PatientActionController extends Controller
         $new = DB::transaction(function () use ($admission, $data) {
             // close the current episode as a transfer (continuation of care, not a discharge);
             // a pending phase-1 medical discharge is superseded by the transfer, so clear its
-            // fields rather than leaving a stale outcome/delay on a transfer-closed row
+            // fields rather than leaving a stale delay on a transfer-closed row.
+            // Legacy stamps the destination + MORTALITY='Alive' (dmc-patients.php:43,120;
+            // icu-transfer.php:41) — the Trans-to-ICU stat keys on discharge_to='Intensive Care (ICU)'.
             $admission->update([
                 'discharge_date' => now()->toDateString(),
                 'transfer_type' => $admission->current_location === 'ICU' ? 'Transfer from ICU' : 'other transfer',
+                'discharge_to' => $data['target'] === 'ICU' ? 'Intensive Care (ICU)' : 'Ward',
                 'medical_discharge_date' => null,
-                'outcome' => null,
+                'outcome' => 'Alive',
                 'delay_reason' => null,
                 'discharged_by' => Auth::id(),
             ]);
@@ -624,12 +667,14 @@ class PatientActionController extends Controller
 
         $new = DB::transaction(function () use ($admission) {
             // close the ICU episode as a transfer-out (continuation of care, not a discharge);
-            // any pending phase-1 medical discharge is superseded — clear its fields like transfer()
+            // any pending phase-1 medical discharge is superseded — clear its fields like transfer().
+            // Legacy stamps DISTO='Ward' + MORTALITY='Alive' (newpatients/dmc-patients-icu-transfer.php:41).
             $admission->update([
                 'discharge_date' => now()->toDateString(),
                 'transfer_type' => 'Transfer from ICU',
+                'discharge_to' => 'Ward',
                 'medical_discharge_date' => null,
-                'outcome' => null,
+                'outcome' => 'Alive',
                 'delay_reason' => null,
                 'discharged_by' => Auth::id(),
             ]);

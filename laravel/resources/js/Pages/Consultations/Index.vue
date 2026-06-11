@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
@@ -44,7 +44,12 @@ const submitEdit = () => eForm.put(`/consultations/${editing.value.id}`, { prese
 
 // when "to service" names an INTERNAL specialty, narrow the receiving-consultant list to its
 // ON-SERVICE consultants (a previously chosen consultant stays selectable); if none match,
-// fall back to the full list with a note
+// fall back to the full list with a note. External / free-text services have NO receiving
+// consultant (legacy stored none) — the select is disabled and cleared.
+const isInternalService = (toService) => {
+    const wanted = String(toService || '').trim().toLowerCase();
+    return !!(wanted && props.specialties.find((s) => !s.is_external && s.name.trim().toLowerCase() === wanted));
+};
 const consultantPick = (toService, currentId) => {
     const wanted = String(toService || '').trim().toLowerCase();
     const spec = wanted && props.specialties.find((s) => !s.is_external && s.name.trim().toLowerCase() === wanted);
@@ -56,7 +61,16 @@ const consultantPick = (toService, currentId) => {
 };
 const cPick = computed(() => consultantPick(cForm.to_service, cForm.consultant_id));
 const ePick = computed(() => consultantPick(eForm.to_service, eForm.consultant_id));
+const cInternal = computed(() => isInternalService(cForm.to_service));
+const eInternal = computed(() => isInternalService(eForm.to_service));
+watch(cInternal, (v) => { if (!v) cForm.consultant_id = ''; });
+watch(eInternal, (v) => { if (!v) eForm.consultant_id = ''; });
 const deleteConsult = (c) => { if (confirm(`Delete the consultation for ${c.name}? This cannot be undone.`)) router.delete(`/consultations/${c.id}`, { preserveScroll: true }); };
+
+// Esc closes whichever modal is open
+const onEsc = (e) => { if (e.key === 'Escape') { showAdd.value = false; editing.value = null; } };
+onMounted(() => window.addEventListener('keydown', onEsc));
+onUnmounted(() => window.removeEventListener('keydown', onEsc));
 
 // sign off
 const signoff = (row) => {
@@ -152,8 +166,9 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Date</label><input v-model="eForm.consultation_date" type="date" :max="today" :class="field" /></div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">From service <span class="text-danger-500">*</span></label><input v-model="eForm.consultation_from" list="svc-list" :class="[field, eForm.errors.consultation_from && 'border-danger-500']" /><p v-if="eForm.errors.consultation_from" class="mt-1 text-xs text-danger-600">{{ eForm.errors.consultation_from }}</p></div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">To service <span class="text-danger-500">*</span></label><input v-model="eForm.to_service" list="svc-list" :class="[field, eForm.errors.to_service && 'border-danger-500']" /><p v-if="eForm.errors.to_service" class="mt-1 text-xs text-danger-600">{{ eForm.errors.to_service }}</p></div>
-                        <div class="sm:col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Receiving consultant <span class="text-danger-500">*</span></label><select v-model="eForm.consultant_id" :class="[field, eForm.errors.consultant_id && 'border-danger-500']"><option value="">Select consultant…</option><option v-for="c in ePick.list" :key="c.id" :value="c.id">{{ c.name }}</option></select>
-                            <p v-if="ePick.fallback" class="mt-1 text-xs text-warning-500">No on-service consultants for this specialty — showing all.</p>
+                        <div class="sm:col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Receiving consultant <span v-if="eInternal" class="text-danger-500">*</span></label><select v-model="eForm.consultant_id" :disabled="!eInternal" :class="[field, 'disabled:bg-ink-50', eForm.errors.consultant_id && 'border-danger-500']"><option value="">Select consultant…</option><option v-for="c in ePick.list" :key="c.id" :value="c.id">{{ c.name }}</option></select>
+                            <p v-if="!eInternal" class="mt-1 text-xs text-ink-400">External / free-text service — no internal consultant is recorded.</p>
+                            <p v-else-if="ePick.fallback" class="mt-1 text-xs text-warning-500">No on-service consultants for this specialty — showing all.</p>
                             <p v-if="eForm.errors.consultant_id" class="mt-1 text-xs text-danger-600">{{ eForm.errors.consultant_id }}</p></div>
                     </div>
                     <div>
@@ -189,8 +204,9 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">From service <span class="text-danger-500">*</span></label><input v-model="cForm.consultation_from" list="svc-list" :class="[field, cForm.errors.consultation_from && 'border-danger-500']" placeholder="Referring service" /><p v-if="cForm.errors.consultation_from" class="mt-1 text-xs text-danger-600">{{ cForm.errors.consultation_from }}</p></div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">To service <span class="text-danger-500">*</span></label><input v-model="cForm.to_service" list="svc-list" :class="[field, cForm.errors.to_service && 'border-danger-500']" placeholder="Consulted service" /><p v-if="cForm.errors.to_service" class="mt-1 text-xs text-danger-600">{{ cForm.errors.to_service }}</p></div>
                         <datalist id="svc-list"><option v-for="s in specialties" :key="s.id" :value="s.name" /></datalist>
-                        <div class="sm:col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Receiving consultant <span class="text-danger-500">*</span></label><select v-model="cForm.consultant_id" :class="[field, cForm.errors.consultant_id && 'border-danger-500']"><option value="">Select consultant…</option><option v-for="c in cPick.list" :key="c.id" :value="c.id">{{ c.name }}</option></select>
-                            <p v-if="cPick.fallback" class="mt-1 text-xs text-warning-500">No on-service consultants for this specialty — showing all.</p>
+                        <div class="sm:col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Receiving consultant <span v-if="cInternal" class="text-danger-500">*</span></label><select v-model="cForm.consultant_id" :disabled="!cInternal" :class="[field, 'disabled:bg-ink-50', cForm.errors.consultant_id && 'border-danger-500']"><option value="">Select consultant…</option><option v-for="c in cPick.list" :key="c.id" :value="c.id">{{ c.name }}</option></select>
+                            <p v-if="!cInternal" class="mt-1 text-xs text-ink-400">External / free-text service — no internal consultant is recorded.</p>
+                            <p v-else-if="cPick.fallback" class="mt-1 text-xs text-warning-500">No on-service consultants for this specialty — showing all.</p>
                             <p v-if="cForm.errors.consultant_id" class="mt-1 text-xs text-danger-600">{{ cForm.errors.consultant_id }}</p></div>
                     </div>
                     <div>

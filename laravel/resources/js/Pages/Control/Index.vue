@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, onMounted, onUnmounted } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
@@ -45,6 +45,11 @@ const deleteUser = (u) => {
     if (confirm(`Delete ${u.username} permanently? Their historical admissions/consultations are kept (attribution cleared). This cannot be undone.`))
         router.delete(`/control/users/${u.id}`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
 };
+
+// Esc closes the user-edit modal
+const onEsc = (e) => { if (e.key === 'Escape') editing.value = null; };
+onMounted(() => window.addEventListener('keydown', onEsc));
+onUnmounted(() => window.removeEventListener('keydown', onEsc));
 
 // reference data
 const specForm = useForm({ name: '', is_subspecialty: true, is_external: false });

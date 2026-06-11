@@ -1,7 +1,8 @@
 <script setup>
-import { ref, reactive, computed, watch } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import IcdTypeahead from '@/Components/IcdTypeahead.vue';
 
 const props = defineProps({ mode: String, results: Object, filters: Object, options: Object });
 
@@ -30,25 +31,28 @@ const qs = computed(() => new URLSearchParams(
 ).toString());
 
 // diagnosis ICD picker (admissions mode)
-const dxQuery = ref(''); const dxResults = ref([]); const selectedDx = ref([]); let dxTimer = null;
-watch(dxQuery, (q) => { clearTimeout(dxTimer); if (q.trim().length < 2) { dxResults.value = []; return; } dxTimer = setTimeout(async () => { dxResults.value = await (await fetch(`/api/icd10?q=${encodeURIComponent(q.trim())}`, { headers: { Accept: 'application/json' } })).json(); }, 250); });
-const addDx = (d) => { if (!selectedDx.value.find((x) => x.code === d.code)) { selectedDx.value.push(d); f.dx.push(d.code); } dxQuery.value = ''; dxResults.value = []; };
+const selectedDx = ref([]);
+const addDx = (d) => { if (!selectedDx.value.find((x) => x.code === d.code)) { selectedDx.value.push(d); f.dx.push(d.code); } };
 const removeDx = (code) => { selectedDx.value = selectedDx.value.filter((x) => x.code !== code); f.dx = f.dx.filter((c) => c !== code); };
 const toggleInd = (id) => { f.indication.includes(id) ? (f.indication = f.indication.filter((x) => x !== id)) : f.indication.push(id); };
 
 // edit-from-registry (reuse Modify)
 const editing = ref(null);
 const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '', bed: '', diagnoses: [] });
-const mDx = ref([]); const mQuery = ref(''); const mResults = ref([]); let mTimer = null;
+const mDx = ref([]);
 const openEdit = async (id) => {
     const d = await (await fetch(`/admissions/${id}/edit`, { headers: { Accept: 'application/json' } })).json();
     editing.value = { id }; mForm.mrn = d.mrn || ''; mForm.name = d.name || ''; mForm.age = d.age ?? ''; mForm.gender = d.gender || '';
     mForm.nationality = d.nationality || ''; mForm.bed = d.bed || ''; mDx.value = d.diagnoses || []; mForm.diagnoses = mDx.value.map((x) => x.code);
 };
-watch(mQuery, (q) => { clearTimeout(mTimer); if (q.trim().length < 2) { mResults.value = []; return; } mTimer = setTimeout(async () => { mResults.value = await (await fetch(`/api/icd10?q=${encodeURIComponent(q.trim())}`, { headers: { Accept: 'application/json' } })).json(); }, 250); });
-const mAdd = (d) => { if (!mDx.value.find((x) => x.code === d.code)) { mDx.value.push(d); mForm.diagnoses.push(d.code); } mQuery.value = ''; mResults.value = []; };
+const mAdd = (d) => { if (!mDx.value.find((x) => x.code === d.code)) { mDx.value.push(d); mForm.diagnoses.push(d.code); } };
 const mRemove = (code) => { mDx.value = mDx.value.filter((x) => x.code !== code); mForm.diagnoses = mForm.diagnoses.filter((c) => c !== code); };
 const submitEdit = () => mForm.post(`/admissions/${editing.value.id}/modify`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
+
+// Esc closes the edit modal (the ICD typeahead swallows the first Esc while its dropdown is open)
+const onEsc = (e) => { if (e.key === 'Escape') editing.value = null; };
+onMounted(() => window.addEventListener('keydown', onEsc));
+onUnmounted(() => window.removeEventListener('keydown', onEsc));
 
 const fld = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20';
 const outcomeTone = (o) => o === 'Dead' ? 'bg-danger-100 text-danger-600' : o === 'Alive' ? 'bg-success-100 text-success-600' : 'bg-ink-100 text-ink-500';
@@ -88,10 +92,7 @@ const toggleExpand = (id) => {
                     <div><label class="text-xs text-ink-400">Admitted from</label><input v-model="f.from" type="date" :class="fld" /></div>
                     <div><label class="text-xs text-ink-400">to</label><input v-model="f.to" type="date" :class="fld" /></div>
                 </div>
-                <div class="relative">
-                    <input v-model="dxQuery" :class="fld" placeholder="Add diagnosis filter (ICD-10)…" />
-                    <ul v-if="dxResults.length" class="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-xl border border-ink-100 bg-white py-1 shadow-lg"><li v-for="d in dxResults" :key="d.code" @click="addDx(d)" class="cursor-pointer px-3 py-1.5 text-sm hover:bg-brand-50"><span class="nums font-semibold text-brand-700">{{ d.code }}</span> · {{ d.name }}</li></ul>
-                </div>
+                <IcdTypeahead :input-class="fld" placeholder="Add diagnosis filter (ICD-10)…" @select="addDx" />
                 <div v-if="selectedDx.length" class="flex flex-wrap items-center gap-2">
                     <span v-for="d in selectedDx" :key="d.code" class="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700"><span class="nums">{{ d.code }}</span> <button type="button" @click="removeDx(d.code)" class="text-brand-500 hover:text-danger-600">✕</button></span>
                     <label class="ml-2 flex items-center gap-1 text-xs text-ink-500"><input type="radio" value="or" v-model="f.dx_match" /> any</label>
@@ -242,7 +243,7 @@ const toggleExpand = (id) => {
                     </div>
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-ink-700">Diagnoses</label>
-                        <div class="relative"><input v-model="mQuery" :class="fld" placeholder="Search ICD-10…" /><ul v-if="mResults.length" class="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-ink-100 bg-white py-1 shadow-lg"><li v-for="d in mResults" :key="d.code" @click="mAdd(d)" class="cursor-pointer px-3 py-1.5 text-sm hover:bg-brand-50"><span class="nums font-semibold text-brand-700">{{ d.code }}</span> · {{ d.name }}</li></ul></div>
+                        <IcdTypeahead :input-class="fld" placeholder="Search ICD-10…" @select="mAdd" />
                         <div v-if="mDx.length" class="mt-2 flex flex-wrap gap-1.5"><span v-for="d in mDx" :key="d.code" class="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700"><span class="nums">{{ d.code }}</span> {{ d.name }} <button type="button" @click="mRemove(d.code)" class="text-brand-500 hover:text-danger-600">✕</button></span></div>
                     </div>
                     <div class="flex justify-end gap-2 pt-1"><button type="button" @click="editing = null" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save changes</button></div>

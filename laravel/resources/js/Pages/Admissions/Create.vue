@@ -1,7 +1,8 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { ref } from 'vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import IcdTypeahead from '@/Components/IcdTypeahead.vue';
 
 const props = defineProps({ consultants: Array, countries: Array, locations: Array, admitFrom: Array });
 
@@ -13,21 +14,9 @@ const form = useForm({
 });
 
 // ICD-10 async picker
-const dxQuery = ref('');
-const dxResults = ref([]);
 const selectedDx = ref([]);
-let dxTimer = null;
-watch(dxQuery, (q) => {
-    clearTimeout(dxTimer);
-    if (q.trim().length < 2) { dxResults.value = []; return; }
-    dxTimer = setTimeout(async () => {
-        const r = await fetch(`/api/icd10?q=${encodeURIComponent(q.trim())}`, { headers: { Accept: 'application/json' } });
-        dxResults.value = await r.json();
-    }, 250);
-});
 const addDx = (d) => {
     if (!selectedDx.value.find((x) => x.code === d.code)) { selectedDx.value.push(d); form.diagnoses.push(d.code); }
-    dxQuery.value = ''; dxResults.value = [];
 };
 const removeDx = (code) => {
     selectedDx.value = selectedDx.value.filter((x) => x.code !== code);
@@ -115,14 +104,7 @@ const field = 'w-full rounded-xl border border-ink-200 bg-white px-3.5 py-2.5 te
                 <h2 class="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-brand-700">
                     <span class="grid h-6 w-6 place-items-center rounded-lg bg-brand-100 text-brand-700">3</span> Admission diagnosis (ICD-10)
                 </h2>
-                <div class="relative">
-                    <input v-model="dxQuery" :class="field" placeholder="Type a code or description (≥2 chars)…" />
-                    <ul v-if="dxResults.length" class="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded-xl border border-ink-100 bg-white py-1 shadow-lg">
-                        <li v-for="d in dxResults" :key="d.code" @click="addDx(d)" class="cursor-pointer px-4 py-2 text-sm hover:bg-brand-50">
-                            <span class="nums font-semibold text-brand-700">{{ d.code }}</span> · {{ d.name }}
-                        </li>
-                    </ul>
-                </div>
+                <IcdTypeahead :input-class="field" placeholder="Type a code or description (≥2 chars)…" @select="addDx" />
                 <div v-if="selectedDx.length" class="mt-3 flex flex-wrap gap-2">
                     <span v-for="d in selectedDx" :key="d.code" class="inline-flex items-center gap-1.5 rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-700">
                         <span class="nums">{{ d.code }}</span> {{ d.name }}

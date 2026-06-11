@@ -22,11 +22,11 @@ use Illuminate\Support\Facades\Route;
 // Guest
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'show'])->name('login');
-    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');   // brute-force guard
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:auth');   // brute-force guard (username+IP key)
     Route::get('/register', [RegisterController::class, 'show'])->name('register');
     Route::post('/register', [RegisterController::class, 'store']);
     Route::get('/forgot-password', [PasswordResetController::class, 'request'])->name('password.request');
-    Route::post('/forgot-password', [PasswordResetController::class, 'email'])->name('password.email')->middleware('throttle:5,1');
+    Route::post('/forgot-password', [PasswordResetController::class, 'email'])->name('password.email')->middleware('throttle:auth');
     Route::get('/reset-password/{token}', [PasswordResetController::class, 'reset'])->name('password.reset');
     Route::post('/reset-password', [PasswordResetController::class, 'update'])->name('password.update');
 });
@@ -34,7 +34,7 @@ Route::middleware('guest')->group(function () {
 // MFA login challenge — reached after password but BEFORE the session is authenticated
 // (identity held in the session, not the auth guard).
 Route::get('/mfa/challenge', [MfaController::class, 'challenge'])->name('mfa.challenge');
-Route::post('/mfa/challenge', [MfaController::class, 'verifyChallenge'])->middleware('throttle:5,1');   // brute-force guard on the 6-digit code
+Route::post('/mfa/challenge', [MfaController::class, 'verifyChallenge'])->middleware('throttle:auth');   // brute-force guard on the 6-digit code (pending-user+IP key)
 
 // Authenticated
 Route::middleware(['auth', 'mfa.enroll', 'pwd'])->group(function () {

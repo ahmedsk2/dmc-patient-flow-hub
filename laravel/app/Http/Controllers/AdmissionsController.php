@@ -142,7 +142,7 @@ class AdmissionsController extends Controller
         ]);
     }
 
-    /** ICD-10 typeahead for the diagnosis picker. */
+    /** ICD-10 typeahead for the diagnosis picker — relevance: code-prefix, name-prefix, substring. */
     public function icd10(Request $request): JsonResponse
     {
         $q = trim((string) $request->query('q', ''));
@@ -150,8 +150,9 @@ class AdmissionsController extends Controller
             return response()->json([]);
         }
         $rows = Icd10::query()
-            ->where('code', 'like', "{$q}%")->orWhere('name', 'like', "%{$q}%")
-            ->limit(20)->get(['code', 'name']);
+            ->where(fn ($w) => $w->where('code', 'like', "{$q}%")->orWhere('name', 'like', "%{$q}%"))
+            ->orderByRaw('CASE WHEN code LIKE ? THEN 0 WHEN name LIKE ? THEN 1 ELSE 2 END, code', ["{$q}%", "{$q}%"])
+            ->limit(50)->get(['code', 'name']);
 
         return response()->json($rows->map(fn ($r) => ['code' => $r->code, 'name' => $r->name]));
     }

@@ -63,21 +63,31 @@ class FinalSweepG1Test extends TestCase
 
     public function test_complete_discharge_override_changes_outcome_and_audits_old_value(): void
     {
+        // H1 revert: outcome vocabulary is strictly Alive/Dead — the override here flips
+        // the phase-1 Alive to Dead (the only legal change) and must audit the old value
         $a = $this->medicallyDischarged();
 
         $this->actingAs($this->admin())->post("/admissions/{$a->id}/complete-discharge", [
             'discharge_date' => now()->toDateString(),
-            'outcome' => 'Transferred', 'discharge_to' => 'Other Facility',
+            'outcome' => 'Dead',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $a->refresh();
         $this->assertNotNull($a->discharge_date);
-        $this->assertSame('Transferred', $a->outcome, 'override must replace the phase-1 outcome');
-        $this->assertSame('Other Facility', $a->discharge_to);
+        $this->assertSame('Dead', $a->outcome, 'override must replace the phase-1 outcome');
 
         $log = AuditLog::where('action', 'admission.complete_discharge')->latest('id')->first();
         $this->assertNotNull($log);
         $this->assertSame('Alive', $log->details['outcome_was'] ?? null, 'audit must capture the replaced outcome');
+
+        // a destination-only override still works (no outcome change → no outcome_was)
+        $b = $this->medicallyDischarged();
+        $this->actingAs($this->admin())->post("/admissions/{$b->id}/complete-discharge", [
+            'discharge_date' => now()->toDateString(), 'discharge_to' => 'Other Facility',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $b->refresh();
+        $this->assertSame('Alive', $b->outcome);
+        $this->assertSame('Other Facility', $b->discharge_to, 'destination override must replace the phase-1 destination');
     }
 
     public function test_complete_discharge_override_dead_forces_mortuary(): void
