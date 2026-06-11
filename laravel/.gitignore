@@ -1,4 +1,4 @@
-*.log
+﻿*.log
 .DS_Store
 .env
 .env.backup
@@ -14,7 +14,7 @@
 /.zed
 /auth.json
 /node_modules
-/public/build
+# /public/build  (committed: deploy host has no Node)
 /public/fonts-manifest.dev.json
 /public/hot
 /public/storage
