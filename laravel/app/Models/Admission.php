@@ -23,6 +23,23 @@ class Admission extends Model
      */
     public const REAL_DISCHARGE_TYPES = ['discharge from ward', 'discharge from ICU'];
 
+    /**
+     * The ONE readmission JOIN predicate (admissions a JOIN admissions prev): a new admission
+     * anchored to a prior REAL discharge of the same patient within the configured window.
+     * Shared by Statistics (headline KPI, grid, per-consultant, drill-down) and Reports so the
+     * definition cannot drift. Guarded by StatisticsValueTest + GapWave2Test.
+     */
+    public static function readmissionJoin(int $window): \Closure
+    {
+        return function ($j) use ($window) {
+            $j->on('prev.patient_id', '=', 'a.patient_id')
+              ->whereColumn('prev.discharge_date', '<=', 'a.admit_date')
+              ->whereRaw('DATEDIFF(a.admit_date, prev.discharge_date) BETWEEN 0 AND ?', [$window])
+              ->whereColumn('prev.id', '<>', 'a.id')
+              ->whereIn('prev.transfer_type', self::REAL_DISCHARGE_TYPES);
+        };
+    }
+
     protected $guarded = ['id'];
 
     protected function casts(): array

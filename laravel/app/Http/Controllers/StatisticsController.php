@@ -267,20 +267,12 @@ class StatisticsController extends Controller
     }
 
     /**
-     * The ONE readmission JOIN predicate: a new admission anchored to a prior REAL discharge of the
-     * same patient within the configured window (see the headline comment above). Shared by the
-     * headline KPI, the grid buckets, the per-consultant series and the drill-down so the
-     * definition cannot drift.
+     * The ONE readmission JOIN predicate — now centralised on the Admission model so Reports
+     * uses the identical definition (see Admission::readmissionJoin and the headline comment above).
      */
     private function readmissionJoin(int $window): \Closure
     {
-        return function ($j) use ($window) {
-            $j->on('prev.patient_id', '=', 'a.patient_id')
-              ->whereColumn('prev.discharge_date', '<=', 'a.admit_date')
-              ->whereRaw('DATEDIFF(a.admit_date, prev.discharge_date) BETWEEN 0 AND ?', [$window])
-              ->whereColumn('prev.id', '<>', 'a.id')
-              ->whereIn('prev.transfer_type', \App\Models\Admission::REAL_DISCHARGE_TYPES);
-        };
+        return \App\Models\Admission::readmissionJoin($window);
     }
 
     /** SQL bucket-key expression for the chosen interval (sargable enough; grouped over a bounded range). */

@@ -49,7 +49,8 @@ const print = () => window.print();
                     <th scope="col" class="px-3 py-2">Day</th><th scope="col" class="px-3 py-2 text-right">Admissions</th><th scope="col" class="px-3 py-2 text-right">Discharges</th><th scope="col" class="px-3 py-2 text-right">ICU</th><th scope="col" class="px-3 py-2 text-right">Mortality</th>
                 </tr></thead>
                 <tbody>
-                    <tr v-for="(d, i) in days" :key="d.day" :class="['Sat','Sun'].includes(d.weekday) ? 'bg-accent-300/15' : (i % 2 ? 'bg-surface/60 print:bg-white' : '')">
+                    <!-- weekend = Friday/Saturday (D4 — Saudi work week), matching the report weekend-discharge metric -->
+                    <tr v-for="(d, i) in days" :key="d.day" :class="['Fri','Sat'].includes(d.weekday) ? 'bg-accent-300/15' : (i % 2 ? 'bg-surface/60 print:bg-white' : '')">
                         <td class="border-b border-ink-100 px-3 py-1 font-medium text-ink-700">{{ d.weekday }} {{ d.day }}</td>
                         <td class="nums border-b border-ink-100 px-3 py-1 text-right">{{ d.admissions }}</td>
                         <td class="nums border-b border-ink-100 px-3 py-1 text-right">{{ d.discharges }}</td>
