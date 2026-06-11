@@ -284,6 +284,8 @@ class ResidualR2Test extends TestCase
         $stamp = now()->subDays(3)->startOfSecond();
         $a = $this->admission(['consultant_id' => $from->id, 'assigned_at' => $stamp,
             'assigned_on' => $stamp->toDateString(), 'is_new_assignment' => 1]);
+        // bulk reassign is handover-gated: every moving patient needs a handover updated TODAY
+        \App\Models\Handover::create(['admission_id' => $a->id, 'body' => 'Plan attached.', 'updated_by' => $from->id]);
 
         $this->actingAs($this->admin())->post('/admissions/reassign', [
             'from_consultant_id' => $from->id, 'to_consultant_id' => $to->id, 'mark_new' => false,
@@ -300,6 +302,8 @@ class ResidualR2Test extends TestCase
         $from = $this->user(User::ROLE_CONSULTANT);
         $to = $this->user(User::ROLE_CONSULTANT);
         $a = $this->admission(['consultant_id' => $from->id]);
+        // bulk reassign is handover-gated: every moving patient needs a handover updated TODAY
+        \App\Models\Handover::create(['admission_id' => $a->id, 'body' => 'Plan attached.', 'updated_by' => $from->id]);
 
         $this->actingAs($this->admin())->post('/admissions/reassign', [
             'from_consultant_id' => $from->id, 'to_consultant_id' => $to->id,

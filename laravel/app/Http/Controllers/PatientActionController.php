@@ -4,6 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Admission;
 use App\Models\AuditLog;
+use App\Models\Handover;
+use App\Models\HandoverRevision;
+use App\Models\HandoverSignature;
+use App\Models\Notification;
 use App\Models\User;
 use App\Services\ShuffleService;
 use Illuminate\Http\RedirectResponse;
@@ -11,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 /**
@@ -33,6 +38,52 @@ class PatientActionController extends Controller
     {
         $u = Auth::user();
         return $u->isAdmin() || $u->can_manage || (int) $a->consultant_id === (int) $u->id;
+    }
+
+    // ---- same-day handover gate (consultant-changing moves only) --------------------------------
+
+    /**
+     * A patient may only move to a DIFFERENT consultant when their handover was updated TODAY —
+     * no admin override. First assignments, shuffle, self-assign, ICU pull, location/external
+     * transfers and discharges are NOT gated.
+     */
+    private function assertHandoverToday(Admission $a): void
+    {
+        if (! Handover::updatedToday($a->id)) {
+            throw ValidationException::withMessages(['handover' => 'Handover must be updated today before transfer.']);
+        }
+    }
+
+    /**
+     * Record the receiving consultant's pending signature for a gated transfer (call INSIDE the
+     * transfer transaction): supersede any prior pending signature for the admission, then pin
+     * the latest handover revision at transfer time.
+     */
+    private function createHandoverSignature(Admission $a, ?int $fromId, int $toId): HandoverSignature
+    {
+        HandoverSignature::voidPendingFor($a->id);
+
+        return HandoverSignature::create([
+            'admission_id' => $a->id,
+            'from_consultant_id' => $fromId,
+            'to_consultant_id' => $toId,
+            'revision_id' => HandoverRevision::latestIdFor($a->id),
+            'required_at' => now(),
+        ]);
+    }
+
+    /** Display name for notification payloads. */
+    private function consultantName(?int $id): ?string
+    {
+        $u = $id ? User::find($id) : null;
+
+        return $u ? ($u->full_name ?: $u->name) : null;
+    }
+
+    /** Discharge/delete closes the episode — a still-unsigned handover signature is moot. */
+    private function voidPendingSignatures(Admission $a): void
+    {
+        HandoverSignature::voidPendingFor($a->id);
     }
 
     /** Full edit of an admission's patient demographics + diagnoses (Modify capability). */
@@ -112,12 +163,35 @@ class PatientActionController extends Controller
         // mark_new=false (legacy "New Patient?" unchecked) = quiet administrative move:
         // the new-assignment fields are left UNTOUCHED, preserving any existing assigned_at
         $markNew = $request->boolean('mark_new', true);
-        $count = Admission::whereNull('discharge_date')->where('consultant_id', $data['from_consultant_id'])
-            ->update(['consultant_id' => $data['to_consultant_id']]
-                + ($markNew ? ['is_new_assignment' => true, 'assigned_on' => now()->toDateString(), 'assigned_at' => now()] : []));
+
+        // every moving patient needs a handover updated TODAY (use the preflight endpoint /
+        // bulk modal editors to bring them current before confirming)
+        $moving = Admission::whereNull('discharge_date')->where('consultant_id', $data['from_consultant_id'])->get();
+        $freshIds = Handover::whereIn('admission_id', $moving->pluck('id'))
+            ->whereDate('updated_at', today())->pluck('admission_id')->flip();
+        if ($moving->contains(fn ($a) => ! $freshIds->has($a->id))) {
+            throw ValidationException::withMessages(['handover' => 'Handover must be updated today before transfer.']);
+        }
+
+        [$count, $sigIds] = DB::transaction(function () use ($data, $markNew, $moving) {
+            $count = Admission::whereNull('discharge_date')->where('consultant_id', $data['from_consultant_id'])
+                ->update(['consultant_id' => $data['to_consultant_id']]
+                    + ($markNew ? ['is_new_assignment' => true, 'assigned_on' => now()->toDateString(), 'assigned_at' => now()] : []));
+            // one signature per moved admission, ONE notification for the receiving consultant
+            $sigIds = $moving->map(fn ($a) => $this->createHandoverSignature(
+                $a, (int) $data['from_consultant_id'], (int) $data['to_consultant_id'])->id)->all();
+            if ($count > 0) {
+                Notification::create(['user_id' => $data['to_consultant_id'], 'type' => 'handover.transfer', 'created_at' => now(), 'payload' => [
+                    'count' => $count, 'from_name' => $this->consultantName((int) $data['from_consultant_id']),
+                ]]);
+            }
+
+            return [$count, $sigIds];
+        });
         AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'admission.bulk_reassign',
             'entity_type' => 'consultant', 'entity_id' => (string) $data['from_consultant_id'],
-            'details' => ['to' => $data['to_consultant_id'], 'count' => $count, 'mark_new' => $markNew], 'ip' => $request->ip()]);
+            'details' => ['to' => $data['to_consultant_id'], 'count' => $count, 'mark_new' => $markNew,
+                'handover_signature_ids' => $sigIds], 'ip' => $request->ip()]);
 
         return back()->with('flash', ['type' => 'success', 'message' => "Reassigned {$count} patient(s)."]);
     }
@@ -154,9 +228,33 @@ class PatientActionController extends Controller
         // the new-assignment fields are left UNTOUCHED, preserving any existing assigned_at
         $markNew = $request->boolean('mark_new', true);
 
-        $admission->update(['consultant_id' => $data['consultant_id']]
-            + ($markNew ? ['is_new_assignment' => true, 'assigned_on' => now()->toDateString(), 'assigned_at' => now()] : []));
-        $this->audit('admission.assign', $admission, ['consultant_id' => $data['consultant_id'], 'mark_new' => $markNew]);
+        // moving an ALREADY-assigned patient to a different consultant is a handover —
+        // gated on a same-day handover note; first assignments are not
+        $oldConsultant = $admission->consultant_id ? (int) $admission->consultant_id : null;
+        $gated = $oldConsultant !== null && $oldConsultant !== (int) $data['consultant_id'];
+        if ($gated) {
+            $this->assertHandoverToday($admission);
+        }
+
+        $sig = DB::transaction(function () use ($admission, $data, $markNew, $gated, $oldConsultant) {
+            $admission->update(['consultant_id' => $data['consultant_id']]
+                + ($markNew ? ['is_new_assignment' => true, 'assigned_on' => now()->toDateString(), 'assigned_at' => now()] : []));
+            if (! $gated) {
+                return null;
+            }
+            $sig = $this->createHandoverSignature($admission, $oldConsultant, (int) $data['consultant_id']);
+            Notification::create(['user_id' => $data['consultant_id'], 'type' => 'handover.transfer', 'created_at' => now(), 'payload' => [
+                'admission_id' => $admission->id,
+                'patient_name' => $admission->patient?->name,
+                'mrn' => $admission->patient?->mrn,
+                'from_name' => $this->consultantName($oldConsultant),
+                'count_hint' => 1,
+            ]]);
+
+            return $sig;
+        });
+        $this->audit('admission.assign', $admission, ['consultant_id' => $data['consultant_id'], 'mark_new' => $markNew]
+            + ($sig ? ['handover_signature_id' => $sig->id] : []));
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultant assigned.']);
     }
@@ -199,18 +297,24 @@ class PatientActionController extends Controller
             return back()->with('flash', ['type' => 'error', 'message' => 'This admission is already fully discharged.']);
         }
         $complete = (bool) ($data['complete'] ?? false);
-        $admission->update([
-            'medical_discharge_date' => $data['medical_discharge_date'],
-            'outcome' => $data['outcome'],
-            // a death can only go to the mortuary — enforced here, not just in the UI
-            'discharge_to' => $data['outcome'] === 'Dead' ? 'Mortuary' : ($data['discharge_to'] ?? null),
-            // a closed file has no "still-in" delay — only the medical-only path keeps the reason
-            'delay_reason' => $complete ? null : ($data['delay_reason'] ?? null),
-            'discharged_by' => Auth::id(),
-        ] + ($complete ? [
-            'discharge_date' => $data['medical_discharge_date'],
-            'transfer_type' => $admission->current_location === 'ICU' ? 'discharge from ICU' : 'discharge from ward',
-        ] : []));
+        DB::transaction(function () use ($admission, $data, $complete) {
+            $admission->update([
+                'medical_discharge_date' => $data['medical_discharge_date'],
+                'outcome' => $data['outcome'],
+                // a death can only go to the mortuary — enforced here, not just in the UI
+                'discharge_to' => $data['outcome'] === 'Dead' ? 'Mortuary' : ($data['discharge_to'] ?? null),
+                // a closed file has no "still-in" delay — only the medical-only path keeps the reason
+                'delay_reason' => $complete ? null : ($data['delay_reason'] ?? null),
+                'discharged_by' => Auth::id(),
+            ] + ($complete ? [
+                'discharge_date' => $data['medical_discharge_date'],
+                'transfer_type' => $admission->current_location === 'ICU' ? 'discharge from ICU' : 'discharge from ward',
+            ] : []));
+            // only the file-closing path voids a pending handover signature (phase-1 keeps it)
+            if ($complete) {
+                $this->voidPendingSignatures($admission);
+            }
+        });
         $this->audit($complete ? 'admission.discharge_both' : 'admission.medical_discharge', $admission, ['outcome' => $data['outcome']]);
 
         return back()->with('flash', ['type' => 'success', 'message' => $complete
@@ -234,11 +338,14 @@ class PatientActionController extends Controller
         if (! $admission->medical_discharge_date) {
             return back()->with('flash', ['type' => 'error', 'message' => 'Record a medical discharge first (it captures the outcome).']);
         }
-        $admission->update([
-            'discharge_date' => $data['discharge_date'],
-            'transfer_type' => $admission->current_location === 'ICU' ? 'discharge from ICU' : 'discharge from ward',
-            'discharged_by' => Auth::id(),
-        ]);
+        DB::transaction(function () use ($admission, $data) {
+            $admission->update([
+                'discharge_date' => $data['discharge_date'],
+                'transfer_type' => $admission->current_location === 'ICU' ? 'discharge from ICU' : 'discharge from ward',
+                'discharged_by' => Auth::id(),
+            ]);
+            $this->voidPendingSignatures($admission);   // the file is closed — nothing left to sign
+        });
         $this->audit('admission.complete_discharge', $admission, ['date' => $data['discharge_date']]);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Discharge completed.']);
@@ -258,14 +365,17 @@ class PatientActionController extends Controller
         if ($admission->discharge_date) {
             return back()->with('flash', ['type' => 'error', 'message' => 'Already discharged.']);
         }
-        $admission->update([
-            'discharge_date' => $data['discharge_date'],
-            'outcome' => $data['outcome'],
-            // a death can only go to the mortuary — enforced here, not just in the UI
-            'discharge_to' => $data['outcome'] === 'Dead' ? 'Mortuary' : ($data['discharge_to'] ?? null),
-            'transfer_type' => 'discharge from ICU',
-            'discharged_by' => Auth::id(),
-        ]);
+        DB::transaction(function () use ($admission, $data) {
+            $admission->update([
+                'discharge_date' => $data['discharge_date'],
+                'outcome' => $data['outcome'],
+                // a death can only go to the mortuary — enforced here, not just in the UI
+                'discharge_to' => $data['outcome'] === 'Dead' ? 'Mortuary' : ($data['discharge_to'] ?? null),
+                'transfer_type' => 'discharge from ICU',
+                'discharged_by' => Auth::id(),
+            ]);
+            $this->voidPendingSignatures($admission);   // the file is closed — nothing left to sign
+        });
         $this->audit('admission.icu_discharge', $admission, ['outcome' => $data['outcome']]);
 
         return back()->with('flash', ['type' => 'success', 'message' => "ICU discharge complete ({$data['outcome']})."]);
@@ -346,7 +456,15 @@ class PatientActionController extends Controller
         ]);
         $specialty = \App\Models\Specialty::findOrFail($data['specialty_id']);
 
-        $new = DB::transaction(function () use ($admission, $data, $specialty) {
+        // an internal handover to a DIFFERENT consultant is gated on a same-day handover note
+        $oldConsultant = $admission->consultant_id ? (int) $admission->consultant_id : null;
+        $gated = $oldConsultant !== null && $oldConsultant !== (int) $data['consultant_id'];
+        if ($gated) {
+            $this->assertHandoverToday($admission);
+        }
+
+        $sig = null;
+        $new = DB::transaction(function () use ($admission, $data, $specialty, $gated, $oldConsultant, &$sig) {
             // close the episode as a specialty handover (continuation of care); a pending phase-1
             // medical discharge is superseded — clear its fields like the location transfer does
             $admission->update([
@@ -379,12 +497,25 @@ class PatientActionController extends Controller
                 $new->diagnoses()->create(['seq' => $dx->seq, 'icd10_code' => $dx->icd10_code]);
             }
 
+            // the signature lives on the CLOSING episode — that's the one carrying the
+            // handover text + revisions the receiving consultant is acknowledging
+            if ($gated) {
+                $sig = $this->createHandoverSignature($admission, $oldConsultant, (int) $data['consultant_id']);
+                Notification::create(['user_id' => $data['consultant_id'], 'type' => 'handover.transfer', 'created_at' => now(), 'payload' => [
+                    'admission_id' => $admission->id,
+                    'patient_name' => $admission->patient?->name,
+                    'mrn' => $admission->patient?->mrn,
+                    'from_name' => $this->consultantName($oldConsultant),
+                    'count_hint' => 1,
+                ]]);
+            }
+
             return $new;
         });
         $this->audit('admission.transfer_specialty', $admission, [
             'specialty_id' => (int) $data['specialty_id'], 'specialty' => $specialty->name,
             'consultant_id' => (int) $data['consultant_id'], 'new_admission_id' => $new->id,
-        ]);
+        ] + ($sig ? ['handover_signature_id' => $sig->id] : []));
 
         return back()->with('flash', ['type' => 'success', 'message' => "Patient transferred to {$specialty->name}."]);
     }
@@ -525,6 +656,7 @@ class PatientActionController extends Controller
 
         DB::transaction(function () use ($admission, $details) {
             $this->audit('admission.delete', $admission, $details);   // written first — survives the delete
+            $this->voidPendingSignatures($admission);                 // moot before the cascade, but explicit
             $admission->diagnoses()->delete();                        // explicit, even though the FK cascades
             $admission->delete();
         });

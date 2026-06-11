@@ -119,6 +119,16 @@ class PatientsController extends Controller
 
         $newCutoff = now()->subDay();   // "New" = assigned within the last 24h (rolling)
 
+        // handover meta + my pending signatures — two grouped lookups, no per-card queries
+        $handovers = \App\Models\Handover::whereIn('admission_id', $admissions->pluck('id'))
+            ->with('updatedBy:id,name,full_name')->get()->keyBy('admission_id');
+        // sign-pending is matched by PATIENT (a specialty transfer leaves the signature on the
+        // closed episode while the board shows the patient's new one)
+        $signPendingPatientIds = \App\Models\HandoverSignature::where('to_consultant_id', auth()->id())
+            ->whereNull('signed_at')->whereNull('voided_at')
+            ->join('admissions', 'admissions.id', '=', 'handover_signatures.admission_id')
+            ->pluck('admissions.patient_id')->flip();
+
         // ICD-10 names for every code on the board — ONE lookup, then an in-memory map
         $boardCodes = $admissions->pluck('diagnoses')->flatten()->pluck('icd10_code')->unique()->values();
         $dxNames = $boardCodes->isEmpty()
@@ -163,6 +173,12 @@ class PatientsController extends Controller
                 'is_tb' => $isTb,
                 'is_readmission' => $readmitIds->has($a->id),
                 'medically_discharged' => $medDischarged,
+                'handover' => ($h = $handovers->get($a->id)) ? [
+                    'updated_at' => $h->updated_at->toIso8601String(),
+                    'updated_by' => $h->updatedBy ? ($h->updatedBy->full_name ?: $h->updatedBy->name) : null,
+                    'today' => $h->updated_at->isToday(),
+                ] : null,
+                'sign_pending' => $signPendingPatientIds->has($a->patient_id),
             ];
 
             $c = &$groups[$cid]['counts'];

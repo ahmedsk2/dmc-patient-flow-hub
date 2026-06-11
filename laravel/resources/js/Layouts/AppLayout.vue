@@ -21,6 +21,7 @@ const nav = [
     { label: 'Dashboard', href: '/', icon: 'grid' },
     { label: 'New Admissions', href: '/admissions', icon: 'plus' },
     { label: 'Patients', href: '/patients', icon: 'bed' },
+    { label: 'Handovers', href: '/handovers', icon: 'clipboard' },
     { label: 'Consultations', href: '/consultations', icon: 'chat' },
 ];
 // Admin-only — Registry/Statistics/Reports + exports are restricted (PHI exposure control);
@@ -49,6 +50,48 @@ const icons = {
     cog: 'M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.28c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.43l-1.003.827c-.293.241-.438.613-.43.992a7.03 7.03 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.542-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.93 6.93 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z',
     clock: 'M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
     upload: 'M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 7.5 12 3m0 0L7.5 7.5M12 3v13.5',
+    clipboard: 'M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z',
+};
+
+// ---- notification bell (handover transfers) ---------------------------------------------------
+// Badge count comes from the shared `unreadNotifications` prop (refreshed by every Inertia visit —
+// no polling timer); opening the dropdown fetches the latest 15 and marks everything read.
+const bellOpen = ref(false);
+const bellLoading = ref(false);
+const notifications = ref([]);
+const readOverride = ref(false);   // optimistic zero after read-all, until the next shared-prop refresh
+const unread = computed(() => (readOverride.value ? 0 : (page.props.unreadNotifications || 0)));
+watch(() => page.props.unreadNotifications, () => (readOverride.value = false));
+
+const xsrf = () => decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/) || [])[1] || '');
+const toggleBell = async () => {
+    bellOpen.value = !bellOpen.value;
+    if (!bellOpen.value) return;
+    bellLoading.value = true;
+    try {
+        const d = await (await fetch('/api/notifications', { headers: { Accept: 'application/json' } })).json();
+        notifications.value = d.notifications || [];
+        if (d.unread > 0) {
+            await fetch('/notifications/read-all', { method: 'POST', headers: { Accept: 'application/json', 'X-XSRF-TOKEN': xsrf() } });
+        }
+        readOverride.value = true;
+    } finally {
+        bellLoading.value = false;
+    }
+};
+const goInbox = () => { bellOpen.value = false; router.visit('/handovers'); };
+const notifText = (n) => {
+    const p = n.payload || {};
+    if (p.count) return `Dr. ${p.from_name || 'A consultant'} handed over ${p.count} patient(s) to you`;
+    return `Dr. ${p.from_name || 'A consultant'} handed over ${p.patient_name || 'a patient'}${p.mrn ? ` (MRN ${p.mrn})` : ''}`;
+};
+const relTime = (iso) => {
+    if (!iso) return '';
+    const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    if (mins < 60 * 24) return `${Math.round(mins / 60)}h ago`;
+    return `${Math.round(mins / (60 * 24))}d ago`;
 };
 </script>
 
@@ -116,6 +159,30 @@ const icons = {
                     <div class="hidden items-center gap-2 rounded-full bg-success-100 px-3 py-1 text-xs font-semibold text-success-600 sm:flex">
                         <span class="relative flex h-2 w-2"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-success-500 opacity-60"></span><span class="relative inline-flex h-2 w-2 rounded-full bg-success-500"></span></span>
                         Live
+                    </div>
+                    <!-- notification bell -->
+                    <div class="relative">
+                        <button @click="toggleBell" aria-label="Notifications" title="Notifications" class="relative grid h-9 w-9 place-items-center rounded-full text-ink-400 transition hover:bg-ink-50 hover:text-ink-700">
+                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" /></svg>
+                            <span v-if="unread > 0" class="nums absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-danger-600 px-1 text-[10px] font-bold leading-none text-white">{{ unread > 9 ? '9+' : unread }}</span>
+                        </button>
+                        <div v-if="bellOpen" class="fixed inset-0 z-40" @click="bellOpen = false"></div>
+                        <div v-if="bellOpen" class="absolute right-0 top-11 z-50 w-80 overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-ink-100">
+                            <div class="flex items-center justify-between border-b border-ink-100 px-4 py-2.5">
+                                <span class="text-sm font-bold text-ink-800">Notifications</span>
+                                <button @click="goInbox" class="text-xs font-semibold text-brand-600 hover:underline">Handover inbox →</button>
+                            </div>
+                            <div v-if="bellLoading" class="px-4 py-6 text-center text-sm text-ink-400">Loading…</div>
+                            <ul v-else-if="notifications.length" class="max-h-80 divide-y divide-ink-50 overflow-auto">
+                                <li v-for="n in notifications" :key="n.id">
+                                    <button @click="goInbox" class="w-full px-4 py-3 text-left transition hover:bg-brand-50/40" :class="{ 'bg-brand-50/30': !n.read_at }">
+                                        <p class="text-sm leading-snug text-ink-700">{{ notifText(n) }}</p>
+                                        <p class="nums mt-0.5 text-xs text-ink-400">{{ relTime(n.created_at) }}</p>
+                                    </button>
+                                </li>
+                            </ul>
+                            <div v-else class="px-4 py-6 text-center text-sm text-ink-400">No notifications yet.</div>
+                        </div>
                     </div>
                     <div class="flex items-center gap-3 border-l border-ink-100 pl-3">
                         <Link href="/profile" class="flex items-center gap-3 rounded-xl px-1 py-1 transition hover:bg-ink-50">

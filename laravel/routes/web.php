@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\ConsultationsController;
 use App\Http\Controllers\ControlController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\HandoverController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\MfaController;
 use App\Http\Controllers\PatientActionController;
@@ -59,6 +60,16 @@ Route::middleware(['auth', 'mfa.enroll', 'pwd'])->group(function () {
     Route::post('/admissions/{admission}/reverse-discharge', [PatientActionController::class, 'reverseDischarge'])->name('admissions.reverse');
     Route::post('/admissions/{admission}/undo-medical-discharge', [PatientActionController::class, 'undoMedicalDischarge'])->name('admissions.undoMedical');
     Route::delete('/admissions/{admission}', [PatientActionController::class, 'destroy'])->name('admissions.destroy');   // admin-only (enforced in the action)
+
+    // Handovers — read is all-roles; save is canManage/outgoing (enforced in the action)
+    Route::get('/admissions/{admission}/handover', [HandoverController::class, 'show'])->name('admissions.handover.show');
+    Route::post('/admissions/{admission}/handover', [HandoverController::class, 'save'])->name('admissions.handover.save');
+    Route::get('/handovers', [HandoverController::class, 'index'])->name('handovers.index');
+    Route::get('/handovers/preflight', [HandoverController::class, 'preflight'])->name('handovers.preflight');
+    Route::post('/handovers/sign-many', [HandoverController::class, 'signMany'])->name('handovers.signMany');
+    Route::post('/handovers/{signature}/sign', [HandoverController::class, 'sign'])->name('handovers.sign');
+    Route::get('/api/notifications', [HandoverController::class, 'notifications'])->name('notifications.index');
+    Route::post('/notifications/read-all', [HandoverController::class, 'readAll'])->name('notifications.readAll');
     Route::get('/consultations', [ConsultationsController::class, 'index'])->name('consultations.index');
     Route::post('/consultations', [ConsultationsController::class, 'store'])->name('consultations.store');
     Route::post('/consultations/{consultation}/signoff', [ConsultationsController::class, 'signoff'])->name('consultations.signoff');

@@ -37,6 +37,10 @@ class HandleInertiaRequests extends Middleware
                 ] : null,
             ],
             'flash' => fn () => $request->session()->get('flash'),
+            // bell badge — a cheap COUNT on (user_id, read_at); refreshed by every Inertia visit
+            'unreadNotifications' => fn () => $user
+                ? \App\Models\Notification::where('user_id', $user->id)->whereNull('read_at')->count()
+                : 0,
         ]);
     }
 }

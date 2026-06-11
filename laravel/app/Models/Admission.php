@@ -80,6 +80,8 @@ class Admission extends Model
     public function admittedBy(): BelongsTo { return $this->belongsTo(User::class, 'admitted_by'); }
     public function dischargedBy(): BelongsTo { return $this->belongsTo(User::class, 'discharged_by'); }
     public function diagnoses(): HasMany { return $this->hasMany(AdmissionDiagnosis::class); }
+    public function handover() { return $this->hasOne(Handover::class); }
+    public function handoverSignatures(): HasMany { return $this->hasMany(HandoverSignature::class); }
 
     /** Currently admitted (file not closed). */
     public function scopeActive(Builder $q): Builder { return $q->whereNull('discharge_date'); }

@@ -31,7 +31,12 @@ class LegacyImport extends Command
         DB::statement("SET SESSION sql_mode='NO_AUTO_VALUE_ON_ZERO'");
 
         Schema::disableForeignKeyConstraints();
-        foreach (['admission_diagnoses', 'admissions', 'consultations', 'patients', 'icd10',
+        // Handover + notification tables MUST be truncated whenever admissions are re-imported:
+        // they reference admissions/users by id, and a fresh import re-seeds those ids — TRUNCATE
+        // (with FK checks off) bypasses the cascade, so stale rows would otherwise survive and
+        // point at the wrong (or missing) episodes after a new legacy dump is loaded.
+        foreach (['handover_signatures', 'handover_revisions', 'handovers', 'notifications',
+                  'admission_diagnoses', 'admissions', 'consultations', 'patients', 'icd10',
                   'specialties', 'consultation_reasons', 'tb_diagnoses', 'countries', 'settings'] as $t) {
             DB::table($t)->truncate();
         }

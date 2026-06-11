@@ -60,6 +60,71 @@ const reassign = ref(false);
 const rForm = useForm({ from_consultant_id: '', to_consultant_id: '', mark_new: true });
 const submitReassign = () => rForm.post('/admissions/reassign', { preserveScroll: true, onSuccess: () => { reassign.value = false; rForm.reset(); } });
 
+// ---- handover: board icon + modal + transfer-gate editors -------------------------------------
+const fmtAt = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
+const handoverTone = (p) => !p.handover ? 'text-ink-300 hover:text-ink-500' : p.handover.today ? 'text-brand-600 hover:text-brand-700' : 'text-warning-500 hover:text-warning-600';
+const handoverTitle = (p) => p.handover ? `Handover — last updated ${p.handover.updated_by || '—'} ${fmtAt(p.handover.updated_at)}` : 'No handover yet';
+
+// handover modal — read-only body + meta for all roles; Edit+Save for canManage; History collapsible
+const hModal = ref(null);   // { row, data|null }
+const hForm = useForm({ body: '' });
+const hEditing = ref(false);
+const histOpen = ref(false);
+const openHandover = async (p) => {
+    hModal.value = { row: p, data: null };
+    hEditing.value = false; histOpen.value = false;
+    hForm.reset(); hForm.clearErrors();
+    const d = await (await fetch(`/admissions/${p.id}/handover`, { headers: { Accept: 'application/json' } })).json();
+    if (hModal.value && hModal.value.row.id === p.id) { hModal.value.data = d; hForm.body = d.body || ''; }
+};
+const submitHandover = () => hForm.post(`/admissions/${hModal.value.row.id}/handover`, {
+    preserveScroll: true, preserveState: true, onSuccess: () => (hModal.value = null),
+});
+
+// inline gate editor (assign + specialty-transfer modals): when the server rejects with the
+// handover error, write today's handover right there, save, then retry the original submit
+const gateBody = ref('');
+const gateBusy = ref(false);
+const xsrf = () => decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/) || [])[1] || '');
+const saveHandoverInline = async (admissionId, body) => {
+    const res = await fetch(`/admissions/${admissionId}/handover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-XSRF-TOKEN': xsrf() },
+        body: JSON.stringify({ body }),
+    });
+    return res.ok;
+};
+const saveGateThen = async (retry) => {
+    const body = gateBody.value.trim();
+    if (!body || !modal.value) return;
+    gateBusy.value = true;
+    try { if (await saveHandoverInline(modal.value.row.id, body)) { gateBody.value = ''; retry(); } } finally { gateBusy.value = false; }
+};
+
+// bulk-reassign preflight: which of the consultant's patients still need today's handover —
+// stale ones get an editor each; Confirm unlocks once every handover is current
+const preflight = ref(null);   // null | { loading, rows: [{id,name,mrn,handover_today,body}] }
+const preflightBodies = ref({});
+const loadPreflight = async (id) => {
+    preflight.value = { loading: true, rows: [] };
+    const rows = await (await fetch(`/handovers/preflight?from_consultant_id=${id}`, { headers: { Accept: 'application/json' } })).json();
+    preflightBodies.value = Object.fromEntries(rows.filter((r) => !r.handover_today).map((r) => [r.id, r.body || '']));
+    preflight.value = { loading: false, rows };
+};
+watch(() => rForm.from_consultant_id, (id) => { preflight.value = null; if (id) loadPreflight(id); });
+const staleRows = computed(() => (preflight.value?.rows || []).filter((r) => !r.handover_today));
+const preflightReady = computed(() => !!preflight.value && !preflight.value.loading && staleRows.value.length === 0);
+const allStaleFilled = computed(() => staleRows.value.every((r) => (preflightBodies.value[r.id] || '').trim().length > 0));
+const savingAll = ref(false);
+const saveAllStale = async () => {
+    if (!allStaleFilled.value) return;
+    savingAll.value = true;
+    try {
+        for (const r of staleRows.value) await saveHandoverInline(r.id, preflightBodies.value[r.id].trim());
+        await loadPreflight(rForm.from_consultant_id);   // re-check — flips handover_today, unlocks Confirm
+    } finally { savingAll.value = false; }
+};
+
 const modal = ref(null);
 const today = new Date().toISOString().slice(0, 10);
 const aForm = useForm({ consultant_id: '', mark_new: true });
@@ -69,7 +134,8 @@ const icuForm = useForm({ outcome: 'Alive', discharge_date: today, discharge_to:
 const tForm = useForm({ mode: 'location', target: 'ICU', specialty_id: '', consultant_id: '', service: '' });
 const openModal = (mode, row) => {
     modal.value = { mode, row };
-    if (mode === 'assign') { aForm.consultant_id = row.consultant_id || ''; aForm.mark_new = true; }
+    gateBody.value = '';   // fresh inline-handover editor per patient
+    if (mode === 'assign') { aForm.consultant_id = row.consultant_id || ''; aForm.mark_new = true; aForm.clearErrors(); }
     if (mode === 'medical') mdForm.reset();   // never carry a previous patient's type/destination over
     if (mode === 'icu') icuForm.reset();
     if (mode === 'transfer') { tForm.reset(); tForm.target = row.location === 'ICU' ? 'Ward' : 'ICU'; }
@@ -217,7 +283,13 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                                 class="rounded underline decoration-dotted underline-offset-2 hover:opacity-75">{{ p.bed || '—' }}</button>
                             <template v-else>{{ p.bed || '—' }}</template>
                         </span>
-                        <span v-if="p.los !== null" class="nums rounded-full px-2 py-0.5 text-[11px] font-bold" :class="losTone(p.los_band)">{{ p.los }}d</span>
+                        <span class="flex items-center gap-1">
+                            <button type="button" @click="openHandover(p)" :title="handoverTitle(p)" :aria-label="handoverTitle(p)"
+                                class="grid h-6 w-6 place-items-center rounded-lg transition hover:bg-white/70" :class="handoverTone(p)">
+                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z" /></svg>
+                            </button>
+                            <span v-if="p.los !== null" class="nums rounded-full px-2 py-0.5 text-[11px] font-bold" :class="losTone(p.los_band)">{{ p.los }}d</span>
+                        </span>
                     </div>
                     <div class="px-3 py-2">
                         <div class="font-semibold text-ink-800">{{ p.name }}</div>
@@ -228,6 +300,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                             <span v-if="p.is_longterm" class="rounded-full bg-accent-300/40 px-1.5 py-0.5 text-[10px] font-semibold text-accent-600">Long-term</span>
                             <span v-if="p.is_tb" class="rounded-full bg-danger-100 px-1.5 py-0.5 text-[10px] font-semibold text-danger-600">TB</span>
                             <span v-if="p.medically_discharged" class="rounded-full bg-warning-100 px-1.5 py-0.5 text-[10px] font-semibold text-warning-500">Disch. still in</span>
+                            <Link v-if="p.sign_pending" href="/handovers" title="Handover awaiting your signature" class="rounded-full bg-brand-100 px-1.5 py-0.5 text-[10px] font-semibold text-brand-700 hover:bg-brand-200">Sign pending</Link>
                             <button v-if="p.dx_count" type="button" @click="toggleDx(p.id)" :aria-expanded="dxOpen === p.id"
                                 :aria-label="`${p.dx_count} diagnoses — ${dxOpen === p.id ? 'hide' : 'show'} names`"
                                 class="rounded-full px-1.5 py-0.5 text-[10px] font-semibold transition"
@@ -266,6 +339,12 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                 <form v-if="modal.mode === 'assign'" @submit.prevent="submitAssign" class="space-y-4">
                     <select v-model="aForm.consultant_id" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select consultant…</option><option v-for="c in consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select>
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="aForm.mark_new" class="rounded text-brand-600" /> Mark as new patient <span class="text-xs text-ink-400">(uncheck for a quiet administrative move — no “New” badge)</span></label>
+                    <!-- handover gate: write today's handover here, save, retry the assign -->
+                    <div v-if="aForm.errors.handover" class="rounded-xl bg-warning-100/60 p-3 ring-1 ring-warning-500/30">
+                        <p class="text-xs font-semibold text-warning-500">{{ aForm.errors.handover }}</p>
+                        <textarea v-model="gateBody" rows="3" maxlength="5000" placeholder="Write today's handover for this patient…" aria-label="Handover text" class="mt-2 w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
+                        <div class="mt-2 flex justify-end"><button type="button" @click="saveGateThen(submitAssign)" :disabled="gateBusy || !gateBody.trim()" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save handover & assign</button></div>
+                    </div>
                     <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="aForm.processing || !aForm.consultant_id" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Assign</button></div>
                 </form>
                 <form v-else-if="modal.mode === 'medical'" @submit.prevent="submitMedical" class="space-y-4">
@@ -319,6 +398,12 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                             <p v-if="tForm.specialty_id && !specConsultants.length" class="mt-1 text-xs text-warning-500">No consultants registered under this specialty.</p>
                             <p v-if="tForm.errors.consultant_id" class="mt-1 text-xs text-danger-600">{{ tForm.errors.consultant_id }}</p></div>
                         <p class="text-xs text-ink-400">Closes this episode as a specialty handover and opens a new one under the chosen consultant.</p>
+                        <!-- handover gate: write today's handover here, save, retry the transfer -->
+                        <div v-if="tForm.errors.handover" class="rounded-xl bg-warning-100/60 p-3 ring-1 ring-warning-500/30">
+                            <p class="text-xs font-semibold text-warning-500">{{ tForm.errors.handover }}</p>
+                            <textarea v-model="gateBody" rows="3" maxlength="5000" placeholder="Write today's handover for this patient…" aria-label="Handover text" class="mt-2 w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
+                            <div class="mt-2 flex justify-end"><button type="button" @click="saveGateThen(submitTransfer)" :disabled="gateBusy || !gateBody.trim()" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save handover & transfer</button></div>
+                        </div>
                     </template>
                     <template v-else>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">External / allied service</label>
@@ -340,8 +425,66 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">From</label><select v-model="rForm.from_consultant_id" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select…</option><option v-for="c in consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">To</label><select v-model="rForm.to_consultant_id" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select…</option><option v-for="c in consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="rForm.mark_new" class="rounded text-brand-600" /> Mark as new patients <span class="text-xs text-ink-400">(uncheck to keep their current “New” status)</span></label>
-                    <div class="flex justify-end gap-2"><button type="button" @click="reassign = false" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="rForm.processing || !rForm.from_consultant_id || !rForm.to_consultant_id" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Reassign all</button></div>
+
+                    <!-- handover preflight: every moving patient needs a handover updated TODAY -->
+                    <div v-if="preflight" class="rounded-xl bg-surface/70 p-3 ring-1 ring-ink-100">
+                        <p v-if="preflight.loading" class="text-sm text-ink-400">Checking handovers…</p>
+                        <template v-else-if="staleRows.length">
+                            <p class="text-xs font-semibold text-warning-500">{{ staleRows.length }} of {{ preflight.rows.length }} patient(s) need today's handover before the move:</p>
+                            <div v-for="r in staleRows" :key="r.id" class="mt-2">
+                                <p class="text-xs font-semibold text-ink-700">{{ r.name }} <span class="nums font-normal text-ink-400">MRN {{ r.mrn }}</span></p>
+                                <textarea v-model="preflightBodies[r.id]" rows="2" maxlength="5000" :aria-label="`Handover for ${r.name}`" placeholder="Write today's handover…" class="mt-1 w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
+                            </div>
+                            <div class="mt-2 flex justify-end"><button type="button" @click="saveAllStale" :disabled="savingAll || !allStaleFilled" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50">{{ savingAll ? 'Saving…' : 'Save all handovers' }}</button></div>
+                        </template>
+                        <p v-else class="flex items-center gap-1.5 text-xs font-semibold text-success-600">
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                            {{ preflight.rows.length ? `All ${preflight.rows.length} handover(s) updated today — ready to move.` : 'No active patients under this consultant.' }}
+                        </p>
+                    </div>
+                    <p v-if="rForm.errors.handover" class="text-xs font-semibold text-danger-600">{{ rForm.errors.handover }}</p>
+
+                    <div class="flex justify-end gap-2"><button type="button" @click="reassign = false" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="rForm.processing || !rForm.from_consultant_id || !rForm.to_consultant_id || !preflightReady" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Reassign all</button></div>
                 </form>
+            </div>
+        </div>
+
+        <!-- handover modal (read for all roles; edit for canManage) -->
+        <div v-if="hModal" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="hModal = null">
+            <div class="max-h-[90vh] w-full max-w-lg overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
+                <div class="mb-4 flex items-start justify-between">
+                    <div><h3 class="text-lg font-bold text-ink-900">Handover</h3><p class="text-sm text-ink-400">{{ hModal.row.name }} · MRN {{ hModal.row.mrn }}</p></div>
+                    <button @click="hModal = null" aria-label="Close" class="text-ink-400 hover:text-ink-700">✕</button>
+                </div>
+                <p v-if="!hModal.data" class="py-6 text-center text-sm text-ink-400">Loading…</p>
+                <template v-else>
+                    <p class="mb-2 text-xs text-ink-400">
+                        {{ hModal.data.updated_at ? `Last updated by ${hModal.data.updated_by_name || '—'} · ${fmtAt(hModal.data.updated_at)}` : 'No handover yet.' }}
+                        <span v-if="hModal.data.updated_at" class="ml-1 rounded-full px-2 py-0.5 text-[10px] font-semibold" :class="hModal.data.today ? 'bg-brand-100 text-brand-700' : 'bg-warning-100 text-warning-500'">{{ hModal.data.today ? 'Updated today' : 'Stale' }}</span>
+                    </p>
+                    <template v-if="hEditing">
+                        <textarea v-model="hForm.body" rows="6" maxlength="5000" aria-label="Handover text" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
+                        <p v-if="hForm.errors.body" class="mt-1 text-xs text-danger-600">{{ hForm.errors.body }}</p>
+                        <div class="mt-3 flex justify-end gap-2">
+                            <button type="button" @click="hEditing = false" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
+                            <button type="button" @click="submitHandover" :disabled="hForm.processing || !hForm.body.trim()" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save</button>
+                        </div>
+                    </template>
+                    <template v-else>
+                        <p class="whitespace-pre-wrap rounded-xl bg-surface/70 px-3 py-2.5 text-sm leading-relaxed text-ink-700">{{ hModal.data.body || 'No handover text recorded.' }}</p>
+                        <div class="mt-3 flex items-center justify-between">
+                            <button v-if="hModal.data.revisions?.length" type="button" @click="histOpen = !histOpen" :aria-expanded="histOpen" class="text-xs font-semibold text-brand-600 hover:underline">{{ histOpen ? 'Hide history' : `History (${hModal.data.revisions.length})` }}</button>
+                            <span v-else class="text-xs text-ink-400">No history yet.</span>
+                            <button v-if="canManage(hModal.row) && !isObserver" type="button" @click="hEditing = true" class="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Edit</button>
+                        </div>
+                        <ul v-if="histOpen" class="mt-3 max-h-56 space-y-2 overflow-auto">
+                            <li v-for="(r, i) in hModal.data.revisions" :key="i" class="rounded-xl ring-1 ring-ink-100">
+                                <p class="rounded-t-xl bg-surface/60 px-3 py-1.5 text-[11px] font-semibold text-ink-500">{{ r.author || '—' }} · {{ fmtAt(r.at) }}</p>
+                                <p class="whitespace-pre-wrap px-3 py-2 text-xs leading-relaxed text-ink-600">{{ r.body }}</p>
+                            </li>
+                        </ul>
+                    </template>
+                </template>
             </div>
         </div>
 

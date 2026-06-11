@@ -1,4 +1,4 @@
-# Laravel app — production deployment runbook
+﻿# Laravel app â€” production deployment runbook
 
 > Ordered checklist for putting the **Laravel re-platform** (`laravel/` on branch `laravel-replatform`)
 > into production. The legacy PHP app has its own runbook at the repo root ([`DEPLOY.md`](../../DEPLOY.md));
@@ -10,9 +10,9 @@
 - **MySQL 8.x** (InnoDB, utf8mb4)
 - **Composer 2.x**; **Node 20+ / npm** only if building assets on the server (you can also build
   locally / in CI and upload `public/build/`)
-- A web server (Apache or nginx) with the document root pointed at **`laravel/public`** —
+- A web server (Apache or nginx) with the document root pointed at **`laravel/public`** â€”
   never at `laravel/` itself
-- HTTPS/TLS terminated in front of the app (this system holds PHI — do not run plain HTTP)
+- HTTPS/TLS terminated in front of the app (this system holds PHI â€” do not run plain HTTP)
 
 ## 1. Code
 
@@ -36,11 +36,11 @@ Set in `.env` (never commit it):
 |---|---|
 | `APP_ENV` / `APP_DEBUG` | `production` / `false` |
 | `APP_URL` | the real https URL |
-| `DB_*` | host, **`dmc_laravel`** (or your name), a **dedicated DB user with a fresh password** (the old legacy credentials were exposed — never reuse them) |
+| `DB_*` | host, **`dmc_laravel`** (or your name), a **dedicated DB user with a fresh password** (the old legacy credentials were exposed â€” never reuse them) |
 | `LEGACY_DB_*` | only needed if you will run `legacy:import` on this server; otherwise remove/leave unused |
 | `MAIL_*` | the SMTP relay (password-reset emails); **rotated** SMTP credentials |
 | `SESSION_SECURE_COOKIE` | `true` (HTTPS only) |
-| `APP_TIMEZONE` | the hospital's zone (e.g. `Asia/Riyadh`) — date columns are timezone-naive; "today" metrics drift near midnight if app/DB zones differ |
+| `APP_TIMEZONE` | the hospital's zone (e.g. `Asia/Riyadh`) â€” date columns are timezone-naive; "today" metrics drift near midnight if app/DB zones differ |
 | `LOG_CHANNEL` / `LOG_LEVEL` | `daily` / `warning` (rotated; stock `single` grows unbounded) |
 | `SENTRY_DSN` | optional but recommended: `composer require sentry/sentry-laravel` on the server, set the DSN, and unhandled exceptions get alerted instead of dying silently in a log file (the SDK is inert while the DSN is empty) |
 
@@ -48,19 +48,21 @@ Set in `.env` (never commit it):
 
 Pick **one**:
 
-- **(a) Upload the ready-made export** — import `dmc_laravel_export.sql` into an empty database.
-  Schema + data arrive together; no migrate needed. Afterwards run `php artisan migrate` once anyway —
-  it should say *Nothing to migrate* (sanity check that code and schema agree).
-- **(b) Rebuild from the legacy DB** — create an empty DB, then:
+- **(a) Upload the ready-made export** â€” import `dmc_laravel_export.sql` into an empty database.
+  Schema + data arrive together; no migrate needed. Afterwards run `php artisan migrate` once anyway â€”
+  it should say *Nothing to migrate* (sanity check that code and schema agree). If the export predates
+  the handover feature it will instead run `2026_06_11_000001_create_handover_tables` (handovers,
+  handover_revisions, handover_signatures, notifications) â€” that's expected; they start empty.
+- **(b) Rebuild from the legacy DB** â€” create an empty DB, then:
   `php artisan migrate && php artisan legacy:import` (requires the `legacy` connection to reach the
   original database; the import is read-only on the source and idempotent on the target).
 
 ## 4. First-login / app configuration (in the UI, as an admin)
 
-- [ ] **Control → Settings:** set the real **Licensed ward beds** and **ICU beds** (occupancy is wrong
-      until you do — defaults are placeholders). Changes are recorded in the on-page history.
-- [ ] **Control → Settings:** choose the **MFA enforcement** policy (off / admins / everyone).
-- [ ] **Control → Users:** verify roles/capabilities; deactivate any accounts that should not exist.
+- [ ] **Control â†’ Settings:** set the real **Licensed ward beds** and **ICU beds** (occupancy is wrong
+      until you do â€” defaults are placeholders). Changes are recorded in the on-page history.
+- [ ] **Control â†’ Settings:** choose the **MFA enforcement** policy (off / admins / everyone).
+- [ ] **Control â†’ Users:** verify roles/capabilities; deactivate any accounts that should not exist.
 - [ ] **New Admissions queue:** assign any patients showing as *awaiting assignment*.
 
 ## 5. Hardening & ops
@@ -68,7 +70,7 @@ Pick **one**:
 - [ ] `php artisan config:cache && php artisan route:cache && php artisan view:cache`
 - [ ] File permissions: web user needs write only to `storage/` and `bootstrap/cache/`
 - [ ] **Backups:** schedule a daily `mysqldump` of the app DB + retention; verify a restore once.
-      (No backup process shipped with the legacy system — this must be stood up.)
+      (No backup process shipped with the legacy system â€” this must be stood up.)
 - [ ] Log rotation for `storage/logs/`
 - [ ] Confirm `/login` is reachable over HTTPS and plain-HTTP redirects to HTTPS
 
@@ -76,10 +78,10 @@ Pick **one**:
 
 - [ ] Log in as a real admin (existing staff passwords carried over from the legacy system)
 - [ ] Dashboard renders with believable census numbers; Bed Occupancy sensible after step 4
-- [ ] Admit a test patient → appears on New Admissions → assign → appears on Active board → discharge
-      (medical → complete) → appears in Registry → **delete/clean the test record**
-- [ ] PDF download works (Reports → Download PDF)
-- [ ] `php artisan test` on a staging copy is green (49 tests / 325 assertions as of 2026-06-10)
+- [ ] Admit a test patient â†’ appears on New Admissions â†’ assign â†’ appears on Active board â†’ discharge
+      (medical â†’ complete) â†’ appears in Registry â†’ **delete/clean the test record**
+- [ ] PDF download works (Reports â†’ Download PDF)
+- [ ] `php artisan test` on a staging copy is green (147 tests / 1,157 assertions as of 2026-06-11)
 
 ## Rollback
 

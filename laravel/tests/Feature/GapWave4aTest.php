@@ -45,10 +45,13 @@ class GapWave4aTest extends TestCase
         $admin = $this->user(['role' => User::ROLE_ADMIN]);
         $spec = Specialty::create(['name' => 'Cardiology', 'is_subspecialty' => true]);
         $cardio = $this->user(['name' => 'Cardio Cons', 'specialty_id' => $spec->id]);
-        $a = $this->admission(['consultant_id' => $this->user()->id, 'bed' => 'W-12',
+        $owner = $this->user();
+        $a = $this->admission(['consultant_id' => $owner->id, 'bed' => 'W-12',
             'medical_discharge_date' => now()->toDateString(), 'outcome' => 'Alive', 'delay_reason' => 'bed']);
         $a->diagnoses()->create(['seq' => 1, 'icd10_code' => 'I21.0']);
         $a->diagnoses()->create(['seq' => 2, 'icd10_code' => 'E11.9']);
+        // a consultant-changing transfer requires a handover updated TODAY (HandoverTest covers the gate)
+        \App\Models\Handover::create(['admission_id' => $a->id, 'body' => 'Plan attached.', 'updated_by' => $owner->id]);
 
         $this->actingAs($admin)->post("/admissions/{$a->id}/transfer", [
             'mode' => 'specialty', 'specialty_id' => $spec->id, 'consultant_id' => $cardio->id,
