@@ -17,6 +17,26 @@ class Admission extends Model
     public const NON_ICU_SQL = "(current_location <> 'ICU' OR current_location IS NULL)";
 
     /**
+     * Legacy doughnut buckets, fixed order (statistics/a4.php "Discharge / Transfer to").
+     * Shared by Reports (annual + monthly booklets) and the Statistics destination donut.
+     */
+    public const DEST_BUCKETS = ['Intensive Care (ICU)', 'Home', 'Mortuary', 'Other Facility', 'Absconded', 'LAMA'];
+
+    /**
+     * Map raw discharge_to counts into the fixed legacy buckets (everything else, including
+     * blank, => To Other Speciality). The ONE bucketing definition — do not duplicate.
+     */
+    public static function bucketizeDestinations(array $byDest): array
+    {
+        $buckets = array_fill_keys([...self::DEST_BUCKETS, 'To Other Speciality'], 0);
+        foreach ($byDest as $dest => $c) {
+            $buckets[in_array($dest, self::DEST_BUCKETS, true) ? $dest : 'To Other Speciality'] += (int) $c;
+        }
+
+        return $buckets;
+    }
+
+    /**
      * transfer_type values that are REAL discharges — the only valid readmission anchors.
      * Ward<->ICU / specialty transfers are continuations of care, never readmission anchors.
      * Used identically by Statistics, Registry and the board badge (guarded by StatisticsValueTest).

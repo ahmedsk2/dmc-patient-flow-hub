@@ -22,17 +22,18 @@ class ConsultationRequest extends FormRequest
 
     public function rules(): array
     {
+        // legacy parity: the old form required ALL of these client-side — enforce server-side too
         return [
             'mrn' => ['required', 'string', 'max:64'],
             'patient_name' => ['required', 'string', 'max:191'],
-            'age' => ['nullable', 'integer', 'between:0,130'],
-            'bed' => ['nullable', 'string', 'max:64'],
+            'age' => ['required', 'integer', 'between:0,130'],
+            'bed' => ['required', 'string', 'max:64'],
             'current_location' => ['nullable', 'string', 'max:32'],
             'consultation_date' => ['required', 'date', 'before_or_equal:today'],
-            'consultation_from' => ['nullable', 'string', 'max:128'],
-            'to_service' => ['nullable', 'string', 'max:128'],
-            'consultant_id' => ['nullable', 'exists:users,id'],
-            'indication' => ['array'],
+            'consultation_from' => ['required', 'string', 'max:128'],
+            'to_service' => ['required', 'string', 'max:128'],
+            'consultant_id' => ['required', 'exists:users,id'],
+            'indication' => ['required', 'array', 'min:1'],
             'indication.*' => ['integer'],
             'other_indication' => ['nullable', 'string', 'max:255'],
         ];

@@ -98,6 +98,7 @@ class ControlController extends Controller
     public function updateUser(Request $request, User $user): RedirectResponse
     {
         $data = $request->validate([
+            'username' => ['required', 'string', 'max:64', 'alpha_dash', Rule::unique('users', 'username')->ignore($user->id)],
             'full_name' => ['nullable', 'string', 'max:191'],
             // app-level uniqueness only — the DB index was dropped (legacy members shared/lacked emails)
             'email' => ['nullable', 'email', 'max:191', Rule::unique('users', 'email')->ignore($user->id)],

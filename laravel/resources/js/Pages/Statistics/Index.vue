@@ -3,7 +3,7 @@ import { ref, computed, watch } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
-const props = defineProps({ range: Object, kpis: Object, monthly: Object, los: Object, topDx: Array, reasons: Object, perConsultant: Array, sourceMix: Array, kpiGrid: Array, interval: String, destinations: Object, destByConsultant: Array, readmitWindow: Number, consultants: Array, physician: Object });
+const props = defineProps({ range: Object, kpis: Object, monthly: Object, los: Object, topDx: Array, reasons: Object, perConsultant: Array, sourceMix: Array, kpiGrid: Array, interval: String, truncated: Boolean, destinations: Object, destByConsultant: Array, readmitWindow: Number, consultants: Array, physician: Object });
 
 const from = ref(props.range.from);
 const to = ref(props.range.to);
@@ -45,20 +45,34 @@ const toneClass = (t) => ({
     brand: 'text-brand-700', info: 'text-info-500', danger: 'text-danger-600', accent: 'text-accent-600', ink: 'text-ink-700',
 }[t]);
 
+// PNG-export-only toolbar (no zoom/pan clutter) — applied to every chart on this page
+const dlToolbar = { show: true, tools: { download: true, selection: false, zoom: false, zoomin: false, zoomout: false, pan: false, reset: false } };
+
 // computed (not plain consts): Apply/interval re-fetches with preserveState, so props change
 // in place — every prop-derived chart input must be reactive or the chart keeps stale data
+//
+// day interval: Fri/Sat ticks (Saudi weekend — D4) tinted amber from the raw bucket keys
+const tickColors = computed(() => props.interval !== 'day'
+    ? '#94a3b8'
+    : (props.monthly.keys || []).map((k) => {
+        const dow = new Date(`${k}T00:00:00Z`).getUTCDay();   // 5 = Fri, 6 = Sat
+        return dow === 5 || dow === 6 ? '#d9a23c' : '#94a3b8';
+    }));
 const monthlyChart = computed(() => ({
-    chart: { type: 'area', toolbar: { show: false }, fontFamily: 'inherit' },
-    colors: [C.teal, C.blue, C.red], stroke: { width: [3, 3, 2], curve: 'smooth' },
+    chart: { type: 'area', toolbar: dlToolbar, fontFamily: 'inherit' },
+    colors: [C.teal, C.blue, C.red, C.gold, C.slate], stroke: { width: [3, 3, 2, 2, 2], curve: 'smooth' },
     fill: { type: 'gradient', gradient: { opacityFrom: 0.25, opacityTo: 0.02 } },
     dataLabels: { enabled: false }, legend: { position: 'top', horizontalAlign: 'right' },
-    xaxis: { categories: props.monthly.labels, labels: { style: { colors: '#94a3b8' } } },
+    xaxis: { categories: props.monthly.labels, labels: { style: { colors: tickColors.value } } },
     yaxis: { labels: { style: { colors: '#94a3b8' } } }, grid: { borderColor: '#eef2f6' },
 }));
 const monthlySeries = computed(() => [
     { name: 'Admissions', data: props.monthly.admissions },
     { name: 'Discharges', data: props.monthly.discharges },
     { name: 'Mortality', data: props.monthly.deaths },
+    // extra context series — toggle off via the legend if noisy
+    { name: 'Consultations', data: props.monthly.consultations },
+    { name: 'Sign-offs', data: props.monthly.signoffs },
 ]);
 
 // KPI-grid header tracks the selected interval + actual applied range
@@ -93,13 +107,13 @@ const physNumbers = computed(() => props.physician ? [
 ] : []);
 
 const barChart = (cats, color, horizontal = false) => ({
-    chart: { type: 'bar', toolbar: { show: false }, fontFamily: 'inherit' },
+    chart: { type: 'bar', toolbar: dlToolbar, fontFamily: 'inherit' },
     colors: [color], plotOptions: { bar: { horizontal, borderRadius: 6, columnWidth: '55%', barHeight: '65%' } },
     dataLabels: { enabled: false }, xaxis: { categories: cats, labels: { style: { colors: '#94a3b8' } } },
     yaxis: { labels: { style: { colors: '#94a3b8' }, maxWidth: 200 } }, grid: { borderColor: '#eef2f6' },
 });
 const donut = (labels) => ({
-    chart: { type: 'donut', fontFamily: 'inherit' }, labels,
+    chart: { type: 'donut', toolbar: dlToolbar, fontFamily: 'inherit' }, labels,
     colors: [C.teal, C.gold, C.blue, C.navy, C.tealLt, C.slate],
     legend: { position: 'bottom' }, dataLabels: { enabled: true }, stroke: { width: 0 },
     plotOptions: { pie: { donut: { size: '68%' } } },
@@ -128,6 +142,12 @@ const donut = (labels) => ({
             <span class="ml-auto text-sm text-ink-400">{{ range.from }} → {{ range.to }}</span>
         </div>
 
+        <!-- day-interval cap notice -->
+        <div v-if="truncated" class="mb-5 flex items-start gap-2 rounded-xl bg-warning-100 px-4 py-3 text-sm font-medium text-warning-500 ring-1 ring-warning-500/20" role="alert">
+            <svg class="mt-0.5 h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
+            <span>Daily view is capped at ~370 days — the chart and grid stop before {{ range.to }}. Switch to <button @click="setInterval2('month')" class="font-bold underline underline-offset-2 hover:opacity-80">Monthly</button> to cover the whole range.</span>
+        </div>
+
         <!-- KPIs -->
         <div class="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4 xl:grid-cols-8">
             <div v-for="k in kpiCards" :key="k.label" class="rounded-2xl bg-white p-4 shadow-card ring-1 ring-ink-100/60">
@@ -142,7 +162,7 @@ const donut = (labels) => ({
         <!-- charts -->
         <div class="grid gap-5 lg:grid-cols-2">
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60 lg:col-span-2">
-                <h3 class="mb-3 font-bold text-ink-800">{{ interval === 'day' ? 'Daily' : interval === 'quarter' ? 'Quarterly' : 'Monthly' }} admissions, discharges & mortality</h3>
+                <h3 class="mb-3 font-bold text-ink-800">{{ interval === 'day' ? 'Daily' : interval === 'quarter' ? 'Quarterly' : 'Monthly' }} admissions, discharges, mortality & consultations <span v-if="interval === 'day'" class="text-xs font-normal text-accent-600">(Fri/Sat ticks in amber)</span></h3>
                 <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="area" height="300" :options="monthlyChart" :series="monthlySeries" />
             </div>
 
@@ -162,7 +182,7 @@ const donut = (labels) => ({
                         <option v-for="c in destByConsultant" :key="c.name" :value="c.name">{{ c.name }}</option>
                     </select>
                 </div>
-                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" v-if="destDonut.data.length" type="donut" height="280" :options="donut(destDonut.labels)" :series="destDonut.data" />
+                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" v-if="destDonut.data.some((v) => v > 0)" type="donut" height="280" :options="donut(destDonut.labels)" :series="destDonut.data" />
                 <p v-else class="py-10 text-center text-sm text-ink-300">{{ destChoice ? 'No discharges for this consultant in range.' : 'No discharges in range.' }}</p>
             </div>
 

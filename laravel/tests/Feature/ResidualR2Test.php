@@ -117,6 +117,7 @@ class ResidualR2Test extends TestCase
     private function userPayload(User $u, array $overrides = []): array
     {
         return array_merge([
+            'username' => $u->username,   // required since R3 (admin username edit)
             'role' => (int) $u->role, 'active' => true, 'on_service' => false, 'specialty_id' => null,
             'can_assign' => false, 'can_add' => false, 'can_manage' => false, 'can_modify' => false,
         ], $overrides);

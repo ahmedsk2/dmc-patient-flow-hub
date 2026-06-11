@@ -22,17 +22,76 @@ class PatientsController extends Controller
     {
         $settings = Setting::current();
         $filters = $request->only('search', 'location', 'view');
-        $tbCodes = DB::table('tb_diagnoses')->pluck('icd10_code')->flip();
+        $scope = $this->boardScope($request);
+        $tbExists = $this->tbExists();
+        [$groups, $readmitWindow] = $this->boardGroups($filters, $settings, $scope, $tbExists);
 
-        $tbExists = fn ($q) => $q->whereExists(fn ($sub) => $sub->selectRaw('1')
-            ->from('admission_diagnoses as ad')->join('tb_diagnoses as tb', 'tb.icd10_code', '=', 'ad.icd10_code')
-            ->whereColumn('ad.admission_id', 'admissions.id'));
+        return Inertia::render('Patients/Index', [
+            'groups' => $groups,
+            'filters' => $filters,
+            'readmitWindow' => $readmitWindow,
+            'consultants' => User::consultantOptions(),
+            'specialties' => Specialty::where('is_external', false)->orderBy('name')->get(['id', 'name']),
+            'externalServices' => Specialty::where('is_external', true)->orderBy('name')->pluck('name'),
+            'stats' => [
+                // chips mirror what the viewer can SEE (D1-scoped for consultants) — except the
+                // assignment queue, which stays global so they can still grab new patients from it
+                'total' => Admission::active()->whereNotNull('consultant_id')->tap($scope)->count(),
+                'ward' => Admission::active()->whereNotNull('consultant_id')->tap($scope)->nonIcu()->count(),
+                'icu' => Admission::active()->whereNotNull('consultant_id')->tap($scope)->icu()->count(),
+                'longterm' => Admission::active()->whereNotNull('consultant_id')->tap($scope)->where('is_longterm', true)->count(),
+                'tb' => Admission::active()->whereNotNull('consultant_id')->tap($scope)->where($tbExists)->count(),
+                'unassigned' => Admission::active()->whereNull('consultant_id')->count(),
+            ],
+        ]);
+    }
 
-        // D1 (legacy endorsement scope [0,2,4]): a consultant sees only THEIR OWN group;
-        // admin/registrar/resident/observer see the whole board.
+    /**
+     * Printable read-only census board (all roles) — the SAME D1-scoped board dataset as the
+     * interactive list, unfiltered, rendered print-styled with every group expanded.
+     */
+    public function activeList(Request $request): Response
+    {
+        [$groups, $readmitWindow] = $this->boardGroups(
+            [], Setting::current(), $this->boardScope($request), $this->tbExists());
+
+        return Inertia::render('ActiveList', [
+            'groups' => $groups,
+            'readmitWindow' => $readmitWindow,
+            'generatedAt' => now()->format('D, d M Y · H:i'),
+        ]);
+    }
+
+    /**
+     * D1 (legacy endorsement scope [0,2,4]): a consultant sees only THEIR OWN group;
+     * admin/registrar/resident/observer see the whole board.
+     */
+    private function boardScope(Request $request): \Closure
+    {
         $u = $request->user();
         $ownOnly = (int) $u->role === User::ROLE_CONSULTANT && ! $u->isAdmin();
-        $scope = fn ($q) => $ownOnly ? $q->where('consultant_id', $u->id) : $q;
+
+        return fn ($q) => $ownOnly ? $q->where('consultant_id', $u->id) : $q;
+    }
+
+    /** Active-TB predicate (diagnosis on the tb_diagnoses list). */
+    private function tbExists(): \Closure
+    {
+        return fn ($q) => $q->whereExists(fn ($sub) => $sub->selectRaw('1')
+            ->from('admission_diagnoses as ad')->join('tb_diagnoses as tb', 'tb.icd10_code', '=', 'ad.icd10_code')
+            ->whereColumn('ad.admission_id', 'admissions.id'));
+    }
+
+    /**
+     * The board dataset: assigned active admissions, grouped per consultant with per-group
+     * counts, ordered on-service hospitalists → on-service subspecialists → off-service.
+     * Shared by the interactive board (index) and the printable census (activeList).
+     *
+     * @return array{0: array, 1: int} [$groups, $readmitWindow]
+     */
+    private function boardGroups(array $filters, Setting $settings, \Closure $scope, \Closure $tbExists): array
+    {
+        $tbCodes = DB::table('tb_diagnoses')->pluck('icd10_code')->flip();
 
         $admissions = Admission::query()
             ->whereNull('discharge_date')
@@ -124,23 +183,6 @@ class PatientsController extends Controller
         $groups = array_values($groups);
         usort($groups, fn ($a, $b) => [$rank($a), $a['name']] <=> [$rank($b), $b['name']]);
 
-        return Inertia::render('Patients/Index', [
-            'groups' => $groups,
-            'filters' => $filters,
-            'readmitWindow' => $readmitWindow,
-            'consultants' => User::consultantOptions(),
-            'specialties' => Specialty::where('is_external', false)->orderBy('name')->get(['id', 'name']),
-            'externalServices' => Specialty::where('is_external', true)->orderBy('name')->pluck('name'),
-            'stats' => [
-                // chips mirror what the viewer can SEE (D1-scoped for consultants) — except the
-                // assignment queue, which stays global so they can still grab new patients from it
-                'total' => Admission::active()->whereNotNull('consultant_id')->tap($scope)->count(),
-                'ward' => Admission::active()->whereNotNull('consultant_id')->tap($scope)->nonIcu()->count(),
-                'icu' => Admission::active()->whereNotNull('consultant_id')->tap($scope)->icu()->count(),
-                'longterm' => Admission::active()->whereNotNull('consultant_id')->tap($scope)->where('is_longterm', true)->count(),
-                'tb' => Admission::active()->whereNotNull('consultant_id')->tap($scope)->where($tbExists)->count(),
-                'unassigned' => Admission::active()->whereNull('consultant_id')->count(),
-            ],
-        ]);
+        return [$groups, $readmitWindow];
     }
 }

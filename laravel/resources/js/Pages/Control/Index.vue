@@ -30,11 +30,11 @@ let timer = null;
 watch(q, () => { clearTimeout(timer); timer = setTimeout(() => router.get('/control', { q: q.value || undefined }, { preserveState: true, replace: true, preserveScroll: true }), 300); });
 
 const editing = ref(null);
-const uForm = useForm({ full_name: '', email: '', role: 5, active: true, on_service: false, specialty_id: '', can_assign: false, can_add: false, can_manage: false, can_modify: false });
+const uForm = useForm({ username: '', full_name: '', email: '', role: 5, active: true, on_service: false, specialty_id: '', can_assign: false, can_add: false, can_manage: false, can_modify: false });
 const editUser = (u) => {
     editing.value = u;
     uForm.clearErrors();
-    uForm.full_name = u.full_name || ''; uForm.email = u.email || '';
+    uForm.username = u.username || ''; uForm.full_name = u.full_name || ''; uForm.email = u.email || '';
     uForm.role = u.role; uForm.active = u.active; uForm.on_service = u.on_service; uForm.specialty_id = u.specialty_id || '';
     uForm.can_assign = u.can.assign; uForm.can_add = u.can.add; uForm.can_manage = u.can.manage; uForm.can_modify = u.can.modify;
 };
@@ -174,6 +174,11 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
                 <h3 class="text-lg font-bold text-ink-900">{{ editing.name }}</h3>
                 <p class="mb-4 text-sm text-ink-400">{{ editing.username }}</p>
                 <div class="space-y-4">
+                    <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Username</span>
+                        <input v-model="uForm.username" :class="field" placeholder="login name" />
+                        <span v-if="uForm.errors.username" class="mt-1 block text-xs text-danger-600">{{ uForm.errors.username }}</span>
+                        <span class="mt-1 block text-xs text-ink-400">The login name — changing it changes what they type to sign in.</span>
+                    </label>
                     <div class="grid grid-cols-2 gap-3">
                         <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Full name</span>
                             <input v-model="uForm.full_name" :class="field" placeholder="Dr …" />

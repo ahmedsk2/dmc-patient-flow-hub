@@ -42,6 +42,7 @@ Route::middleware(['auth', 'mfa.enroll', 'pwd'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
     Route::get('/patients', [PatientsController::class, 'index'])->name('patients.index');
+    Route::get('/active-list', [PatientsController::class, 'activeList'])->name('patients.activeList');   // printable census (all roles, D1-scoped)
     Route::post('/admissions/shuffle', [PatientActionController::class, 'shuffle'])->name('admissions.shuffle');
     Route::post('/admissions/reassign', [PatientActionController::class, 'bulkReassign'])->name('admissions.reassign');
     Route::post('/admissions/{admission}/assign-to-me', [PatientActionController::class, 'assignToMe'])->name('admissions.assignToMe');

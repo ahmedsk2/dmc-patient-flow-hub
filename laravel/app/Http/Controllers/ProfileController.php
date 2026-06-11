@@ -7,6 +7,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -36,8 +37,17 @@ class ProfileController extends Controller
         $data = $request->validate([
             'full_name' => ['required', 'string', 'max:191'],
             'email' => ['nullable', 'email', 'max:191'],
+            'username' => ['required', 'string', 'max:64', 'alpha_dash', Rule::unique('users', 'username')->ignore($u->id)],
         ]);
-        $u->update(['full_name' => $data['full_name'], 'name' => $data['full_name'], 'email' => $data['email']]);
+
+        // a login-name change is security-relevant — audit it with the OLD value
+        if ($data['username'] !== $u->username) {
+            AuditLog::create(['actor_id' => $u->id, 'actor_name' => $u->name, 'action' => 'user.username_change',
+                'entity_type' => 'user', 'entity_id' => (string) $u->id,
+                'details' => ['was' => $u->username, 'username' => $data['username']], 'ip' => $request->ip()]);
+        }
+        $u->update(['full_name' => $data['full_name'], 'name' => $data['full_name'],
+            'email' => $data['email'], 'username' => $data['username']]);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Profile updated.']);
     }

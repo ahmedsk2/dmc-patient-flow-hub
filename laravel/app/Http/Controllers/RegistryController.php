@@ -190,18 +190,6 @@ class RegistryController extends Controller
             ]);
     }
 
-    /* ---------- ICD-10 typeahead for the diagnosis filter ---------- */
-
-    public function icd10(Request $request)
-    {
-        $q = trim((string) $request->query('q', ''));
-        if (mb_strlen($q) < 2) {
-            return response()->json([]);
-        }
-        return response()->json(Icd10::where('code', 'like', "{$q}%")->orWhere('name', 'like', "%{$q}%")
-            ->limit(20)->get(['code', 'name'])->map(fn ($r) => ['code' => $r->code, 'name' => $r->name]));
-    }
-
     /* ---------- Exports (mode-aware, de-identified) ---------- */
 
     public function export(Request $request): StreamedResponse

@@ -58,8 +58,9 @@ class User extends Authenticatable
     {
         return static::where('role', self::ROLE_CONSULTANT)
             ->when($activeOnly, fn ($q) => $q->where('active', 1))
-            ->orderBy('full_name')->get(['id', 'full_name', 'name', 'specialty_id'])
-            ->map(fn ($u) => ['id' => $u->id, 'name' => $u->full_name ?: $u->name, 'specialty_id' => $u->specialty_id]);
+            ->orderBy('full_name')->get(['id', 'full_name', 'name', 'specialty_id', 'on_service'])
+            ->map(fn ($u) => ['id' => $u->id, 'name' => $u->full_name ?: $u->name,
+                'specialty_id' => $u->specialty_id, 'on_service' => (bool) $u->on_service]);
     }
 
     public function specialty() { return $this->belongsTo(Specialty::class); }

@@ -48,8 +48,12 @@ const kpiIcons = {
     trendDown: 'M2.25 6 9 12.75l4.286-4.286a11.948 11.948 0 0 1 4.306 6.43l.776 2.898m0 0 3.182-5.511m-3.182 5.51-5.511-3.181',
 };
 
+// PNG-export-only toolbar (no zoom/pan clutter) — applied to every chart on this page
+// (the occupancy gauge runs in sparkline mode, which suppresses the toolbar by design)
+const dlToolbar = { show: true, tools: { download: true, selection: false, zoom: false, zoomin: false, zoomout: false, pan: false, reset: false } };
+
 const areaOptions = computed(() => ({
-    chart: { type: 'area', toolbar: { show: false }, fontFamily: 'inherit', animations: { easing: 'easeinout', speed: 600 } },
+    chart: { type: 'area', toolbar: dlToolbar, fontFamily: 'inherit', animations: { easing: 'easeinout', speed: 600 } },
     colors: [C.teal, C.gold],
     dataLabels: { enabled: false },
     stroke: { curve: 'smooth', width: 2.5 },
@@ -78,7 +82,7 @@ const gaugeOptions = computed(() => ({
 }));
 
 const colOptions = (cats, colors) => ({
-    chart: { type: 'bar', toolbar: { show: false }, fontFamily: 'inherit', stacked: false },
+    chart: { type: 'bar', toolbar: dlToolbar, fontFamily: 'inherit', stacked: false },
     colors, plotOptions: { bar: { borderRadius: 6, columnWidth: '55%' } },
     dataLabels: { enabled: false }, grid: { borderColor: '#eef2f6', strokeDashArray: 4 },
     xaxis: { categories: cats, labels: { style: { colors: '#94a3b5' } }, axisBorder: { show: false }, axisTicks: { show: false } },
@@ -89,7 +93,7 @@ const consultsSeries = computed(() => [{ name: 'New', data: props.consults.new }
 const losSeries = computed(() => [{ name: 'Patients', data: props.los.data }]);
 
 const donutOptions = computed(() => ({
-    chart: { type: 'donut', fontFamily: 'inherit' },
+    chart: { type: 'donut', toolbar: dlToolbar, fontFamily: 'inherit' },
     colors: [C.teal, C.gold, C.navy],
     labels: ['Hospitalist', 'Sub-specialty', 'Long-term'],
     legend: { position: 'bottom', fontWeight: 600 },

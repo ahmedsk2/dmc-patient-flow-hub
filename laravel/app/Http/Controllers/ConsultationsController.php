@@ -55,7 +55,9 @@ class ConsultationsController extends Controller
         return Inertia::render('Consultations/Index', [
             'consultations' => $consultations,
             'filters' => ['search' => $filters['search'] ?? '', 'status' => $status, 'scope' => $mine ? 'mine' : ''],
-            'specialties' => Specialty::orderBy('name')->pluck('name'),
+            // full objects (not just names): the form filters the consultant dropdown by
+            // INTERNAL specialty when "to service" matches one
+            'specialties' => Specialty::orderBy('name')->get(['id', 'name', 'is_external']),
             'stats' => [
                 'active' => Consultation::whereNull('signoff_date')->count(),
                 'total' => Consultation::count(),

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Admission;
 use App\Models\ConsultationReason;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -16,7 +17,7 @@ use Inertia\Response;
  */
 class StatisticsController extends Controller
 {
-    private string $nonIcu = \App\Models\Admission::NON_ICU_SQL;
+    private string $nonIcu = Admission::NON_ICU_SQL;
 
     public function index(Request $request): Response
     {
@@ -82,11 +83,17 @@ class StatisticsController extends Controller
             ->selectRaw($this->keyExpr('discharge_date', $interval) . ' k, ROUND(AVG(DATEDIFF(discharge_date, admit_date)), 1) los')
             ->groupBy('k')->pluck('los', 'k')->all();
 
+        // day-interval bucket list is capped (~370) — surface it so the page can suggest Monthly
+        $truncated = $interval === 'day' && $buckets !== [] && end($buckets)['key'] < $t;
+
         $monthly = [
             'labels' => array_column($buckets, 'label'),
+            'keys' => $keys,   // raw bucket keys (Y-m-d for day interval) — drive Fri/Sat tick coloring
             'admissions' => array_map(fn ($k) => (int) ($admBy[$k] ?? 0), $keys),
             'discharges' => array_map(fn ($k) => (int) ($disBy[$k] ?? 0), $keys),
             'deaths' => array_map(fn ($k) => (int) ($deathBy[$k] ?? 0), $keys),
+            'consultations' => array_map(fn ($k) => (int) ($consBy[$k] ?? 0), $keys),
+            'signoffs' => array_map(fn ($k) => (int) ($signBy[$k] ?? 0), $keys),
         ];
         // grid splits deaths into ICU/ward (legacy KPI grid) — the headline 'deaths' KPI and the
         // monthly chart keep the single reconciled all-locations figure above
@@ -100,10 +107,13 @@ class StatisticsController extends Controller
             'avgLos' => (float) ($losBy[$b['key']] ?? 0),
         ], $buckets);
 
-        // discharge destinations (range) for a donut — overall + per-consultant
-        $dest = DB::table('admissions')->whereBetween('discharge_date', [$f, $t])
-            ->selectRaw("COALESCE(NULLIF(TRIM(discharge_to), ''), 'Unspecified') dest, COUNT(*) c")
-            ->groupBy('dest')->orderByDesc('c')->limit(8)->get();
+        // discharge destinations (range) for a donut — overall uses the SHARED legacy 7-bucket
+        // split over non-ICU closed episodes (Admission::bucketizeDestinations, same as Reports);
+        // the per-consultant variant below stays raw values
+        $destBuckets = Admission::bucketizeDestinations(
+            DB::table('admissions')->whereBetween('discharge_date', [$f, $t])->whereRaw($this->nonIcu)
+                ->selectRaw("COALESCE(discharge_to, '') dst, COUNT(*) c")
+                ->groupBy('dst')->pluck('c', 'dst')->all());
 
         $byCons = [];
         DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
@@ -207,8 +217,9 @@ class StatisticsController extends Controller
             'sourceMix' => $sourceMix,
             'kpiGrid' => $kpiGrid,
             'interval' => $interval,
+            'truncated' => $truncated,
             'readmitWindow' => $readmitWindow,
-            'destinations' => ['labels' => $dest->pluck('dest'), 'data' => $dest->pluck('c')],
+            'destinations' => ['labels' => array_keys($destBuckets), 'data' => array_values($destBuckets)],
             'destByConsultant' => $destByConsultant,
             'consultants' => \App\Models\User::consultantOptions(),
             'physician' => $physician,

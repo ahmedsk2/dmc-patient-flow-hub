@@ -32,9 +32,6 @@ class ReportsController extends Controller
 {
     private string $nonIcu = Admission::NON_ICU_SQL;
 
-    /** Legacy doughnut buckets, fixed order (statistics/a4.php "Discharge / Transfer to"). */
-    private const DEST_BUCKETS = ['Intensive Care (ICU)', 'Home', 'Mortuary', 'Other Facility', 'Absconded', 'LAMA'];
-
     public function index(Request $request): Response
     {
         $year = (int) ($request->query('year') ?: Carbon::today()->year);
@@ -336,7 +333,7 @@ class ReportsController extends Controller
                     'physical' => (float) ($physLosByMonth[$key] ?? 0),
                     'icu' => (float) ($icuLosByMonth[$key] ?? 0),
                 ],
-                'destinations' => $this->bucketize($destByMonth[$key] ?? []),
+                'destinations' => Admission::bucketizeDestinations($destByMonth[$key] ?? []),
                 'consultantLos' => $consultants
                     ->map(fn ($u) => ['name' => $u->full_name ?: $u->name, 'value' => (float) ($cLosByMonth[$key][$u->id] ?? 0)])
                     ->values()->all(),
@@ -436,25 +433,17 @@ class ReportsController extends Controller
         return [$census, $long, $beds];
     }
 
-    /** Legacy 7-bucket destination split over non-ICU closed episodes. */
+    /**
+     * Legacy 7-bucket destination split over non-ICU closed episodes — bucketing itself lives
+     * on Admission::bucketizeDestinations (shared with the Statistics donut).
+     */
     private function destinationBuckets(string $from, string $to): array
     {
         $byDest = DB::table('admissions')->whereBetween('discharge_date', [$from, $to])->whereRaw($this->nonIcu)
             ->selectRaw("COALESCE(discharge_to, '') dst, COUNT(*) c")
             ->groupBy('dst')->pluck('c', 'dst')->all();
 
-        return $this->bucketize($byDest);
-    }
-
-    /** Map raw discharge_to counts into the fixed legacy buckets (everything else => To Other Speciality). */
-    private function bucketize(array $byDest): array
-    {
-        $buckets = array_fill_keys([...self::DEST_BUCKETS, 'To Other Speciality'], 0);
-        foreach ($byDest as $dest => $c) {
-            $buckets[in_array($dest, self::DEST_BUCKETS, true) ? $dest : 'To Other Speciality'] += (int) $c;
-        }
-
-        return $buckets;
+        return Admission::bucketizeDestinations($byDest);
     }
 
     /** Per-consultant physical LOS over a range — ALL active consultant-role users, zeros included. */

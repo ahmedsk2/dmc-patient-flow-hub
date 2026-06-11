@@ -7,7 +7,7 @@ const props = defineProps({ profile: Object });
 const dForm = useForm({ password: '' });
 const disableMfa = () => { if (confirm('Disable two-factor authentication for your account?')) dForm.delete('/mfa', { preserveScroll: true, onSuccess: () => dForm.reset() }); };
 
-const pForm = useForm({ full_name: props.profile.name, email: props.profile.email });
+const pForm = useForm({ full_name: props.profile.name, email: props.profile.email, username: props.profile.username });
 const saveProfile = () => pForm.put('/profile', { preserveScroll: true });
 
 const wForm = useForm({ current_password: '', password: '', password_confirmation: '' });
@@ -38,6 +38,11 @@ const field = 'w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm out
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Full name</label><input v-model="pForm.full_name" :class="[field, pForm.errors.full_name && 'border-danger-500']" /><p v-if="pForm.errors.full_name" class="mt-1 text-xs text-danger-600">{{ pForm.errors.full_name }}</p></div>
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Email</label><input v-model="pForm.email" type="email" :class="[field, pForm.errors.email && 'border-danger-500']" /><p v-if="pForm.errors.email" class="mt-1 text-xs text-danger-600">{{ pForm.errors.email }}</p></div>
+                    <div class="sm:col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Username</label>
+                        <input v-model="pForm.username" autocomplete="username" :class="[field, 'sm:max-w-xs', pForm.errors.username && 'border-danger-500']" />
+                        <p v-if="pForm.errors.username" class="mt-1 text-xs text-danger-600">{{ pForm.errors.username }}</p>
+                        <p class="mt-1 text-xs text-ink-400">This is your <strong>login name</strong> — changing it changes what you type to sign in. Letters, numbers, dashes and underscores only.</p>
+                    </div>
                 </div>
                 <div class="mt-4 flex items-center gap-3">
                     <button @click="saveProfile" :disabled="pForm.processing" class="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save profile</button>
