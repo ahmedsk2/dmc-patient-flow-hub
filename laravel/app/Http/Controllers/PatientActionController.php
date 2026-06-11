@@ -322,13 +322,21 @@ class PatientActionController extends Controller
             : 'Medically discharged — awaiting bed exit.']);
     }
 
-    /** Phase 2 — complete discharge: file closed, leaves the active board. */
+    /**
+     * Phase 2 — complete discharge: file closed, leaves the active board. The outcome/destination
+     * captured at phase 1 may be OVERRIDDEN here (the patient's status can change while they wait
+     * for the bed exit); without an override the phase-1 values stand.
+     */
     public function completeDischarge(Request $request, Admission $admission): RedirectResponse
     {
         if (! $this->canManage($admission)) {
             throw new AccessDeniedHttpException('Only the primary consultant or a manager may discharge.');
         }
-        $data = $request->validate(['discharge_date' => ['required', 'date', 'before_or_equal:today']]);
+        $data = $request->validate([
+            'discharge_date' => ['required', 'date', 'before_or_equal:today'],
+            'outcome' => ['nullable', 'in:Alive,Dead,LAMA,DAMA,Transferred'],
+            'discharge_to' => ['nullable', self::DISCHARGE_DESTINATIONS],
+        ]);
         if ($admission->discharge_date) {
             return back()->with('flash', ['type' => 'error', 'message' => 'Already discharged.']);
         }
@@ -338,15 +346,28 @@ class PatientActionController extends Controller
         if (! $admission->medical_discharge_date) {
             return back()->with('flash', ['type' => 'error', 'message' => 'Record a medical discharge first (it captures the outcome).']);
         }
-        DB::transaction(function () use ($admission, $data) {
-            $admission->update([
-                'discharge_date' => $data['discharge_date'],
-                'transfer_type' => $admission->current_location === 'ICU' ? 'discharge from ICU' : 'discharge from ward',
-                'discharged_by' => Auth::id(),
-            ]);
+        $oldOutcome = $admission->outcome;
+        $updates = [
+            'discharge_date' => $data['discharge_date'],
+            'transfer_type' => $admission->current_location === 'ICU' ? 'discharge from ICU' : 'discharge from ward',
+            'discharged_by' => Auth::id(),
+        ];
+        if (($data['outcome'] ?? null) !== null || ($data['discharge_to'] ?? null) !== null) {
+            $outcome = $data['outcome'] ?? $admission->outcome;
+            $updates['outcome'] = $outcome;
+            // a death can only go to the mortuary — same rule as medicalDischarge
+            $updates['discharge_to'] = $outcome === 'Dead' ? 'Mortuary' : ($data['discharge_to'] ?? $admission->discharge_to);
+        }
+        DB::transaction(function () use ($admission, $updates) {
+            $admission->update($updates);
             $this->voidPendingSignatures($admission);   // the file is closed — nothing left to sign
         });
-        $this->audit('admission.complete_discharge', $admission, ['date' => $data['discharge_date']]);
+        $details = ['date' => $data['discharge_date']];
+        if (array_key_exists('outcome', $updates) && $updates['outcome'] !== $oldOutcome) {
+            $details['outcome'] = $updates['outcome'];
+            $details['outcome_was'] = $oldOutcome;
+        }
+        $this->audit('admission.complete_discharge', $admission, $details);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Discharge completed.']);
     }
@@ -395,7 +416,7 @@ class PatientActionController extends Controller
         if ($admission->discharge_date->lt(now()->subDays(2)->startOfDay())) {
             return back()->with('flash', ['type' => 'error', 'message' => 'Only discharges from the last 48 hours can be reversed.']);
         }
-        $admission->update(['discharge_date' => null, 'medical_discharge_date' => null, 'outcome' => null, 'transfer_type' => null, 'discharged_by' => null]);
+        $admission->update(['discharge_date' => null, 'medical_discharge_date' => null, 'outcome' => null, 'discharge_to' => null, 'transfer_type' => null, 'discharged_by' => null]);
         $this->audit('admission.reverse_discharge', $admission);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Discharge reversed.']);

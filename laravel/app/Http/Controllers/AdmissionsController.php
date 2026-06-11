@@ -64,7 +64,7 @@ class AdmissionsController extends Controller
             'consultants' => User::consultantOptions(),
             'countries' => Country::orderBy('name')->pluck('name'),
             'locations' => ['ER', 'Ward', 'ICU'],
-            'admitFrom' => ['ER', 'Clinic', 'Referral', 'Transfer', 'Direct'],
+            'admitFrom' => ['ER', 'Clinic', 'OPD', 'OR', 'ICU', 'Referral', 'Transfer', 'Direct', 'Other service'],   // full legacy ADMFROM vocabulary
         ]);
     }
 

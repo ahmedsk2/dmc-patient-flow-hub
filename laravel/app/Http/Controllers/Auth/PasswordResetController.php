@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -22,12 +23,25 @@ class PasswordResetController extends Controller
         return Inertia::render('Auth/ForgotPassword', ['status' => session('status')]);
     }
 
+    /**
+     * Accepts a USERNAME or an email in the same field (many clinical accounts only know their
+     * username). A value without '@' is looked up by username and the account's email is used.
+     * The response is the SAME generic status in every case — found or not, email on file or
+     * not — so the endpoint cannot be used to enumerate accounts.
+     */
     public function email(Request $request): RedirectResponse
     {
-        $request->validate(['email' => ['required', 'email']]);
-        $status = Password::sendResetLink($request->only('email'));
+        $request->validate(['email' => ['required', 'string', 'max:255']]);
+        $value = trim((string) $request->input('email'));
+        $email = str_contains($value, '@')
+            ? $value
+            : User::where('username', $value)->value('email');
 
-        return back()->with('status', __($status));
+        if ($email) {
+            Password::sendResetLink(['email' => $email]);
+        }
+
+        return back()->with('status', 'If that account exists, a password reset link has been sent.');
     }
 
     public function reset(Request $request, string $token): Response

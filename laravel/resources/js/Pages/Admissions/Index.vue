@@ -24,10 +24,11 @@ const dayName = (d) => d && d !== 'Undated' ? new Date(d + 'T00:00:00').toLocale
 
 const shuffle = () => { if (confirm('Auto-assign all unassigned patients across on-service consultants?')) router.post('/admissions/shuffle', {}, { preserveScroll: true }); };
 
-// assign-to-primary modal
+// assign-to-primary modal — mark_new defaults UNCHECKED here (legacy queue default: a fresh
+// admission gets its "New" badge from the shuffle/board flows, not the queue assign)
 const assigning = ref(null);
-const aForm = useForm({ consultant_id: '' });
-const openAssign = (p) => { assigning.value = p; aForm.consultant_id = ''; };
+const aForm = useForm({ consultant_id: '', mark_new: false });
+const openAssign = (p) => { assigning.value = p; aForm.consultant_id = ''; aForm.mark_new = false; };
 const submitAssign = () => aForm.post(`/admissions/${assigning.value.id}/assign`, { preserveScroll: true, onSuccess: () => (assigning.value = null) });
 const assignToMe = (p) => router.post(`/admissions/${p.id}/assign-to-me`, {}, { preserveScroll: true });
 
@@ -37,7 +38,7 @@ const fromIcu = (p) => { if (confirm(`Admit ${p.name} (MRN ${p.mrn}) from ICU to
 
 // modify a queued (unassigned) patient — reuses /admissions/{id}/edit + /modify
 const today = new Date().toISOString().slice(0, 10);
-const admitFromOptions = ['ER', 'Clinic', 'Referral', 'Transfer', 'Direct', 'ICU', 'OPD', 'OR'];
+const admitFromOptions = ['ER', 'Clinic', 'OPD', 'OR', 'ICU', 'Referral', 'Transfer', 'Direct', 'Other service'];
 const editing = ref(null);
 const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '', bed: '', admit_date: '', admitted_from: '', current_location: 'Ward', diagnoses: [] });
 const mDx = ref([]); const mQuery = ref(''); const mResults = ref([]); let mTimer = null;
@@ -135,6 +136,7 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
                         <option value="">Select consultant…</option>
                         <option v-for="c in consultants" :key="c.id" :value="c.id">{{ c.name }}</option>
                     </select>
+                    <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="aForm.mark_new" class="rounded text-brand-600" /> Mark as new patient <span class="text-xs text-ink-400">(check to show the “New” badge on the board)</span></label>
                     <div class="flex justify-end gap-2">
                         <button type="button" @click="assigning = null" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
                         <button type="submit" :disabled="aForm.processing || !aForm.consultant_id" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Assign</button>

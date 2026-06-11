@@ -173,6 +173,9 @@ class PatientsController extends Controller
                 'is_tb' => $isTb,
                 'is_readmission' => $readmitIds->has($a->id),
                 'medically_discharged' => $medDischarged,
+                // phase-1 values — prefill the complete-discharge modal's optional override selects
+                'outcome' => $a->outcome,
+                'discharge_to' => $a->discharge_to,
                 'handover' => ($h = $handovers->get($a->id)) ? [
                     'updated_at' => $h->updated_at->toIso8601String(),
                     'updated_by' => $h->updatedBy ? ($h->updatedBy->full_name ?: $h->updatedBy->name) : null,

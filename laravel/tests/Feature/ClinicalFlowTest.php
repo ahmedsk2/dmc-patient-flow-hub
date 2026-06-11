@@ -45,7 +45,8 @@ class ClinicalFlowTest extends TestCase
 
         // phase 1 - medical discharge: clinically done, still occupying the bed (stays active)
         $this->actingAs($admin)->post("/admissions/{$a->id}/medical-discharge", [
-            'outcome' => 'Alive', 'medical_discharge_date' => now()->toDateString(), 'delay_reason' => 'Physical',   // R1: controlled vocab (Physical|System)
+            'outcome' => 'Alive', 'medical_discharge_date' => now()->toDateString(),
+            'discharge_to' => 'Home', 'delay_reason' => 'Physical',   // R1: controlled vocab (Physical|System)
         ])->assertRedirect();
         $a->refresh();
         $this->assertNotNull($a->medical_discharge_date);
@@ -65,11 +66,12 @@ class ClinicalFlowTest extends TestCase
         ]);
         $this->assertSame(1, Admission::whereNotNull('discharge_date')->count());
 
-        // reverse (admin) returns the patient to active
+        // reverse (admin) returns the patient to active — clears the destination too (legacy nulled DISTO)
         $this->actingAs($admin)->post("/admissions/{$a->id}/reverse-discharge")->assertRedirect();
         $a->refresh();
         $this->assertNull($a->discharge_date);
         $this->assertNull($a->medical_discharge_date);
+        $this->assertNull($a->discharge_to, 'reverse-discharge must clear discharge_to (legacy DISTO)');
     }
 
     public function test_icu_discharge_is_single_step(): void

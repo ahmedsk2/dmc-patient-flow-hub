@@ -326,6 +326,8 @@ class ResidualR2Test extends TestCase
         // Dr Day One: one admission today (+ an old one that must NOT count)
         $this->admission(['consultant_id' => $one->id, 'admit_date' => now()->toDateString()]);
         $this->admission(['consultant_id' => $one->id, 'admit_date' => now()->subDays(10)->toDateString()]);
+        // ICU rows are excluded from this block (legacy parity) — must NOT bump Dr Day One
+        $this->admission(['consultant_id' => $one->id, 'admit_date' => now()->toDateString(), 'current_location' => 'ICU']);
         // Dr Day Two: one discharge yesterday
         $this->admission(['consultant_id' => $two->id, 'admit_date' => now()->subDays(20)->toDateString(),
             'discharge_date' => now()->subDay()->toDateString(), 'transfer_type' => 'discharge from ward', 'outcome' => 'Alive']);
@@ -333,6 +335,12 @@ class ResidualR2Test extends TestCase
         $this->admission(['consultant_id' => $idle->id, 'admit_date' => now()->subDays(15)->toDateString()]);
         // unassigned admission today — no consultant, not counted
         $this->admission(['admit_date' => now()->toDateString()]);
+        // legacy parity: the block joins ACTIVE CONSULTANTS only (position=3, active=1) —
+        // an inactive consultant and a registrar with activity today must both be absent
+        $inactive = $this->user(User::ROLE_CONSULTANT, ['full_name' => 'Dr Gone', 'active' => 0]);
+        $registrar = $this->user(User::ROLE_REGISTRAR, ['full_name' => 'Dr Registrar']);
+        $this->admission(['consultant_id' => $inactive->id, 'admit_date' => now()->toDateString()]);
+        $this->admission(['consultant_id' => $registrar->id, 'admit_date' => now()->toDateString()]);
 
         $this->actingAs($this->admin())->get('/dashboard')
             ->assertInertia(fn (AssertableInertia $page) => $page

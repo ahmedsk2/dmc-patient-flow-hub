@@ -129,7 +129,7 @@ const modal = ref(null);
 const today = new Date().toISOString().slice(0, 10);
 const aForm = useForm({ consultant_id: '', mark_new: true });
 const mdForm = useForm({ outcome: 'Alive', medical_discharge_date: today, discharge_to: '', delay_reason: '', complete: false });
-const cdForm = useForm({ discharge_date: today });
+const cdForm = useForm({ discharge_date: today, outcome: '', discharge_to: '' });
 const icuForm = useForm({ outcome: 'Alive', discharge_date: today, discharge_to: '' });
 const tForm = useForm({ mode: 'location', target: 'ICU', specialty_id: '', consultant_id: '', service: '' });
 const openModal = (mode, row) => {
@@ -137,16 +137,21 @@ const openModal = (mode, row) => {
     gateBody.value = '';   // fresh inline-handover editor per patient
     if (mode === 'assign') { aForm.consultant_id = row.consultant_id || ''; aForm.mark_new = true; aForm.clearErrors(); }
     if (mode === 'medical') mdForm.reset();   // never carry a previous patient's type/destination over
+    if (mode === 'complete') { cdForm.reset(); cdForm.outcome = row.outcome || ''; cdForm.discharge_to = row.discharge_to || ''; }   // prefill the optional override from phase-1
     if (mode === 'icu') icuForm.reset();
     if (mode === 'transfer') { tForm.reset(); tForm.target = row.location === 'ICU' ? 'Ward' : 'ICU'; }
 };
 // controlled destination vocabulary (legacy "Discharged to" list); a death locks to Mortuary
 const destinations = ['Home', 'Other Facility', 'LAMA', 'Absconded', 'Mortuary'];
 watch(() => mdForm.outcome, (o) => { if (o === 'Dead') mdForm.discharge_to = 'Mortuary'; else if (mdForm.discharge_to === 'Mortuary') mdForm.discharge_to = ''; });
+watch(() => cdForm.outcome, (o) => { if (o === 'Dead') cdForm.discharge_to = 'Mortuary'; else if (cdForm.discharge_to === 'Mortuary') cdForm.discharge_to = ''; });
 watch(() => icuForm.outcome, (o) => { if (o === 'Dead') icuForm.discharge_to = 'Mortuary'; else if (icuForm.discharge_to === 'Mortuary') icuForm.discharge_to = ''; });
 watch(() => mdForm.complete, (c) => { if (c) mdForm.delay_reason = ''; });   // a closed file has no "still-in" delay
-// internal-specialty handover: consultants offered are those of the chosen specialty
-const specConsultants = computed(() => props.consultants.filter((c) => c.specialty_id === tForm.specialty_id));
+// internal-specialty handover: consultants offered are the ON-SERVICE ones of the chosen specialty
+const specConsultants = computed(() => props.consultants.filter((c) => c.specialty_id === tForm.specialty_id && c.on_service));
+// bulk reassign: the RECEIVING consultant must be on service ('from' stays unfiltered — patients
+// may be moved away from someone who just went off service)
+const onServiceConsultants = computed(() => props.consultants.filter((c) => c.on_service));
 watch(() => tForm.specialty_id, () => (tForm.consultant_id = ''));
 const transferReady = computed(() =>
     tForm.mode === 'location' ? !!tForm.target
@@ -166,7 +171,7 @@ const undoMedical = (row) => { if (confirm('Undo the medical discharge and retur
 
 // modify (full edit) — fetches detail, then edits demographics + admission facts + diagnoses
 const canModify = computed(() => me.value.is_admin || me.value.can.modify);
-const admitFromOptions = ['ER', 'Clinic', 'Referral', 'Transfer', 'Direct', 'ICU', 'OPD', 'OR'];
+const admitFromOptions = ['ER', 'Clinic', 'OPD', 'OR', 'ICU', 'Referral', 'Transfer', 'Direct', 'Other service'];
 const editing = ref(null);
 const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '', bed: '', admit_date: '', admitted_from: '', current_location: 'Ward', diagnoses: [] });
 const selectedDx = ref([]);
@@ -369,6 +374,16 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                 <form v-else-if="modal.mode === 'complete'" @submit.prevent="submitComplete" class="space-y-4">
                     <p class="text-sm text-ink-600">Close the file and free the bed.</p>
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge date</label><input v-model="cdForm.discharge_date" type="date" :max="today" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" /><p v-if="cdForm.errors.discharge_date" class="mt-1 text-xs text-danger-600">{{ cdForm.errors.discharge_date }}</p></div>
+                    <!-- optional override of the phase-1 outcome/destination (prefilled with the current values) -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Status</label>
+                            <select v-model="cdForm.outcome" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">—</option><option>Alive</option><option>Dead</option><option>LAMA</option><option>DAMA</option><option>Transferred</option></select>
+                            <p v-if="cdForm.errors.outcome" class="mt-1 text-xs text-danger-600">{{ cdForm.errors.outcome }}</p></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Destination</label>
+                            <select v-model="cdForm.discharge_to" :disabled="cdForm.outcome === 'Dead'" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">—</option><option v-for="d in destinations" :key="d">{{ d }}</option></select>
+                            <p v-if="cdForm.errors.discharge_to" class="mt-1 text-xs text-danger-600">{{ cdForm.errors.discharge_to }}</p></div>
+                    </div>
+                    <p class="text-xs text-ink-400">Status and destination carry over from the medical discharge — change them here only if the situation changed before the bed exit.</p>
                     <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="cdForm.processing" class="rounded-xl bg-success-600 px-5 py-2 text-sm font-semibold text-white hover:bg-success-700 disabled:opacity-50">Complete discharge</button></div>
                 </form>
                 <form v-else-if="modal.mode === 'icu'" @submit.prevent="submitIcu" class="space-y-4">
@@ -393,9 +408,9 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Receiving specialty</label>
                             <select v-model="tForm.specialty_id" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select specialty…</option><option v-for="s in specialties" :key="s.id" :value="s.id">{{ s.name }}</option></select>
                             <p v-if="tForm.errors.specialty_id" class="mt-1 text-xs text-danger-600">{{ tForm.errors.specialty_id }}</p></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Receiving consultant</label>
-                            <select v-model="tForm.consultant_id" :disabled="!tForm.specialty_id" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">Select consultant…</option><option v-for="c in specConsultants" :key="c.id" :value="c.id">{{ c.name }}</option></select>
-                            <p v-if="tForm.specialty_id && !specConsultants.length" class="mt-1 text-xs text-warning-500">No consultants registered under this specialty.</p>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Receiving consultant <span class="font-normal text-ink-400">(on-service only)</span></label>
+                            <select v-model="tForm.consultant_id" :disabled="!tForm.specialty_id" title="On-service consultants only" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">Select consultant…</option><option v-for="c in specConsultants" :key="c.id" :value="c.id">{{ c.name }}</option></select>
+                            <p v-if="tForm.specialty_id && !specConsultants.length" class="mt-1 text-xs text-warning-500">No on-service consultants under this specialty.</p>
                             <p v-if="tForm.errors.consultant_id" class="mt-1 text-xs text-danger-600">{{ tForm.errors.consultant_id }}</p></div>
                         <p class="text-xs text-ink-400">Closes this episode as a specialty handover and opens a new one under the chosen consultant.</p>
                         <!-- handover gate: write today's handover here, save, retry the transfer -->
@@ -423,7 +438,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                 <p class="mb-4 text-sm text-ink-400">Moves every active patient from one consultant to another.</p>
                 <form @submit.prevent="submitReassign" class="space-y-4">
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">From</label><select v-model="rForm.from_consultant_id" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select…</option><option v-for="c in consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">To</label><select v-model="rForm.to_consultant_id" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select…</option><option v-for="c in consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
+                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">To <span class="font-normal text-ink-400">(on-service only)</span></label><select v-model="rForm.to_consultant_id" title="On-service consultants only" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select…</option><option v-for="c in onServiceConsultants" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="rForm.mark_new" class="rounded text-brand-600" /> Mark as new patients <span class="text-xs text-ink-400">(uncheck to keep their current “New” status)</span></label>
 
                     <!-- handover preflight: every moving patient needs a handover updated TODAY -->

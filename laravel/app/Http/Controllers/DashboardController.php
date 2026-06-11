@@ -116,13 +116,15 @@ class DashboardController extends Controller
         // per-consultant activity since yesterday (legacy dashboard/1.php "last day" block).
         // DATE columns — compare against the yesterday date STRING, so "since yesterday" means
         // yesterday + today. Alias 'consultant' is the established non-colliding GROUP BY alias.
+        // Legacy parity: non-ICU rows only, joined to ACTIVE CONSULTANTS (position=3, active=1).
         $since = Carbon::today()->subDay()->toDateString();
+        $activeConsultant = fn ($q) => $q->where('u.role', \App\Models\User::ROLE_CONSULTANT)->where('u.active', 1);
         $adm24 = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
-            ->where('a.admit_date', '>=', $since)
+            ->where('a.admit_date', '>=', $since)->whereRaw($this->nonIcu)->tap($activeConsultant)
             ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
             ->groupBy('consultant')->pluck('c', 'consultant');
         $dis24 = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
-            ->where('a.discharge_date', '>=', $since)
+            ->where('a.discharge_date', '>=', $since)->whereRaw($this->nonIcu)->tap($activeConsultant)
             ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
             ->groupBy('consultant')->pluck('c', 'consultant');
         $activity24h = $adm24->keys()->merge($dis24->keys())->unique()->sort()->values()

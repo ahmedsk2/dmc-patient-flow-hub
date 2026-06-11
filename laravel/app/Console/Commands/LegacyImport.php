@@ -241,11 +241,28 @@ class LegacyImport extends Command
     private function importConsultations(array $userMap, array $patientMap): void
     {
         $u = fn ($id) => ($id && isset($userMap[$id])) ? $userMap[$id] : null;
-        $this->legacy->table('consultations')->orderBy('id')->chunk(1000, function ($chunk) use ($u, $patientMap) {
+
+        // legacy consultation_to_service held the NUMERIC speciality id for internal specialties
+        // (the dropdown emitted ids) but the NAME for other/allied services — resolve numbers to
+        // names at import time. speciality takes precedence on an id collision (legacy display
+        // only ever looked numbers up in speciality); non-numeric values are kept as-is.
+        $svcMap = [];
+        foreach ($this->legacy->table('speciality')->get() as $r) {
+            $svcMap[(int) $r->id] = trim((string) $r->specilaity);
+        }
+        foreach ($this->legacy->table('other_specialities')->get() as $r) {
+            $svcMap[(int) $r->id] ??= trim((string) $r->specilaity);
+        }
+
+        $this->legacy->table('consultations')->orderBy('id')->chunk(1000, function ($chunk) use ($u, $patientMap, $svcMap) {
             $batch = [];
             foreach ($chunk as $c) {
                 $mrn = mb_substr(trim((string) $c->MRN), 0, 64);
                 $ind = json_decode($c->indication ?? '', true);
+                $svc = trim((string) ($c->consultation_to_service ?? ''));
+                if ($svc !== '' && ctype_digit($svc)) {
+                    $svc = $svcMap[(int) $svc] ?? $svc;   // unmatched numbers self-heal via the data-fix migration
+                }
                 $batch[] = [
                     'mrn' => $mrn ?: null,
                     'patient_id' => $patientMap[$mrn] ?? null,
@@ -257,7 +274,7 @@ class LegacyImport extends Command
                     'consultation_from' => $c->consultation_from,
                     'indication' => is_array($ind) ? json_encode($ind) : null,
                     'other_indication' => $c->other_ind,
-                    'to_service' => $c->consultation_to_service,
+                    'to_service' => $svc ?: null,
                     'consultant_id' => $u($c->consultant_id),
                     'entered_by' => $u($c->entered_by_id),
                     'signoff_date' => $this->date($c->signoff_date),

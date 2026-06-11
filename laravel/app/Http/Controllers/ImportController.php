@@ -16,15 +16,16 @@ use Inertia\Response;
  * Bulk import of HISTORICAL admission episodes from pasted CSV (admin). Two-step: PREVIEW parses +
  * validates every row (no writes) and shows valid/invalid with reasons; CONFIRM commits only the
  * valid rows in one transaction. Columns: MRN, Name, Age, Gender, Nationality, AdmitDate,
- * DischargeDate, Outcome, Location — plus four OPTIONAL trailing clinical columns (Gap Wave 4b):
+ * DischargeDate, Outcome, Location — plus OPTIONAL trailing clinical columns:
  * Diagnoses (pipe-separated ICD-10 codes), Consultant (matched by full name / display name /
  * username among consultant-role users; unmatched stays a valid row with a preview warning),
- * DischargedTo, ClinicalDischargeDate (Y-m-d). Old 9-column rows remain fully valid.
+ * DischargedTo, ClinicalDischargeDate (Y-m-d) — Gap Wave 4b — and AdmittedFrom, Bed,
+ * DelayReason, LongTerm (1/yes) — final sweep G1. Old shorter rows remain fully valid.
  */
 class ImportController extends Controller
 {
     private array $columns = ['MRN', 'Name', 'Age', 'Gender', 'Nationality', 'AdmitDate', 'DischargeDate', 'Outcome', 'Location',
-        'Diagnoses', 'Consultant', 'DischargedTo', 'ClinicalDischargeDate'];
+        'Diagnoses', 'Consultant', 'DischargedTo', 'ClinicalDischargeDate', 'AdmittedFrom', 'Bed', 'DelayReason', 'LongTerm'];
 
     public function index(): Response
     {
@@ -69,6 +70,10 @@ class ImportController extends Controller
                     'discharge_to' => $r['discharged_to'],
                     'outcome' => $r['outcome'],
                     'current_location' => $r['location'],
+                    'admitted_from' => $r['admitted_from'],
+                    'bed' => $r['bed'],
+                    'delay_reason' => $r['delay_reason'],
+                    'is_longterm' => $r['is_longterm'],
                     // historical assignment: set the consultant only — no is_new_assignment/assigned_at
                     // (those drive the live "New" badge / 24h window, which must not fire for imports)
                     'consultant_id' => $r['consultant_id'],
@@ -130,6 +135,11 @@ class ImportController extends Controller
                 'consultant_id' => null,
                 'discharged_to' => trim($c[11] ?? '') ?: null,
                 'medical_discharge_date' => $this->date($c[12] ?? null),
+                // optional trailing columns 14–17 (final sweep G1) — absent in shorter rows
+                'admitted_from' => trim($c[13] ?? '') ?: null,
+                'bed' => trim($c[14] ?? '') ?: null,
+                'delay_reason' => trim($c[15] ?? '') ?: null,
+                'is_longterm' => in_array(strtolower(trim($c[16] ?? '')), ['1', 'yes'], true),
                 'ok' => true,
                 'error' => null,
                 'warning' => null,
