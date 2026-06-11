@@ -36,19 +36,29 @@ const showIcu = ref(false);
 const fromIcu = (p) => { if (confirm(`Admit ${p.name} (MRN ${p.mrn}) from ICU to the ward?`)) router.post(`/admissions/${p.id}/icu-pull`, {}, { preserveScroll: true, onSuccess: () => (showIcu.value = false) }); };
 
 // modify a queued (unassigned) patient — reuses /admissions/{id}/edit + /modify
+const today = new Date().toISOString().slice(0, 10);
+const admitFromOptions = ['ER', 'Clinic', 'Referral', 'Transfer', 'Direct', 'ICU', 'OPD', 'OR'];
 const editing = ref(null);
-const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '', bed: '', diagnoses: [] });
+const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '', bed: '', admit_date: '', admitted_from: '', current_location: 'Ward', diagnoses: [] });
 const mDx = ref([]); const mQuery = ref(''); const mResults = ref([]); let mTimer = null;
 const openModify = async (p) => {
     const d = await (await fetch(`/admissions/${p.id}/edit`, { headers: { Accept: 'application/json' } })).json();
     editing.value = { id: p.id }; mForm.mrn = d.mrn || ''; mForm.name = d.name || ''; mForm.age = d.age ?? ''; mForm.gender = d.gender || '';
-    mForm.nationality = d.nationality || ''; mForm.bed = d.bed || ''; mDx.value = d.diagnoses || []; mForm.diagnoses = mDx.value.map((x) => x.code);
+    mForm.nationality = d.nationality || ''; mForm.bed = d.bed || '';
+    mForm.admit_date = d.admit_date || ''; mForm.admitted_from = d.admitted_from || ''; mForm.current_location = d.current_location || 'Ward';
+    mDx.value = d.diagnoses || []; mForm.diagnoses = mDx.value.map((x) => x.code);
 };
 watch(mQuery, (q) => { clearTimeout(mTimer); if (q.trim().length < 2) { mResults.value = []; return; } mTimer = setTimeout(async () => { mResults.value = await (await fetch(`/api/icd10?q=${encodeURIComponent(q.trim())}`, { headers: { Accept: 'application/json' } })).json(); }, 250); });
 const mAdd = (d) => { if (!mDx.value.find((x) => x.code === d.code)) { mDx.value.push(d); mForm.diagnoses.push(d.code); } mQuery.value = ''; mResults.value = []; };
 const mRemove = (code) => { mDx.value = mDx.value.filter((x) => x.code !== code); mForm.diagnoses = mForm.diagnoses.filter((c) => c !== code); };
 const submitModify = () => mForm.post(`/admissions/${editing.value.id}/modify`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
 const fld = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500';
+
+// hard delete (admin only — server re-checks)
+const destroyAdmission = (p) => {
+    if (confirm(`Delete the admission for ${p.name} (MRN ${p.mrn})? This permanently removes the episode and its diagnoses.`))
+        router.delete(`/admissions/${p.id}`, { preserveScroll: true });
+};
 
 const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER' ? 'bg-warning-100 text-warning-500' : 'bg-brand-100 text-brand-700';
 </script>
@@ -106,6 +116,7 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
                     </div>
                     <div class="mt-3 flex items-center gap-2 border-t border-ink-50 pt-3">
                         <button v-if="canModify" @click="openModify(p)" title="Edit details" class="grid h-7 w-8 shrink-0 place-items-center rounded-lg text-ink-500 ring-1 ring-ink-200 hover:bg-ink-50"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" /></svg></button>
+                        <button v-if="me.is_admin" @click="destroyAdmission(p)" title="Delete admission" aria-label="Delete admission" class="grid h-7 w-8 shrink-0 place-items-center rounded-lg text-ink-500 ring-1 ring-ink-200 hover:bg-danger-100 hover:text-danger-600"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg></button>
                         <button v-if="canAssign" @click="openAssign(p)" class="flex-1 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">Assign to primary</button>
                         <button v-if="isConsultant" @click="assignToMe(p)" class="flex-1 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 ring-1 ring-brand-200 hover:bg-brand-50">Assign to me</button>
                         <span v-if="!canAssign && !isConsultant && !canModify" class="text-xs text-ink-300">awaiting assignment</span>
@@ -165,6 +176,9 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Age</label><input v-model="mForm.age" inputmode="numeric" :class="fld" /></div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Gender</label><select v-model="mForm.gender" :class="fld"><option value="">—</option><option>Male</option><option>Female</option></select></div>
                         <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Nationality</label><input v-model="mForm.nationality" :class="fld" /></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Admit date</label><input v-model="mForm.admit_date" type="date" :max="today" :class="[fld, mForm.errors.admit_date && 'border-danger-500']" /><p v-if="mForm.errors.admit_date" class="mt-1 text-xs text-danger-600">{{ mForm.errors.admit_date }}</p></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Location</label><select v-model="mForm.current_location" :class="fld"><option>ER</option><option>Ward</option><option>ICU</option></select></div>
+                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Admitted from</label><input v-model="mForm.admitted_from" list="admit-from-options-q" placeholder="ER, Clinic, Referral…" :class="fld" /><datalist id="admit-from-options-q"><option v-for="o in admitFromOptions" :key="o" :value="o" /></datalist></div>
                     </div>
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-ink-700">Diagnoses</label>

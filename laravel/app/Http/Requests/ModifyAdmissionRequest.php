@@ -26,6 +26,11 @@ class ModifyAdmissionRequest extends FormRequest
         $rules = StoreAdmissionRequest::demographicRules();
         $rules['mrn'][] = Rule::unique('patients', 'mrn')->ignore($this->route('admission')->patient?->id);
 
+        // data-correction fields (wrong admit date / source / location on the existing episode)
+        $rules['admit_date'] = ['required', 'date', 'before_or_equal:today'];
+        $rules['admitted_from'] = ['nullable', 'string', 'max:64'];
+        $rules['current_location'] = ['required', 'in:ER,Ward,ICU'];
+
         return $rules;
     }
 }

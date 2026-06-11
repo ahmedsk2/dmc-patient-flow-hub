@@ -3,7 +3,7 @@ import { ref, watch, computed } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
-const props = defineProps({ groups: Array, filters: Object, stats: Object, consultants: Array, readmitWindow: Number });
+const props = defineProps({ groups: Array, filters: Object, stats: Object, consultants: Array, specialties: Array, externalServices: Array, readmitWindow: Number });
 
 const page = usePage();
 const me = computed(() => page.props.auth.user);
@@ -49,12 +49,19 @@ const aForm = useForm({ consultant_id: '' });
 const mdForm = useForm({ outcome: 'Alive', medical_discharge_date: today, discharge_to: '', delay_reason: '' });
 const cdForm = useForm({ discharge_date: today });
 const icuForm = useForm({ outcome: 'Alive', discharge_date: today });
-const tForm = useForm({ target: 'ICU' });
+const tForm = useForm({ mode: 'location', target: 'ICU', specialty_id: '', consultant_id: '', service: '' });
 const openModal = (mode, row) => {
     modal.value = { mode, row };
     if (mode === 'assign') aForm.consultant_id = row.consultant_id || '';
-    if (mode === 'transfer') tForm.target = row.location === 'ICU' ? 'Ward' : 'ICU';
+    if (mode === 'transfer') { tForm.reset(); tForm.target = row.location === 'ICU' ? 'Ward' : 'ICU'; }
 };
+// internal-specialty handover: consultants offered are those of the chosen specialty
+const specConsultants = computed(() => props.consultants.filter((c) => c.specialty_id === tForm.specialty_id));
+watch(() => tForm.specialty_id, () => (tForm.consultant_id = ''));
+const transferReady = computed(() =>
+    tForm.mode === 'location' ? !!tForm.target
+    : tForm.mode === 'specialty' ? !!(tForm.specialty_id && tForm.consultant_id)
+    : !!tForm.service);
 const closeModal = () => (modal.value = null);
 const opts = { preserveScroll: true, onSuccess: closeModal };
 const submitAssign = () => aForm.post(`/admissions/${modal.value.row.id}/assign`, opts);
@@ -67,10 +74,11 @@ const longterm = (row) => router.post(`/admissions/${row.id}/longterm`, {}, { pr
 // reversing a COMPLETED discharge lives on the admin Recent registry
 const undoMedical = (row) => { if (confirm('Undo the medical discharge and return the patient to active?')) router.post(`/admissions/${row.id}/undo-medical-discharge`, {}, { preserveScroll: true }); };
 
-// modify (full edit) — fetches detail, then edits demographics + diagnoses
+// modify (full edit) — fetches detail, then edits demographics + admission facts + diagnoses
 const canModify = computed(() => me.value.is_admin || me.value.can.modify);
+const admitFromOptions = ['ER', 'Clinic', 'Referral', 'Transfer', 'Direct', 'ICU', 'OPD', 'OR'];
 const editing = ref(null);
-const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '', bed: '', diagnoses: [] });
+const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '', bed: '', admit_date: '', admitted_from: '', current_location: 'Ward', diagnoses: [] });
 const selectedDx = ref([]);
 const dxQuery = ref('');
 const dxResults = ref([]);
@@ -80,6 +88,7 @@ const openModify = async (p) => {
     editing.value = { id: p.id };
     mForm.mrn = d.mrn || ''; mForm.name = d.name || ''; mForm.age = d.age ?? ''; mForm.gender = d.gender || '';
     mForm.nationality = d.nationality || ''; mForm.bed = d.bed || '';
+    mForm.admit_date = d.admit_date || ''; mForm.admitted_from = d.admitted_from || ''; mForm.current_location = d.current_location || 'Ward';
     selectedDx.value = d.diagnoses || [];
     mForm.diagnoses = selectedDx.value.map((x) => x.code);
 };
@@ -91,6 +100,12 @@ watch(dxQuery, (q) => {
 const addDx = (d) => { if (!selectedDx.value.find((x) => x.code === d.code)) { selectedDx.value.push(d); mForm.diagnoses.push(d.code); } dxQuery.value = ''; dxResults.value = []; };
 const removeDx = (code) => { selectedDx.value = selectedDx.value.filter((x) => x.code !== code); mForm.diagnoses = mForm.diagnoses.filter((c) => c !== code); };
 const submitModify = () => mForm.post(`/admissions/${editing.value.id}/modify`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
+
+// hard delete (admin only — server re-checks)
+const destroyAdmission = (row) => {
+    if (confirm(`Delete the admission for ${row.name} (MRN ${row.mrn})? This permanently removes the episode and its diagnoses.`))
+        router.delete(`/admissions/${row.id}`, { preserveScroll: true });
+};
 
 const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER' ? 'bg-warning-100 text-warning-500' : 'bg-brand-100 text-brand-700';
 const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b === 'long' ? 'bg-danger-100 text-danger-600' : 'bg-warning-100 text-warning-500';
@@ -184,7 +199,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                         <button v-if="canAssign" @click="openModal('assign', p)" title="Reassign consultant" aria-label="Reassign consultant" class="grid h-7 w-7 place-items-center rounded-lg text-ink-400 hover:bg-info-100 hover:text-info-500"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18 7.5v6m3-3h-6m-3.75-1.875a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" /></svg></button>
                         <button v-if="canModify" @click="openModify(p)" title="Modify details" aria-label="Modify details" class="grid h-7 w-7 place-items-center rounded-lg text-ink-400 hover:bg-brand-100 hover:text-brand-700"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" /></svg></button>
                         <button @click="longterm(p)" :title="p.is_longterm ? 'Remove long-term' : 'Mark long-term'" :aria-label="p.is_longterm ? 'Remove long-term' : 'Mark long-term'" class="grid h-7 w-7 place-items-center rounded-lg hover:bg-accent-300/40" :class="p.is_longterm ? 'text-accent-600' : 'text-ink-400 hover:text-accent-600'"><svg class="h-4 w-4" :fill="p.is_longterm ? 'currentColor' : 'none'" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5m-9-6h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm0 2.25h.008v.008H12v-.008ZM9.75 15h.008v.008H9.75V15Zm0 2.25h.008v.008H9.75v-.008ZM7.5 15h.008v.008H7.5V15Zm0 2.25h.008v.008H7.5v-.008Zm6.75-4.5h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V15Zm0 2.25h.008v.008h-.008v-.008Zm2.25-4.5h.008v.008H16.5v-.008Zm0 2.25h.008v.008H16.5V15Z" /></svg></button>
-                        <button v-if="canManage(p)" @click="openModal('transfer', p)" title="Transfer ward/ICU" aria-label="Transfer ward/ICU" class="grid h-7 w-7 place-items-center rounded-lg text-ink-400 hover:bg-brand-100 hover:text-brand-700"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg></button>
+                        <button v-if="canManage(p)" @click="openModal('transfer', p)" title="Transfer" aria-label="Transfer" class="grid h-7 w-7 place-items-center rounded-lg text-ink-400 hover:bg-brand-100 hover:text-brand-700"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg></button>
                         <template v-if="canManage(p)">
                             <button v-if="p.location === 'ICU'" @click="openModal('icu', p)" title="ICU discharge" aria-label="ICU discharge" class="ml-auto grid h-7 w-7 place-items-center rounded-lg text-ink-400 hover:bg-success-100 hover:text-success-600"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg></button>
                             <template v-else-if="p.medically_discharged">
@@ -193,6 +208,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                             </template>
                             <button v-else @click="openModal('medical', p)" title="Discharge" aria-label="Discharge" class="ml-auto grid h-7 w-7 place-items-center rounded-lg text-ink-400 hover:bg-success-100 hover:text-success-600"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M11.35 3.836c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m8.9-4.414c.376.023.75.05 1.124.08 1.131.094 1.976 1.057 1.976 2.192V16.5A2.25 2.25 0 0 1 18 18.75h-2.25m-7.5-10.5H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V18.75m-7.5-10.5h6.375c.621 0 1.125.504 1.125 1.125v9.375m-8.25-3 1.5 1.5 3-3.75" /></svg></button>
                         </template>
+                        <button v-if="me.is_admin" @click="destroyAdmission(p)" title="Delete admission" aria-label="Delete admission" class="grid h-7 w-7 place-items-center rounded-lg text-ink-400 hover:bg-danger-100 hover:text-danger-600"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg></button>
                     </div>
                 </div>
             </div>
@@ -230,9 +246,32 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                     <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="icuForm.processing" class="rounded-xl bg-success-600 px-5 py-2 text-sm font-semibold text-white hover:bg-success-700 disabled:opacity-50">ICU discharge</button></div>
                 </form>
                 <form v-else @submit.prevent="submitTransfer" class="space-y-4">
-                    <p class="text-sm text-ink-600">Currently in <span class="font-semibold">{{ modal.row.location || '—' }}</span>. Transfer to:</p>
-                    <div class="flex gap-2"><label v-for="loc in ['Ward','ICU']" :key="loc" class="flex-1 cursor-pointer rounded-xl border-2 px-4 py-3 text-center text-sm font-semibold transition" :class="tForm.target === loc ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'"><input type="radio" v-model="tForm.target" :value="loc" class="hidden" /> {{ loc }}</label></div>
-                    <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="tForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Transfer</button></div>
+                    <div class="flex gap-1 rounded-xl bg-surface p-1 text-sm font-semibold">
+                        <button v-for="m in [['location','Ward / ICU'],['specialty','Internal specialty'],['external','External service']]" :key="m[0]" type="button" @click="tForm.mode = m[0]"
+                            class="flex-1 rounded-lg px-2 py-1.5 transition" :class="tForm.mode === m[0] ? 'bg-white text-brand-700 shadow-sm ring-1 ring-ink-100' : 'text-ink-500 hover:text-ink-700'">{{ m[1] }}</button>
+                    </div>
+                    <template v-if="tForm.mode === 'location'">
+                        <p class="text-sm text-ink-600">Currently in <span class="font-semibold">{{ modal.row.location || '—' }}</span>. Transfer to:</p>
+                        <div class="flex gap-2"><label v-for="loc in ['Ward','ICU']" :key="loc" class="flex-1 cursor-pointer rounded-xl border-2 px-4 py-3 text-center text-sm font-semibold transition" :class="tForm.target === loc ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'"><input type="radio" v-model="tForm.target" :value="loc" class="hidden" /> {{ loc }}</label></div>
+                        <p class="text-xs text-ink-400">Keeps the same consultant; opens a new episode in the receiving location.</p>
+                    </template>
+                    <template v-else-if="tForm.mode === 'specialty'">
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Receiving specialty</label>
+                            <select v-model="tForm.specialty_id" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select specialty…</option><option v-for="s in specialties" :key="s.id" :value="s.id">{{ s.name }}</option></select>
+                            <p v-if="tForm.errors.specialty_id" class="mt-1 text-xs text-danger-600">{{ tForm.errors.specialty_id }}</p></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Receiving consultant</label>
+                            <select v-model="tForm.consultant_id" :disabled="!tForm.specialty_id" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">Select consultant…</option><option v-for="c in specConsultants" :key="c.id" :value="c.id">{{ c.name }}</option></select>
+                            <p v-if="tForm.specialty_id && !specConsultants.length" class="mt-1 text-xs text-warning-500">No consultants registered under this specialty.</p>
+                            <p v-if="tForm.errors.consultant_id" class="mt-1 text-xs text-danger-600">{{ tForm.errors.consultant_id }}</p></div>
+                        <p class="text-xs text-ink-400">Closes this episode as a specialty handover and opens a new one under the chosen consultant.</p>
+                    </template>
+                    <template v-else>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">External / allied service</label>
+                            <select v-model="tForm.service" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select service…</option><option v-for="s in externalServices" :key="s" :value="s">{{ s }}</option></select>
+                            <p v-if="tForm.errors.service" class="mt-1 text-xs text-danger-600">{{ tForm.errors.service }}</p></div>
+                        <p class="text-xs text-ink-400">Closes this episode — the patient leaves the department (no new episode).</p>
+                    </template>
+                    <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="tForm.processing || !transferReady" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Transfer</button></div>
                 </form>
             </div>
         </div>
@@ -262,6 +301,9 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Age</label><input v-model="mForm.age" inputmode="numeric" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" /></div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Gender</label><select v-model="mForm.gender" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500"><option value="">—</option><option>Male</option><option>Female</option></select></div>
                         <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Nationality</label><input v-model="mForm.nationality" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" /></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Admit date</label><input v-model="mForm.admit_date" type="date" :max="today" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" :class="{ 'border-danger-500': mForm.errors.admit_date }" /><p v-if="mForm.errors.admit_date" class="mt-1 text-xs text-danger-600">{{ mForm.errors.admit_date }}</p></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Location</label><select v-model="mForm.current_location" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500"><option>ER</option><option>Ward</option><option>ICU</option></select></div>
+                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Admitted from</label><input v-model="mForm.admitted_from" list="admit-from-options" placeholder="ER, Clinic, Referral…" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" /><datalist id="admit-from-options"><option v-for="o in admitFromOptions" :key="o" :value="o" /></datalist></div>
                     </div>
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-ink-700">Diagnoses</label>

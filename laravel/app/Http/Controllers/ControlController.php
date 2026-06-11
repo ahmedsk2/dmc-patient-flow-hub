@@ -36,7 +36,7 @@ class ControlController extends Controller
             'users' => $users,
             'filters' => ['q' => $request->query('q', '')],
             'roles' => User::ROLE_LABELS,
-            'specialties' => Specialty::orderBy('name')->get(['id', 'name']),
+            'specialties' => Specialty::orderBy('name')->get(['id', 'name', 'is_external']),
             'reasons' => ConsultationReason::orderBy('name')->get(['id', 'name']),
             'settingHistory' => DB::table('setting_changes as sc')->leftJoin('users as u', 'u.id', '=', 'sc.changed_by')
                 ->orderByDesc('sc.id')->limit(25)
@@ -143,10 +143,15 @@ class ControlController extends Controller
 
     public function addSpecialty(Request $request): RedirectResponse
     {
-        $data = $request->validate(['name' => ['required', 'string', 'max:191'], 'is_subspecialty' => ['boolean']]);
-        Specialty::create(['name' => $data['name'], 'is_subspecialty' => $request->boolean('is_subspecialty', true)]);
+        $data = $request->validate(['name' => ['required', 'string', 'max:191'], 'is_subspecialty' => ['boolean'], 'is_external' => ['boolean']]);
+        Specialty::create([
+            'name' => $data['name'],
+            'is_subspecialty' => $request->boolean('is_subspecialty', true),
+            'is_external' => $request->boolean('is_external', false),   // external/allied service = transfer-out target only
+        ]);
         AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'specialty.add',
-            'entity_type' => 'specialty', 'entity_id' => null, 'details' => ['name' => $data['name']], 'ip' => $request->ip()]);
+            'entity_type' => 'specialty', 'entity_id' => null,
+            'details' => ['name' => $data['name'], 'is_external' => $request->boolean('is_external', false)], 'ip' => $request->ip()]);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Specialty added.']);
     }

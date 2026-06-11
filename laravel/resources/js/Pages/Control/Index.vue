@@ -41,7 +41,7 @@ const resetMfa = (u) => { if (confirm(`Reset two-factor for ${u.username}? They'
 const sendReset = (u) => router.post(`/control/users/${u.id}/send-reset`, {}, { preserveScroll: true });
 
 // reference data
-const specForm = useForm({ name: '', is_subspecialty: true });
+const specForm = useForm({ name: '', is_subspecialty: true, is_external: false });
 const submitSpec = () => specForm.post('/control/specialties', { preserveScroll: true, onSuccess: () => specForm.reset() });
 const reasonForm = useForm({ name: '' });
 const submitReason = () => reasonForm.post('/control/reasons', { preserveScroll: true, onSuccess: () => reasonForm.reset() });
@@ -150,9 +150,10 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
         <div v-show="tab === 'reference'" class="grid gap-5 lg:grid-cols-2">
             <div class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
                 <h3 class="mb-3 font-bold text-ink-800">Specialties</h3>
-                <div class="mb-4 flex max-h-48 flex-wrap gap-2 overflow-auto"><span v-for="s in specialties" :key="s.id" class="rounded-full bg-surface px-3 py-1 text-sm text-ink-600">{{ s.name }}</span></div>
+                <div class="mb-4 flex max-h-48 flex-wrap gap-2 overflow-auto"><span v-for="s in specialties" :key="s.id" class="rounded-full px-3 py-1 text-sm" :class="s.is_external ? 'bg-accent-300/30 text-accent-600' : 'bg-surface text-ink-600'">{{ s.name }}<span v-if="s.is_external" class="ml-1 text-[10px] font-semibold uppercase">ext</span></span></div>
                 <form @submit.prevent="submitSpec" class="flex gap-2"><input v-model="specForm.name" :class="field" placeholder="New specialty" /><button :disabled="specForm.processing || !specForm.name" class="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Add</button></form>
                 <label class="mt-2 flex items-center gap-2 text-xs text-ink-500"><input type="checkbox" v-model="specForm.is_subspecialty" class="rounded text-brand-600" /> Subspecialty (uncheck for hospitalist)</label>
+                <label class="mt-1 flex items-center gap-2 text-xs text-ink-500"><input type="checkbox" v-model="specForm.is_external" class="rounded text-brand-600" /> External / allied service (transfer-out target only — not an internal specialty)</label>
             </div>
             <div class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
                 <h3 class="mb-3 font-bold text-ink-800">Consultation indications</h3>
@@ -175,7 +176,7 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
                         <label class="flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" v-model="uForm.on_service" class="rounded text-brand-600" /> On service</label>
                     </div>
                     <label v-if="uForm.role === 3" class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Specialty</span>
-                        <select v-model="uForm.specialty_id" :class="field"><option value="">—</option><option v-for="s in specialties" :key="s.id" :value="s.id">{{ s.name }}</option></select>
+                        <select v-model="uForm.specialty_id" :class="field"><option value="">—</option><option v-for="s in specialties.filter((x) => !x.is_external)" :key="s.id" :value="s.id">{{ s.name }}</option></select>
                     </label>
                     <div class="grid grid-cols-2 gap-2">
                         <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_assign" class="rounded text-brand-600" /> Can assign</label>

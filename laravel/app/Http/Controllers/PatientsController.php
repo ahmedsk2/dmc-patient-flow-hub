@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Admission;
 use App\Models\Setting;
+use App\Models\Specialty;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,9 +28,16 @@ class PatientsController extends Controller
             ->from('admission_diagnoses as ad')->join('tb_diagnoses as tb', 'tb.icd10_code', '=', 'ad.icd10_code')
             ->whereColumn('ad.admission_id', 'admissions.id'));
 
+        // D1 (legacy endorsement scope [0,2,4]): a consultant sees only THEIR OWN group;
+        // admin/registrar/resident/observer see the whole board.
+        $u = $request->user();
+        $ownOnly = (int) $u->role === User::ROLE_CONSULTANT && ! $u->isAdmin();
+        $scope = fn ($q) => $ownOnly ? $q->where('consultant_id', $u->id) : $q;
+
         $admissions = Admission::query()
             ->whereNull('discharge_date')
             ->whereNotNull('consultant_id')                       // assigned only (unassigned → New Admissions)
+            ->tap($scope)
             ->with(['patient:id,mrn,name,gender,age', 'consultant:id,full_name,name,specialty_id,on_service', 'diagnoses:id,admission_id,icd10_code'])
             ->withCount('diagnoses')
             ->when($filters['location'] ?? null, fn ($q, $loc) => $q->where('current_location', $loc))
@@ -113,12 +121,16 @@ class PatientsController extends Controller
             'filters' => $filters,
             'readmitWindow' => $readmitWindow,
             'consultants' => User::consultantOptions(),
+            'specialties' => Specialty::where('is_external', false)->orderBy('name')->get(['id', 'name']),
+            'externalServices' => Specialty::where('is_external', true)->orderBy('name')->pluck('name'),
             'stats' => [
-                'total' => Admission::active()->whereNotNull('consultant_id')->count(),
-                'ward' => Admission::active()->whereNotNull('consultant_id')->nonIcu()->count(),
-                'icu' => Admission::active()->whereNotNull('consultant_id')->icu()->count(),
-                'longterm' => Admission::active()->whereNotNull('consultant_id')->where('is_longterm', true)->count(),
-                'tb' => Admission::active()->whereNotNull('consultant_id')->where($tbExists)->count(),
+                // chips mirror what the viewer can SEE (D1-scoped for consultants) — except the
+                // assignment queue, which stays global so they can still grab new patients from it
+                'total' => Admission::active()->whereNotNull('consultant_id')->tap($scope)->count(),
+                'ward' => Admission::active()->whereNotNull('consultant_id')->tap($scope)->nonIcu()->count(),
+                'icu' => Admission::active()->whereNotNull('consultant_id')->tap($scope)->icu()->count(),
+                'longterm' => Admission::active()->whereNotNull('consultant_id')->tap($scope)->where('is_longterm', true)->count(),
+                'tb' => Admission::active()->whereNotNull('consultant_id')->tap($scope)->where($tbExists)->count(),
                 'unassigned' => Admission::active()->whereNull('consultant_id')->count(),
             ],
         ]);

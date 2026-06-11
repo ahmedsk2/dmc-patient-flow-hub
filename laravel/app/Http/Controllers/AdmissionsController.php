@@ -129,6 +129,9 @@ class AdmissionsController extends Controller
             'gender' => $admission->patient?->gender,
             'nationality' => $admission->patient?->nationality,
             'bed' => $admission->bed,
+            'admit_date' => optional($admission->admit_date)->toDateString(),
+            'admitted_from' => $admission->admitted_from,
+            'current_location' => $admission->current_location,
             'diagnoses' => $admission->diagnoses->map(fn ($d) => ['code' => $d->icd10_code, 'name' => $names[$d->icd10_code] ?? $d->icd10_code])->values(),
         ]);
     }

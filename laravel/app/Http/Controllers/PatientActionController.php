@@ -42,19 +42,32 @@ class PatientActionController extends Controller
         $patient = $admission->patient;
         $data = $request->validated();
 
-        DB::transaction(function () use ($admission, $patient, $data) {
+        // data correction may move the admit date — keep the old one in the audit trail
+        $oldAdmitDate = optional($admission->admit_date)->toDateString();
+        $newAdmitDate = \Carbon\Carbon::parse($data['admit_date'])->toDateString();
+
+        DB::transaction(function () use ($admission, $patient, $data, $newAdmitDate) {
             $patient->update([
                 'mrn' => $data['mrn'], 'name' => $data['name'], 'age' => $data['age'] ?? null,
                 'gender' => $data['gender'] ?? null, 'nationality' => $data['nationality'] ?? null,
             ]);
-            $admission->update(['bed' => $data['bed'] ?? null]);
+            $admission->update([
+                'bed' => $data['bed'] ?? null,
+                'admit_date' => $newAdmitDate,
+                'admitted_from' => $data['admitted_from'] ?? null,
+                'current_location' => $data['current_location'],
+            ]);
             $admission->diagnoses()->delete();
             $seq = 1;
             foreach (array_unique(array_filter(array_map('trim', $data['diagnoses'] ?? []))) as $code) {
                 $admission->diagnoses()->create(['seq' => $seq++, 'icd10_code' => $code]);
             }
         });
-        $this->audit('patient.modify', $admission, ['mrn' => $data['mrn']]);
+        $details = ['mrn' => $data['mrn']];
+        if ($oldAdmitDate !== $newAdmitDate) {
+            $details['admit_date_was'] = $oldAdmitDate;
+        }
+        $this->audit('patient.modify', $admission, $details);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Patient details updated.']);
     }
@@ -257,11 +270,109 @@ class PatientActionController extends Controller
         return back()->with('flash', ['type' => 'success', 'message' => 'Medical discharge undone.']);
     }
 
+    /**
+     * Three-mode transfer (legacy semantics):
+     *   location  — ward<->ICU move: close + reopen under the SAME consultant (default; a bare
+     *               {target} payload without `mode` keeps its pre-wave behavior).
+     *   specialty — internal handover: close as 'transfer to other speciality' + open a new
+     *               episode under the CHOSEN consultant (it IS a new assignment).
+     *   external  — out of the department: close as 'other transfer' to the named allied
+     *               service; NO new episode.
+     */
     public function transfer(Request $request, Admission $admission): RedirectResponse
     {
         if (! $this->canManage($admission)) {
             throw new AccessDeniedHttpException('Only the primary consultant or a manager may transfer.');
         }
+        $mode = $request->validate(['mode' => ['nullable', 'in:location,specialty,external']])['mode'] ?? 'location';
+
+        if ($mode !== 'location' && $admission->discharge_date) {
+            return back()->with('flash', ['type' => 'error', 'message' => 'This admission is already discharged.']);
+        }
+
+        return match ($mode) {
+            'specialty' => $this->transferSpecialty($request, $admission),
+            'external' => $this->transferExternal($request, $admission),
+            default => $this->transferLocation($request, $admission),
+        };
+    }
+
+    /** Internal handover — new episode under the chosen consultant of the receiving specialty. */
+    private function transferSpecialty(Request $request, Admission $admission): RedirectResponse
+    {
+        $data = $request->validate([
+            'specialty_id' => ['required', Rule::exists('specialties', 'id')->where('is_external', false)],
+            'consultant_id' => ['required', Rule::exists('users', 'id')->where('role', User::ROLE_CONSULTANT)],
+        ]);
+        $specialty = \App\Models\Specialty::findOrFail($data['specialty_id']);
+
+        $new = DB::transaction(function () use ($admission, $data, $specialty) {
+            // close the episode as a specialty handover (continuation of care); a pending phase-1
+            // medical discharge is superseded — clear its fields like the location transfer does
+            $admission->update([
+                'discharge_date' => now()->toDateString(),
+                'transfer_type' => 'transfer to other speciality',
+                'discharge_to' => $specialty->name,
+                'medical_discharge_date' => null,
+                'outcome' => null,
+                'delay_reason' => null,
+                'discharged_by' => Auth::id(),
+            ]);
+
+            // open the receiving episode under the CHOSEN consultant — same physical location,
+            // bed cleared (reassign on the new service), and it IS a new assignment
+            $new = Admission::create([
+                'patient_id' => $admission->patient_id,
+                'bed' => null,
+                'admitted_from' => 'Transfer',
+                'admit_date' => now()->toDateString(),
+                'current_location' => $admission->current_location,
+                'consultant_id' => $data['consultant_id'],
+                'admitted_by' => Auth::id(),
+                'is_new_assignment' => true,
+                'assigned_on' => now()->toDateString(),
+                'assigned_at' => now(),
+            ]);
+
+            // carry the diagnoses forward
+            foreach ($admission->diagnoses as $dx) {
+                $new->diagnoses()->create(['seq' => $dx->seq, 'icd10_code' => $dx->icd10_code]);
+            }
+
+            return $new;
+        });
+        $this->audit('admission.transfer_specialty', $admission, [
+            'specialty_id' => (int) $data['specialty_id'], 'specialty' => $specialty->name,
+            'consultant_id' => (int) $data['consultant_id'], 'new_admission_id' => $new->id,
+        ]);
+
+        return back()->with('flash', ['type' => 'success', 'message' => "Patient transferred to {$specialty->name}."]);
+    }
+
+    /** Out-of-department transfer — closes the episode only (no receiving episode here). */
+    private function transferExternal(Request $request, Admission $admission): RedirectResponse
+    {
+        $data = $request->validate([
+            'service' => ['required', 'string', 'max:128', Rule::exists('specialties', 'name')->where('is_external', true)],
+        ]);
+
+        $admission->update([
+            'discharge_date' => now()->toDateString(),
+            'transfer_type' => 'other transfer',
+            'discharge_to' => $data['service'],
+            'medical_discharge_date' => null,
+            'outcome' => null,
+            'delay_reason' => null,
+            'discharged_by' => Auth::id(),
+        ]);
+        $this->audit('admission.transfer_external', $admission, ['service' => $data['service']]);
+
+        return back()->with('flash', ['type' => 'success', 'message' => "Patient transferred to {$data['service']}."]);
+    }
+
+    /** Ward<->ICU move — the original single-mode behavior, unchanged. */
+    private function transferLocation(Request $request, Admission $admission): RedirectResponse
+    {
         $data = $request->validate(['target' => ['required', 'in:Ward,ICU']]);
         if ($admission->current_location === $data['target']) {
             return back()->with('flash', ['type' => 'error', 'message' => "Patient is already in {$data['target']}."]);
@@ -355,5 +466,29 @@ class PatientActionController extends Controller
         $this->audit('admission.icu_pull', $admission, ['new_admission_id' => $new->id]);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Patient admitted from ICU — now in the assignment queue.']);
+    }
+
+    /**
+     * Hard-delete an admission (admin only) — the legacy "delete" on the queue/board. The audit
+     * row captures the identifying details BEFORE the row disappears; recovery is via backups.
+     */
+    public function destroy(Admission $admission): RedirectResponse
+    {
+        if (! Auth::user()->isAdmin()) {
+            throw new AccessDeniedHttpException('Admin only.');
+        }
+        $details = [
+            'mrn' => $admission->patient?->mrn,
+            'patient' => $admission->patient?->name,
+            'admit_date' => optional($admission->admit_date)->toDateString(),
+        ];
+
+        DB::transaction(function () use ($admission, $details) {
+            $this->audit('admission.delete', $admission, $details);   // written first — survives the delete
+            $admission->diagnoses()->delete();                        // explicit, even though the FK cascades
+            $admission->delete();
+        });
+
+        return back()->with('flash', ['type' => 'success', 'message' => 'Admission deleted.']);
     }
 }

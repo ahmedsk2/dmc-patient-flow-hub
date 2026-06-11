@@ -57,9 +57,26 @@ class LegacyImport extends Command
         // specialties (legacy speciality.specilaity; id 1 = Hospitalist => not a subspecialty)
         $rows = $this->legacy->table('speciality')->get()->map(fn ($r) => [
             'id' => $r->id, 'name' => trim($r->specilaity ?? 'Unknown'),
-            'is_subspecialty' => ((int) $r->id !== 1), 'created_at' => now(), 'updated_at' => now(),
+            'is_subspecialty' => ((int) $r->id !== 1), 'is_external' => false,
+            'created_at' => now(), 'updated_at' => now(),
         ])->all();
         $this->insertBatched('specialties', $rows);
+
+        // external/allied services (legacy other_specialities) into the SAME table, flagged
+        // is_external. Legacy ids collide with speciality ids, so insert by NAME (skip any name
+        // already present) and let auto-increment assign fresh ids. Idempotent: the truncate
+        // above wipes both sets before each import.
+        $taken = DB::table('specialties')->pluck('name')
+            ->mapWithKeys(fn ($n) => [mb_strtolower(trim($n)) => true])->all();
+        $external = [];
+        foreach ($this->legacy->table('other_specialities')->get() as $r) {
+            $name = trim($r->specilaity ?? '');
+            if ($name === '' || isset($taken[mb_strtolower($name)])) { continue; }
+            $taken[mb_strtolower($name)] = true;
+            $external[] = ['name' => $name, 'is_subspecialty' => true, 'is_external' => true,
+                'created_at' => now(), 'updated_at' => now()];
+        }
+        $this->insertBatched('specialties', $external);
 
         // icd10 (code + name)
         $this->legacy->table('icd10')->orderBy('autoid')->chunk(5000, function ($chunk) {
