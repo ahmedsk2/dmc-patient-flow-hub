@@ -46,15 +46,22 @@ const submitReassign = () => rForm.post('/admissions/reassign', { preserveScroll
 const modal = ref(null);
 const today = new Date().toISOString().slice(0, 10);
 const aForm = useForm({ consultant_id: '' });
-const mdForm = useForm({ outcome: 'Alive', medical_discharge_date: today, discharge_to: '', delay_reason: '' });
+const mdForm = useForm({ outcome: 'Alive', medical_discharge_date: today, discharge_to: '', delay_reason: '', complete: false });
 const cdForm = useForm({ discharge_date: today });
-const icuForm = useForm({ outcome: 'Alive', discharge_date: today });
+const icuForm = useForm({ outcome: 'Alive', discharge_date: today, discharge_to: '' });
 const tForm = useForm({ mode: 'location', target: 'ICU', specialty_id: '', consultant_id: '', service: '' });
 const openModal = (mode, row) => {
     modal.value = { mode, row };
     if (mode === 'assign') aForm.consultant_id = row.consultant_id || '';
+    if (mode === 'medical') mdForm.reset();   // never carry a previous patient's type/destination over
+    if (mode === 'icu') icuForm.reset();
     if (mode === 'transfer') { tForm.reset(); tForm.target = row.location === 'ICU' ? 'Ward' : 'ICU'; }
 };
+// controlled destination vocabulary (legacy "Discharged to" list); a death locks to Mortuary
+const destinations = ['Home', 'Other Facility', 'LAMA', 'Absconded', 'Mortuary'];
+watch(() => mdForm.outcome, (o) => { if (o === 'Dead') mdForm.discharge_to = 'Mortuary'; else if (mdForm.discharge_to === 'Mortuary') mdForm.discharge_to = ''; });
+watch(() => icuForm.outcome, (o) => { if (o === 'Dead') icuForm.discharge_to = 'Mortuary'; else if (icuForm.discharge_to === 'Mortuary') icuForm.discharge_to = ''; });
+watch(() => mdForm.complete, (c) => { if (c) mdForm.delay_reason = ''; });   // a closed file has no "still-in" delay
 // internal-specialty handover: consultants offered are those of the chosen specialty
 const specConsultants = computed(() => props.consultants.filter((c) => c.specialty_id === tForm.specialty_id));
 watch(() => tForm.specialty_id, () => (tForm.consultant_id = ''));
@@ -226,14 +233,23 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                     <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="aForm.processing || !aForm.consultant_id" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Assign</button></div>
                 </form>
                 <form v-else-if="modal.mode === 'medical'" @submit.prevent="submitMedical" class="space-y-4">
+                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge type</label>
+                        <div class="flex gap-2">
+                            <label v-for="t in [[false, 'Medical only (still in bed)'], [true, 'Complete (leaving now)']]" :key="String(t[0])" class="flex-1 cursor-pointer rounded-xl border-2 px-3 py-2.5 text-center text-sm font-semibold transition" :class="mdForm.complete === t[0] ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'"><input type="radio" v-model="mdForm.complete" :value="t[0]" class="hidden" /> {{ t[1] }}</label>
+                        </div>
+                    </div>
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Outcome</label><select v-model="mdForm.outcome" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option>Alive</option><option>Dead</option><option>LAMA</option><option>DAMA</option><option>Transferred</option></select></div>
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Medical discharge date</label><input v-model="mdForm.medical_discharge_date" type="date" :max="today" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" /><p v-if="mdForm.errors.medical_discharge_date" class="mt-1 text-xs text-danger-600">{{ mdForm.errors.medical_discharge_date }}</p></div>
                     <div class="grid grid-cols-2 gap-3">
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge to</label><input v-model="mdForm.discharge_to" placeholder="Home, facility…" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" /></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Delay reason</label><input v-model="mdForm.delay_reason" placeholder="if bed not freed" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" /></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge to</label>
+                            <select v-model="mdForm.discharge_to" :disabled="mdForm.outcome === 'Dead'" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">—</option><option v-for="d in destinations" :key="d">{{ d }}</option></select>
+                            <p v-if="mdForm.errors.discharge_to" class="mt-1 text-xs text-danger-600">{{ mdForm.errors.discharge_to }}</p></div>
+                        <div v-if="!mdForm.complete"><label class="mb-1 block text-sm font-semibold text-ink-700">Delay reason</label>
+                            <select v-model="mdForm.delay_reason" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">—</option><option value="Physical">Physical bed availability</option><option value="System">System</option></select>
+                            <p v-if="mdForm.errors.delay_reason" class="mt-1 text-xs text-danger-600">{{ mdForm.errors.delay_reason }}</p></div>
                     </div>
-                    <p class="text-xs text-ink-400">Marks the patient clinically discharged but still in a bed. Use <strong>Complete discharge</strong> when they physically leave.</p>
-                    <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mdForm.processing" class="rounded-xl bg-warning-500 px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">Medical discharge</button></div>
+                    <p class="text-xs text-ink-400">{{ mdForm.complete ? 'Closes the file and frees the bed in one step.' : 'Marks the patient clinically discharged but still in a bed. Use Complete discharge when they physically leave.' }}</p>
+                    <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mdForm.processing" class="rounded-xl px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50" :class="mdForm.complete ? 'bg-success-600 hover:bg-success-700' : 'bg-warning-500'">{{ mdForm.complete ? 'Discharge & close file' : 'Medical discharge' }}</button></div>
                 </form>
                 <form v-else-if="modal.mode === 'complete'" @submit.prevent="submitComplete" class="space-y-4">
                     <p class="text-sm text-ink-600">Close the file and free the bed.</p>
@@ -242,6 +258,9 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                 </form>
                 <form v-else-if="modal.mode === 'icu'" @submit.prevent="submitIcu" class="space-y-4">
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Outcome</label><select v-model="icuForm.outcome" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option>Alive</option><option>Dead</option><option>LAMA</option><option>DAMA</option><option>Transferred</option></select></div>
+                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge to</label>
+                        <select v-model="icuForm.discharge_to" :disabled="icuForm.outcome === 'Dead'" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">—</option><option v-for="d in destinations" :key="d">{{ d }}</option></select>
+                        <p v-if="icuForm.errors.discharge_to" class="mt-1 text-xs text-danger-600">{{ icuForm.errors.discharge_to }}</p></div>
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge date</label><input v-model="icuForm.discharge_date" type="date" :max="today" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" /><p v-if="icuForm.errors.discharge_date" class="mt-1 text-xs text-danger-600">{{ icuForm.errors.discharge_date }}</p></div>
                     <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="icuForm.processing" class="rounded-xl bg-success-600 px-5 py-2 text-sm font-semibold text-white hover:bg-success-700 disabled:opacity-50">ICU discharge</button></div>
                 </form>

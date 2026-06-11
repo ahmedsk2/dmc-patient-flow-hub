@@ -118,6 +118,12 @@ class AdmissionsController extends Controller
     /** Full detail for the Modify modal (demographics + current diagnoses with names). */
     public function edit(Admission $admission): JsonResponse
     {
+        // Feeds the Modify modal with full demographics — gate to those who may actually modify
+        // (or manage / own) the admission so read-only users can't pull PHI through this JSON.
+        $u = Auth::user();
+        if (! ($u->isAdmin() || $u->can_modify || $u->can_manage || (int) $admission->consultant_id === (int) $u->id)) {
+            throw new AccessDeniedHttpException('You do not have access to this patient\'s details.');
+        }
         $admission->load('patient', 'diagnoses');
         $names = Icd10::whereIn('code', $admission->diagnoses->pluck('icd10_code'))->pluck('name', 'code');
 

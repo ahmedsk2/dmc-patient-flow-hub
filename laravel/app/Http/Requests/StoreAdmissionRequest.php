@@ -45,4 +45,23 @@ class StoreAdmissionRequest extends FormRequest
             'consultant_id' => ['nullable', 'exists:users,id'],
         ];
     }
+
+    /**
+     * Duplicate active-MRN guard (legacy parity: newpatients/dmc-patients-add.php) — a patient
+     * cannot be admitted twice while an episode is still open (discharge_date IS NULL).
+     */
+    public function withValidator(\Illuminate\Validation\Validator $validator): void
+    {
+        $validator->after(function (\Illuminate\Validation\Validator $v) {
+            if ($v->errors()->has('mrn')) {
+                return;   // MRN already rejected — don't stack a misleading duplicate message
+            }
+            $active = \App\Models\Admission::whereNull('discharge_date')
+                ->whereHas('patient', fn ($q) => $q->where('mrn', $this->input('mrn')))
+                ->exists();
+            if ($active) {
+                $v->errors()->add('mrn', 'This MRN already has an active admission.');
+            }
+        });
+    }
 }

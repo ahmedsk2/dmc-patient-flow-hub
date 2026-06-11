@@ -45,7 +45,7 @@ class ClinicalFlowTest extends TestCase
 
         // phase 1 - medical discharge: clinically done, still occupying the bed (stays active)
         $this->actingAs($admin)->post("/admissions/{$a->id}/medical-discharge", [
-            'outcome' => 'Alive', 'medical_discharge_date' => now()->toDateString(), 'delay_reason' => 'bed not freed',
+            'outcome' => 'Alive', 'medical_discharge_date' => now()->toDateString(), 'delay_reason' => 'Physical',   // R1: controlled vocab (Physical|System)
         ])->assertRedirect();
         $a->refresh();
         $this->assertNotNull($a->medical_discharge_date);

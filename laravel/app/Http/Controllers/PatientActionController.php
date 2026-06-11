@@ -154,7 +154,14 @@ class PatientActionController extends Controller
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultant assigned.']);
     }
 
-    /** Phase 1 — medical discharge: clinically done but still occupying a bed ("discharged still in"). */
+    /** Controlled destination vocabulary (legacy "Discharged to" list; ICU kept for historical rows). */
+    private const DISCHARGE_DESTINATIONS = 'in:Home,Other Facility,LAMA,Absconded,Mortuary,Intensive Care (ICU)';
+
+    /**
+     * Phase 1 — medical discharge: clinically done but still occupying a bed ("discharged still in").
+     * With complete=true (legacy "both") the SAME request also closes the file — discharge_date
+     * mirrors the medical discharge date and the transfer_type follows the current location.
+     */
     public function medicalDischarge(Request $request, Admission $admission): RedirectResponse
     {
         if (! $this->canManage($admission)) {
@@ -163,22 +170,31 @@ class PatientActionController extends Controller
         $data = $request->validate([
             'outcome' => ['required', 'in:Alive,Dead,LAMA,DAMA,Transferred'],
             'medical_discharge_date' => ['required', 'date', 'before_or_equal:today'],
-            'discharge_to' => ['nullable', 'string', 'max:128'],
-            'delay_reason' => ['nullable', 'string', 'max:191'],
+            'discharge_to' => ['nullable', self::DISCHARGE_DESTINATIONS],
+            'delay_reason' => ['nullable', 'in:Physical,System'],
+            'complete' => ['nullable', 'boolean'],
         ]);
         if ($admission->discharge_date) {
             return back()->with('flash', ['type' => 'error', 'message' => 'This admission is already fully discharged.']);
         }
+        $complete = (bool) ($data['complete'] ?? false);
         $admission->update([
             'medical_discharge_date' => $data['medical_discharge_date'],
             'outcome' => $data['outcome'],
-            'discharge_to' => $data['discharge_to'] ?? null,
-            'delay_reason' => $data['delay_reason'] ?? null,
+            // a death can only go to the mortuary — enforced here, not just in the UI
+            'discharge_to' => $data['outcome'] === 'Dead' ? 'Mortuary' : ($data['discharge_to'] ?? null),
+            // a closed file has no "still-in" delay — only the medical-only path keeps the reason
+            'delay_reason' => $complete ? null : ($data['delay_reason'] ?? null),
             'discharged_by' => Auth::id(),
-        ]);
-        $this->audit('admission.medical_discharge', $admission, ['outcome' => $data['outcome']]);
+        ] + ($complete ? [
+            'discharge_date' => $data['medical_discharge_date'],
+            'transfer_type' => $admission->current_location === 'ICU' ? 'discharge from ICU' : 'discharge from ward',
+        ] : []));
+        $this->audit($complete ? 'admission.discharge_both' : 'admission.medical_discharge', $admission, ['outcome' => $data['outcome']]);
 
-        return back()->with('flash', ['type' => 'success', 'message' => 'Medically discharged — awaiting bed exit.']);
+        return back()->with('flash', ['type' => 'success', 'message' => $complete
+            ? 'Patient discharged — file closed.'
+            : 'Medically discharged — awaiting bed exit.']);
     }
 
     /** Phase 2 — complete discharge: file closed, leaves the active board. */
@@ -216,6 +232,7 @@ class PatientActionController extends Controller
         $data = $request->validate([
             'outcome' => ['required', 'in:Alive,Dead,LAMA,DAMA,Transferred'],
             'discharge_date' => ['required', 'date', 'before_or_equal:today'],
+            'discharge_to' => ['nullable', self::DISCHARGE_DESTINATIONS],
         ]);
         if ($admission->discharge_date) {
             return back()->with('flash', ['type' => 'error', 'message' => 'Already discharged.']);
@@ -223,6 +240,8 @@ class PatientActionController extends Controller
         $admission->update([
             'discharge_date' => $data['discharge_date'],
             'outcome' => $data['outcome'],
+            // a death can only go to the mortuary — enforced here, not just in the UI
+            'discharge_to' => $data['outcome'] === 'Dead' ? 'Mortuary' : ($data['discharge_to'] ?? null),
             'transfer_type' => 'discharge from ICU',
             'discharged_by' => Auth::id(),
         ]);

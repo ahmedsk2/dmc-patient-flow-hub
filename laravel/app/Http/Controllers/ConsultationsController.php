@@ -105,6 +105,14 @@ class ConsultationsController extends Controller
         if (! Auth::user()->isAdmin()) {
             throw new AccessDeniedHttpException('Admin only.');
         }
+        // Undo is for correcting recent mistakes (the 48h Recent registry), not silently
+        // reopening months-old sign-offs — mirrors the reverse-discharge window.
+        if (! $consultation->signoff_date) {
+            return back()->with('flash', ['type' => 'error', 'message' => 'This consultation is not signed off.']);
+        }
+        if ($consultation->signoff_date->lt(now()->subDays(2)->startOfDay())) {
+            return back()->with('flash', ['type' => 'error', 'message' => 'Only sign-offs from the last 48 hours can be reversed.']);
+        }
         $consultation->update(['signoff_date' => null]);
         AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'consultation.reverse_signoff',
             'entity_type' => 'consultation', 'entity_id' => (string) $consultation->id, 'ip' => $request->ip()]);
