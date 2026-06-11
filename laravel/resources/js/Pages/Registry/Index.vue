@@ -11,7 +11,7 @@ const canModify = computed(() => me.value.is_admin || me.value.can.modify);
 
 const f = reactive({
     search: '', from: '', to: '', outcome: '', location: '', gender: '', nationality: '',
-    age_from: '', age_to: '', admitted_from: '', consultant_id: '', longterm: false, discharged: false, tb: false,
+    age_from: '', age_to: '', admitted_from: '', discharged_to: '', delay: '', consultant_id: '', longterm: false, discharged: false, tb: false,
     readmit72: false, dx: [], dx_match: 'or', keyword: '', indication: [], consultation_from: '', to_service: '', signed_only: false,
     ...props.filters,
 });
@@ -74,6 +74,8 @@ const modes = [['admissions', 'Admissions'], ['consultations', 'Consultations'],
                     <select v-model="f.location" :class="fld"><option value="">Any location</option><option v-for="l in options.locations" :key="l">{{ l }}</option></select>
                     <select v-model="f.outcome" :class="fld"><option value="">Any outcome</option><option v-for="o in options.outcomes" :key="o">{{ o }}</option></select>
                     <select v-model="f.admitted_from" :class="fld"><option value="">Any source</option><option v-for="a in options.admittedFrom" :key="a">{{ a }}</option></select>
+                    <select v-model="f.discharged_to" :class="fld"><option value="">Any discharged-to</option><option v-for="d in options.dischargedTo" :key="d">{{ d }}</option></select>
+                    <select v-model="f.delay" :class="fld"><option value="">Any delay reason</option><option v-for="d in options.delays" :key="d">{{ d }}</option></select>
                     <div class="flex gap-2"><input v-model="f.age_from" :class="fld" placeholder="Age ≥" inputmode="numeric" /><input v-model="f.age_to" :class="fld" placeholder="Age ≤" inputmode="numeric" /></div>
                     <div><label class="text-xs text-ink-400">Admitted from</label><input v-model="f.from" type="date" :class="fld" /></div>
                     <div><label class="text-xs text-ink-400">to</label><input v-model="f.to" type="date" :class="fld" /></div>
@@ -116,6 +118,8 @@ const modes = [['admissions', 'Admissions'], ['consultations', 'Consultations'],
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.signed_only" class="rounded text-brand-600" /> Signed off only</label>
                     <button @click="apply" class="ml-auto rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">Search</button>
                     <button @click="reset" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 hover:text-ink-700">Reset</button>
+                    <a :href="`/registry/export-xlsx?${qs}`" class="rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</a>
+                    <a :href="`/registry/export?${qs}`" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50">CSV</a>
                 </div>
             </div>
             <!-- DIAGNOSIS -->
@@ -125,6 +129,8 @@ const modes = [['admissions', 'Admissions'], ['consultations', 'Consultations'],
                 <div><label class="text-xs text-ink-400">to</label><input v-model="f.to" type="date" :class="fld" /></div>
                 <button @click="apply" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">Search</button>
                 <button @click="reset" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 hover:text-ink-700">Reset</button>
+                <a :href="`/registry/export-xlsx?${qs}`" class="rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</a>
+                <a :href="`/registry/export?${qs}`" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50">CSV</a>
             </div>
         </div>
 

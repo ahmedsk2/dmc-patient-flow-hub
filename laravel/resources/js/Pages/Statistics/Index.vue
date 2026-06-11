@@ -3,12 +3,17 @@ import { ref, computed, watch } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
-const props = defineProps({ range: Object, kpis: Object, monthly: Object, los: Object, topDx: Array, reasons: Object, perConsultant: Array, sourceMix: Array, kpiGrid: Array, interval: String, destinations: Object, destByConsultant: Array, readmitWindow: Number });
+const props = defineProps({ range: Object, kpis: Object, monthly: Object, los: Object, topDx: Array, reasons: Object, perConsultant: Array, sourceMix: Array, kpiGrid: Array, interval: String, destinations: Object, destByConsultant: Array, readmitWindow: Number, consultants: Array, physician: Object });
 
 const from = ref(props.range.from);
 const to = ref(props.range.to);
 const interval = ref(props.interval || 'month');
-const apply = () => router.get('/statistics', { from: from.value, to: to.value, interval: interval.value }, { preserveState: true, preserveScroll: true });
+// per-physician drill-down selection (server-computed prop; selection round-trips via the URL)
+const physChoice = ref(props.physician?.id ?? '');
+const apply = () => router.get('/statistics', {
+    from: from.value, to: to.value, interval: interval.value,
+    ...(physChoice.value ? { consultant_id: physChoice.value } : {}),
+}, { preserveState: true, preserveScroll: true });
 const setInterval2 = (i) => { interval.value = i; apply(); };
 
 // per-consultant discharge-destination donut (All = overall)
@@ -58,6 +63,34 @@ const monthlySeries = computed(() => [
 
 // KPI-grid header tracks the selected interval + actual applied range
 const gridTitle = computed(() => ({ day: 'Daily', quarter: 'Quarterly' }[props.interval] ?? 'Monthly') + ' KPI grid');
+
+// per-consultant chart KPI modes (Admissions | Avg LOS | window readmissions)
+const consMode = ref('admissions');
+const consModes = computed(() => [
+    ['admissions', 'Admissions'],
+    ['avgLos', 'Avg LOS'],
+    ['readmits', `${props.readmitWindow ?? 3}d readmits`],
+]);
+const consModeColor = computed(() => ({ admissions: C.tealLt, avgLos: C.gold, readmits: C.red }[consMode.value]));
+const consCats = computed(() => props.perConsultant.map((c) => c.name));
+const consSeries = computed(() => [{
+    name: consModes.value.find((m) => m[0] === consMode.value)?.[1] ?? '',
+    data: props.perConsultant.map((c) => c[consMode.value]),
+}]);
+// the list is no longer capped at 10 — grow the chart with the roster so bars stay readable
+const consHeight = computed(() => Math.max(340, props.perConsultant.length * 28 + 60));
+
+// drill-down (computed, like every prop-derived chart input — see note above)
+const physDonutSeries = computed(() => props.physician?.destinations?.data ?? []);
+const physDonutOptions = computed(() => donut(props.physician?.destinations?.labels ?? []));
+const physHasDischarges = computed(() => physDonutSeries.value.some((v) => v > 0));
+const physNumbers = computed(() => props.physician ? [
+    ['Admissions', props.physician.numbers.admissions],
+    ['Discharges', props.physician.numbers.discharges],
+    ['Deaths', props.physician.numbers.deaths],
+    ['Avg LOS', props.physician.numbers.avgLos + 'd'],
+    [`≤${props.readmitWindow ?? 3}d readmits`, props.physician.numbers.readmissions],
+] : []);
 
 const barChart = (cats, color, horizontal = false) => ({
     chart: { type: 'bar', toolbar: { show: false }, fontFamily: 'inherit' },
@@ -143,8 +176,50 @@ const donut = (labels) => ({
             </div>
 
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60 lg:col-span-2">
-                <h3 class="mb-3 font-bold text-ink-800">Admissions by consultant</h3>
-                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="bar" height="340" :options="barChart(perConsultant.map(c => c.name), C.tealLt, true)" :series="[{ name: 'Admissions', data: perConsultant.map(c => c.c) }]" />
+                <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <h3 class="font-bold text-ink-800">By consultant</h3>
+                    <div class="flex gap-1 rounded-xl bg-surface p-1 ring-1 ring-ink-100">
+                        <button v-for="m in consModes" :key="m[0]" @click="consMode = m[0]" class="rounded-lg px-3 py-1.5 text-xs font-semibold transition" :class="consMode === m[0] ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ m[1] }}</button>
+                    </div>
+                </div>
+                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="bar" :height="consHeight" :options="barChart(consCats, consModeColor, true)" :series="consSeries" />
+            </div>
+
+            <!-- per-physician drill-down -->
+            <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60 lg:col-span-2">
+                <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <h3 class="font-bold text-ink-800">Physician drill-down</h3>
+                    <select v-model="physChoice" @change="apply" aria-label="Drill-down consultant" class="max-w-[55%] truncate rounded-lg border border-ink-200 px-2 py-1.5 text-sm outline-none focus:border-brand-500">
+                        <option value="">Select a consultant…</option>
+                        <option v-for="c in consultants" :key="c.id" :value="c.id">{{ c.name }}</option>
+                    </select>
+                </div>
+                <div v-if="physician" class="space-y-4">
+                    <div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                        <div v-for="n in physNumbers" :key="n[0]" class="rounded-xl bg-surface p-3 ring-1 ring-ink-100/60">
+                            <div class="text-[11px] font-semibold uppercase tracking-wide text-ink-400">{{ n[0] }}</div>
+                            <div class="nums mt-0.5 text-xl font-bold text-ink-800">{{ n[1] }}</div>
+                        </div>
+                    </div>
+                    <div class="grid gap-5 sm:grid-cols-2">
+                        <div>
+                            <h4 class="mb-2 text-sm font-semibold text-ink-600">Discharge destinations</h4>
+                            <apexchart v-if="physHasDischarges" role="img" :aria-label="`Discharge destinations for ${physician.name}`" type="donut" height="260" :options="physDonutOptions" :series="physDonutSeries" />
+                            <p v-else class="py-10 text-center text-sm text-ink-300">No closed episodes in range.</p>
+                        </div>
+                        <div>
+                            <h4 class="mb-2 text-sm font-semibold text-ink-600">Top diagnoses</h4>
+                            <ol v-if="physician.topDx.length" class="space-y-1.5">
+                                <li v-for="(d, i) in physician.topDx" :key="d.label" class="flex items-center justify-between gap-2 rounded-lg bg-surface px-3 py-2 text-sm ring-1 ring-ink-100/60">
+                                    <span class="text-ink-700"><span class="nums mr-2 font-bold text-brand-700">{{ i + 1 }}.</span>{{ d.label }}</span>
+                                    <span class="nums font-semibold text-ink-500">{{ d.value }}</span>
+                                </li>
+                            </ol>
+                            <p v-else class="py-10 text-center text-sm text-ink-300">No diagnoses recorded in range.</p>
+                        </div>
+                    </div>
+                </div>
+                <p v-else class="py-8 text-center text-sm text-ink-300">Pick a consultant to see their destinations, top diagnoses and KPIs for this range.</p>
             </div>
 
             <div class="overflow-hidden rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60 lg:col-span-2">
@@ -152,7 +227,7 @@ const donut = (labels) => ({
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
-                            <th scope="col" class="px-3 py-2">Period</th><th scope="col" class="px-3 py-2 text-right">Adm</th><th scope="col" class="px-3 py-2 text-right">Disch</th><th scope="col" class="px-3 py-2 text-right">ICU</th><th scope="col" class="px-3 py-2 text-right">Mort</th><th scope="col" class="px-3 py-2 text-right">Consults</th><th scope="col" class="px-3 py-2 text-right">Sign-offs</th><th scope="col" class="px-3 py-2 text-right">Avg LOS</th>
+                            <th scope="col" class="px-3 py-2">Period</th><th scope="col" class="px-3 py-2 text-right">Adm</th><th scope="col" class="px-3 py-2 text-right">Disch</th><th scope="col" class="px-3 py-2 text-right">ICU adm</th><th scope="col" class="px-3 py-2 text-right">→ICU</th><th scope="col" class="px-3 py-2 text-right">ICU mort</th><th scope="col" class="px-3 py-2 text-right">Ward mort</th><th scope="col" class="px-3 py-2 text-right">Readm</th><th scope="col" class="px-3 py-2 text-right">Consults</th><th scope="col" class="px-3 py-2 text-right">Sign-offs</th><th scope="col" class="px-3 py-2 text-right">Avg LOS</th>
                         </tr></thead>
                         <tbody class="divide-y divide-ink-50">
                             <tr v-for="r in kpiGrid" :key="r.label" class="hover:bg-brand-50/40">
@@ -160,7 +235,10 @@ const donut = (labels) => ({
                                 <td class="nums px-3 py-1.5 text-right">{{ r.admissions }}</td>
                                 <td class="nums px-3 py-1.5 text-right">{{ r.discharges }}</td>
                                 <td class="nums px-3 py-1.5 text-right text-danger-600">{{ r.icu }}</td>
-                                <td class="nums px-3 py-1.5 text-right">{{ r.deaths }}</td>
+                                <td class="nums px-3 py-1.5 text-right text-danger-600">{{ r.transToIcu }}</td>
+                                <td class="nums px-3 py-1.5 text-right">{{ r.icuDeaths }}</td>
+                                <td class="nums px-3 py-1.5 text-right">{{ r.wardDeaths }}</td>
+                                <td class="nums px-3 py-1.5 text-right text-accent-600">{{ r.readmits }}</td>
                                 <td class="nums px-3 py-1.5 text-right">{{ r.consultations }}</td>
                                 <td class="nums px-3 py-1.5 text-right">{{ r.signoffs }}</td>
                                 <td class="nums px-3 py-1.5 text-right">{{ r.avgLos }}d</td>

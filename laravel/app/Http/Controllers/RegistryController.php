@@ -24,8 +24,7 @@ class RegistryController extends Controller
 {
     public function index(Request $request): Response
     {
-        $mode = in_array($request->query('mode'), ['admissions', 'consultations', 'diagnosis'], true)
-            ? $request->query('mode') : 'admissions';
+        $mode = $this->mode($request);
 
         $results = match ($mode) {
             'consultations' => $this->consultationResults($request),
@@ -37,18 +36,36 @@ class RegistryController extends Controller
             'mode' => $mode,
             'results' => $results,
             'filters' => $request->only(['search', 'from', 'to', 'outcome', 'location', 'gender', 'nationality',
-                'age_from', 'age_to', 'admitted_from', 'consultant_id', 'longterm', 'discharged', 'tb', 'readmit72',
+                'age_from', 'age_to', 'admitted_from', 'discharged_to', 'delay', 'consultant_id', 'longterm',
+                'discharged', 'tb', 'readmit72',
                 'dx', 'dx_match', 'keyword', 'indication', 'consultation_from', 'to_service', 'signed_only']),
             'options' => [
-                'outcomes' => ['Alive', 'Dead', 'LAMA', 'DAMA', 'Transferred'],
+                // option lists reflect the values actually present in the data (legacy approach),
+                // so historical vocabularies (old sources/outcomes) stay filterable
+                'outcomes' => $this->distinctValues('outcome'),
                 'locations' => ['Ward', 'ICU', 'ER'],
-                'admittedFrom' => ['ER', 'Clinic', 'Referral', 'Transfer', 'Direct'],
+                'admittedFrom' => $this->distinctValues('admitted_from'),
+                'dischargedTo' => $this->distinctValues('discharge_to'),
+                'delays' => $this->distinctValues('delay_reason'),
                 'countries' => Country::orderBy('name')->pluck('name'),
                 'consultants' => User::consultantOptions(activeOnly: false),   // registry filters span inactive consultants
                 'reasons' => ConsultationReason::orderBy('name')->get(['id', 'name']),
                 'readmitWindow' => max(0, (int) (\App\Models\Setting::current()->readmission_window_days ?? 3)),
             ],
         ]);
+    }
+
+    private function mode(Request $request): string
+    {
+        return in_array($request->query('mode'), ['admissions', 'consultations', 'diagnosis'], true)
+            ? $request->query('mode') : 'admissions';
+    }
+
+    /** DISTINCT non-empty values of an admissions column — registry filter options from live data. */
+    private function distinctValues(string $column)
+    {
+        return Admission::query()->whereNotNull($column)->where($column, '<>', '')
+            ->distinct()->orderBy($column)->limit(100)->pluck($column);
     }
 
     /* ---------- Admissions ---------- */
@@ -64,6 +81,8 @@ class RegistryController extends Controller
             ->when($request->input('outcome'), fn ($q, $o) => $q->where('outcome', $o))
             ->when($request->input('location'), fn ($q, $l) => $q->where('current_location', $l))
             ->when($request->input('admitted_from'), fn ($q, $a) => $q->where('admitted_from', $a))
+            ->when($request->input('discharged_to'), fn ($q, $d) => $q->where('discharge_to', $d))
+            ->when($request->input('delay'), fn ($q, $d) => $q->where('delay_reason', $d))
             ->when($request->input('consultant_id'), fn ($q, $c) => $q->where('consultant_id', $c))
             ->when($request->input('gender'), fn ($q, $g) => $q->whereHas('patient', fn ($p) => $p->where('gender', $g)))
             ->when($request->input('nationality'), fn ($q, $n) => $q->whereHas('patient', fn ($p) => $p->where('nationality', $n)))
@@ -107,9 +126,8 @@ class RegistryController extends Controller
 
     /* ---------- Consultations ---------- */
 
-    private function consultationResults(Request $request)
+    private function consultationQuery(Request $request)
     {
-        $reasons = ConsultationReason::pluck('name', 'id');
         $indication = array_filter((array) $request->input('indication', []));
 
         return Consultation::query()->with('consultant:id,full_name,name')
@@ -125,7 +143,14 @@ class RegistryController extends Controller
             ->when($indication, fn ($q) => $q->where(function ($w) use ($indication) {
                 foreach ($indication as $id) { $w->orWhereJsonContains('indication', (int) $id); }
             }))
-            ->orderByDesc('consultation_date')->orderByDesc('id')
+            ->orderByDesc('consultation_date')->orderByDesc('id');
+    }
+
+    private function consultationResults(Request $request)
+    {
+        $reasons = ConsultationReason::pluck('name', 'id');
+
+        return $this->consultationQuery($request)
             ->paginate(20)->withQueryString()->through(fn (Consultation $c) => [
                 'id' => $c->id, 'name' => $c->patient_name ?? 'Unknown', 'mrn' => $c->mrn, 'age' => $c->age,
                 'location' => $c->current_location, 'from' => $c->consultation_from, 'to' => $c->to_service,
@@ -137,20 +162,25 @@ class RegistryController extends Controller
 
     /* ---------- Free-text diagnosis ---------- */
 
-    private function diagnosisResults(Request $request)
+    private function diagnosisQuery(Request $request)
     {
         $kw = trim((string) $request->input('keyword', ''));
         if (mb_strlen($kw) < 2) {
-            return Admission::query()->whereRaw('1=0')->paginate(20)->withQueryString();
+            return Admission::query()->whereRaw('1=0');
         }
         $codes = Icd10::where('name', 'like', "%{$kw}%")->limit(500)->pluck('code');
 
-        return Admission::query()->with(['patient:id,mrn,name,gender,age', 'consultant:id,full_name,name'])
+        return Admission::query()->with(['patient:id,mrn,name,gender,age,nationality', 'consultant:id,full_name,name'])
             ->whereExists(fn ($s) => $s->selectRaw('1')->from('admission_diagnoses as adx')
                 ->whereColumn('adx.admission_id', 'admissions.id')->whereIn('adx.icd10_code', $codes))
             ->when($request->input('from'), fn ($q, $d) => $q->whereDate('admit_date', '>=', $d))
             ->when($request->input('to'), fn ($q, $d) => $q->whereDate('admit_date', '<=', $d))
-            ->orderByDesc('admit_date')->orderByDesc('id')
+            ->orderByDesc('admit_date')->orderByDesc('id');
+    }
+
+    private function diagnosisResults(Request $request)
+    {
+        return $this->diagnosisQuery($request)
             ->paginate(20)->withQueryString()->through(fn (Admission $a) => [
                 'id' => $a->id, 'name' => $a->patient?->name ?? 'Unknown', 'mrn' => $a->patient?->mrn,
                 'age' => $a->patient?->age, 'gender' => $a->patient?->gender, 'location' => $a->current_location,
@@ -172,21 +202,13 @@ class RegistryController extends Controller
             ->limit(20)->get(['code', 'name'])->map(fn ($r) => ['code' => $r->code, 'name' => $r->name]));
     }
 
-    /* ---------- Exports (admissions mode) ---------- */
+    /* ---------- Exports (mode-aware, de-identified) ---------- */
 
     public function export(Request $request): StreamedResponse
     {
         return response()->streamDownload(function () use ($request) {
             $out = fopen('php://output', 'w');
-            fputcsv($out, ['MRN', 'Name', 'Age', 'Gender', 'Nationality', 'Location', 'Consultant', 'Admitted', 'Discharged', 'LOS (d)', 'Outcome', 'Status']);
-            $this->admissionQuery($request)->chunk(500, function ($chunk) use ($out) {
-                foreach ($chunk as $a) {
-                    fputcsv($out, [$a->patient?->mrn, $a->patient?->name, $a->patient?->age, $a->patient?->gender, $a->patient?->nationality,
-                        $a->current_location, $a->consultant?->full_name ?? $a->consultant?->name,
-                        optional($a->admit_date)->toDateString(), optional($a->discharge_date)->toDateString(),
-                        $a->lengthOfStay(), $a->outcome, $a->discharge_date ? 'Discharged' : 'Active']);
-                }
-            });
+            $this->writeExport($request, fn (array $row) => fputcsv($out, $row));
             fclose($out);
         }, 'dmc-registry-' . now()->format('Ymd-His') . '.csv', ['Content-Type' => 'text/csv']);
     }
@@ -196,17 +218,64 @@ class RegistryController extends Controller
         $tmp = tempnam(sys_get_temp_dir(), 'reg') . '.xlsx';
         $writer = new XlsxWriter();
         $writer->openToFile($tmp);
-        $writer->addRow(Row::fromValues(['MRN', 'Name', 'Age', 'Gender', 'Nationality', 'Location', 'Consultant', 'Admitted', 'Discharged', 'LOS (d)', 'Outcome', 'Status']));
-        $this->admissionQuery($request)->chunk(500, function ($chunk) use ($writer) {
-            foreach ($chunk as $a) {
-                $writer->addRow(Row::fromValues([(string) $a->patient?->mrn, $a->patient?->name, $a->patient?->age, $a->patient?->gender, $a->patient?->nationality,
-                    $a->current_location, $a->consultant?->full_name ?? $a->consultant?->name,
-                    optional($a->admit_date)->toDateString(), optional($a->discharge_date)->toDateString(),
-                    $a->lengthOfStay(), $a->outcome, $a->discharge_date ? 'Discharged' : 'Active']));
-            }
-        });
+        $this->writeExport($request, fn (array $row) => $writer->addRow(Row::fromValues(
+            array_map(fn ($v) => $v ?? '', $row))));
         $writer->close();
 
         return response()->download($tmp, 'dmc-registry-' . now()->format('Ymd-His') . '.xlsx')->deleteFileAfterSend();
+    }
+
+    /**
+     * Emit header + rows for the CURRENT mode through $write — shared by CSV and XLSX so the two
+     * formats can never drift. Exports are DE-IDENTIFIED (no patient name — legacy parity; MRN is
+     * the clinical identifier) and carry the legacy clinical column set.
+     */
+    private function writeExport(Request $request, callable $write): void
+    {
+        if ($this->mode($request) === 'consultations') {
+            $this->writeConsultationExport($request, $write);
+
+            return;
+        }
+
+        $write(['MRN', 'Age', 'Gender', 'Nationality', 'Diagnoses', 'Admitted', 'Admitted From', 'Location',
+            'Clinical Discharge Date', 'Discharged', 'Discharged To', 'Outcome', 'Delay Reason', 'Transfer Type',
+            'Long-term', 'LOS (d)', 'Consultant', 'Status']);
+
+        $query = $this->mode($request) === 'diagnosis' ? $this->diagnosisQuery($request) : $this->admissionQuery($request);
+        $query->chunk(500, function ($chunk) use ($write) {
+            // diagnosis names: load the chunk's codes once (one whereIn), not one query per row
+            $chunk->load('diagnoses');
+            $codes = $chunk->flatMap(fn ($a) => $a->diagnoses->pluck('icd10_code'))->unique()->values();
+            $names = $codes->isEmpty() ? collect() : Icd10::whereIn('code', $codes)->pluck('name', 'code');
+            foreach ($chunk as $a) {
+                $write([
+                    (string) $a->patient?->mrn, $a->patient?->age, $a->patient?->gender, $a->patient?->nationality,
+                    $a->diagnoses->sortBy('seq')->map(fn ($d) => $names[$d->icd10_code] ?? $d->icd10_code)->implode('; '),
+                    optional($a->admit_date)->toDateString(), $a->admitted_from, $a->current_location,
+                    optional($a->medical_discharge_date)->toDateString(), optional($a->discharge_date)->toDateString(),
+                    $a->discharge_to, $a->outcome, $a->delay_reason, $a->transfer_type,
+                    $a->is_longterm ? 'Yes' : '',
+                    $a->lengthOfStay(), $a->consultant?->full_name ?? $a->consultant?->name,
+                    $a->discharge_date ? 'Discharged' : 'Active',
+                ]);
+            }
+        });
+    }
+
+    private function writeConsultationExport(Request $request, callable $write): void
+    {
+        $write(['MRN', 'Age', 'Location', 'From', 'To Service', 'Consultant', 'Date', 'Signoff', 'Reasons']);
+        $reasons = ConsultationReason::pluck('name', 'id');
+        $this->consultationQuery($request)->chunk(500, function ($chunk) use ($write, $reasons) {
+            foreach ($chunk as $c) {
+                $write([
+                    (string) $c->mrn, $c->age, $c->current_location, $c->consultation_from, $c->to_service,
+                    $c->consultant?->full_name ?? $c->consultant?->name,
+                    optional($c->consultation_date)->toDateString(), optional($c->signoff_date)->toDateString(),
+                    collect($c->indication ?? [])->map(fn ($id) => $reasons[$id] ?? null)->filter()->implode('; '),
+                ]);
+            }
+        });
     }
 }

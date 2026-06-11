@@ -24,6 +24,7 @@ class StatisticsController extends Controller
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date'],
             'interval' => ['nullable', 'in:day,month,quarter'],
+            'consultant_id' => ['nullable', 'integer', 'exists:users,id'],
         ]);
         $to = isset($data['to']) ? Carbon::parse($data['to']) : Carbon::today();
         $from = isset($data['from']) ? Carbon::parse($data['from']) : $to->copy()->startOfYear();
@@ -54,13 +55,7 @@ class StatisticsController extends Controller
         // so they are excluded (otherwise same-day transfer rows inflate the metric).
         $readmitWindow = max(0, (int) (\App\Models\Setting::current()->readmission_window_days ?? 3));
         $readmissions = (int) DB::table('admissions as a')
-            ->join('admissions as prev', function ($j) use ($readmitWindow) {
-                $j->on('prev.patient_id', '=', 'a.patient_id')
-                  ->whereColumn('prev.discharge_date', '<=', 'a.admit_date')
-                  ->whereRaw('DATEDIFF(a.admit_date, prev.discharge_date) BETWEEN 0 AND ?', [$readmitWindow])
-                  ->whereColumn('prev.id', '<>', 'a.id')
-                  ->whereIn('prev.transfer_type', \App\Models\Admission::REAL_DISCHARGE_TYPES);
-            })
+            ->join('admissions as prev', $this->readmissionJoin($readmitWindow))
             ->whereBetween('a.admit_date', [$f, $t])
             ->distinct()->count('a.id');
 
@@ -73,6 +68,15 @@ class StatisticsController extends Controller
         $icuBy = $this->seriesBy('admissions', 'admit_date', $f, $t, $interval, "current_location = 'ICU'");
         $consBy = $this->seriesBy('consultations', 'consultation_date', $f, $t, $interval, '1=1');
         $signBy = $this->seriesBy('consultations', 'signoff_date', $f, $t, $interval, '1=1');
+        // restored legacy grid columns: ICU transfers + ICU/ward death split + per-bucket readmissions
+        $icuTransBy = $this->seriesBy('admissions', 'discharge_date', $f, $t, $interval, "discharge_to = 'Intensive Care (ICU)'");
+        $icuDeathBy = $this->seriesBy('admissions', 'discharge_date', $f, $t, $interval, "outcome = 'Dead' AND current_location = 'ICU'");
+        $wardDeathBy = $this->seriesBy('admissions', 'discharge_date', $f, $t, $interval, "outcome = 'Dead' AND {$this->nonIcu}");
+        $readmitBy = DB::table('admissions as a')
+            ->join('admissions as prev', $this->readmissionJoin($readmitWindow))
+            ->whereBetween('a.admit_date', [$f, $t])
+            ->selectRaw($this->keyExpr('a.admit_date', $interval) . ' k, COUNT(DISTINCT a.id) c')
+            ->groupBy('k')->pluck('c', 'k')->all();
         $losBy = DB::table('admissions')->whereBetween('discharge_date', [$f, $t])->whereNotNull('admit_date')
             ->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
             ->selectRaw($this->keyExpr('discharge_date', $interval) . ' k, ROUND(AVG(DATEDIFF(discharge_date, admit_date)), 1) los')
@@ -84,10 +88,14 @@ class StatisticsController extends Controller
             'discharges' => array_map(fn ($k) => (int) ($disBy[$k] ?? 0), $keys),
             'deaths' => array_map(fn ($k) => (int) ($deathBy[$k] ?? 0), $keys),
         ];
+        // grid splits deaths into ICU/ward (legacy KPI grid) — the headline 'deaths' KPI and the
+        // monthly chart keep the single reconciled all-locations figure above
         $kpiGrid = array_map(fn ($b) => [
             'label' => $b['label'],
             'admissions' => (int) ($admBy[$b['key']] ?? 0), 'discharges' => (int) ($disBy[$b['key']] ?? 0),
-            'icu' => (int) ($icuBy[$b['key']] ?? 0), 'deaths' => (int) ($deathBy[$b['key']] ?? 0),
+            'icu' => (int) ($icuBy[$b['key']] ?? 0), 'transToIcu' => (int) ($icuTransBy[$b['key']] ?? 0),
+            'icuDeaths' => (int) ($icuDeathBy[$b['key']] ?? 0), 'wardDeaths' => (int) ($wardDeathBy[$b['key']] ?? 0),
+            'readmits' => (int) ($readmitBy[$b['key']] ?? 0),
             'consultations' => (int) ($consBy[$b['key']] ?? 0), 'signoffs' => (int) ($signBy[$b['key']] ?? 0),
             'avgLos' => (float) ($losBy[$b['key']] ?? 0),
         ], $buckets);
@@ -147,17 +155,41 @@ class StatisticsController extends Controller
         arsort($reasonTally);
         $reasonTally = array_slice($reasonTally, 0, 8, true);
 
-        // per-consultant admissions (range)
-        $perConsultant = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
+        // per-consultant KPI modes (range, ALL consultants): admissions, avg LOS (non-ICU,
+        // discharge-based like the headline) and window readmissions — one grouped query per
+        // metric (the 'consultant' alias avoids the users.name collision; see $byCons above)
+        $admByCons = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
             ->whereBetween('a.admit_date', [$f, $t])
             ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
-            ->groupBy('consultant')->orderByDesc('c')->limit(10)->get()
-            ->map(fn ($r) => (object) ['name' => $r->consultant, 'c' => (int) $r->c]);
+            ->groupBy('consultant')->pluck('c', 'consultant')->all();
+        $losByCons = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
+            ->whereBetween('a.discharge_date', [$f, $t])->whereNotNull('a.admit_date')
+            ->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(a.discharge_date, a.admit_date) >= 0')
+            ->selectRaw('COALESCE(u.full_name, u.name) consultant, ROUND(AVG(DATEDIFF(a.discharge_date, a.admit_date)), 1) los')
+            ->groupBy('consultant')->pluck('los', 'consultant')->all();
+        $readmitByCons = DB::table('admissions as a')
+            ->join('admissions as prev', $this->readmissionJoin($readmitWindow))
+            ->join('users as u', 'u.id', '=', 'a.consultant_id')
+            ->whereBetween('a.admit_date', [$f, $t])
+            ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(DISTINCT a.id) c')
+            ->groupBy('consultant')->pluck('c', 'consultant')->all();
+        $perConsultant = collect(array_keys($admByCons))
+            ->merge(array_keys($losByCons))->merge(array_keys($readmitByCons))->unique()
+            ->map(fn ($name) => [
+                'name' => $name,
+                'admissions' => (int) ($admByCons[$name] ?? 0),
+                'avgLos' => (float) ($losByCons[$name] ?? 0),
+                'readmits' => (int) ($readmitByCons[$name] ?? 0),
+            ])->sortByDesc('admissions')->values();
 
         // admission source mix
         $sourceMix = DB::table('admissions')->whereBetween('admit_date', [$f, $t])
             ->selectRaw("COALESCE(NULLIF(admitted_from, ''), 'Unknown') src, COUNT(*) c")
             ->groupBy('src')->orderByDesc('c')->limit(6)->get();
+
+        $physician = empty($data['consultant_id'])
+            ? null
+            : $this->physician((int) $data['consultant_id'], $f, $t, $readmitWindow);
 
         return Inertia::render('Statistics/Index', [
             'range' => ['from' => $f, 'to' => $t],
@@ -178,7 +210,77 @@ class StatisticsController extends Controller
             'readmitWindow' => $readmitWindow,
             'destinations' => ['labels' => $dest->pluck('dest'), 'data' => $dest->pluck('c')],
             'destByConsultant' => $destByConsultant,
+            'consultants' => \App\Models\User::consultantOptions(),
+            'physician' => $physician,
         ]);
+    }
+
+    /**
+     * Per-physician drill-down: the legacy charts.php view — destination buckets over CLOSED
+     * episodes, top-5 diagnoses, and the headline KPI formulas scoped to one consultant.
+     */
+    private function physician(int $consultantId, string $f, string $t, int $readmitWindow): array
+    {
+        $u = \App\Models\User::findOrFail($consultantId);
+
+        // legacy transfer-type buckets (charts.php): fixed order, zero-filled
+        $destMap = [
+            'discharge from ward' => 'Discharged',
+            'transfer to other speciality' => 'Intra-dept transfer',
+            'other transfer' => 'Out-dept transfer',
+            'discharge from ICU' => 'ICU discharge',
+        ];
+        $byType = DB::table('admissions')->where('consultant_id', $consultantId)
+            ->whereBetween('discharge_date', [$f, $t])->whereIn('transfer_type', array_keys($destMap))
+            ->selectRaw('transfer_type tt, COUNT(*) c')->groupBy('tt')->pluck('c', 'tt')->all();
+
+        $topDx = DB::table('admission_diagnoses as ad')
+            ->join('admissions as a', 'a.id', '=', 'ad.admission_id')
+            ->leftJoin('icd10 as i', 'i.code', '=', 'ad.icd10_code')
+            ->where('a.consultant_id', $consultantId)->whereBetween('a.admit_date', [$f, $t])
+            ->selectRaw('ad.icd10_code code, MAX(i.name) name, COUNT(*) c')
+            ->groupBy('ad.icd10_code')->orderByDesc('c')->limit(5)->get()
+            ->map(fn ($r) => ['label' => $r->name ?: $r->code, 'value' => (int) $r->c]);
+
+        $scoped = fn () => DB::table('admissions')->where('consultant_id', $consultantId);
+
+        return [
+            'id' => $consultantId,
+            'name' => $u->full_name ?: $u->name,
+            'destinations' => ['labels' => array_values($destMap),
+                'data' => array_map(fn ($type) => (int) ($byType[$type] ?? 0), array_keys($destMap))],
+            'topDx' => $topDx,
+            // the reconciled headline formulas, scoped by consultant_id
+            'numbers' => [
+                'admissions' => (int) $scoped()->whereBetween('admit_date', [$f, $t])->whereRaw($this->nonIcu)->count(),
+                'discharges' => (int) $scoped()->whereBetween('discharge_date', [$f, $t])->whereRaw($this->nonIcu)->count(),
+                'deaths' => (int) $scoped()->where('outcome', 'Dead')->whereBetween('discharge_date', [$f, $t])->count(),
+                'avgLos' => round((float) ($scoped()->whereBetween('discharge_date', [$f, $t])->whereNotNull('admit_date')
+                    ->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
+                    ->selectRaw('AVG(DATEDIFF(discharge_date, admit_date)) v')->value('v') ?? 0), 1),
+                'readmissions' => (int) DB::table('admissions as a')
+                    ->join('admissions as prev', $this->readmissionJoin($readmitWindow))
+                    ->where('a.consultant_id', $consultantId)->whereBetween('a.admit_date', [$f, $t])
+                    ->distinct()->count('a.id'),
+            ],
+        ];
+    }
+
+    /**
+     * The ONE readmission JOIN predicate: a new admission anchored to a prior REAL discharge of the
+     * same patient within the configured window (see the headline comment above). Shared by the
+     * headline KPI, the grid buckets, the per-consultant series and the drill-down so the
+     * definition cannot drift.
+     */
+    private function readmissionJoin(int $window): \Closure
+    {
+        return function ($j) use ($window) {
+            $j->on('prev.patient_id', '=', 'a.patient_id')
+              ->whereColumn('prev.discharge_date', '<=', 'a.admit_date')
+              ->whereRaw('DATEDIFF(a.admit_date, prev.discharge_date) BETWEEN 0 AND ?', [$window])
+              ->whereColumn('prev.id', '<>', 'a.id')
+              ->whereIn('prev.transfer_type', \App\Models\Admission::REAL_DISCHARGE_TYPES);
+        };
     }
 
     /** SQL bucket-key expression for the chosen interval (sargable enough; grouped over a bounded range). */

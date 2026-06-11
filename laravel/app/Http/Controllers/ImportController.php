@@ -16,11 +16,15 @@ use Inertia\Response;
  * Bulk import of HISTORICAL admission episodes from pasted CSV (admin). Two-step: PREVIEW parses +
  * validates every row (no writes) and shows valid/invalid with reasons; CONFIRM commits only the
  * valid rows in one transaction. Columns: MRN, Name, Age, Gender, Nationality, AdmitDate,
- * DischargeDate, Outcome, Location.
+ * DischargeDate, Outcome, Location — plus four OPTIONAL trailing clinical columns (Gap Wave 4b):
+ * Diagnoses (pipe-separated ICD-10 codes), Consultant (matched by full name / display name /
+ * username among consultant-role users; unmatched stays a valid row with a preview warning),
+ * DischargedTo, ClinicalDischargeDate (Y-m-d). Old 9-column rows remain fully valid.
  */
 class ImportController extends Controller
 {
-    private array $columns = ['MRN', 'Name', 'Age', 'Gender', 'Nationality', 'AdmitDate', 'DischargeDate', 'Outcome', 'Location'];
+    private array $columns = ['MRN', 'Name', 'Age', 'Gender', 'Nationality', 'AdmitDate', 'DischargeDate', 'Outcome', 'Location',
+        'Diagnoses', 'Consultant', 'DischargedTo', 'ClinicalDischargeDate'];
 
     public function index(): Response
     {
@@ -57,12 +61,17 @@ class ImportController extends Controller
                 $patient = Patient::firstOrCreate(['mrn' => $r['mrn']], [
                     'name' => $r['name'], 'gender' => $r['gender'], 'age' => $r['age'], 'nationality' => $r['nationality'],
                 ]);
-                DB::table('admissions')->insert([
+                $admissionId = DB::table('admissions')->insertGetId([
                     'patient_id' => $patient->id,
                     'admit_date' => $r['admit_date'],
                     'discharge_date' => $r['discharge_date'],
+                    'medical_discharge_date' => $r['medical_discharge_date'],
+                    'discharge_to' => $r['discharged_to'],
                     'outcome' => $r['outcome'],
                     'current_location' => $r['location'],
+                    // historical assignment: set the consultant only — no is_new_assignment/assigned_at
+                    // (those drive the live "New" badge / 24h window, which must not fire for imports)
+                    'consultant_id' => $r['consultant_id'],
                     // derive the discharge type from location so ICU imports classify correctly
                     // (feeds the readmission filter + recent-discharge views, which key on these strings)
                     'transfer_type' => $r['discharge_date']
@@ -71,6 +80,13 @@ class ImportController extends Controller
                     'admitted_by' => Auth::id(),
                     'created_at' => now(), 'updated_at' => now(),
                 ]);
+                $seq = 1;
+                foreach ($r['diagnoses'] as $code) {
+                    DB::table('admission_diagnoses')->insert([
+                        'admission_id' => $admissionId, 'seq' => $seq++, 'icd10_code' => $code,
+                        'created_at' => now(), 'updated_at' => now(),
+                    ]);
+                }
             }
         });
 
@@ -83,10 +99,11 @@ class ImportController extends Controller
             'message' => "Imported {$n} admission(s)" . ($skipped ? ", skipped {$skipped} invalid." : '.')]);
     }
 
-    /** @return array<int,array{line:int,ok:bool,error:?string,mrn:?string,name:?string,...}> */
+    /** @return array<int,array{line:int,ok:bool,error:?string,warning:?string,mrn:?string,name:?string,...}> */
     private function parse(string $text): array
     {
         $lines = preg_split('/\r\n|\r|\n/', trim($text));
+        $consultants = null;   // lazy — only loaded when a row actually carries column 11
         $out = [];
         foreach ($lines as $i => $line) {
             if (trim($line) === '') { continue; }
@@ -106,9 +123,24 @@ class ImportController extends Controller
                 'discharge_date' => $this->date($c[6] ?? null),
                 'outcome' => trim($c[7] ?? '') ?: null,
                 'location' => trim($c[8] ?? '') ?: 'Ward',
+                // optional trailing clinical columns (Gap Wave 4b) — absent in 9-column rows
+                'diagnoses' => collect(explode('|', trim($c[9] ?? '')))->map(fn ($x) => trim($x))
+                    ->filter()->unique()->values()->all(),
+                'consultant_name' => trim($c[10] ?? '') ?: null,
+                'consultant_id' => null,
+                'discharged_to' => trim($c[11] ?? '') ?: null,
+                'medical_discharge_date' => $this->date($c[12] ?? null),
                 'ok' => true,
                 'error' => null,
+                'warning' => null,
             ];
+            if ($row['consultant_name'] !== null) {
+                $consultants ??= $this->consultantLookup();
+                $row['consultant_id'] = $consultants[mb_strtolower($row['consultant_name'])] ?? null;
+                if ($row['consultant_id'] === null) {
+                    $row['warning'] = "Consultant \"{$row['consultant_name']}\" not matched — imported unassigned";
+                }
+            }
             if ($mrn === '' || mb_strlen($mrn) > 11) {
                 $row['ok'] = false; $row['error'] = 'MRN must be 1–11 digits';
             } elseif (! $row['admit_date']) {
@@ -117,6 +149,25 @@ class ImportController extends Controller
             $out[] = $row;
         }
         return $out;
+    }
+
+    /**
+     * lowercase(full_name | name | username) => id for consultant-role users; one query per
+     * preview/import run. First match wins on a (pathological) name collision.
+     */
+    private function consultantLookup(): array
+    {
+        $map = [];
+        \App\Models\User::where('role', \App\Models\User::ROLE_CONSULTANT)
+            ->get(['id', 'full_name', 'name', 'username'])
+            ->each(function ($u) use (&$map) {
+                foreach ([$u->full_name, $u->name, $u->username] as $key) {
+                    $key = mb_strtolower(trim((string) $key));
+                    if ($key !== '' && ! isset($map[$key])) { $map[$key] = $u->id; }
+                }
+            });
+
+        return $map;
     }
 
     private function date($v): ?string
