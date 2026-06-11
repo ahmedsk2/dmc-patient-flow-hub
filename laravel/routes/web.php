@@ -47,6 +47,7 @@ Route::middleware(['auth', 'mfa.enroll', 'pwd'])->group(function () {
     Route::post('/admissions/{admission}/assign-to-me', [PatientActionController::class, 'assignToMe'])->name('admissions.assignToMe');
     Route::post('/admissions/{admission}/longterm', [PatientActionController::class, 'toggleLongterm'])->name('admissions.longterm');
     Route::post('/admissions/{admission}/assign', [PatientActionController::class, 'assign'])->name('admissions.assign');
+    Route::post('/admissions/{admission}/bed', [PatientActionController::class, 'updateBed'])->name('admissions.bed');
     Route::get('/admissions/{admission}/edit', [AdmissionsController::class, 'edit'])->name('admissions.edit');
     Route::post('/admissions/{admission}/modify', [PatientActionController::class, 'modify'])->name('admissions.modify');
     Route::post('/admissions/{admission}/medical-discharge', [PatientActionController::class, 'medicalDischarge'])->name('admissions.medicalDischarge');
@@ -97,6 +98,7 @@ Route::middleware(['auth', 'mfa.enroll', 'pwd'])->group(function () {
         Route::get('/control', [ControlController::class, 'index'])->name('control.index');
         Route::put('/control/settings', [ControlController::class, 'updateSettings'])->name('control.settings');
         Route::put('/control/users/{user}', [ControlController::class, 'updateUser'])->name('control.users.update');
+        Route::delete('/control/users/{user}', [ControlController::class, 'destroyUser'])->name('control.users.destroy');
         Route::post('/control/users/{user}/reset-mfa', [ControlController::class, 'resetMfa'])->name('control.users.resetMfa');
         Route::post('/control/users/{user}/send-reset', [ControlController::class, 'sendReset'])->name('control.users.sendReset');
         Route::post('/control/specialties', [ControlController::class, 'addSpecialty'])->name('control.specialties.add');

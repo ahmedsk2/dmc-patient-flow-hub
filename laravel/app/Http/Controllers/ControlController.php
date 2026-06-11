@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Admission;
 use App\Models\AuditLog;
 use App\Models\ConsultationReason;
 use App\Models\Setting;
@@ -12,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -25,7 +27,7 @@ class ControlController extends Controller
             ->orderBy('role')->orderBy('full_name')
             ->paginate(20)->withQueryString()
             ->through(fn (User $u) => [
-                'id' => $u->id, 'name' => $u->full_name ?: $u->name, 'username' => $u->username, 'email' => $u->email,
+                'id' => $u->id, 'name' => $u->full_name ?: $u->name, 'full_name' => $u->full_name, 'username' => $u->username, 'email' => $u->email,
                 'role' => (int) $u->role, 'role_label' => $u->roleLabel(), 'active' => (bool) $u->active,
                 'on_service' => (bool) $u->on_service, 'specialty_id' => $u->specialty_id, 'mfa' => (bool) $u->mfa_enrolled_at,
                 'can' => ['assign' => (bool) $u->can_assign, 'add' => (bool) $u->can_add, 'manage' => (bool) $u->can_manage, 'modify' => (bool) $u->can_modify],
@@ -96,6 +98,9 @@ class ControlController extends Controller
     public function updateUser(Request $request, User $user): RedirectResponse
     {
         $data = $request->validate([
+            'full_name' => ['nullable', 'string', 'max:191'],
+            // app-level uniqueness only — the DB index was dropped (legacy members shared/lacked emails)
+            'email' => ['nullable', 'email', 'max:191', Rule::unique('users', 'email')->ignore($user->id)],
             'role' => ['required', 'integer', 'in:0,2,3,4,5'],
             'active' => ['required', 'boolean'],
             'on_service' => ['required', 'boolean'],
@@ -111,11 +116,42 @@ class ControlController extends Controller
             return back()->with('flash', ['type' => 'error', 'message' => 'You cannot remove your own admin access.']);
         }
 
+        // legacy parity: a user still carrying active patients cannot be deactivated
+        if (! $data['active'] && Admission::whereNull('discharge_date')->where('consultant_id', $user->id)->exists()) {
+            return back()->with('flash', ['type' => 'error',
+                'message' => "{$user->username} still has active patients — reassign or discharge them first."]);
+        }
+
         $user->update($data);
         AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'user.update',
             'entity_type' => 'user', 'entity_id' => (string) $user->id, 'details' => $data, 'ip' => $request->ip()]);
 
         return back()->with('flash', ['type' => 'success', 'message' => "Updated {$user->username}."]);
+    }
+
+    /**
+     * Delete a user account (admin). Historical references survive: every FK to users
+     * (admissions.consultant_id/admitted_by/discharged_by, consultations.consultant_id/entered_by,
+     * audit_log.actor_id, setting_changes.changed_by) is nullOnDelete, and display falls back to
+     * the denormalised names. The audit row records the username BEFORE the account disappears.
+     */
+    public function destroyUser(Request $request, User $user): RedirectResponse
+    {
+        if ($user->id === Auth::id()) {
+            return back()->with('flash', ['type' => 'error', 'message' => 'You cannot delete your own account.']);
+        }
+        if (Admission::whereNull('discharge_date')->where('consultant_id', $user->id)->exists()) {
+            return back()->with('flash', ['type' => 'error',
+                'message' => "{$user->username} still has active patients — reassign or discharge them first."]);
+        }
+
+        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'user.delete',
+            'entity_type' => 'user', 'entity_id' => (string) $user->id,
+            'details' => ['username' => $user->username, 'name' => $user->full_name ?: $user->name, 'role' => (int) $user->role],
+            'ip' => $request->ip()]);
+        $user->delete();
+
+        return back()->with('flash', ['type' => 'success', 'message' => "Deleted {$user->username}."]);
     }
 
     /** Clear a user's MFA enrollment (admin) — for a locked-out user who lost their device. */

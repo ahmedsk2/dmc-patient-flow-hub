@@ -38,7 +38,7 @@ class PatientsController extends Controller
             ->whereNull('discharge_date')
             ->whereNotNull('consultant_id')                       // assigned only (unassigned → New Admissions)
             ->tap($scope)
-            ->with(['patient:id,mrn,name,gender,age', 'consultant:id,full_name,name,specialty_id,on_service', 'diagnoses:id,admission_id,icd10_code'])
+            ->with(['patient:id,mrn,name,gender,age', 'consultant:id,full_name,name,specialty_id,on_service', 'diagnoses:id,admission_id,seq,icd10_code'])
             ->withCount('diagnoses')
             ->when($filters['location'] ?? null, fn ($q, $loc) => $q->where('current_location', $loc))
             ->when(($filters['view'] ?? null) === 'longterm', fn ($q) => $q->where('is_longterm', true))
@@ -60,6 +60,12 @@ class PatientsController extends Controller
 
         $newCutoff = now()->subDay();   // "New" = assigned within the last 24h (rolling)
 
+        // ICD-10 names for every code on the board — ONE lookup, then an in-memory map
+        $boardCodes = $admissions->pluck('diagnoses')->flatten()->pluck('icd10_code')->unique()->values();
+        $dxNames = $boardCodes->isEmpty()
+            ? collect()
+            : DB::table('icd10')->whereIn('code', $boardCodes)->pluck('name', 'code');
+
         $groups = [];
         foreach ($admissions as $a) {
             $cid = (int) $a->consultant_id;
@@ -70,7 +76,7 @@ class PatientsController extends Controller
                     'specialty_id' => (int) ($a->consultant?->specialty_id ?? 0),
                     'on_service' => (bool) $a->consultant?->on_service,
                     'patients' => [],
-                    'counts' => ['new' => 0, 'active' => 0, 'ward' => 0, 'icu' => 0, 'tb' => 0, 'total' => 0],
+                    'counts' => ['new' => 0, 'old' => 0, 'active' => 0, 'ward' => 0, 'icu' => 0, 'tb' => 0, 'total' => 0],
                 ];
             }
             $isTb = $a->diagnoses->contains(fn ($d) => $tbCodes->has($d->icd10_code));
@@ -91,6 +97,8 @@ class PatientsController extends Controller
                 'los' => $los,
                 'los_band' => $los === null ? null : ($los < $settings->short_los ? 'short' : ($los > $settings->long_los ? 'long' : 'mid')),
                 'dx_count' => $a->diagnoses_count,
+                'diagnoses' => $a->diagnoses->sortBy('seq')->values()
+                    ->map(fn ($d) => ['code' => $d->icd10_code, 'name' => $dxNames[$d->icd10_code] ?? $d->icd10_code])->all(),
                 'is_longterm' => (bool) $a->is_longterm,
                 'is_new' => $a->assigned_at !== null && $a->assigned_at->greaterThanOrEqualTo($newCutoff),
                 'is_tb' => $isTb,
@@ -100,7 +108,7 @@ class PatientsController extends Controller
 
             $c = &$groups[$cid]['counts'];
             $c['total']++;
-            if ($a->assigned_at !== null && $a->assigned_at->greaterThanOrEqualTo($newCutoff)) $c['new']++;
+            if ($a->assigned_at !== null && $a->assigned_at->greaterThanOrEqualTo($newCutoff)) { $c['new']++; } else { $c['old']++; }
             if ($isIcu) { $c['icu']++; } else { $c['ward']++; }
             if ($isTb) $c['tb']++;
             if (! $isIcu && ! $medDischarged && ! $a->is_longterm && ! $isTb) $c['active']++;

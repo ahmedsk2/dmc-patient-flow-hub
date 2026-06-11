@@ -30,15 +30,21 @@ let timer = null;
 watch(q, () => { clearTimeout(timer); timer = setTimeout(() => router.get('/control', { q: q.value || undefined }, { preserveState: true, replace: true, preserveScroll: true }), 300); });
 
 const editing = ref(null);
-const uForm = useForm({ role: 5, active: true, on_service: false, specialty_id: '', can_assign: false, can_add: false, can_manage: false, can_modify: false });
+const uForm = useForm({ full_name: '', email: '', role: 5, active: true, on_service: false, specialty_id: '', can_assign: false, can_add: false, can_manage: false, can_modify: false });
 const editUser = (u) => {
     editing.value = u;
+    uForm.clearErrors();
+    uForm.full_name = u.full_name || ''; uForm.email = u.email || '';
     uForm.role = u.role; uForm.active = u.active; uForm.on_service = u.on_service; uForm.specialty_id = u.specialty_id || '';
     uForm.can_assign = u.can.assign; uForm.can_add = u.can.add; uForm.can_manage = u.can.manage; uForm.can_modify = u.can.modify;
 };
 const saveUser = () => uForm.put(`/control/users/${editing.value.id}`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
 const resetMfa = (u) => { if (confirm(`Reset two-factor for ${u.username}? They'll re-enrol on next login.`)) router.post(`/control/users/${u.id}/reset-mfa`, {}, { preserveScroll: true }); };
 const sendReset = (u) => router.post(`/control/users/${u.id}/send-reset`, {}, { preserveScroll: true });
+const deleteUser = (u) => {
+    if (confirm(`Delete ${u.username} permanently? Their historical admissions/consultations are kept (attribution cleared). This cannot be undone.`))
+        router.delete(`/control/users/${u.id}`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
+};
 
 // reference data
 const specForm = useForm({ name: '', is_subspecialty: true, is_external: false });
@@ -168,6 +174,16 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
                 <h3 class="text-lg font-bold text-ink-900">{{ editing.name }}</h3>
                 <p class="mb-4 text-sm text-ink-400">{{ editing.username }}</p>
                 <div class="space-y-4">
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Full name</span>
+                            <input v-model="uForm.full_name" :class="field" placeholder="Dr …" />
+                            <span v-if="uForm.errors.full_name" class="mt-1 block text-xs text-danger-600">{{ uForm.errors.full_name }}</span>
+                        </label>
+                        <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Email</span>
+                            <input v-model="uForm.email" type="email" :class="field" placeholder="name@dmc-im.com" />
+                            <span v-if="uForm.errors.email" class="mt-1 block text-xs text-danger-600">{{ uForm.errors.email }}</span>
+                        </label>
+                    </div>
                     <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Role</span>
                         <select v-model.number="uForm.role" :class="field"><option v-for="(label, id) in roles" :key="id" :value="Number(id)">{{ label }}</option></select>
                     </label>
@@ -187,8 +203,8 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
                 </div>
                 <div class="mt-6 flex items-center justify-end gap-2">
                     <button v-if="editing.email" @click="sendReset(editing)" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-600 hover:bg-ink-50">Send reset email</button>
-                    <button v-if="editing.mfa" @click="resetMfa(editing)" class="mr-auto rounded-xl px-3 py-2 text-sm font-semibold text-danger-600 hover:bg-danger-100">Reset MFA</button>
-                    <span v-if="!editing.mfa" class="mr-auto"></span>
+                    <button v-if="editing.mfa" @click="resetMfa(editing)" class="rounded-xl px-3 py-2 text-sm font-semibold text-danger-600 hover:bg-danger-100">Reset MFA</button>
+                    <button @click="deleteUser(editing)" class="mr-auto rounded-xl px-3 py-2 text-sm font-semibold text-danger-600 hover:bg-danger-100">Delete</button>
                     <button @click="editing = null" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
                     <button @click="saveUser" :disabled="uForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save</button>
                 </div>

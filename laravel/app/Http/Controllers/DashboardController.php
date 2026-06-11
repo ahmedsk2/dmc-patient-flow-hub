@@ -113,6 +113,33 @@ class DashboardController extends Controller
                 'tb' => (int) $r->tb, 'active' => (int) $r->active, 'total' => (int) $r->total,
             ]);
 
+        // per-consultant activity since yesterday (legacy dashboard/1.php "last day" block).
+        // DATE columns — compare against the yesterday date STRING, so "since yesterday" means
+        // yesterday + today. Alias 'consultant' is the established non-colliding GROUP BY alias.
+        $since = Carbon::today()->subDay()->toDateString();
+        $adm24 = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
+            ->where('a.admit_date', '>=', $since)
+            ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
+            ->groupBy('consultant')->pluck('c', 'consultant');
+        $dis24 = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
+            ->where('a.discharge_date', '>=', $since)
+            ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
+            ->groupBy('consultant')->pluck('c', 'consultant');
+        $activity24h = $adm24->keys()->merge($dis24->keys())->unique()->sort()->values()
+            ->map(fn ($name) => [
+                'name' => $name,
+                'admissions' => (int) ($adm24[$name] ?? 0),
+                'discharges' => (int) ($dis24[$name] ?? 0),
+            ]);
+
+        // year-to-date counter strip (non-ICU admissions/discharges, per docs/METRICS.md)
+        $ytd = [
+            'admissions' => (int) DB::table('admissions')->whereBetween('admit_date', [$yearStart, $today])->whereRaw($this->nonIcu)->count(),
+            'discharges' => (int) DB::table('admissions')->whereBetween('discharge_date', [$yearStart, $today])->whereRaw($this->nonIcu)->count(),
+            'consultations' => (int) DB::table('consultations')->whereBetween('consultation_date', [$yearStart, $today])->count(),
+            'signoffs' => (int) DB::table('consultations')->whereBetween('signoff_date', [$yearStart, $today])->count(),
+        ];
+
         $recent = DB::table('admissions as a')->join('patients as p', 'p.id', '=', 'a.patient_id')
             ->leftJoin('users as u', 'u.id', '=', 'a.consultant_id')
             ->selectRaw('p.name name, p.mrn mrn, a.admit_date admitted, a.current_location loc, COALESCE(u.full_name, u.name) consultant')
@@ -140,6 +167,8 @@ class DashboardController extends Controller
             'mix' => ['hospitalist' => (int) ($mix->hosp ?? 0), 'subspecialty' => (int) ($mix->subs ?? 0), 'longterm' => (int) ($mix->longterm ?? 0)],
             'perConsultant' => $perConsultant,
             'consultantBoard' => $consultantBoard,
+            'activity24h' => $activity24h,
+            'ytd' => $ytd,
             'topDxWeek' => $topDxWeek,
             'recent' => $recent,
             'generatedAt' => now()->format('D, d M Y · H:i'),

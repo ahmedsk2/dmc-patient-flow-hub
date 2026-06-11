@@ -25,22 +25,29 @@ const outcomeTone = (o) => o === 'Dead' ? 'bg-danger-100 text-danger-600' : o ==
 
         <!-- discharges -->
         <div v-show="tab === 'discharges'" class="overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-ink-100/60">
+            <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
-                    <th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Discharged</th><th scope="col" class="px-3 py-3">From</th><th scope="col" class="px-3 py-3">Outcome</th><th scope="col" class="px-3 py-3">By</th><th scope="col" class="px-5 py-3 text-right">Undo</th>
+                    <th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Admitted</th><th scope="col" class="px-3 py-3">Discharged</th><th scope="col" class="px-3 py-3 text-center">LOS</th><th scope="col" class="px-3 py-3">Diagnoses</th><th scope="col" class="px-3 py-3">From</th><th scope="col" class="px-3 py-3">To</th><th scope="col" class="px-3 py-3">Outcome</th><th scope="col" class="px-3 py-3">Admitted by</th><th scope="col" class="px-3 py-3">By</th><th scope="col" class="px-5 py-3 text-right">Undo</th>
                 </tr></thead>
                 <tbody class="divide-y divide-ink-50">
                     <tr v-for="d in discharges" :key="d.id" class="hover:bg-brand-50/40">
                         <td class="px-5 py-3"><div class="font-semibold text-ink-800">{{ d.name }}</div><div class="nums text-xs text-ink-400">MRN {{ d.mrn }}</div></td>
+                        <td class="nums px-3 py-3 text-ink-500">{{ d.admit_date || '—' }}</td>
                         <td class="nums px-3 py-3 text-ink-500">{{ d.discharge_date }}</td>
+                        <td class="nums px-3 py-3 text-center font-semibold text-ink-700">{{ d.los ?? '—' }}<span v-if="d.los !== null" class="font-normal text-ink-400">d</span></td>
+                        <td class="max-w-56 px-3 py-3 text-xs text-ink-600" :title="d.diagnoses"><span class="line-clamp-2">{{ d.diagnoses || '—' }}</span></td>
                         <td class="px-3 py-3 text-ink-600">{{ d.current_location || '—' }}</td>
+                        <td class="px-3 py-3 text-ink-600">{{ d.discharge_to || '—' }}</td>
                         <td class="px-3 py-3"><span v-if="d.outcome" class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="outcomeTone(d.outcome)">{{ d.outcome }}</span></td>
+                        <td class="px-3 py-3 text-ink-600">{{ d.admitter || '—' }}</td>
                         <td class="px-3 py-3 text-ink-600">{{ d.actor || '—' }}</td>
                         <td class="px-5 py-3 text-right"><button @click="undoDischarge(d.id)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-danger-600 hover:bg-danger-100">Undo</button></td>
                     </tr>
-                    <tr v-if="!discharges.length"><td colspan="6" class="px-5 py-10 text-center text-ink-400">No discharges in the last 48 hours.</td></tr>
+                    <tr v-if="!discharges.length"><td colspan="11" class="px-5 py-10 text-center text-ink-400">No discharges in the last 48 hours.</td></tr>
                 </tbody>
             </table>
+            </div>
         </div>
 
         <!-- signoffs -->

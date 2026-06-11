@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, onMounted, onUnmounted } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
@@ -11,6 +11,8 @@ const props = defineProps({
     mix: Object,
     perConsultant: Array,
     consultantBoard: Array,
+    activity24h: Array,
+    ytd: Object,
     topDxWeek: Array,
     recent: Array,
     generatedAt: String,
@@ -100,7 +102,28 @@ const donutSeries = computed(() => [props.mix.hospitalist, props.mix.subspecialt
 const consultantMax = computed(() => Math.max(1, ...props.perConsultant.map((c) => c.c)));
 const locTone = (loc) => loc === 'ICU' ? 'bg-danger-100 text-danger-600' : loc === 'ER' ? 'bg-warning-100 text-warning-500' : 'bg-brand-100 text-brand-700';
 
-const refresh = () => router.reload({ only: ['kpis', 'trend', 'consults', 'los', 'mix', 'perConsultant', 'recent', 'generatedAt'] });
+// per-consultant activity since yesterday (grouped bars)
+const act24Options = computed(() => colOptions(props.activity24h.map((r) => r.name), [C.blue, C.gold]));
+const act24Series = computed(() => [
+    { name: 'Admissions', data: props.activity24h.map((r) => r.admissions) },
+    { name: 'Discharges', data: props.activity24h.map((r) => r.discharges) },
+]);
+
+// YTD counter strip
+const ytdCards = computed(() => [
+    ['Admissions', props.ytd.admissions], ['Discharges', props.ytd.discharges],
+    ['Consultations', props.ytd.consultations], ['Sign-offs', props.ytd.signoffs],
+]);
+
+const refresh = () => router.reload({ only: ['kpis', 'trend', 'consults', 'los', 'mix', 'perConsultant', 'consultantBoard', 'activity24h', 'ytd', 'topDxWeek', 'recent', 'generatedAt'] });
+
+// 5-minute auto-refresh, visibility-gated: a dashboard left open on a ward screen stays
+// current, but background tabs don't hammer the server.
+let autoRefresh = null;
+onMounted(() => {
+    autoRefresh = setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 300000);
+});
+onUnmounted(() => clearInterval(autoRefresh));
 </script>
 
 <template>
@@ -134,6 +157,17 @@ const refresh = () => router.reload({ only: ['kpis', 'trend', 'consults', 'los',
                     </div>
                 </div>
                 <div class="pointer-events-none absolute -bottom-6 -right-4 h-20 w-20 rounded-full bg-gradient-to-br opacity-10" :class="toneClass[c.tone]"></div>
+            </div>
+        </div>
+
+        <!-- YTD counter strip -->
+        <div class="mt-5 rounded-2xl bg-white px-5 py-4 shadow-card ring-1 ring-ink-100/60">
+            <div class="flex flex-wrap items-center gap-x-8 gap-y-3">
+                <span class="text-xs font-semibold uppercase tracking-wide text-ink-400">Year to date<span class="block text-[10px] font-normal normal-case text-ink-300">adm / disch non-ICU</span></span>
+                <div v-for="[label, value] in ytdCards" :key="label" class="flex items-baseline gap-2">
+                    <span class="nums text-2xl font-extrabold text-brand-700">{{ (value ?? 0).toLocaleString() }}</span>
+                    <span class="text-xs font-semibold text-ink-500">{{ label }}</span>
+                </div>
             </div>
         </div>
 
@@ -217,6 +251,12 @@ const refresh = () => router.reload({ only: ['kpis', 'trend', 'consults', 'los',
                 </div>
                 <p v-if="!topDxWeek.length" class="text-sm text-ink-400">No admissions in the last 7 days.</p>
             </div>
+        </div>
+
+        <!-- per-consultant 24h activity -->
+        <div v-if="activity24h.length" class="mt-5 rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
+            <h3 class="mb-2 font-bold text-ink-800">Admissions / Discharges per consultant <span class="font-normal text-ink-400">(since yesterday)</span></h3>
+            <apexchart type="bar" height="280" :options="act24Options" :series="act24Series" role="img" aria-label="Grouped bar chart: admissions and discharges per consultant since yesterday" />
         </div>
 
         <!-- per-consultant breakdown table -->

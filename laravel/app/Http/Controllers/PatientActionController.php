@@ -107,12 +107,17 @@ class PatientActionController extends Controller
         $data = $request->validate([
             'from_consultant_id' => ['required', 'exists:users,id'],
             'to_consultant_id' => ['required', 'exists:users,id', 'different:from_consultant_id'],
+            'mark_new' => ['nullable', 'boolean'],
         ]);
+        // mark_new=false (legacy "New Patient?" unchecked) = quiet administrative move:
+        // the new-assignment fields are left UNTOUCHED, preserving any existing assigned_at
+        $markNew = $request->boolean('mark_new', true);
         $count = Admission::whereNull('discharge_date')->where('consultant_id', $data['from_consultant_id'])
-            ->update(['consultant_id' => $data['to_consultant_id'], 'is_new_assignment' => true, 'assigned_on' => now()->toDateString(), 'assigned_at' => now()]);
+            ->update(['consultant_id' => $data['to_consultant_id']]
+                + ($markNew ? ['is_new_assignment' => true, 'assigned_on' => now()->toDateString(), 'assigned_at' => now()] : []));
         AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'admission.bulk_reassign',
             'entity_type' => 'consultant', 'entity_id' => (string) $data['from_consultant_id'],
-            'details' => ['to' => $data['to_consultant_id'], 'count' => $count], 'ip' => $request->ip()]);
+            'details' => ['to' => $data['to_consultant_id'], 'count' => $count, 'mark_new' => $markNew], 'ip' => $request->ip()]);
 
         return back()->with('flash', ['type' => 'success', 'message' => "Reassigned {$count} patient(s)."]);
     }
@@ -141,17 +146,33 @@ class PatientActionController extends Controller
         if (! ($u->isAdmin() || $u->can_assign)) {
             throw new AccessDeniedHttpException('You do not have the Assign capability.');
         }
-        $data = $request->validate(['consultant_id' => ['required', 'exists:users,id']]);
-
-        $admission->update([
-            'consultant_id' => $data['consultant_id'],
-            'is_new_assignment' => true,
-            'assigned_on' => now()->toDateString(),
-            'assigned_at' => now(),
+        $data = $request->validate([
+            'consultant_id' => ['required', 'exists:users,id'],
+            'mark_new' => ['nullable', 'boolean'],
         ]);
-        $this->audit('admission.assign', $admission, ['consultant_id' => $data['consultant_id']]);
+        // mark_new=false (legacy "New Patient?" unchecked) = quiet administrative assignment:
+        // the new-assignment fields are left UNTOUCHED, preserving any existing assigned_at
+        $markNew = $request->boolean('mark_new', true);
+
+        $admission->update(['consultant_id' => $data['consultant_id']]
+            + ($markNew ? ['is_new_assignment' => true, 'assigned_on' => now()->toDateString(), 'assigned_at' => now()] : []));
+        $this->audit('admission.assign', $admission, ['consultant_id' => $data['consultant_id'], 'mark_new' => $markNew]);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultant assigned.']);
+    }
+
+    /** Inline bed edit on a board card. */
+    public function updateBed(Request $request, Admission $admission): RedirectResponse
+    {
+        if (! $this->canManage($admission)) {
+            throw new AccessDeniedHttpException('Only the primary consultant or a manager may change the bed.');
+        }
+        $data = $request->validate(['bed' => ['nullable', 'string', 'max:64']]);
+        $old = $admission->bed;
+        $admission->update(['bed' => $data['bed'] ?? null]);
+        $this->audit('admission.bed', $admission, ['bed' => $admission->bed, 'was' => $old]);
+
+        return back()->with('flash', ['type' => 'success', 'message' => 'Bed updated.']);
     }
 
     /** Controlled destination vocabulary (legacy "Discharged to" list; ICU kept for historical rows). */
