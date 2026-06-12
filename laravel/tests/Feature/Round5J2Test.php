@@ -25,7 +25,7 @@ use Tests\TestCase;
  *  4. physician drill-down numbers gain transToIcu / consultations / signoffs + a second
  *     'Discharged to' donut with the legacy 6 buckets over non-ICU closed episodes
  *  5. dashboard consultation donut = [signed-off last 24h, active] (legacy dashboard/1.php);
- *     census donut titled with the TB count (kpis.tbActive)
+ *     census donut titled with the TB count (donutTb — assigned non-ICU since round-10 M1/5)
  *  6. dashboard avgLosMonth + physician drill-down avgLos render 2 decimals
  *  7. Recent discharges + Registry results ship los_band (same settings-driven bands as the board)
  * 12. Observer page blocks: /admissions, /admissions/create, /consultations are 403 (legacy
@@ -218,16 +218,17 @@ class Round5J2Test extends TestCase
             'consultation_date' => now()->subDays(20)->toDateString(),
             'signoff_date' => now()->subDays(10)->toDateString(), 'indication' => []]);
 
-        $tb = $this->admission();
+        $tb = $this->admission(['consultant_id' => $this->user()->id]);   // ASSIGNED — counts in the donut title
         $tb->diagnoses()->create(['seq' => 1, 'icd10_code' => 'A15.0']);
-        $this->admission();   // active non-TB
+        $this->admission();   // active non-TB, unassigned — excluded from the donut headline (M1/5)
 
         $this->actingAs($this->admin())->get('/')
             ->assertInertia(fn (AssertableInertia $p) => $p
                 ->where('consultDonut.signed24h', 1)   // legacy: signoff_date + 1 day >= today
                 ->where('consultDonut.active', 1)
-                ->where('kpis.tbActive', 1)
-                ->where('kpis.census', 2));
+                ->where('donutTb', 1)                  // donut title TB count = assigned non-ICU TB
+                ->where('donutTotal', 1)               // donut population excludes the unassigned row
+                ->where('kpis.census', 2));            // …while the KPI tile stays all-active
     }
 
     // ---- 6. two-decimal LOS ------------------------------------------------------------------------

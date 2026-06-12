@@ -36,7 +36,8 @@ class ProfileController extends Controller
         $u = Auth::user();
         $data = $request->validate([
             'full_name' => ['required', 'string', 'max:191'],
-            'email' => ['nullable', 'email', 'max:191'],
+            // app-level uniqueness only — the DB index was dropped (legacy members shared/lacked emails)
+            'email' => ['nullable', 'email', 'max:191', Rule::unique('users', 'email')->ignore($u->id)],
             'username' => ['required', 'string', 'max:64', 'alpha_dash', Rule::unique('users', 'username')->ignore($u->id)],
         ]);
 
@@ -62,6 +63,11 @@ class ProfileController extends Controller
 
         if (! Hash::check($data['current_password'], $u->password)) {
             throw ValidationException::withMessages(['current_password' => 'The current password is incorrect.']);
+        }
+        // a "change" to the SAME password would only restamp the 3-month expiry clock
+        // (legacy change-password.php:41-43 parity)
+        if (Hash::check($data['password'], $u->password)) {
+            throw ValidationException::withMessages(['password' => 'Choose a password different from your previous one.']);
         }
 
         $u->update([

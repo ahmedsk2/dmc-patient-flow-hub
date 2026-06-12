@@ -28,7 +28,9 @@ class RegisterController extends Controller
         $data = $request->validate([
             'username' => ['required', 'string', 'max:240', 'unique:users,username'],
             'full_name' => ['required', 'string', 'max:191'],
-            'email' => ['nullable', 'email', 'max:191', 'unique:users,email'],
+            // REQUIRED for new self-registrations (password reset needs a reachable address);
+            // the column stays nullable only for imported legacy users without one
+            'email' => ['required', 'email', 'max:191', 'unique:users,email'],
             'role' => ['required', 'integer', 'in:2,3,4,5'],   // never admin via self-registration
             'password' => ['required', 'confirmed', PasswordRule::min(8)->letters()->numbers()],
         ]);
@@ -37,7 +39,7 @@ class RegisterController extends Controller
             'username' => $data['username'],
             'name' => $data['full_name'],
             'full_name' => $data['full_name'],
-            'email' => $data['email'] ?? null,
+            'email' => $data['email'],
             'role' => $data['role'],
             'password' => $data['password'],          // hashed by the model cast
             'active' => 0,                            // pending admin activation

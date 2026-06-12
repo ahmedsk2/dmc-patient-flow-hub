@@ -277,9 +277,20 @@ class RegistryController extends Controller
     {
         return response()->streamDownload(function () use ($request) {
             $out = fopen('php://output', 'w');
-            $this->writeExport($request, fn (array $row) => fputcsv($out, $row));
+            $this->writeExport($request, fn (array $row) => fputcsv($out, array_map(self::csvSafe(...), $row)));
             fclose($out);
         }, $this->exportFilename('csv'), ['Content-Type' => 'text/csv']);
+    }
+
+    /**
+     * Neutralize spreadsheet formula injection in the CSV (Excel evaluates cells starting with
+     * = + - @): prefix them with an apostrophe — legacy $safeCell parity
+     * (registry/search-results-diagnosis.php:91-94). CSV ONLY: the XLSX writer emits typed
+     * strings, which spreadsheet apps never evaluate.
+     */
+    private static function csvSafe(mixed $v): mixed
+    {
+        return preg_match('/^[=+\-@]/', (string) ($v ?? '')) ? "'" . $v : $v;
     }
 
     public function exportXlsx(Request $request): BinaryFileResponse

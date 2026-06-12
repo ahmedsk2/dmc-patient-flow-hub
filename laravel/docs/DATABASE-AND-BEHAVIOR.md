@@ -36,6 +36,7 @@ Every table uses InnoDB with real foreign keys and indexes (unlike the legacy My
 | `email` | varchar | For password-reset email. |
 | `password` | varchar | bcrypt hash. |
 | `mfa_secret`, `mfa_recovery_codes`, `mfa_enrolled_at` | text/datetime | TOTP two-factor. NULL = not enrolled. |
+| `mfa_last_counter` | int | Last accepted TOTP time-step — replay guard (a code can't be reused within its ±90s window). |
 | `pass_exp_date` | date | Password set date; expiry gate = +3 months. |
 | `remember_token` | varchar | "Remember me" cookie token. |
 | `legacy_id` | int | Maps back to the old `members.member_id`. |
@@ -59,11 +60,12 @@ A re-admission or a ward↔ICU transfer creates a **new** row, so one patient = 
 | `admitted_by`, `discharged_by` | FK→users | Audit attribution (session user, not spoofable). |
 | `medical_discharge_date` | date | Phase-1 (medical) discharge → "discharged still in". |
 | `discharge_date` | date (idx) | **NULL = active.** Phase-2 (complete) discharge / ICU discharge. |
-| `discharge_to`, `outcome` | — | Destination; outcome ∈ Alive/Dead/LAMA/DAMA/Transferred. |
+| `discharge_to`, `outcome` | — | `discharge_to` = destination (Home / Other Facility / **LAMA / Absconded / Mortuary** / transfer targets). `outcome` is **strictly Alive/Dead** — non-death dispositions are *destinations*, never outcomes; a Dead outcome locks the destination to Mortuary (UI-enforced). |
 | `delay_reason` | varchar | Why the bed isn't freed after medical discharge. |
 | `transfer_type` | varchar | `discharge from ward` / `discharge from ICU` / `other transfer` / `Transfer from ICU`. |
 | `is_longterm`, `is_new_assignment` | bool | Long-term flag; "new" badge (set on assignment). |
 | `assigned_on` | date | When the consultant was assigned. |
+| `assigned_at` | timestamp | Precise assignment moment — drives the rolling 24-hour "New" badge (NULL on historical rows = not new). |
 | `legacy_id` | int | Maps to old `picupatients.ID`. |
 
 ### `admission_diagnoses` — ICD-10 codes per admission (replaces the legacy JSON array)
@@ -74,11 +76,36 @@ A re-admission or a ward↔ICU transfer creates a **new** row, so one patient = 
 `consultation_from`, `to_service`, `indication` (JSON of `consultation_reasons` ids), `other_indication`,
 `consultant_id` (receiving), `entered_by`, `signoff_date` (NULL = open), `legacy_id`.
 
+### Handover subsystem (4 tables)
+| Table | Use |
+|---|---|
+| `handovers` | The **current** handover text — one row per admission, upserted on save. `updated_at` drives the same-day gate. |
+| `handover_revisions` | Append-only history — every save adds one row (`body`, `author_id`, `created_at`). |
+| `handover_signatures` | Created on **consultant-to-consultant moves** (reassign, bulk reassign, internal specialty transfer): `from/to_consultant_id`, `revision_id`, `required_at`, `signed_at`/`signed_by`, `voided_at`. |
+| `notifications` | Lightweight in-app inbox feed (the bell in the layout) — `user_id`, `type` (currently `handover.*`), `payload`, `read_at`. |
+
+Behavior:
+- **Same-day gate:** a patient may only move to a *different* consultant when their handover was
+  updated **today** (`handovers.updated_at` is today). First assignments from the unassigned queue
+  are not gated. Bulk reassign checks the gate per selected patient (a preflight endpoint shows
+  per-admission freshness).
+- **Signatures bind the latest revision:** each move pins `revision_id` to the latest handover
+  revision at transfer time, and it is **re-bound at signing** to the revision the receiving
+  consultant actually read. Only the primary consultant or a manager may update the handover while
+  a signature is pending outgoing.
+- **Voiding:** a new move supersedes (voids) any pending signature on the admission; closing the
+  patient's **last open episode** (complete/ICU/one-step discharge, delete) voids unsigned
+  signatures **patient-wide** — including those parked on already-closed episodes (e.g. after a
+  specialty transfer), so nothing dangles forever.
+- **Bell / inbox:** the receiving consultant gets a `handover.transfer` notification (bell badge =
+  unread count on every page) and an `/handovers` inbox listing signatures awaiting them plus
+  their outgoing ones (last 7 days).
+
 ### Reference / config tables
 | Table | Columns | Use |
 |---|---|---|
 | `settings` | single row: `min/max_hospitalist`, `min/max_subs`, `short_los`, `long_los`, **`ward_beds`**, **`icu_beds`**, `mfa_enforcement` | Operational thresholds (see metrics doc). |
-| `specialties` | `id`, `name`, `is_subspecialty` | Specialty list (id 1 = hospitalist). |
+| `specialties` | `id`, `name`, `is_subspecialty`, `is_external` | Specialty list (id 1 = hospitalist). `is_external` = allied/external services (legacy `other_specialities`): transfer-OUT targets only — an external transfer closes the episode without opening a new one, and they never appear in internal-specialty pickers. |
 | `consultation_reasons` | `id`, `name` | Consultation indication options. |
 | `tb_diagnoses` | `icd10_code` | ICD-10 codes that classify an admission as TB. |
 | `icd10` | `code`, `name` | ICD-10 reference (~72k rows). |

@@ -38,11 +38,6 @@ class DashboardController extends Controller
         // (`signoff_date + INTERVAL 1 DAY >= CURDATE()`, i.e. yesterday + today) (J2-5)
         $signed24h = (int) DB::table('consultations')->where('signoff_date', '>=', Carbon::yesterday()->toDateString())->count();
         $deathsMonth = (int) DB::table('admissions')->where('outcome', 'Dead')->whereBetween('discharge_date', [$monthStart, $today])->count();
-        // active TB census for the donut title 'Current patients: N (incl. M TB)' (J2-5)
-        $tbActive = (int) DB::table('admissions as a')->whereNull('a.discharge_date')
-            ->whereExists(fn ($s) => $s->selectRaw('1')->from('admission_diagnoses as ad')
-                ->join('tb_diagnoses as tb', 'tb.icd10_code', '=', 'ad.icd10_code')
-                ->whereColumn('ad.admission_id', 'a.id'))->count();
 
         // current-month average LOS over non-ICU discharges — the Statistics avgLos formula family
         // (AVG(DATEDIFF) with the >= 0 guard), month-scoped like deathsMonth above; 2 decimals
@@ -100,6 +95,17 @@ class DashboardController extends Controller
                 SUM(CASE WHEN (u.specialty_id <> 1 OR u.specialty_id IS NULL) AND a.is_longterm = 0 THEN 1 ELSE 0 END) subs,
                 SUM(CASE WHEN a.is_longterm = 1 THEN 1 ELSE 0 END) longterm")
             ->whereNull('a.discharge_date')->whereRaw('(a.current_location <> "ICU" OR a.current_location IS NULL)')->first();
+
+        // census-donut headline 'Current patients: N (incl. M TB)' — the DONUT'S OWN population
+        // (assigned non-ICU active), i.e. the sum of the mix slices, with its TB subset counted
+        // over the same rows (legacy dashboard/1.php:151-154 summed the donut buckets; the TB
+        // query INNER JOINed members too). The Active Census KPI tile (kpis.census) stays all-active.
+        $donutTotal = (int) (($mix->hosp ?? 0) + ($mix->subs ?? 0) + ($mix->longterm ?? 0));
+        $donutTb = (int) DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
+            ->whereNull('a.discharge_date')->whereRaw('(a.current_location <> "ICU" OR a.current_location IS NULL)')
+            ->whereExists(fn ($s) => $s->selectRaw('1')->from('admission_diagnoses as ad')
+                ->join('tb_diagnoses as tb', 'tb.icd10_code', '=', 'ad.icd10_code')
+                ->whereColumn('ad.admission_id', 'a.id'))->count();
 
         // alias must NOT collide with a real column (users.name): MySQL resolves GROUP BY to the
         // column (only_full_group_by error), MariaDB can't match repeated raw expressions either.
@@ -197,13 +203,14 @@ class DashboardController extends Controller
                 'admissionsToday' => $admissionsToday, 'dischargesToday' => $dischargesToday,
                 'activeConsults' => $activeConsults, 'deathsMonth' => $deathsMonth, 'avgLosMonth' => $avgLosMonth,
                 'occupancy' => $occupancy, 'occupancyGauge' => $occupancyGauge, 'wardBeds' => $wardBeds,
-                'tbActive' => $tbActive,
             ],
             'trend' => $trend,
             'consults' => $cons,
             'consultDonut' => ['signed24h' => $signed24h, 'active' => $activeConsults],
             'los' => ['labels' => array_keys($losBuckets), 'data' => array_values($losBuckets)],
             'mix' => ['hospitalist' => (int) ($mix->hosp ?? 0), 'subspecialty' => (int) ($mix->subs ?? 0), 'longterm' => (int) ($mix->longterm ?? 0)],
+            'donutTotal' => $donutTotal,
+            'donutTb' => $donutTb,
             'perConsultant' => $perConsultant,
             'consultantBoard' => $consultantBoard,
             'activity24h' => $activity24h,

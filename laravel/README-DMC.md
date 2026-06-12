@@ -72,7 +72,7 @@ Verified row-for-row against the source (total admissions and active census matc
 | Reports — A4 annual report: **server-side PDF** (dompdf) + browser print | ✅ |
 | Control panel (admin) — settings, user role/capability management | ✅ |
 | Profile — edit details, change password | ✅ |
-| Two-factor auth (TOTP) — enroll (QR + recovery codes), login challenge, disable | ✅ |
+| Two-factor auth (TOTP) — enroll (QR + recovery codes), login challenge; admin reset via Control | ✅ |
 | Auto-assign "shuffle" — balances the unassigned queue across on-service consultants | ✅ |
 | Assign-to-me + bulk change-consultant (reassign all of A → B) | ✅ |
 | Long-term + TB board views; long-term label toggle | ✅ |
@@ -104,11 +104,12 @@ consultant-without-Assign cannot shuffle, admin dashboard renders, import previe
 CI runs the suite on every push via `.github/workflows/laravel-ci.yml` (MySQL service).
 
 ## Access policy (decided)
-- **Control panel** is admin-only (`EnsureAdmin`). **Statistics / Registry / Reports** are open to any
-  authenticated user (read-only analytics); **Observers** (role 5) are read-only everywhere — they cannot
-  admit, run flow actions, or create consultations (enforced server-side). This is a deliberate choice for
-  the re-platform; the legacy `permissions.docx` matrix was flagged dated and should be re-confirmed with
-  the clinical team before any tightening.
+- **Control panel** is admin-only (`EnsureAdmin`) — and so are **Statistics, Registry, Reports, Recent,
+  Import and ALL exports (CSV/XLSX/PDF)**, a PHI-exposure decision (review 2026-06-09 finding #1). The
+  **Dashboard** is the analytics surface for non-admin users. **Observers** (role 5) are read-only
+  everywhere — they cannot admit, run flow actions, or create consultations (enforced server-side). The
+  legacy `permissions.docx` matrix was flagged dated; the implemented role/capability model was
+  re-confirmed with the maintainer before these gates were set.
 
 ## Deferred / next
 - Swap the approximated `EhcLogo.vue` for the official EHC logo asset (drop it at

@@ -81,7 +81,7 @@ Pick **one**:
 - [ ] Admit a test patient â†’ appears on New Admissions â†’ assign â†’ appears on Active board â†’ discharge
       (medical â†’ complete) â†’ appears in Registry â†’ **delete/clean the test record**
 - [ ] PDF download works (Reports â†’ Download PDF)
-- [ ] `php artisan test` on a staging copy is green (147 tests / 1,157 assertions as of 2026-06-11)
+- [ ] `php artisan test` on a staging copy is green (291 tests / 2,338 assertions as of 2026-06-12)
 
 ## Rollback
 

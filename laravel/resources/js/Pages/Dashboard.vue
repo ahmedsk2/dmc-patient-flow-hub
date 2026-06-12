@@ -10,6 +10,8 @@ const props = defineProps({
     consultDonut: Object,
     los: Object,
     mix: Object,
+    donutTotal: Number,
+    donutTb: Number,
     perConsultant: Array,
     consultantBoard: Array,
     activity24h: Array,
@@ -226,10 +228,11 @@ onUnmounted(() => clearInterval(autoRefresh));
                 <h3 class="mb-2 font-bold text-ink-800">Length of Stay <span class="font-normal text-ink-400">(this year)</span></h3>
                 <apexchart type="bar" height="260" :options="colOptions(los.labels, [C.navy])" :series="losSeries" role="img" aria-label="Bar chart: length-of-stay distribution this year" />
             </div>
-            <!-- legacy census donut title carries the headline + TB count (J2-5) -->
+            <!-- legacy census donut title carries the headline + TB count over the DONUT'S OWN
+                 population (assigned non-ICU — dashboard/1.php:151-154), not the all-active KPI (M1/5) -->
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
-                <h3 class="mb-2 font-bold text-ink-800">Current patients: <span class="nums">{{ kpis.census }}</span> <span class="font-normal text-ink-400">(incl. {{ kpis.tbActive }} TB)</span></h3>
-                <apexchart type="donut" height="260" :options="donutOptions" :series="donutSeries" role="img" :aria-label="`Donut chart: active census by service — ${kpis.census} patients including ${kpis.tbActive} TB`" />
+                <h3 class="mb-2 font-bold text-ink-800">Current patients: <span class="nums">{{ donutTotal }}</span> <span class="font-normal text-ink-400">(incl. {{ donutTb }} TB)</span></h3>
+                <apexchart type="donut" height="260" :options="donutOptions" :series="donutSeries" role="img" :aria-label="`Donut chart: assigned non-ICU census by service — ${donutTotal} patients including ${donutTb} TB`" />
             </div>
         </div>
 
