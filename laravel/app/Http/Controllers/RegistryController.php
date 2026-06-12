@@ -43,7 +43,7 @@ class RegistryController extends Controller
                 // option lists reflect the values actually present in the data (legacy approach),
                 // so historical vocabularies (old sources/outcomes) stay filterable
                 'outcomes' => $this->distinctValues('outcome'),
-                'locations' => ['Ward', 'ICU', 'ER'],
+                'locations' => ['Ward', 'ICU', 'ER', 'Non-ICU'],   // Non-ICU = legacy year-extract preset (ward+ER+unset)
                 'admittedFrom' => $this->distinctValues('admitted_from'),
                 'dischargedTo' => $this->distinctValues('discharge_to'),
                 'delays' => $this->distinctValues('delay_reason'),
@@ -79,7 +79,9 @@ class RegistryController extends Controller
             ->when($request->input('from'), fn ($q, $d) => $q->whereDate('admit_date', '>=', $d))
             ->when($request->input('to'), fn ($q, $d) => $q->whereDate('admit_date', '<=', $d))
             ->when($request->input('outcome'), fn ($q, $o) => $q->where('outcome', $o))
-            ->when($request->input('location'), fn ($q, $l) => $q->where('current_location', $l))
+            ->when($request->input('location'), fn ($q, $l) => $l === 'Non-ICU'
+                ? $q->whereRaw(Admission::NON_ICU_SQL)   // legacy year-extract preset: ward + ER + unset
+                : $q->where('current_location', $l))
             ->when($request->input('admitted_from'), fn ($q, $a) => $q->where('admitted_from', $a))
             ->when($request->input('discharged_to'), fn ($q, $d) => $q->where('discharge_to', $d))
             ->when($request->input('delay'), fn ($q, $d) => $q->where('delay_reason', $d))

@@ -34,7 +34,7 @@ class StoreAdmissionRequest extends FormRequest
         return [
             'mrn' => ['required', 'string', 'regex:/^\d{1,11}$/'],
             'name' => ['required', 'string', 'max:191'],
-            'age' => ['nullable', 'integer', 'between:0,130'],
+            'age' => ['nullable', 'integer', 'between:0,150'],
             'gender' => ['nullable', 'in:Male,Female'],
             'nationality' => ['nullable', 'string', 'max:191'],
             'bed' => ['nullable', 'string', 'max:64'],
@@ -52,7 +52,7 @@ class StoreAdmissionRequest extends FormRequest
     public function rules(): array
     {
         return array_merge(self::demographicRules(), [
-            'age' => ['required', 'integer', 'between:0,130'],
+            'age' => ['required', 'integer', 'between:0,150'],
             'gender' => ['required', 'in:Male,Female'],
             'nationality' => ['required', 'string', 'max:191', 'exists:countries,name'],
             'bed' => ['required', 'string', 'max:64'],

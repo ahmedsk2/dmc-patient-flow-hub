@@ -23,7 +23,7 @@ class ConsultationRequest extends FormRequest
         return [
             'mrn' => ['required', 'string', 'max:64'],
             'patient_name' => ['required', 'string', 'max:191'],
-            'age' => ['required', 'integer', 'between:0,130'],
+            'age' => ['required', 'integer', 'between:0,150'],
             'bed' => ['required', 'string', 'max:64'],
             'current_location' => ['nullable', 'string', 'max:32'],
             'consultation_date' => ['required', 'date', 'before_or_equal:today'],

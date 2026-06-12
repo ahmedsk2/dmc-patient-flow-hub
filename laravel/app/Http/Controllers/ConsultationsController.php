@@ -133,7 +133,7 @@ class ConsultationsController extends Controller
     /** Edit a consultation (receiving consultant / manager / admin). */
     public function update(\App\Http\Requests\ConsultationRequest $request, Consultation $consultation): RedirectResponse
     {
-        // ownership gate (receiving consultant / manager / admin) lives in ConsultationRequest::authorize()
+        // edit is open to any clinical role (J1-10 legacy parity); gate lives in ConsultationRequest::authorize()
         $data = $request->validated();
         $consultation->update([...$data, 'indication' => $data['indication'] ?? []]);
         AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'consultation.modify',
