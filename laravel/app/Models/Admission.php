@@ -98,6 +98,19 @@ class Admission extends Model
     public function scopeIcu(Builder $q): Builder { return $q->where('current_location', 'ICU'); }
 
     /**
+     * Settings-driven LOS band (short/mid/long) — the ONE banding rule, shared by the board,
+     * the Recent registry and the Registry results so the colors can never drift.
+     */
+    public static function losBand(?int $los, Setting $settings): ?string
+    {
+        if ($los === null) {
+            return null;
+        }
+
+        return $los < $settings->short_los ? 'short' : ($los > $settings->long_los ? 'long' : 'mid');
+    }
+
+    /**
      * Length of stay in days: admit → physical discharge, or TODAY while the file is open.
      * A phase-1 medical discharge does NOT freeze it — legacy kept counting for the
      * "discharged still in" patients until the bed was actually vacated (B6).

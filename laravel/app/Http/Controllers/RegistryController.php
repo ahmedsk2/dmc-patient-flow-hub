@@ -153,12 +153,15 @@ class RegistryController extends Controller
             ->join('tb_diagnoses as tb', 'tb.icd10_code', '=', 'ad.icd10_code')
             ->whereIn('ad.admission_id', $ids)->distinct()->pluck('ad.admission_id')->flip();
 
+        $settings = \App\Models\Setting::current();   // LOS bands, same rule as the board (J2-7)
+
         return $page->through(fn (Admission $a) => [
             'id' => $a->id, 'name' => $a->patient?->name ?? 'Unknown', 'mrn' => $a->patient?->mrn,
             'age' => $a->patient?->age, 'gender' => $a->patient?->gender, 'nationality' => $a->patient?->nationality,
             'location' => $a->current_location, 'consultant' => $a->consultant?->full_name ?? $a->consultant?->name ?? '—',
             'admit_date' => optional($a->admit_date)->toDateString(), 'discharge_date' => optional($a->discharge_date)->toDateString(),
             'outcome' => $a->outcome, 'los' => $a->lengthOfStay(), 'status' => $a->discharge_date ? 'Discharged' : 'Active',
+            'los_band' => Admission::losBand($a->lengthOfStay(), $settings),
             // detail-panel fields
             'diagnoses' => $a->diagnoses->sortBy('seq')->values()
                 ->map(fn ($d) => ['code' => $d->icd10_code, 'name' => $dxNames[$d->icd10_code] ?? $d->icd10_code])->all(),
@@ -247,6 +250,8 @@ class RegistryController extends Controller
 
     private function diagnosisResults(Request $request)
     {
+        $settings = \App\Models\Setting::current();   // LOS bands, same rule as the board (J2-7)
+
         return $this->diagnosisQuery($request)
             ->paginate(20)->withQueryString()->through(fn (Admission $a) => [
                 'id' => $a->id, 'name' => $a->patient?->name ?? 'Unknown', 'mrn' => $a->patient?->mrn,
@@ -254,6 +259,7 @@ class RegistryController extends Controller
                 'consultant' => $a->consultant?->full_name ?? $a->consultant?->name ?? '—',
                 'admit_date' => optional($a->admit_date)->toDateString(), 'discharge_date' => optional($a->discharge_date)->toDateString(),
                 'outcome' => $a->outcome, 'los' => $a->lengthOfStay(), 'status' => $a->discharge_date ? 'Discharged' : 'Active',
+                'los_band' => Admission::losBand($a->lengthOfStay(), $settings),
             ]);
     }
 

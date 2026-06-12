@@ -41,7 +41,7 @@ const toggleInd = (id) => { f.indication.includes(id) ? (f.indication = f.indica
 const today = new Date().toISOString().slice(0, 10);
 const admitFromOptions = ['ER', 'Clinic', 'OPD', 'OR', 'ICU', 'Referral', 'Transfer', 'Direct', 'Other service'];
 const editing = ref(null);
-const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '', bed: '', admit_date: '', admitted_from: '', current_location: 'Ward', diagnoses: [] });
+const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '', bed: '', admit_date: '', admitted_from: '', current_location: 'Ward', consultant_id: '', diagnoses: [] });
 const mDx = ref([]);
 const openEdit = async (id) => {
     const d = await (await fetch(`/admissions/${id}/edit`, { headers: { Accept: 'application/json' } })).json();
@@ -49,8 +49,11 @@ const openEdit = async (id) => {
     mForm.mrn = d.mrn || ''; mForm.name = d.name || ''; mForm.age = d.age ?? ''; mForm.gender = d.gender || '';
     mForm.nationality = d.nationality || ''; mForm.bed = d.bed || '';
     mForm.admit_date = d.admit_date || ''; mForm.admitted_from = d.admitted_from || ''; mForm.current_location = d.current_location || 'Ward';
+    mForm.consultant_id = d.consultant_id || '';   // QUIET reassignment, legacy Modify semantics (J2-13)
     mDx.value = d.diagnoses || []; mForm.diagnoses = mDx.value.map((x) => x.code);
 };
+// on-service consultants for the edit select; the current (possibly historical) assignee stays selectable
+const modifyConsultants = computed(() => props.options.consultants.filter((c) => c.on_service || c.id === mForm.consultant_id));
 const mAdd = (d) => { if (!mDx.value.find((x) => x.code === d.code)) { mDx.value.push(d); mForm.diagnoses.push(d.code); } };
 const mRemove = (code) => { mDx.value = mDx.value.filter((x) => x.code !== code); mForm.diagnoses = mForm.diagnoses.filter((c) => c !== code); };
 const submitEdit = () => mForm.post(`/admissions/${editing.value.id}/modify`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
@@ -62,6 +65,8 @@ onUnmounted(() => window.removeEventListener('keydown', onEsc));
 
 const fld = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20';
 const outcomeTone = (o) => o === 'Dead' ? 'bg-danger-100 text-danger-600' : o === 'Alive' ? 'bg-success-100 text-success-600' : 'bg-ink-100 text-ink-500';
+// same short/long LOS band colors as the board cards (J2-7)
+const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b === 'long' ? 'bg-danger-100 text-danger-600' : 'bg-warning-100 text-warning-500';
 const modes = [['admissions', 'Admissions'], ['consultations', 'Consultations'], ['diagnosis', 'Diagnosis (free text)']];
 
 // expandable row detail (admissions mode) — fresh Set per toggle so Vue picks up the change
@@ -188,7 +193,7 @@ const toggleExpand = (id) => {
                             <td class="px-3 py-3 text-ink-600">{{ r.consultant }}</td>
                             <td class="nums px-3 py-3 text-ink-500">{{ r.admit_date || '—' }}</td>
                             <td class="nums px-3 py-3 text-ink-500">{{ r.discharge_date || '—' }}</td>
-                            <td class="nums px-3 py-3 text-ink-600">{{ r.los !== null ? r.los + 'd' : '—' }}</td>
+                            <td class="nums px-3 py-3"><span v-if="r.los !== null" class="rounded-full px-2 py-0.5 text-xs font-bold" :class="losTone(r.los_band)">{{ r.los }}d</span><span v-else class="text-ink-300">—</span></td>
                             <td class="px-3 py-3"><span v-if="r.outcome" class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="outcomeTone(r.outcome)">{{ r.outcome }}</span><span v-else class="text-ink-300">—</span></td>
                             <td class="px-5 py-3 text-right"><button v-if="canModify" @click="openEdit(r.id)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50">Edit</button></td>
                         </tr>
@@ -249,6 +254,12 @@ const toggleExpand = (id) => {
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Admit date</label><input v-model="mForm.admit_date" type="date" :max="today" :class="[fld, mForm.errors.admit_date && 'border-danger-500']" /><p v-if="mForm.errors.admit_date" class="mt-1 text-xs text-danger-600">{{ mForm.errors.admit_date }}</p></div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Location</label><select v-model="mForm.current_location" :class="fld"><option>ER</option><option>Ward</option><option>ICU</option></select><p v-if="mForm.errors.current_location" class="mt-1 text-xs text-danger-600">{{ mForm.errors.current_location }}</p></div>
                         <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Admitted from</label><input v-model="mForm.admitted_from" list="reg-admit-from-options" placeholder="ER, Clinic, Referral…" :class="fld" /><datalist id="reg-admit-from-options"><option v-for="o in admitFromOptions" :key="o" :value="o" /></datalist><p v-if="mForm.errors.admitted_from" class="mt-1 text-xs text-danger-600">{{ mForm.errors.admitted_from }}</p></div>
+                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Consultant <span class="font-normal text-ink-400">(quiet change — no “New” badge)</span></label>
+                            <select v-model="mForm.consultant_id" title="On-service consultants only" :class="fld">
+                                <option value="">— no change —</option>
+                                <option v-for="c in modifyConsultants" :key="c.id" :value="c.id">{{ c.name }}{{ !c.on_service ? ' (off service)' : '' }}</option>
+                            </select>
+                            <p v-if="mForm.errors.consultant_id" class="mt-1 text-xs text-danger-600">{{ mForm.errors.consultant_id }}</p></div>
                     </div>
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-ink-700">Diagnoses</label>

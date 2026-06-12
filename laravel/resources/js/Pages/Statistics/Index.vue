@@ -115,12 +115,19 @@ const consHeight = computed(() => consMode.value === 'activity'
 const physDonutSeries = computed(() => props.physician?.destinations?.data ?? []);
 const physDonutOptions = computed(() => donut(props.physician?.destinations?.labels ?? []));
 const physHasDischarges = computed(() => physDonutSeries.value.some((v) => v > 0));
+// second donut (J2-4): legacy 'Discharged to' 6 buckets over the consultant's non-ICU closed episodes
+const physDestSeries = computed(() => props.physician?.dischargedTo?.data ?? []);
+const physDestOptions = computed(() => donut(props.physician?.dischargedTo?.labels ?? []));
+const physHasDest = computed(() => physDestSeries.value.some((v) => v > 0));
 const physNumbers = computed(() => props.physician ? [
     ['Admissions', props.physician.numbers.admissions],
     ['Discharges', props.physician.numbers.discharges],
+    ['→ ICU', props.physician.numbers.transToIcu],
     ['Deaths', props.physician.numbers.deaths],
     ['Avg LOS', props.physician.numbers.avgLos + 'd'],
     [`≤${props.readmitWindow ?? 3}d readmits`, props.physician.numbers.readmissions],
+    ['Consultations', props.physician.numbers.consultations],
+    ['Sign-offs', props.physician.numbers.signoffs],
 ] : []);
 // bucketed 4-series activity for the selected physician (interval-aligned with the page)
 const physSeries = computed(() => props.physician?.series
@@ -245,17 +252,24 @@ const donut = (labels) => ({
                     </select>
                 </div>
                 <div v-if="physician" class="space-y-4">
-                    <div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
                         <div v-for="n in physNumbers" :key="n[0]" class="rounded-xl bg-surface p-3 ring-1 ring-ink-100/60">
                             <div class="text-[11px] font-semibold uppercase tracking-wide text-ink-400">{{ n[0] }}</div>
                             <div class="nums mt-0.5 text-xl font-bold text-ink-800">{{ n[1] }}</div>
                         </div>
                     </div>
-                    <div class="grid gap-5 sm:grid-cols-2">
+                    <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                         <div>
                             <h4 class="mb-2 text-sm font-semibold text-ink-600">Discharge destinations</h4>
                             <apexchart v-if="physHasDischarges" role="img" :aria-label="`Discharge destinations for ${physician.name}`" type="donut" height="260" :options="physDonutOptions" :series="physDonutSeries" />
                             <p v-else class="py-10 text-center text-sm text-ink-300">No closed episodes in range.</p>
+                        </div>
+                        <!-- legacy charts.php 'Discharged to' donut: Home / Other Facility / LAMA /
+                             Absconded / Mortuary / Transfer over non-ICU closed episodes (J2-4) -->
+                        <div>
+                            <h4 class="mb-2 text-sm font-semibold text-ink-600">Discharged to</h4>
+                            <apexchart v-if="physHasDest" role="img" :aria-label="`Discharged-to destinations for ${physician.name}`" type="donut" height="260" :options="physDestOptions" :series="physDestSeries" />
+                            <p v-else class="py-10 text-center text-sm text-ink-300">No non-ICU closed episodes in range.</p>
                         </div>
                         <div>
                             <h4 class="mb-2 text-sm font-semibold text-ink-600">Top diagnoses</h4>

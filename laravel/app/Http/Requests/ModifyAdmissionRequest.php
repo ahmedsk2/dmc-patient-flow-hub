@@ -65,6 +65,9 @@ class ModifyAdmissionRequest extends FormRequest
             ? ['nullable', 'string', 'max:64', 'in:' . implode(',', StoreAdmissionRequest::ADMIT_FROM)]
             : ['nullable', 'string', 'max:64'];
         $rules['current_location'] = ['required', 'in:ER,Ward,ICU'];
+        // optional QUIET consultant change (legacy Modify semantics, J2-13) — must be a consultant
+        $rules['consultant_id'] = ['nullable', \Illuminate\Validation\Rule::exists('users', 'id')
+            ->where('role', \App\Models\User::ROLE_CONSULTANT)];
 
         return $rules;
     }

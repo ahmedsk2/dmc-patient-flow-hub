@@ -59,6 +59,9 @@ const saveBed = (p) => {
 const shuffle = () => { if (confirm('Auto-assign all unassigned patients across on-service consultants?')) router.post('/admissions/shuffle', {}, { preserveScroll: true }); };
 const reassign = ref(false);
 const rForm = useForm({ from_consultant_id: '', to_consultant_id: '', mark_new: true, admission_ids: [] });
+// group-header 'Change consultant' opens the bulk-reassign modal PRE-FILLED with from=this
+// consultant (J2-11); the toolbar button opens it blank
+const openReassign = (fromId = '') => { rForm.from_consultant_id = fromId; rForm.to_consultant_id = ''; reassign.value = true; };
 const submitReassign = () => {
     rForm.admission_ids = [...selectedIds.value];   // SUBSET move: only the checked patients travel
     rForm.post('/admissions/reassign', { preserveScroll: true, onSuccess: () => { reassign.value = false; rForm.reset(); selectedIds.value = new Set(); } });
@@ -191,7 +194,7 @@ const undoMedical = (row) => { if (confirm('Undo the medical discharge and retur
 const canModify = computed(() => me.value.is_admin || me.value.can.modify);
 const admitFromOptions = ['ER', 'Clinic', 'OPD', 'OR', 'ICU', 'Referral', 'Transfer', 'Direct', 'Other service'];
 const editing = ref(null);
-const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '', bed: '', admit_date: '', admitted_from: '', current_location: 'Ward', diagnoses: [] });
+const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '', bed: '', admit_date: '', admitted_from: '', current_location: 'Ward', consultant_id: '', diagnoses: [] });
 const selectedDx = ref([]);
 const openModify = async (p) => {
     const d = await (await fetch(`/admissions/${p.id}/edit`, { headers: { Accept: 'application/json' } })).json();
@@ -199,9 +202,12 @@ const openModify = async (p) => {
     mForm.mrn = d.mrn || ''; mForm.name = d.name || ''; mForm.age = d.age ?? ''; mForm.gender = d.gender || '';
     mForm.nationality = d.nationality || ''; mForm.bed = d.bed || '';
     mForm.admit_date = d.admit_date || ''; mForm.admitted_from = d.admitted_from || ''; mForm.current_location = d.current_location || 'Ward';
+    mForm.consultant_id = d.consultant_id || '';   // QUIET reassignment, legacy Modify semantics (J2-13)
     selectedDx.value = d.diagnoses || [];
     mForm.diagnoses = selectedDx.value.map((x) => x.code);
 };
+// on-service consultants for the Modify select; the current assignee stays selectable
+const modifyConsultants = computed(() => props.consultants.filter((c) => c.on_service || c.id === mForm.consultant_id));
 const addDx = (d) => { if (!selectedDx.value.find((x) => x.code === d.code)) { selectedDx.value.push(d); mForm.diagnoses.push(d.code); } };
 const removeDx = (code) => { selectedDx.value = selectedDx.value.filter((x) => x.code !== code); mForm.diagnoses = mForm.diagnoses.filter((c) => c !== code); };
 const submitModify = () => mForm.post(`/admissions/${editing.value.id}/modify`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
@@ -228,8 +234,10 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
         <!-- toolbar -->
         <div class="mb-4 flex flex-wrap items-center gap-2">
             <span class="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-ink-100">Census <span class="nums ml-1 text-brand-700">{{ stats.total }}</span></span>
+            <span class="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-ink-100">Ward (non-ICU) <span class="nums ml-1 text-brand-700">{{ stats.ward }}</span></span>
             <span class="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-ink-100">ICU <span class="nums ml-1 text-danger-600">{{ stats.icu }}</span></span>
-            <Link v-if="stats.unassigned" href="/admissions" class="inline-flex items-center gap-1.5 rounded-xl bg-accent-300/30 px-3 py-2 text-sm font-semibold text-accent-600 ring-1 ring-accent-300/50 transition hover:bg-accent-300/50">
+            <!-- observers don't get the queue link — the page behind it is clinical-role only (J2-12) -->
+            <Link v-if="stats.unassigned && !isObserver" href="/admissions" class="inline-flex items-center gap-1.5 rounded-xl bg-accent-300/30 px-3 py-2 text-sm font-semibold text-accent-600 ring-1 ring-accent-300/50 transition hover:bg-accent-300/50">
                 {{ stats.unassigned }} awaiting assignment →
             </Link>
 
@@ -247,7 +255,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
             <button v-if="canAssign" @click="shuffle" title="Auto-assign unassigned" aria-label="Auto-assign unassigned" class="grid h-9 w-9 place-items-center rounded-xl bg-white text-ink-500 shadow-sm ring-1 ring-ink-100 transition hover:bg-ink-50">
                 <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" /></svg>
             </button>
-            <button v-if="canReassign" @click="reassign = true" title="Bulk reassign" aria-label="Bulk reassign" class="grid h-9 w-9 place-items-center rounded-xl bg-white text-ink-500 shadow-sm ring-1 ring-ink-100 transition hover:bg-ink-50">
+            <button v-if="canReassign && !isObserver" @click="openReassign()" title="Bulk reassign" aria-label="Bulk reassign" class="grid h-9 w-9 place-items-center rounded-xl bg-white text-ink-500 shadow-sm ring-1 ring-ink-100 transition hover:bg-ink-50">
                 <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" /></svg>
             </button>
         </div>
@@ -290,7 +298,12 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
         <div v-for="g in groups" :key="g.id" v-show="open.has(g.id)" class="mb-4 overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-ink-100/60">
             <div class="flex items-center justify-between border-b border-ink-100 px-5 py-3">
                 <h3 class="font-bold text-ink-800">Dr. {{ g.name }} <span class="ml-1 text-sm font-normal text-ink-400">· {{ g.counts.total }} patient(s)</span></h3>
-                <button @click="toggle(g.id)" title="Collapse" aria-label="Collapse" class="text-ink-400 hover:text-ink-700"><svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" /></svg></button>
+                <span class="flex items-center gap-2">
+                    <!-- opens the bulk-reassign modal pre-filled with from=this consultant (J2-11) -->
+                    <button v-if="canReassign && !isObserver && g.patients.length" @click="openReassign(g.id)"
+                        class="rounded-lg px-2.5 py-1 text-xs font-semibold text-brand-700 ring-1 ring-brand-200 transition hover:bg-brand-50">Change consultant</button>
+                    <button @click="toggle(g.id)" title="Collapse" aria-label="Collapse" class="text-ink-400 hover:text-ink-700"><svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" /></svg></button>
+                </span>
             </div>
             <p v-if="!g.patients.length" class="px-5 py-4 text-sm text-ink-400">No patients on this list yet.</p>
             <div v-else class="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -316,14 +329,17 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                     <div class="px-3 py-2">
                         <div class="font-semibold text-ink-800">{{ p.name }}</div>
                         <div class="nums text-xs text-ink-400">MRN {{ p.mrn }} · {{ p.age ?? '—' }}y · {{ (p.gender||'—').slice(0,1) }}</div>
+                        <div class="nums text-xs text-ink-400">Admitted {{ p.admit_date || '—' }}</div>
+                        <!-- legacy badge palette (owner decision, J2-10): New=red, Readmit=orange,
+                             Long-term=brown, TB=bright green, Disch-still-in=gold -->
                         <div class="mt-1.5 flex flex-wrap gap-1">
-                            <span v-if="p.is_new" class="rounded-full bg-info-100 px-1.5 py-0.5 text-[10px] font-semibold text-info-500">New</span>
-                            <span v-if="p.is_readmission" class="rounded-full bg-warning-100 px-1.5 py-0.5 text-[10px] font-semibold text-warning-500">Readmit ≤{{ readmitWindow ?? 3 }}d</span>
-                            <span v-if="p.is_longterm" class="rounded-full bg-accent-300/40 px-1.5 py-0.5 text-[10px] font-semibold text-accent-600">Long-term</span>
-                            <span v-if="p.is_tb" class="rounded-full bg-danger-100 px-1.5 py-0.5 text-[10px] font-semibold text-danger-600">TB</span>
+                            <span v-if="p.is_new" class="rounded-full bg-[#fde8e8] px-1.5 py-0.5 text-[10px] font-semibold text-[#d12b1f]">New</span>
+                            <span v-if="p.is_readmission" class="rounded-full bg-[#fff1dd] px-1.5 py-0.5 text-[10px] font-semibold text-[#cf6a00]">Readmit ≤{{ readmitWindow ?? 3 }}d</span>
+                            <span v-if="p.is_longterm" class="rounded-full bg-[#f1e7da] px-1.5 py-0.5 text-[10px] font-semibold text-[#8a5a2b]">Long-term</span>
+                            <span v-if="p.is_tb" class="rounded-full bg-[#01ff70] px-1.5 py-0.5 text-[10px] font-semibold text-[#0a3622]">TB</span>
                             <!-- long-term view lists closed episodes too — read-only card with a Discharged chip -->
                             <span v-if="p.discharged" class="rounded-full bg-ink-100 px-1.5 py-0.5 text-[10px] font-semibold text-ink-500">Discharged {{ p.discharge_date }}</span>
-                            <span v-else-if="p.medically_discharged" class="rounded-full bg-warning-100 px-1.5 py-0.5 text-[10px] font-semibold text-warning-500">Disch. still in</span>
+                            <span v-else-if="p.medically_discharged" class="rounded-full bg-[#fdf3d0] px-1.5 py-0.5 text-[10px] font-semibold text-[#a8740a]">Disch. still in</span>
                             <Link v-if="p.sign_pending" href="/handovers" title="Handover awaiting your signature" class="rounded-full bg-brand-100 px-1.5 py-0.5 text-[10px] font-semibold text-brand-700 hover:bg-brand-200">Sign pending</Link>
                             <button v-if="p.dx_count" type="button" @click="toggleDx(p.id)" :aria-expanded="dxOpen === p.id"
                                 :aria-label="`${p.dx_count} diagnoses — ${dxOpen === p.id ? 'hide' : 'show'} names`"
@@ -581,6 +597,12 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Admit date</label><input v-model="mForm.admit_date" type="date" :max="today" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" :class="{ 'border-danger-500': mForm.errors.admit_date }" /><p v-if="mForm.errors.admit_date" class="mt-1 text-xs text-danger-600">{{ mForm.errors.admit_date }}</p></div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Location</label><select v-model="mForm.current_location" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500"><option>ER</option><option>Ward</option><option>ICU</option></select></div>
                         <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Admitted from</label><input v-model="mForm.admitted_from" list="admit-from-options" placeholder="ER, Clinic, Referral…" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" /><datalist id="admit-from-options"><option v-for="o in admitFromOptions" :key="o" :value="o" /></datalist></div>
+                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Consultant <span class="font-normal text-ink-400">(quiet change — no “New” badge)</span></label>
+                            <select v-model="mForm.consultant_id" title="On-service consultants only" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500">
+                                <option value="">— no change —</option>
+                                <option v-for="c in modifyConsultants" :key="c.id" :value="c.id">{{ c.name }}{{ !c.on_service ? ' (off service)' : '' }}</option>
+                            </select>
+                            <p v-if="mForm.errors.consultant_id" class="mt-1 text-xs text-danger-600">{{ mForm.errors.consultant_id }}</p></div>
                     </div>
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-ink-700">Diagnoses</label>

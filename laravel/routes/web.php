@@ -107,10 +107,10 @@ Route::middleware(['auth', 'mfa.enroll', 'pwd'])->group(function () {
     Route::put('/profile', [ProfileController::class, 'updateProfile'])->name('profile.update');
     Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
 
-    // Two-factor (TOTP) enrollment
+    // Two-factor (TOTP) enrollment. Self-DISABLE was removed (owner decision, J2-14):
+    // once enrolled, only an admin can reset MFA (Control panel reset-mfa).
     Route::get('/mfa/setup', [MfaController::class, 'setup'])->name('mfa.setup');
     Route::post('/mfa/confirm', [MfaController::class, 'confirm'])->name('mfa.confirm');
-    Route::delete('/mfa', [MfaController::class, 'disable'])->name('mfa.disable');
 
     // Admin — analytics + registry + reports + all exports are admin-only (PHI exposure control;
     // non-admins' only statistics is the dashboard).

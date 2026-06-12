@@ -26,6 +26,7 @@ class AdmissionsController extends Controller
      */
     public function index(): Response
     {
+        $this->denyObservers();   // legacy access_PICU_patients [0,2,3,4] page gate (J2-12)
         $rows = Admission::query()
             ->whereNull('discharge_date')->whereNull('consultant_id')
             ->with(['patient:id,mrn,name,gender,age', 'diagnoses:id,admission_id,seq,icd10_code'])
@@ -70,8 +71,18 @@ class AdmissionsController extends Controller
         ]);
     }
 
+    /** Observers are read-only: the admissions queue + admit form are clinical-role pages (J2-12). */
+    private function denyObservers(): void
+    {
+        if (Auth::user()->isObserver()) {
+            throw new AccessDeniedHttpException('Observers have read-only access.');
+        }
+    }
+
     public function create(): Response
     {
+        $this->denyObservers();   // legacy access_PICU_patients [0,2,3,4] page gate (J2-12)
+
         return Inertia::render('Admissions/Create', [
             'consultants' => User::consultantOptions(),
             'countries' => Country::orderBy('name')->pluck('name'),
@@ -153,6 +164,7 @@ class AdmissionsController extends Controller
             'admit_date' => optional($admission->admit_date)->toDateString(),
             'admitted_from' => $admission->admitted_from,
             'current_location' => $admission->current_location,
+            'consultant_id' => $admission->consultant_id,   // prefills the Modify consultant select (J2-13)
             'diagnoses' => $admission->diagnoses->map(fn ($d) => ['code' => $d->icd10_code, 'name' => $names[$d->icd10_code] ?? $d->icd10_code])->values(),
         ]);
     }

@@ -62,18 +62,8 @@ class MfaController extends Controller
         return redirect()->route('profile.edit')->with('flash', ['type' => 'success', 'message' => 'Two-factor authentication enabled.']);
     }
 
-    public function disable(Request $request): RedirectResponse
-    {
-        $user = $request->user();
-        $request->validate(['password' => ['required', 'string']]);
-        if (! Hash::check($request->input('password'), $user->password)) {
-            throw ValidationException::withMessages(['password' => 'Incorrect password.']);
-        }
-        $user->update(['mfa_secret' => null, 'mfa_recovery_codes' => null, 'mfa_enrolled_at' => null]);
-        $this->audit($user, 'mfa.disable');
-
-        return redirect()->route('profile.edit')->with('flash', ['type' => 'success', 'message' => 'Two-factor authentication disabled.']);
-    }
+    // NOTE: self-disable was REMOVED (owner decision, J2-14) — once enrolled, only an admin
+    // can reset a user's MFA via the Control panel (ControlController::resetMfa).
 
     /** Pending-challenge TTL and guess budget — a parked login screen must not stay live. */
     private const PENDING_TTL_SECONDS = 300;   // 5 minutes after the password step

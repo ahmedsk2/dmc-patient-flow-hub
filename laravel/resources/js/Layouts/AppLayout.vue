@@ -24,6 +24,12 @@ const nav = [
     { label: 'Handovers', href: '/handovers', icon: 'clipboard' },
     { label: 'Consultations', href: '/consultations', icon: 'chat' },
 ];
+// Observers (role 5) are read-only: the admissions queue + consultations workspace are
+// clinical-role pages (403 server-side) — drop their nav entries entirely (J2-12)
+const navItems = computed(() => {
+    const observer = page.props.auth?.user?.role === 5;
+    return observer ? nav.filter((i) => !['/admissions', '/consultations'].includes(i.href)) : nav;
+});
 // Admin-only — Registry/Statistics/Reports + exports are restricted (PHI exposure control);
 // non-admins' only analytics is the Dashboard.
 const admin = [
@@ -112,7 +118,7 @@ const relTime = (iso) => {
 
             <nav class="px-3 py-5 space-y-1">
                 <p class="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-navy-400">Clinical</p>
-                <Link v-for="item in nav" :key="item.label" :href="item.href"
+                <Link v-for="item in navItems" :key="item.label" :href="item.href"
                     class="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition"
                     :class="isActive(item.href) ? 'bg-white/10 text-white shadow-inner' : 'text-navy-200 hover:bg-white/5 hover:text-white'">
                     <svg class="h-5 w-5 shrink-0" :class="isActive(item.href) ? 'text-brand-300' : 'text-navy-400 group-hover:text-brand-300'" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor">

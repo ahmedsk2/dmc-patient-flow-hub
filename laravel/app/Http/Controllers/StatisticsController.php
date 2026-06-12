@@ -201,9 +201,14 @@ class StatisticsController extends Controller
             ->whereBetween('co.signoff_date', [$f, $t])
             ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
             ->groupBy('consultant')->pluck('c', 'consultant')->all();
+        // full ACTIVE-consultant roster with zeros (J2-3): a consultant with no activity in the
+        // range still gets a bar, like the legacy per-physician tables built from the members list
+        $rosterNames = \App\Models\User::where('role', \App\Models\User::ROLE_CONSULTANT)->where('active', 1)
+            ->get(['full_name', 'name'])->map(fn ($u) => $u->full_name ?: $u->name);
         $perConsultant = collect(array_keys($admByCons))
             ->merge(array_keys($losByCons))->merge(array_keys($readmitByCons))
             ->merge(array_keys($disByCons))->merge(array_keys($consByCons))->merge(array_keys($signByCons))
+            ->merge($rosterNames)
             ->unique()
             ->map(fn ($name) => [
                 'name' => $name,
@@ -289,25 +294,43 @@ class StatisticsController extends Controller
             ->map(fn ($r) => ['label' => $r->name ?: $r->code, 'value' => (int) $r->c]);
 
         $scoped = fn () => DB::table('admissions')->where('consultant_id', $consultantId);
+        $consScoped = fn () => DB::table('consultations')->where('consultant_id', $consultantId);
+
+        // second donut (J2-4): legacy charts.php 'Discharged to' — the fixed 6 buckets over this
+        // consultant's NON-ICU closed episodes; anything outside the 5 named ones => 'Transfer'
+        $named = ['Home', 'Other Facility', 'LAMA', 'Absconded', 'Mortuary'];
+        $byDest = $scoped()->whereBetween('discharge_date', [$f, $t])->whereRaw($this->nonIcu)
+            ->selectRaw("COALESCE(discharge_to, '') dst, COUNT(*) c")->groupBy('dst')->pluck('c', 'dst')->all();
+        $dischargedTo = array_fill_keys([...$named, 'Transfer'], 0);
+        foreach ($byDest as $dst => $c) {
+            $dischargedTo[in_array($dst, $named, true) ? $dst : 'Transfer'] += (int) $c;
+        }
 
         return [
             'id' => $consultantId,
             'name' => $u->full_name ?: $u->name,
             'destinations' => ['labels' => array_values($destMap),
                 'data' => array_map(fn ($type) => (int) ($byType[$type] ?? 0), array_keys($destMap))],
+            'dischargedTo' => ['labels' => array_keys($dischargedTo), 'data' => array_values($dischargedTo)],
             'topDx' => $topDx,
             // the reconciled headline formulas, scoped by consultant_id
             'numbers' => [
                 'admissions' => (int) $scoped()->whereBetween('admit_date', [$f, $t])->whereRaw($this->nonIcu)->count(),
                 'discharges' => (int) $scoped()->whereBetween('discharge_date', [$f, $t])->whereRaw($this->nonIcu)->count(),
+                // legacy per-physician extras (J2-4): transfers to ICU + consultation activity
+                'transToIcu' => (int) $scoped()->whereBetween('discharge_date', [$f, $t])
+                    ->where('discharge_to', 'Intensive Care (ICU)')->count(),
                 'deaths' => (int) $scoped()->where('outcome', 'Dead')->whereBetween('discharge_date', [$f, $t])->count(),
+                // 2 decimals like the legacy per-physician LOS figure (J2-6)
                 'avgLos' => round((float) ($scoped()->whereBetween('discharge_date', [$f, $t])->whereNotNull('admit_date')
                     ->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
-                    ->selectRaw('AVG(DATEDIFF(discharge_date, admit_date)) v')->value('v') ?? 0), 1),
+                    ->selectRaw('AVG(DATEDIFF(discharge_date, admit_date)) v')->value('v') ?? 0), 2),
                 'readmissions' => (int) DB::table('admissions as a')
                     ->join('admissions as prev', $this->readmissionJoin($readmitWindow))
                     ->where('a.consultant_id', $consultantId)->whereBetween('a.admit_date', [$f, $t])
                     ->distinct()->count('a.id'),
+                'consultations' => (int) $consScoped()->whereBetween('consultation_date', [$f, $t])->count(),
+                'signoffs' => (int) $consScoped()->whereBetween('signoff_date', [$f, $t])->count(),
             ],
             'series' => [
                 'labels' => array_column($buckets, 'label'),

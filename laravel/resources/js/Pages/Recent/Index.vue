@@ -23,6 +23,8 @@ const dischargeGroups = computed(() => {
 });
 
 const outcomeTone = (o) => o === 'Dead' ? 'bg-danger-100 text-danger-600' : o === 'Alive' ? 'bg-success-100 text-success-600' : 'bg-ink-100 text-ink-500';
+// same short/long LOS band colors as the board cards (J2-7)
+const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b === 'long' ? 'bg-danger-100 text-danger-600' : 'bg-warning-100 text-warning-500';
 </script>
 
 <template>
@@ -52,7 +54,7 @@ const outcomeTone = (o) => o === 'Dead' ? 'bg-danger-100 text-danger-600' : o ==
                             <td class="px-5 py-3"><div class="font-semibold text-ink-800">{{ d.name }}</div><div class="nums text-xs text-ink-400">MRN {{ d.mrn }}</div></td>
                             <td class="nums px-3 py-3 text-ink-500">{{ d.admit_date || '—' }}</td>
                             <td class="nums px-3 py-3 text-ink-500">{{ d.discharge_date }}</td>
-                            <td class="nums px-3 py-3 text-center font-semibold text-ink-700">{{ d.los ?? '—' }}<span v-if="d.los !== null" class="font-normal text-ink-400">d</span></td>
+                            <td class="nums px-3 py-3 text-center"><span v-if="d.los !== null" class="rounded-full px-2 py-0.5 text-xs font-bold" :class="losTone(d.los_band)">{{ d.los }}d</span><span v-else class="text-ink-300">—</span></td>
                             <td class="max-w-56 px-3 py-3 text-xs text-ink-600" :title="d.diagnoses"><span class="line-clamp-2">{{ d.diagnoses || '—' }}</span></td>
                             <td class="px-3 py-3 text-ink-600">{{ d.current_location || '—' }}</td>
                             <td class="px-3 py-3 text-ink-600">{{ d.discharge_to || '—' }}</td>

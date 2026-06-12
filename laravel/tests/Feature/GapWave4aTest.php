@@ -46,7 +46,7 @@ class GapWave4aTest extends TestCase
         $spec = Specialty::create(['name' => 'Cardiology', 'is_subspecialty' => true]);
         $cardio = $this->user(['name' => 'Cardio Cons', 'specialty_id' => $spec->id]);
         $owner = $this->user();
-        $a = $this->admission(['consultant_id' => $owner->id, 'bed' => 'W-12',
+        $a = $this->admission(['consultant_id' => $owner->id, 'bed' => 'W-12', 'admitted_from' => 'ER',
             'medical_discharge_date' => now()->subDay()->toDateString(), 'outcome' => 'Alive', 'delay_reason' => 'bed']);
         $a->diagnoses()->create(['seq' => 1, 'icd10_code' => 'I21.0']);
         $a->diagnoses()->create(['seq' => 2, 'icd10_code' => 'E11.9']);
@@ -72,9 +72,11 @@ class GapWave4aTest extends TestCase
         $new = Admission::where('patient_id', $a->patient_id)->whereNull('discharge_date')->first();
         $this->assertNotNull($new, 'a new episode is opened for the receiving specialty');
         $this->assertSame($cardio->id, (int) $new->consultant_id, 'new episode belongs to the CHOSEN consultant');
-        $this->assertSame('Ward', $new->current_location, 'location is unchanged by a specialty handover');
-        $this->assertNull($new->bed);
-        $this->assertSame('Transfer', $new->admitted_from);
+        $this->assertSame('Ward', $new->current_location, 'legacy specialty INSERT forces current_location=Ward');
+        // J2-1 (deliberate change): legacy specialty INSERT copied BED + the ORIGINAL ADMFROM
+        // (dmc-patients.php:110) — was assertNull / 'Transfer' before round 5
+        $this->assertSame('W-12', $new->bed, 'bed carried onto the receiving episode (legacy parity)');
+        $this->assertSame('ER', $new->admitted_from, 'original admitted_from carried (legacy parity)');
         $this->assertTrue($new->is_new_assignment, 'a specialty handover IS a new assignment');
         $this->assertNotNull($new->assigned_at);
         $this->assertSame($admin->id, (int) $new->admitted_by);

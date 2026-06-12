@@ -19,6 +19,11 @@ class ConsultationsController extends Controller
 {
     public function index(Request $request): Response
     {
+        // legacy access_PICU_patients [0,2,3,4] page gate — observers are read-only and the
+        // consultations workspace is a clinical-role page (J2-12)
+        if (Auth::user()->isObserver()) {
+            throw new AccessDeniedHttpException('Observers have read-only access.');
+        }
         $filters = $request->only('search', 'status', 'scope');
         $status = $filters['status'] ?? 'active';
         $mine = ($filters['scope'] ?? '') === 'mine';
@@ -88,7 +93,8 @@ class ConsultationsController extends Controller
     public function signoff(Request $request, Consultation $consultation): RedirectResponse
     {
         $u = Auth::user();
-        if (! ($u->isAdmin() || $u->can_manage || (int) $consultation->consultant_id === (int) $u->id)) {
+        // observers are read-only EVEN with a Manage flag (J1-9 global guarantee)
+        if ($u->isObserver() || ! ($u->isAdmin() || $u->can_manage || (int) $consultation->consultant_id === (int) $u->id)) {
             throw new AccessDeniedHttpException('Only the receiving consultant or a manager may sign off.');
         }
         if ($consultation->signoff_date) {

@@ -187,7 +187,7 @@ class PatientsController extends Controller
                 'admitted_from' => $a->admitted_from,   // discharge-modal record-review summary (J1-15c)
                 'admit_date' => optional($a->admit_date)->toDateString(),
                 'los' => $los,
-                'los_band' => $los === null ? null : ($los < $settings->short_los ? 'short' : ($los > $settings->long_los ? 'long' : 'mid')),
+                'los_band' => Admission::losBand($los, $settings),   // shared banding rule (J2-7)
                 'dx_count' => $a->diagnoses_count,
                 'diagnoses' => $a->diagnoses->sortBy('seq')->values()
                     ->map(fn ($d) => ['code' => $d->icd10_code, 'name' => $dxNames[$d->icd10_code] ?? $d->icd10_code])->all(),

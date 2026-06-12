@@ -34,26 +34,36 @@ class DashboardController extends Controller
         $admissionsToday = (int) DB::table('admissions')->whereDate('admit_date', $today)->whereRaw($this->nonIcu)->count();
         $dischargesToday = (int) DB::table('admissions')->whereDate('discharge_date', $today)->whereRaw($this->nonIcu)->count();
         $activeConsults = (int) DB::table('consultations')->whereNull('signoff_date')->count();
+        // consultation donut = [signed-off in the last 24h, active] — legacy dashboard/1.php
+        // (`signoff_date + INTERVAL 1 DAY >= CURDATE()`, i.e. yesterday + today) (J2-5)
+        $signed24h = (int) DB::table('consultations')->where('signoff_date', '>=', Carbon::yesterday()->toDateString())->count();
         $deathsMonth = (int) DB::table('admissions')->where('outcome', 'Dead')->whereBetween('discharge_date', [$monthStart, $today])->count();
+        // active TB census for the donut title 'Current patients: N (incl. M TB)' (J2-5)
+        $tbActive = (int) DB::table('admissions as a')->whereNull('a.discharge_date')
+            ->whereExists(fn ($s) => $s->selectRaw('1')->from('admission_diagnoses as ad')
+                ->join('tb_diagnoses as tb', 'tb.icd10_code', '=', 'ad.icd10_code')
+                ->whereColumn('ad.admission_id', 'a.id'))->count();
 
         // current-month average LOS over non-ICU discharges — the Statistics avgLos formula family
-        // (AVG(DATEDIFF) with the >= 0 guard), month-scoped like deathsMonth above
+        // (AVG(DATEDIFF) with the >= 0 guard), month-scoped like deathsMonth above; 2 decimals
+        // like the legacy dashboard figure (J2-6)
         $avgLosMonth = round((float) (DB::table('admissions')
             ->whereBetween('discharge_date', [$monthStart, $today])->whereNotNull('admit_date')
             ->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
-            ->selectRaw('AVG(DATEDIFF(discharge_date, admit_date)) v')->value('v') ?? 0), 1);
+            ->selectRaw('AVG(DATEDIFF(discharge_date, admit_date)) v')->value('v') ?? 0), 2);
 
         // real bed occupancy: active WARD (non-ICU) patients ÷ licensed ward beds. True % may exceed
         // 100 (over-census); a separate capped value drives the radial gauge arc.
         $occupancy = round($activeWard / $wardBeds * 100, 1);
         $occupancyGauge = min(100, $occupancy);
 
-        // 30-day admissions vs discharges (non-ICU)
-        $start30 = Carbon::today()->subDays(29)->toDateString();
+        // 31-point admissions-vs-discharges trend: today-30 .. today INCLUSIVE, like the legacy
+        // 31-day loop (dashboard/1.php) — non-ICU (J2-2)
+        $start30 = Carbon::today()->subDays(30)->toDateString();
         $admBy = DB::table('admissions')->selectRaw('admit_date d, COUNT(*) c')->whereBetween('admit_date', [$start30, $today])->whereRaw($this->nonIcu)->groupBy('admit_date')->pluck('c', 'd');
         $disBy = DB::table('admissions')->selectRaw('discharge_date d, COUNT(*) c')->whereBetween('discharge_date', [$start30, $today])->whereRaw($this->nonIcu)->groupBy('discharge_date')->pluck('c', 'd');
         $trend = ['labels' => [], 'admissions' => [], 'discharges' => []];
-        for ($i = 29; $i >= 0; $i--) {
+        for ($i = 30; $i >= 0; $i--) {
             $d = Carbon::today()->subDays($i)->toDateString();
             $trend['labels'][] = $d;
             $trend['admissions'][] = (int) ($admBy[$d] ?? 0);
@@ -144,7 +154,12 @@ class DashboardController extends Controller
             ->where('a.discharge_date', '>=', $since)->whereRaw($this->nonIcu)->tap($activeConsultant)
             ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
             ->groupBy('consultant')->pluck('c', 'consultant');
-        $activity24h = $adm24->keys()->merge($dis24->keys())->unique()->sort()->values()
+        // every ON-SERVICE active consultant appears, zeros included — the legacy table was
+        // built from the members list, so a quiet consultant still shows a row (J2-3)
+        $onServiceNames = DB::table('users')->where('role', \App\Models\User::ROLE_CONSULTANT)
+            ->where('active', 1)->where('on_service', 1)
+            ->selectRaw('COALESCE(full_name, name) consultant')->pluck('consultant');
+        $activity24h = $adm24->keys()->merge($dis24->keys())->merge($onServiceNames)->unique()->sort()->values()
             ->map(fn ($name) => [
                 'name' => $name,
                 'admissions' => (int) ($adm24[$name] ?? 0),
@@ -182,9 +197,11 @@ class DashboardController extends Controller
                 'admissionsToday' => $admissionsToday, 'dischargesToday' => $dischargesToday,
                 'activeConsults' => $activeConsults, 'deathsMonth' => $deathsMonth, 'avgLosMonth' => $avgLosMonth,
                 'occupancy' => $occupancy, 'occupancyGauge' => $occupancyGauge, 'wardBeds' => $wardBeds,
+                'tbActive' => $tbActive,
             ],
             'trend' => $trend,
             'consults' => $cons,
+            'consultDonut' => ['signed24h' => $signed24h, 'active' => $activeConsults],
             'los' => ['labels' => array_keys($losBuckets), 'data' => array_values($losBuckets)],
             'mix' => ['hospitalist' => (int) ($mix->hosp ?? 0), 'subspecialty' => (int) ($mix->subs ?? 0), 'longterm' => (int) ($mix->longterm ?? 0)],
             'perConsultant' => $perConsultant,

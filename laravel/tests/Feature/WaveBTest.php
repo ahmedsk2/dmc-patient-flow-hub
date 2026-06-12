@@ -89,7 +89,7 @@ class WaveBTest extends TestCase
         $this->assertNull($recent->fresh()->discharge_date, 'same-day discharges remain reversible');
     }
 
-    public function test_transfer_restamps_medical_discharge_and_clears_bed(): void
+    public function test_transfer_restamps_medical_discharge_and_carries_bed(): void
     {
         $c = User::create(['username' => 'wb_c3', 'name' => 'Transfer Cons', 'password' => 'secret12345',
             'role' => User::ROLE_CONSULTANT, 'active' => 1]);
@@ -111,7 +111,9 @@ class WaveBTest extends TestCase
         $new = Admission::where('patient_id', $a->patient_id)->whereNull('discharge_date')->first();
         $this->assertNotNull($new);
         $this->assertSame('ICU', $new->current_location);
-        $this->assertNull($new->bed, 'bed is not carried across a ward<->ICU move');
+        // J2-1 (deliberate change): legacy CARRIED the bed onto the receiving episode
+        // (dmc-patients.php:57 copied BED) — was assertNull before round 5
+        $this->assertSame('W-12', $new->bed, 'bed is carried across a ward<->ICU move (legacy parity)');
         $this->assertSame($c->id, (int) $new->consultant_id, 'consultant continuity preserved');
     }
 

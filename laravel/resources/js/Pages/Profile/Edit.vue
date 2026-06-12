@@ -4,8 +4,8 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 
 const props = defineProps({ profile: Object });
 
-const dForm = useForm({ password: '' });
-const disableMfa = () => { if (confirm('Disable two-factor authentication for your account?')) dForm.delete('/mfa', { preserveScroll: true, onSuccess: () => dForm.reset() }); };
+// MFA self-disable was removed (owner decision, J2-14) — enrolled users can only have their
+// two-factor reset by an admin from the Control panel.
 
 const pForm = useForm({ full_name: props.profile.name, email: props.profile.email, username: props.profile.username });
 const saveProfile = () => pForm.put('/profile', { preserveScroll: true });
@@ -78,14 +78,9 @@ const field = 'w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm out
                     </div>
                     <Link v-if="!profile.mfa_enabled" href="/mfa/setup" class="shrink-0 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-brand-700">Enable</Link>
                 </div>
-                <div v-if="profile.mfa_enabled" class="mt-4 flex flex-wrap items-end gap-3 border-t border-ink-100 pt-4">
-                    <div>
-                        <label class="mb-1 block text-sm font-semibold text-ink-700">Confirm password to disable</label>
-                        <input v-model="dForm.password" type="password" :class="[field, 'max-w-xs', dForm.errors.password && 'border-danger-500']" placeholder="Your password" />
-                        <p v-if="dForm.errors.password" class="mt-1 text-xs text-danger-600">{{ dForm.errors.password }}</p>
-                    </div>
-                    <button @click="disableMfa" :disabled="dForm.processing" class="rounded-xl bg-danger-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-danger-700 disabled:opacity-50">Disable two-factor</button>
-                </div>
+                <p v-if="profile.mfa_enabled" class="mt-4 border-t border-ink-100 pt-4 text-sm text-ink-400">
+                    Two-factor can only be reset by an administrator — contact one if you lose your authenticator.
+                </p>
             </section>
         </div>
     </AppLayout>

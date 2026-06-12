@@ -130,9 +130,9 @@ A re-admission or a ward↔ICU transfer creates a **new** row, so one patient = 
 | Button / field | Endpoint | Database effect |
 |---|---|---|
 | **Reassign consultant** | POST `/admissions/{id}/assign` | UPDATE `consultant_id` (+ `is_new_assignment`, `assigned_on`). |
-| **Modify** (bed/MRN/name/age/gender/nationality/diagnoses) | POST `/admissions/{id}/modify` | Transaction: UPDATE `patients` (mrn,name,age,gender,nationality) + UPDATE `admissions.bed` + DELETE all `admission_diagnoses` for the admission and re-INSERT the chosen codes. |
+| **Modify** (bed/MRN/name/age/gender/nationality/diagnoses) | POST `/admissions/{id}/modify` | Transaction: UPDATE `patients` (mrn,name,age,gender,nationality) + UPDATE `admissions.bed` + DELETE all `admission_diagnoses` for the admission and re-INSERT the chosen codes. **J2/13:** an optional `consultant_id` (consultant role) QUIETLY moves the assignment — no `is_new_assignment`/`assigned_*` stamps (legacy Modify semantics), recorded in the `patient.modify` audit row. |
 | **Long-term** toggle | POST `/admissions/{id}/longterm` | UPDATE `admissions.is_longterm` (flip). |
-| **Transfer** (Ward↔ICU) | POST `/admissions/{id}/transfer` | Transaction: close current episode (`discharge_date`=today, `transfer_type`, `discharged_by`) + INSERT a new admission in the target location (same patient/consultant, carried diagnoses). |
+| **Transfer** (Ward↔ICU) | POST `/admissions/{id}/transfer` | Transaction: close current episode (`discharge_date`=today, `transfer_type`, `discharged_by`) + INSERT a new admission in the target location (same patient/consultant, carried diagnoses). **J2/1 (legacy parity):** the new episode **carries the bed** and stamps `admitted_from` with the source side (`Ward` going into ICU, `ICU` coming back); a **specialty** transfer keeps the ORIGINAL `admitted_from`, forces `current_location='Ward'` and also carries the bed. |
 | **Discharge** (ward, not yet medically discharged) | POST `/admissions/{id}/medical-discharge` | UPDATE `medical_discharge_date`, `outcome`, `discharge_to`, `delay_reason`, `discharged_by`. (Patient stays on the board as "discharged still in".) |
 | **Complete discharge** | POST `/admissions/{id}/complete-discharge` | UPDATE `discharge_date`, `transfer_type` (`discharge from ward`/`ICU`), `discharged_by`. Leaves the board. |
 | **ICU discharge** (ICU patients) | POST `/admissions/{id}/icu-discharge` | UPDATE `discharge_date`, `outcome`, `transfer_type='discharge from ICU'`, `discharged_by`. |
@@ -182,8 +182,7 @@ A re-admission or a ward↔ICU transfer creates a **new** row, so one patient = 
 |---|---|---|
 | **Save profile** (name, email) | PUT `/profile` | UPDATE your own `users` row (name, email). |
 | **Change password** | PUT `/profile/password` | UPDATE `password` + `pass_exp_date`=today. |
-| **Enable 2FA** | POST `/mfa/confirm` | UPDATE `mfa_secret`, `mfa_recovery_codes`, `mfa_enrolled_at`. |
-| **Disable 2FA** | DELETE `/mfa` | UPDATE clears the MFA columns. |
+| **Enable 2FA** | POST `/mfa/confirm` | UPDATE `mfa_secret`, `mfa_recovery_codes`, `mfa_enrolled_at`. **J2/14:** self-disable was REMOVED (owner decision) — once enrolled, only an admin can clear MFA via Control → Reset MFA. |
 | **Login** | POST `/login` | Reads `users`; on success regenerates the session and (if "remember me") sets `remember_token` (recaller cookie lives **30 days**; H2/C1). With MFA enrolled, the pending challenge expires after **5 min** and allows **8 code attempts** (H2/C3). |
 | **Register** | POST `/register` | INSERT `users` with `active=0` (pending admin activation), `role` ∈ {2,3,4,5} (never admin), `pass_exp_date`=today. |
 | **Forgot / reset password** | POST `/forgot-password` · `/reset-password` | Forgot: INSERT `password_reset_tokens` + email. Reset: UPDATE `password` + `pass_exp_date`. |

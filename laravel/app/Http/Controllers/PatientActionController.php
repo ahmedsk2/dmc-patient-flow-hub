@@ -112,7 +112,13 @@ class PatientActionController extends Controller
         $oldAdmitDate = optional($admission->admit_date)->toDateString();
         $newAdmitDate = \Carbon\Carbon::parse($data['admit_date'])->toDateString();
 
-        DB::transaction(function () use ($admission, $patient, $target, $data, $newAdmitDate) {
+        // optional QUIET consultant change (legacy Modify semantics, J2-13): the assignment moves
+        // but the new-assignment flags are untouched — no "New" badge, no handover gate
+        $oldConsultant = $admission->consultant_id ? (int) $admission->consultant_id : null;
+        $newConsultant = ! empty($data['consultant_id']) ? (int) $data['consultant_id'] : null;
+        $consultantChanged = $newConsultant !== null && $newConsultant !== $oldConsultant;
+
+        DB::transaction(function () use ($admission, $patient, $target, $data, $newAdmitDate, $consultantChanged, $newConsultant) {
             if ($target) {
                 $admission->update(['patient_id' => $target->id]);
                 $this->audit('patient.repoint', $admission, [
@@ -141,7 +147,7 @@ class PatientActionController extends Controller
                 'admit_date' => $newAdmitDate,
                 'admitted_from' => $data['admitted_from'] ?? null,
                 'current_location' => $data['current_location'],
-            ]);
+            ] + ($consultantChanged ? ['consultant_id' => $newConsultant] : []));
             $admission->diagnoses()->delete();
             $seq = 1;
             foreach (array_unique(array_filter(array_map('trim', $data['diagnoses'] ?? []))) as $code) {
@@ -151,6 +157,10 @@ class PatientActionController extends Controller
         $details = ['mrn' => $data['mrn']];
         if ($oldAdmitDate !== $newAdmitDate) {
             $details['admit_date_was'] = $oldAdmitDate;
+        }
+        if ($consultantChanged) {
+            $details['consultant_id'] = $newConsultant;
+            $details['consultant_was'] = $oldConsultant;
         }
         $this->audit('patient.modify', $admission, $details);
 
@@ -567,14 +577,15 @@ class PatientActionController extends Controller
                 'discharged_by' => Auth::id(),
             ]);
 
-            // open the receiving episode under the CHOSEN consultant — same physical location,
-            // bed cleared (reassign on the new service), and it IS a new assignment
+            // open the receiving episode under the CHOSEN consultant — legacy INSERT
+            // (dmc-patients.php:110) copies the ORIGINAL ADMFROM + BED and hardcodes
+            // current_location='Ward'; it IS a new assignment (J2-1)
             $new = Admission::create([
                 'patient_id' => $admission->patient_id,
-                'bed' => null,
-                'admitted_from' => 'Transfer',
+                'bed' => $admission->bed,
+                'admitted_from' => $admission->admitted_from,
                 'admit_date' => now()->toDateString(),
-                'current_location' => $admission->current_location,
+                'current_location' => 'Ward',
                 'consultant_id' => $data['consultant_id'],
                 'admitted_by' => Auth::id(),
                 'is_new_assignment' => true,
@@ -657,12 +668,13 @@ class PatientActionController extends Controller
                 'discharged_by' => Auth::id(),
             ]);
 
-            // open the receiving episode for the same patient; bed is NOT carried — the old
-            // location's bed number is meaningless after a ward<->ICU move (assign on arrival)
+            // open the receiving episode for the same patient — legacy stamps the SOURCE side
+            // as ADMFROM ('Ward' on a ward->ICU move, 'ICU' coming back) and CARRIES the bed
+            // (dmc-patients.php:57 copied BED onto the ICU episode) (J2-1)
             $new = Admission::create([
                 'patient_id' => $admission->patient_id,
-                'bed' => null,
-                'admitted_from' => 'Transfer',
+                'bed' => $admission->bed,
+                'admitted_from' => $data['target'] === 'ICU' ? 'Ward' : 'ICU',
                 'admit_date' => now()->toDateString(),
                 'current_location' => $data['target'],
                 'consultant_id' => $admission->consultant_id,

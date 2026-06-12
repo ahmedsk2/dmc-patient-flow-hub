@@ -7,6 +7,7 @@ const props = defineProps({
     kpis: Object,
     trend: Object,
     consults: Object,
+    consultDonut: Object,
     los: Object,
     mix: Object,
     perConsultant: Array,
@@ -106,6 +107,18 @@ const donutOptions = computed(() => ({
 }));
 const donutSeries = computed(() => [props.mix.hospitalist, props.mix.subspecialty, props.mix.longterm]);
 
+// consultation donut — legacy dashboard/1.php pair: [signed off in the last 24h, active] (J2-5)
+const consultDonutOptions = computed(() => ({
+    chart: { type: 'donut', toolbar: dlToolbar, fontFamily: 'inherit' },
+    colors: [C.gold, C.teal],
+    labels: ['Signed off (24h)', 'Active'],
+    legend: { position: 'bottom', fontWeight: 600 },
+    dataLabels: { enabled: true, formatter: (v, o) => o.w.globals.series[o.seriesIndex] },
+    stroke: { width: 2, colors: ['#fff'] },
+    plotOptions: { pie: { donut: { size: '70%' } } },
+}));
+const consultDonutSeries = computed(() => [props.consultDonut.signed24h, props.consultDonut.active]);
+
 const consultantMax = computed(() => Math.max(1, ...props.perConsultant.map((c) => c.c)));
 const locTone = (loc) => loc === 'ICU' ? 'bg-danger-100 text-danger-600' : loc === 'ER' ? 'bg-warning-100 text-warning-500' : 'bg-brand-100 text-brand-700';
 
@@ -122,7 +135,7 @@ const ytdCards = computed(() => [
     ['Consultations', props.ytd.consultations], ['Sign-offs', props.ytd.signoffs],
 ]);
 
-const refresh = () => router.reload({ only: ['kpis', 'trend', 'consults', 'los', 'mix', 'perConsultant', 'consultantBoard', 'activity24h', 'ytd', 'topDxWeek', 'recent', 'generatedAt'] });
+const refresh = () => router.reload({ only: ['kpis', 'trend', 'consults', 'consultDonut', 'los', 'mix', 'perConsultant', 'consultantBoard', 'activity24h', 'ytd', 'topDxWeek', 'recent', 'generatedAt'] });
 
 // 5-minute auto-refresh, visibility-gated: a dashboard left open on a ward screen stays
 // current, but background tabs don't hammer the server.
@@ -199,18 +212,24 @@ onUnmounted(() => clearInterval(autoRefresh));
             </div>
         </div>
 
-        <div class="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
+        <div class="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2 xl:grid-cols-4">
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
                 <h3 class="mb-2 font-bold text-ink-800">Consultations</h3>
                 <apexchart type="bar" height="260" :options="colOptions(consults.labels, [C.teal, C.gold])" :series="consultsSeries" role="img" aria-label="Bar chart: consultations received and signed off" />
+            </div>
+            <!-- legacy dashboard/1.php consultation donut: signed off in the last 24h vs active (J2-5) -->
+            <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
+                <h3 class="mb-2 font-bold text-ink-800">Consultations <span class="font-normal text-ink-400">(24h sign-offs vs active)</span></h3>
+                <apexchart type="donut" height="260" :options="consultDonutOptions" :series="consultDonutSeries" role="img" :aria-label="`Donut chart: ${consultDonut.signed24h} consultations signed off in the last 24 hours, ${consultDonut.active} active`" />
             </div>
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
                 <h3 class="mb-2 font-bold text-ink-800">Length of Stay <span class="font-normal text-ink-400">(this year)</span></h3>
                 <apexchart type="bar" height="260" :options="colOptions(los.labels, [C.navy])" :series="losSeries" role="img" aria-label="Bar chart: length-of-stay distribution this year" />
             </div>
+            <!-- legacy census donut title carries the headline + TB count (J2-5) -->
             <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
-                <h3 class="mb-2 font-bold text-ink-800">Census by Service</h3>
-                <apexchart type="donut" height="260" :options="donutOptions" :series="donutSeries" role="img" aria-label="Donut chart: active census by service" />
+                <h3 class="mb-2 font-bold text-ink-800">Current patients: <span class="nums">{{ kpis.census }}</span> <span class="font-normal text-ink-400">(incl. {{ kpis.tbActive }} TB)</span></h3>
+                <apexchart type="donut" height="260" :options="donutOptions" :series="donutSeries" role="img" :aria-label="`Donut chart: active census by service — ${kpis.census} patients including ${kpis.tbActive} TB`" />
             </div>
         </div>
 
