@@ -9,7 +9,9 @@ const props = defineProps({ queue: Array, icuPatients: Array, consultants: Array
 const page = usePage();
 const me = computed(() => page.props.auth.user);
 const canAssign = computed(() => me.value.is_admin || me.value.can.assign);
-const isConsultant = computed(() => me.value.is_admin || me.value.role === 3);
+// K1-9: ANY clinical role may self-assign (legacy Q1 — a registrar self-assigning is normal);
+// the page itself is denied to observers, and the server re-checks
+const canSelfAssign = computed(() => me.value.role !== 5);
 const canAdd = computed(() => me.value.is_admin || me.value.can.add);
 const canModify = computed(() => me.value.is_admin || me.value.can.modify);
 
@@ -53,7 +55,9 @@ const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '',
 const mDx = ref([]);
 const openModify = async (p) => {
     const d = await (await fetch(`/admissions/${p.id}/edit`, { headers: { Accept: 'application/json' } })).json();
-    editing.value = { id: p.id }; mForm.mrn = d.mrn || ''; mForm.name = d.name || ''; mForm.age = d.age ?? ''; mForm.gender = d.gender || '';
+    // keep the LOADED identity so a changed MRN/name is confirmed before posting (K1-3)
+    editing.value = { id: p.id, mrn: d.mrn || '', name: d.name || '' };
+    mForm.mrn = d.mrn || ''; mForm.name = d.name || ''; mForm.age = d.age ?? ''; mForm.gender = d.gender || '';
     mForm.nationality = d.nationality || ''; mForm.bed = d.bed || '';
     mForm.admit_date = d.admit_date || ''; mForm.admitted_from = d.admitted_from || ''; mForm.current_location = d.current_location || 'Ward';
     mForm.consultant_id = d.consultant_id || '';   // QUIET reassignment, legacy Modify semantics (J2-13)
@@ -63,7 +67,12 @@ const openModify = async (p) => {
 const modifyConsultants = computed(() => props.consultants.filter((c) => c.on_service || c.id === mForm.consultant_id));
 const mAdd = (d) => { if (!mDx.value.find((x) => x.code === d.code)) { mDx.value.push(d); mForm.diagnoses.push(d.code); } };
 const mRemove = (code) => { mDx.value = mDx.value.filter((x) => x.code !== code); mForm.diagnoses = mForm.diagnoses.filter((c) => c !== code); };
-const submitModify = () => mForm.post(`/admissions/${editing.value.id}/modify`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
+// identity confirm (K1-3): an MRN/name edit re-points or renames the patient — make it deliberate
+const submitModify = () => {
+    if ((String(mForm.mrn) !== String(editing.value.mrn) || String(mForm.name) !== String(editing.value.name))
+        && !confirm(`Change patient identity from ${editing.value.name} (MRN ${editing.value.mrn}) to ${mForm.name} (MRN ${mForm.mrn})?`)) return;   // declined — no post
+    mForm.post(`/admissions/${editing.value.id}/modify`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
+};
 const fld = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500';
 
 // Esc closes whichever modal is open
@@ -141,8 +150,8 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
                         <button v-if="canModify" @click="openModify(p)" title="Edit details" class="grid h-7 w-8 shrink-0 place-items-center rounded-lg text-ink-500 ring-1 ring-ink-200 hover:bg-ink-50"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" /></svg></button>
                         <button v-if="me.is_admin" @click="destroyAdmission(p)" title="Delete admission" aria-label="Delete admission" class="grid h-7 w-8 shrink-0 place-items-center rounded-lg text-ink-500 ring-1 ring-ink-200 hover:bg-danger-100 hover:text-danger-600"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg></button>
                         <button v-if="canAssign" @click="openAssign(p)" class="flex-1 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">Assign to primary</button>
-                        <button v-if="isConsultant" @click="assignToMe(p)" class="flex-1 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 ring-1 ring-brand-200 hover:bg-brand-50">Assign to me</button>
-                        <span v-if="!canAssign && !isConsultant && !canModify" class="text-xs text-ink-300">awaiting assignment</span>
+                        <button v-if="canSelfAssign" @click="assignToMe(p)" class="flex-1 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 ring-1 ring-brand-200 hover:bg-brand-50">Assign to me</button>
+                        <span v-if="!canAssign && !canSelfAssign && !canModify" class="text-xs text-ink-300">awaiting assignment</span>
                     </div>
                 </div>
             </div>

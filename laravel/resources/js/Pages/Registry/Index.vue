@@ -45,7 +45,8 @@ const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '',
 const mDx = ref([]);
 const openEdit = async (id) => {
     const d = await (await fetch(`/admissions/${id}/edit`, { headers: { Accept: 'application/json' } })).json();
-    editing.value = { id }; mForm.clearErrors();
+    // keep the LOADED identity so a changed MRN/name is confirmed before posting (K1-3)
+    editing.value = { id, mrn: d.mrn || '', name: d.name || '' }; mForm.clearErrors();
     mForm.mrn = d.mrn || ''; mForm.name = d.name || ''; mForm.age = d.age ?? ''; mForm.gender = d.gender || '';
     mForm.nationality = d.nationality || ''; mForm.bed = d.bed || '';
     mForm.admit_date = d.admit_date || ''; mForm.admitted_from = d.admitted_from || ''; mForm.current_location = d.current_location || 'Ward';
@@ -56,7 +57,12 @@ const openEdit = async (id) => {
 const modifyConsultants = computed(() => props.options.consultants.filter((c) => c.on_service || c.id === mForm.consultant_id));
 const mAdd = (d) => { if (!mDx.value.find((x) => x.code === d.code)) { mDx.value.push(d); mForm.diagnoses.push(d.code); } };
 const mRemove = (code) => { mDx.value = mDx.value.filter((x) => x.code !== code); mForm.diagnoses = mForm.diagnoses.filter((c) => c !== code); };
-const submitEdit = () => mForm.post(`/admissions/${editing.value.id}/modify`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
+// identity confirm (K1-3): an MRN/name edit re-points or renames the patient — make it deliberate
+const submitEdit = () => {
+    if ((String(mForm.mrn) !== String(editing.value.mrn) || String(mForm.name) !== String(editing.value.name))
+        && !confirm(`Change patient identity from ${editing.value.name} (MRN ${editing.value.mrn}) to ${mForm.name} (MRN ${mForm.mrn})?`)) return;   // declined — no post
+    mForm.post(`/admissions/${editing.value.id}/modify`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
+};
 
 // Esc closes the edit modal (the ICD typeahead swallows the first Esc while its dropdown is open)
 const onEsc = (e) => { if (e.key === 'Escape') editing.value = null; };
@@ -217,6 +223,8 @@ const toggleExpand = (id) => {
                                             <span v-else class="text-ink-300">—</span>
                                         </dd>
                                     </div>
+                                    <!-- K1-12: nationality is in the payload — surface it in the detail panel -->
+                                    <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Nationality</dt><dd class="mt-0.5 text-ink-700">{{ r.nationality || '—' }}</dd></div>
                                     <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Admitted by</dt><dd class="mt-0.5 text-ink-700">{{ r.admitted_by || '—' }}</dd></div>
                                     <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Discharged by</dt><dd class="mt-0.5 text-ink-700">{{ r.discharged_by || '—' }}</dd></div>
                                     <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Admitted from</dt><dd class="mt-0.5 text-ink-700">{{ r.admitted_from || '—' }}</dd></div>

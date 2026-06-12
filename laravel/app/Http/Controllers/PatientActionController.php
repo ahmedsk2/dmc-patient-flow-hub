@@ -167,12 +167,16 @@ class PatientActionController extends Controller
         return back()->with('flash', ['type' => 'success', 'message' => 'Patient details updated.']);
     }
 
-    /** Self-assign — any consultant may take an admission onto their own list. */
+    /**
+     * Self-assign — open to ANY clinical role (admin/registrar/consultant/resident), like the
+     * legacy handler (Q1 note): a registrar self-assigning was normal there. The assignment
+     * always lands on the AUTH user; observers stay read-only — K1-9 (was admin/consultant only).
+     */
     public function assignToMe(Request $request, Admission $admission): RedirectResponse
     {
         $u = Auth::user();
-        if (! ($u->isAdmin() || (int) $u->role === User::ROLE_CONSULTANT)) {
-            throw new AccessDeniedHttpException('Only a consultant can self-assign.');
+        if ($u->isObserver()) {
+            throw new AccessDeniedHttpException('Observers are read-only.');
         }
         $admission->update(['consultant_id' => $u->id, 'is_new_assignment' => true, 'assigned_on' => now()->toDateString(), 'assigned_at' => now()]);
         $this->audit('admission.assign_to_me', $admission, ['consultant_id' => $u->id]);
@@ -621,25 +625,59 @@ class PatientActionController extends Controller
         return back()->with('flash', ['type' => 'success', 'message' => "Patient transferred to {$specialty->name}."]);
     }
 
-    /** Out-of-department transfer — closes the episode only (no receiving episode here). */
+    /**
+     * Out-of-department transfer — closes the episode (no receiving episode), EXCEPT the
+     * 'Intensive Care (ICU)' service: legacy kept those patients on the census by also opening
+     * the receiving ICU episode under the same consultant (dmc-patients.php:49-66) — K1-1.
+     */
     private function transferExternal(Request $request, Admission $admission): RedirectResponse
     {
         $data = $request->validate([
             'service' => ['required', 'string', 'max:128', Rule::exists('specialties', 'name')->where('is_external', true)],
         ]);
 
-        // legacy stamps MORTALITY='Alive' AND med_DISDATE on every close (dmc-patients.php:43);
-        // the close date supersedes any pending phase-1 medical-discharge date (J1-5)
-        $admission->update([
-            'discharge_date' => now()->toDateString(),
-            'transfer_type' => 'other transfer',
-            'discharge_to' => $data['service'],
-            'medical_discharge_date' => now()->toDateString(),
-            'outcome' => 'Alive',
-            'delay_reason' => null,
-            'discharged_by' => Auth::id(),
-        ]);
-        $this->audit('admission.transfer_external', $admission, ['service' => $data['service']]);
+        $new = DB::transaction(function () use ($admission, $data) {
+            // legacy stamps MORTALITY='Alive' AND med_DISDATE on every close (dmc-patients.php:43);
+            // the close date supersedes any pending phase-1 medical-discharge date (J1-5)
+            $admission->update([
+                'discharge_date' => now()->toDateString(),
+                'transfer_type' => 'other transfer',
+                'discharge_to' => $data['service'],
+                'medical_discharge_date' => now()->toDateString(),
+                'outcome' => 'Alive',
+                'delay_reason' => null,
+                'discharged_by' => Auth::id(),
+            ]);
+
+            if ($data['service'] !== 'Intensive Care (ICU)') {
+                return null;   // truly external — the patient leaves the department
+            }
+
+            // receiving ICU episode (legacy INSERT, dmc-patients.php:57): same consultant, bed
+            // carried, ADMFROM hardcoded 'Ward', assigned_on stamped today but NOT new-flagged
+            // (legacy left newassign untouched)
+            $new = Admission::create([
+                'patient_id' => $admission->patient_id,
+                'bed' => $admission->bed,
+                'admitted_from' => 'Ward',
+                'admit_date' => now()->toDateString(),
+                'current_location' => 'ICU',
+                'consultant_id' => $admission->consultant_id,
+                'admitted_by' => Auth::id(),
+                'is_new_assignment' => false,
+                'assigned_on' => now()->toDateString(),
+                'assigned_at' => now(),
+            ]);
+
+            // carry the diagnoses forward
+            foreach ($admission->diagnoses as $dx) {
+                $new->diagnoses()->create(['seq' => $dx->seq, 'icd10_code' => $dx->icd10_code]);
+            }
+
+            return $new;
+        });
+        $this->audit('admission.transfer_external', $admission, ['service' => $data['service']]
+            + ($new ? ['new_admission_id' => $new->id] : []));
 
         return back()->with('flash', ['type' => 'success', 'message' => "Patient transferred to {$data['service']}."]);
     }

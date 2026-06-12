@@ -20,12 +20,17 @@ use Inertia\Response;
  * Diagnoses (pipe-separated ICD-10 codes), Consultant (matched by full name / display name /
  * username among consultant-role users; unmatched stays a valid row with a preview warning),
  * DischargedTo, ClinicalDischargeDate (Y-m-d) — Gap Wave 4b — and AdmittedFrom, Bed,
- * DelayReason, LongTerm (1/yes) — final sweep G1. Old shorter rows remain fully valid.
+ * DelayReason, LongTerm (1/yes) — final sweep G1 — and TransferType (one of the 3 transfer
+ * literals; when present it OVERRIDES the location-derived discharge type) — K1-4.
+ * Old shorter rows remain fully valid.
  */
 class ImportController extends Controller
 {
     private array $columns = ['MRN', 'Name', 'Age', 'Gender', 'Nationality', 'AdmitDate', 'DischargeDate', 'Outcome', 'Location',
-        'Diagnoses', 'Consultant', 'DischargedTo', 'ClinicalDischargeDate', 'AdmittedFrom', 'Bed', 'DelayReason', 'LongTerm'];
+        'Diagnoses', 'Consultant', 'DischargedTo', 'ClinicalDischargeDate', 'AdmittedFrom', 'Bed', 'DelayReason', 'LongTerm', 'TransferType'];
+
+    /** The 3 transfer literals accepted in column 18 — transfer-closed episodes, not real discharges. */
+    private const TRANSFER_TYPES = ['transfer to other speciality', 'other transfer', 'Transfer from ICU'];
 
     public function index(): Response
     {
@@ -78,10 +83,11 @@ class ImportController extends Controller
                     // (those drive the live "New" badge / 24h window, which must not fire for imports)
                     'consultant_id' => $r['consultant_id'],
                     // derive the discharge type from location so ICU imports classify correctly
-                    // (feeds the readmission filter + recent-discharge views, which key on these strings)
-                    'transfer_type' => $r['discharge_date']
+                    // (feeds the readmission filter + recent-discharge views, which key on these
+                    // strings); an explicit TransferType column OVERRIDES the derivation (K1-4)
+                    'transfer_type' => $r['transfer_type'] ?? ($r['discharge_date']
                         ? ($r['location'] === 'ICU' ? 'discharge from ICU' : 'discharge from ward')
-                        : null,
+                        : null),
                     'admitted_by' => Auth::id(),
                     'created_at' => now(), 'updated_at' => now(),
                 ]);
@@ -140,6 +146,9 @@ class ImportController extends Controller
                 'bed' => trim($c[14] ?? '') ?: null,
                 'delay_reason' => trim($c[15] ?? '') ?: null,
                 'is_longterm' => in_array(strtolower(trim($c[16] ?? '')), ['1', 'yes'], true),
+                // optional column 18 (K1-4): one of the 3 transfer literals — overrides the
+                // location-derived discharge type on commit
+                'transfer_type' => trim($c[17] ?? '') ?: null,
                 'ok' => true,
                 'error' => null,
                 'warning' => null,
@@ -155,6 +164,10 @@ class ImportController extends Controller
                 $row['ok'] = false; $row['error'] = 'MRN must be 1–11 digits';
             } elseif (! $row['admit_date']) {
                 $row['ok'] = false; $row['error'] = 'Missing/invalid admit date';
+            } elseif ($row['transfer_type'] !== null && ! in_array($row['transfer_type'], self::TRANSFER_TYPES, true)) {
+                $row['ok'] = false; $row['error'] = 'TransferType must be one of: ' . implode(' / ', self::TRANSFER_TYPES);
+            } elseif ($row['transfer_type'] !== null && ! $row['discharge_date']) {
+                $row['ok'] = false; $row['error'] = 'TransferType requires a discharge date';
             }
             $out[] = $row;
         }

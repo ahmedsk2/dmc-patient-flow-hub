@@ -66,6 +66,8 @@ class ConsultationsController extends Controller
             'stats' => [
                 'active' => Consultation::whereNull('signoff_date')->count(),
                 'total' => Consultation::count(),
+                // personal counter for consultant-role viewers (K1-13): own active out of total active
+                'mine_active' => Consultation::whereNull('signoff_date')->where('consultant_id', Auth::id())->count(),
             ],
             'reasons' => $reasons->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
             'consultants' => User::consultantOptions(),

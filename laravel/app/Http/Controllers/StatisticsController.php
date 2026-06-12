@@ -249,7 +249,9 @@ class StatisticsController extends Controller
             'readmitWindow' => $readmitWindow,
             'destinations' => ['labels' => array_keys($destBuckets), 'data' => array_values($destBuckets)],
             'destByConsultant' => $destByConsultant,
-            'consultants' => \App\Models\User::consultantOptions(),
+            // drill-down picker spans INACTIVE consultants too (K1-8): departed staff stay
+            // queryable over historical ranges, like the registry filter
+            'consultants' => \App\Models\User::consultantOptions(activeOnly: false),
             'physician' => $physician,
         ]);
     }
@@ -274,7 +276,8 @@ class StatisticsController extends Controller
         $consS = $this->seriesBy('consultations', 'consultation_date', $f, $t, $interval, $own);
         $signS = $this->seriesBy('consultations', 'signoff_date', $f, $t, $interval, $own);
 
-        // legacy transfer-type buckets (charts.php): fixed order, zero-filled
+        // legacy transfer-type buckets (charts.php): fixed order, zero-filled, NON-ICU like the
+        // legacy GROUP BY trans_discharge query (charts.php:57) — K1-6
         $destMap = [
             'discharge from ward' => 'Discharged',
             'transfer to other speciality' => 'Intra-dept transfer',
@@ -283,12 +286,15 @@ class StatisticsController extends Controller
         ];
         $byType = DB::table('admissions')->where('consultant_id', $consultantId)
             ->whereBetween('discharge_date', [$f, $t])->whereIn('transfer_type', array_keys($destMap))
+            ->whereRaw($this->nonIcu)
             ->selectRaw('transfer_type tt, COUNT(*) c')->groupBy('tt')->pluck('c', 'tt')->all();
 
+        // top-5 diagnoses over NON-ICU admissions, like legacy charts.php:922 — K1-6
         $topDx = DB::table('admission_diagnoses as ad')
             ->join('admissions as a', 'a.id', '=', 'ad.admission_id')
             ->leftJoin('icd10 as i', 'i.code', '=', 'ad.icd10_code')
             ->where('a.consultant_id', $consultantId)->whereBetween('a.admit_date', [$f, $t])
+            ->whereRaw($this->nonIcu)
             ->selectRaw('ad.icd10_code code, MAX(i.name) name, COUNT(*) c')
             ->groupBy('ad.icd10_code')->orderByDesc('c')->limit(5)->get()
             ->map(fn ($r) => ['label' => $r->name ?: $r->code, 'value' => (int) $r->c]);
@@ -325,9 +331,12 @@ class StatisticsController extends Controller
                 'avgLos' => round((float) ($scoped()->whereBetween('discharge_date', [$f, $t])->whereNotNull('admit_date')
                     ->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
                     ->selectRaw('AVG(DATEDIFF(discharge_date, admit_date)) v')->value('v') ?? 0), 2),
+                // legacy charts.php:1199 counted a readmission only when the PRIOR discharge was
+                // ALSO this consultant's ($id == $recentadmission['consultant_id']) — K1-7
                 'readmissions' => (int) DB::table('admissions as a')
                     ->join('admissions as prev', $this->readmissionJoin($readmitWindow))
-                    ->where('a.consultant_id', $consultantId)->whereBetween('a.admit_date', [$f, $t])
+                    ->where('a.consultant_id', $consultantId)->where('prev.consultant_id', $consultantId)
+                    ->whereBetween('a.admit_date', [$f, $t])
                     ->distinct()->count('a.id'),
                 'consultations' => (int) $consScoped()->whereBetween('consultation_date', [$f, $t])->count(),
                 'signoffs' => (int) $consScoped()->whereBetween('signoff_date', [$f, $t])->count(),

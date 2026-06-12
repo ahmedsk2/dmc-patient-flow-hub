@@ -129,7 +129,9 @@ class MfaController extends Controller
             throw ValidationException::withMessages(['code' => 'Invalid authentication code.']);
         }
 
-        Auth::login($user, (bool) $request->session()->get('mfa.pending.remember', false));
+        // MFA logins are NEVER remembered (K1-5, legacy parity: MFA users re-authenticate each
+        // session) — a remember-me cookie would let the second factor be bypassed for 30 days
+        Auth::login($user, false);
         $request->session()->forget(['mfa.pending.id', 'mfa.pending.at', 'mfa.pending.attempts', 'mfa.pending.remember']);
         $request->session()->regenerate();
         $this->audit($user, 'login.mfa');

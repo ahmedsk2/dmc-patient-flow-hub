@@ -88,6 +88,8 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
             <div class="flex gap-2">
                 <span class="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-ink-100">Active <span class="nums ml-1 text-accent-600">{{ stats.active }}</span></span>
                 <span class="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-ink-100">Total <span class="nums ml-1 text-ink-600">{{ stats.total }}</span></span>
+                <!-- personal counter for consultant viewers (K1-13): own active out of total active -->
+                <span v-if="me.role === 3" class="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-ink-100">Mine <span class="nums ml-1 text-brand-700">{{ stats.mine_active }} of {{ stats.active }} active</span></span>
             </div>
             <div class="relative ml-auto">
                 <svg class="pointer-events-none absolute left-3 top-2.5 h-5 w-5 text-ink-400" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" /></svg>

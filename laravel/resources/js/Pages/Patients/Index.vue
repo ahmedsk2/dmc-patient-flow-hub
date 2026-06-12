@@ -42,10 +42,11 @@ const sections = computed(() => [
 const dxOpen = ref(null);
 const toggleDx = (id) => (dxOpen.value = dxOpen.value === id ? null : id);
 
-// inline bed edit (canManage) — saves on blur/Enter, Esc cancels
+// inline bed edit — ANY clinical role, matching the J1-opened /bed endpoint (K1-2; was
+// canManage-only affordance); observers stay read-only. Saves on blur/Enter, Esc cancels.
 const vFocus = { mounted: (el) => el.focus() };
 const bedEdit = ref(null);
-const startBed = (p) => { if (canManage(p) && !isObserver.value && !p.discharged) bedEdit.value = { id: p.id, value: p.bed || '' }; };
+const startBed = (p) => { if (!isObserver.value && !p.discharged) bedEdit.value = { id: p.id, value: p.bed || '' }; };
 const cancelBed = () => (bedEdit.value = null);
 const saveBed = (p) => {
     if (!bedEdit.value || bedEdit.value.id !== p.id) return;
@@ -198,7 +199,8 @@ const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '',
 const selectedDx = ref([]);
 const openModify = async (p) => {
     const d = await (await fetch(`/admissions/${p.id}/edit`, { headers: { Accept: 'application/json' } })).json();
-    editing.value = { id: p.id };
+    // keep the LOADED identity so a changed MRN/name is confirmed before posting (K1-3)
+    editing.value = { id: p.id, mrn: d.mrn || '', name: d.name || '' };
     mForm.mrn = d.mrn || ''; mForm.name = d.name || ''; mForm.age = d.age ?? ''; mForm.gender = d.gender || '';
     mForm.nationality = d.nationality || ''; mForm.bed = d.bed || '';
     mForm.admit_date = d.admit_date || ''; mForm.admitted_from = d.admitted_from || ''; mForm.current_location = d.current_location || 'Ward';
@@ -210,7 +212,14 @@ const openModify = async (p) => {
 const modifyConsultants = computed(() => props.consultants.filter((c) => c.on_service || c.id === mForm.consultant_id));
 const addDx = (d) => { if (!selectedDx.value.find((x) => x.code === d.code)) { selectedDx.value.push(d); mForm.diagnoses.push(d.code); } };
 const removeDx = (code) => { selectedDx.value = selectedDx.value.filter((x) => x.code !== code); mForm.diagnoses = mForm.diagnoses.filter((c) => c !== code); };
-const submitModify = () => mForm.post(`/admissions/${editing.value.id}/modify`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
+// identity confirm (K1-3): an MRN/name edit re-points or renames the patient — make it deliberate
+const confirmIdentity = (loaded, mrn, name) =>
+    (String(mrn) === String(loaded.mrn) && String(name) === String(loaded.name))
+    || confirm(`Change patient identity from ${loaded.name} (MRN ${loaded.mrn}) to ${name} (MRN ${mrn})?`);
+const submitModify = () => {
+    if (!confirmIdentity(editing.value, mForm.mrn, mForm.name)) return;   // declined — no post
+    mForm.post(`/admissions/${editing.value.id}/modify`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
+};
 
 // Esc closes whichever modal is open (the ICD typeahead swallows the first Esc while its
 // dropdown is showing, so a second press closes the modal)
@@ -314,7 +323,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                             <input v-if="bedEdit && bedEdit.id === p.id" v-model="bedEdit.value" v-focus maxlength="64"
                                 aria-label="Bed" class="w-14 rounded border border-ink-200 bg-white px-1 py-0 text-[11px] font-semibold text-ink-700 outline-none focus:border-brand-500"
                                 @blur="saveBed(p)" @keydown.enter.prevent="$event.target.blur()" @keydown.esc.prevent="cancelBed" />
-                            <button v-else-if="canManage(p) && !isObserver && !p.discharged" type="button" @click="startBed(p)" title="Edit bed" aria-label="Edit bed"
+                            <button v-else-if="!isObserver && !p.discharged" type="button" @click="startBed(p)" title="Edit bed" aria-label="Edit bed"
                                 class="rounded underline decoration-dotted underline-offset-2 hover:opacity-75">{{ p.bed || '—' }}</button>
                             <template v-else>{{ p.bed || '—' }}</template>
                         </span>
@@ -441,6 +450,22 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                     <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="cdForm.processing" class="rounded-xl bg-success-600 px-5 py-2 text-sm font-semibold text-white hover:bg-success-700 disabled:opacity-50">Complete discharge</button></div>
                 </form>
                 <form v-else-if="modal.mode === 'icu'" @submit.prevent="submitIcu" class="space-y-4">
+                    <!-- record-review step (K1-11): same read-only summary as the medical-discharge
+                         modal — review the admission record before closing the ICU file -->
+                    <div class="rounded-xl bg-surface/70 p-3 ring-1 ring-ink-100">
+                        <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-warning-500">Kindly review admission details</p>
+                        <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                            <div><dt class="font-semibold text-ink-400">Name</dt><dd class="text-ink-700">{{ modal.row.name }}</dd></div>
+                            <div><dt class="font-semibold text-ink-400">MRN</dt><dd class="nums text-ink-700">{{ modal.row.mrn || '—' }}</dd></div>
+                            <div><dt class="font-semibold text-ink-400">Age / Gender</dt><dd class="nums text-ink-700">{{ modal.row.age ?? '—' }}y · {{ modal.row.gender || '—' }}</dd></div>
+                            <div><dt class="font-semibold text-ink-400">Bed</dt><dd class="nums text-ink-700">{{ modal.row.bed || '—' }}</dd></div>
+                            <div><dt class="font-semibold text-ink-400">Admitted from</dt><dd class="text-ink-700">{{ modal.row.admitted_from || '—' }}</dd></div>
+                            <div><dt class="font-semibold text-ink-400">Admit date</dt><dd class="nums text-ink-700">{{ modal.row.admit_date || '—' }}</dd></div>
+                        </dl>
+                        <ul v-if="modal.row.diagnoses?.length" class="mt-2 space-y-0.5 border-t border-ink-100 pt-2 text-[11px] leading-snug text-ink-600">
+                            <li v-for="d in modal.row.diagnoses" :key="d.code"><span class="nums font-semibold text-brand-700">{{ d.code }}</span> {{ d.name }}</li>
+                        </ul>
+                    </div>
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Status</label><select v-model="icuForm.outcome" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option v-for="s in statuses" :key="s">{{ s }}</option></select></div>
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge to</label>
                         <select v-model="icuForm.discharge_to" :disabled="icuForm.outcome === 'Dead'" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">—</option><option v-for="d in destinations" :key="d">{{ d }}</option></select>

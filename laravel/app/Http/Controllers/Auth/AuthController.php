@@ -38,11 +38,12 @@ class AuthController extends Controller
         // If MFA is enrolled, hold the identity in the session and challenge for a code.
         // The pending identity is short-lived: a timestamp lets the challenge reject stale
         // sessions (5 min) and the attempt counter caps guesses (8) — see MfaController.
+        // "Remember me" is deliberately NOT carried over: MFA logins re-authenticate every
+        // session (K1-5) — the challenge always calls Auth::login($user, false).
         if ($user->mfaEnabled()) {
             $request->session()->put('mfa.pending.id', $user->id);
             $request->session()->put('mfa.pending.at', now()->getTimestamp());
             $request->session()->put('mfa.pending.attempts', 0);
-            $request->session()->put('mfa.pending.remember', $request->boolean('remember'));
             return redirect()->route('mfa.challenge');
         }
 

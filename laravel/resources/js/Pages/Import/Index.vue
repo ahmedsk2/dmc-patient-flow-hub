@@ -26,10 +26,10 @@ const csvCell = (v) => {
     return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 };
 const serialize = () => [
-    'MRN,Name,Age,Gender,Nationality,AdmitDate,DischargeDate,Outcome,Location,Diagnoses,Consultant,DischargedTo,ClinicalDischargeDate,AdmittedFrom,Bed,DelayReason,LongTerm',
+    'MRN,Name,Age,Gender,Nationality,AdmitDate,DischargeDate,Outcome,Location,Diagnoses,Consultant,DischargedTo,ClinicalDischargeDate,AdmittedFrom,Bed,DelayReason,LongTerm,TransferType',
     ...editRows.value.map((r) => [r.mrn, r.name, r.age, r.gender, r.nationality, r.admit_date, r.discharge_date,
         r.outcome, r.location, r.diagnoses_text, r.consultant_name, r.discharged_to, r.medical_discharge_date,
-        r.admitted_from, r.bed, r.delay_reason, r.is_longterm ? '1' : '']
+        r.admitted_from, r.bed, r.delay_reason, r.is_longterm ? '1' : '', r.transfer_type]
         .map(csvCell).join(',')),
 ].join('\n');
 
@@ -48,7 +48,7 @@ const cell = 'w-full min-w-16 rounded-lg border border-ink-200 bg-white px-1.5 p
         <div class="mx-auto max-w-4xl space-y-5">
             <section class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
                 <h2 class="font-bold text-ink-800">Paste CSV rows</h2>
-                <p class="mt-1 text-sm text-ink-500">One admission per line; header row optional. MRN required (digits ≤11) and a valid admit date; blank discharge date = still active. Columns 10–17 are <strong>optional</strong>: Diagnoses = pipe-separated ICD-10 codes (e.g. <code class="rounded bg-surface px-1">J18.9|E11.9</code>); Consultant is matched by name/username (unmatched imports unassigned, with a warning); ClinicalDischargeDate = Y-m-d; LongTerm = <code class="rounded bg-surface px-1">1</code>/<code class="rounded bg-surface px-1">yes</code>. Columns, in order:</p>
+                <p class="mt-1 text-sm text-ink-500">One admission per line; header row optional. MRN required (digits ≤11) and a valid admit date; blank discharge date = still active. Columns 10–18 are <strong>optional</strong>: Diagnoses = pipe-separated ICD-10 codes (e.g. <code class="rounded bg-surface px-1">J18.9|E11.9</code>); Consultant is matched by name/username (unmatched imports unassigned, with a warning); ClinicalDischargeDate = Y-m-d; LongTerm = <code class="rounded bg-surface px-1">1</code>/<code class="rounded bg-surface px-1">yes</code>; TransferType = <code class="rounded bg-surface px-1">transfer to other speciality</code> / <code class="rounded bg-surface px-1">other transfer</code> / <code class="rounded bg-surface px-1">Transfer from ICU</code> (needs a discharge date; overrides the location-derived discharge type). Columns, in order:</p>
                 <div class="mt-3 flex flex-wrap gap-1.5">
                     <span v-for="(c, i) in columns" :key="c" class="rounded-full px-2.5 py-1 text-xs font-semibold" :class="i >= 9 ? 'bg-ink-50 text-ink-500' : 'bg-brand-50 text-brand-700'">{{ i + 1 }}. {{ c }}{{ i >= 9 ? ' (opt.)' : '' }}</span>
                 </div>
@@ -78,7 +78,7 @@ const cell = 'w-full min-w-16 rounded-lg border border-ink-200 bg-white px-1.5 p
                 <div class="max-h-96 overflow-auto rounded-xl ring-1 ring-ink-100">
                     <table class="w-full text-xs">
                         <thead class="sticky top-0 bg-ink-50 text-left font-semibold uppercase tracking-wide text-ink-400">
-                            <tr><th scope="col" class="px-3 py-2">#</th><th scope="col" class="px-3 py-2">MRN</th><th scope="col" class="px-3 py-2">Name</th><th scope="col" class="px-3 py-2">Admit</th><th scope="col" class="px-3 py-2">Discharge</th><th scope="col" class="px-3 py-2">Outcome</th><th scope="col" class="px-3 py-2">Loc</th><th scope="col" class="px-3 py-2">Diagnoses</th><th scope="col" class="px-3 py-2">Consultant</th><th scope="col" class="px-3 py-2">Disch. to</th><th scope="col" class="px-3 py-2">Clin. disch.</th><th scope="col" class="px-3 py-2">From</th><th scope="col" class="px-3 py-2">Bed</th><th scope="col" class="px-3 py-2">Delay</th><th scope="col" class="px-3 py-2">LT</th><th scope="col" class="px-3 py-2">Status</th></tr>
+                            <tr><th scope="col" class="px-3 py-2">#</th><th scope="col" class="px-3 py-2">MRN</th><th scope="col" class="px-3 py-2">Name</th><th scope="col" class="px-3 py-2">Admit</th><th scope="col" class="px-3 py-2">Discharge</th><th scope="col" class="px-3 py-2">Outcome</th><th scope="col" class="px-3 py-2">Loc</th><th scope="col" class="px-3 py-2">Diagnoses</th><th scope="col" class="px-3 py-2">Consultant</th><th scope="col" class="px-3 py-2">Disch. to</th><th scope="col" class="px-3 py-2">Clin. disch.</th><th scope="col" class="px-3 py-2">From</th><th scope="col" class="px-3 py-2">Bed</th><th scope="col" class="px-3 py-2">Delay</th><th scope="col" class="px-3 py-2">LT</th><th scope="col" class="px-3 py-2">Transfer</th><th scope="col" class="px-3 py-2">Status</th></tr>
                         </thead>
                         <!-- editable preview (full previews): fix typos in place, then confirm — every
                              row is re-validated server-side on import -->
@@ -99,6 +99,7 @@ const cell = 'w-full min-w-16 rounded-lg border border-ink-200 bg-white px-1.5 p
                                 <td class="px-1 py-1"><input v-model="r.bed" aria-label="Bed" :class="cell" /></td>
                                 <td class="px-1 py-1"><input v-model="r.delay_reason" aria-label="Delay reason" :class="cell" /></td>
                                 <td class="px-1 py-1 text-center"><input v-model="r.is_longterm" type="checkbox" aria-label="Long-term" class="rounded text-brand-600" /></td>
+                                <td class="px-1 py-1"><input v-model="r.transfer_type" placeholder="other transfer…" aria-label="Transfer type" :class="[cell, 'min-w-24']" /></td>
                                 <td class="px-3 py-1">
                                     <span v-if="!r.ok" class="font-semibold text-danger-600">{{ r.error }}</span>
                                     <span v-else-if="r.warning" class="font-semibold text-accent-600">{{ r.warning }}</span>
@@ -128,6 +129,7 @@ const cell = 'w-full min-w-16 rounded-lg border border-ink-200 bg-white px-1.5 p
                                 <td class="px-3 py-1.5">{{ r.bed || '—' }}</td>
                                 <td class="px-3 py-1.5">{{ r.delay_reason || '—' }}</td>
                                 <td class="px-3 py-1.5">{{ r.is_longterm ? 'Yes' : '—' }}</td>
+                                <td class="px-3 py-1.5">{{ r.transfer_type || '—' }}</td>
                                 <td class="px-3 py-1.5">
                                     <span v-if="!r.ok" class="font-semibold text-danger-600">{{ r.error }}</span>
                                     <span v-else-if="r.warning" class="font-semibold text-accent-600">{{ r.warning }}</span>

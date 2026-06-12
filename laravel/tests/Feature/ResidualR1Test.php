@@ -210,13 +210,17 @@ class ResidualR1Test extends TestCase
 
         $this->actingAs($this->user(User::ROLE_RESIDENT, ['can_modify' => true]))
             ->get("/admissions/{$a->id}/edit")->assertOk()->assertJsonPath('id', $a->id);
-        $this->actingAs($this->user(User::ROLE_REGISTRAR, ['can_manage' => true]))
-            ->get("/admissions/{$a->id}/edit")->assertOk();
         $this->actingAs($this->admin())->get("/admissions/{$a->id}/edit")->assertOk();
+
+        // K1-10 (deliberate change): the gate NARROWED to admin/can_modify only — the legacy
+        // Can-Modify fragment audience. can_manage and the owning consultant were dropped
+        // (they were assertOk before round 6); managers/owners act via the action endpoints.
+        $this->actingAs($this->user(User::ROLE_REGISTRAR, ['can_manage' => true]))
+            ->get("/admissions/{$a->id}/edit")->assertForbidden();
 
         $owner = $this->user(User::ROLE_CONSULTANT);
         $owned = $this->admission(['consultant_id' => $owner->id]);
-        $this->actingAs($owner)->get("/admissions/{$owned->id}/edit")->assertOk();
+        $this->actingAs($owner)->get("/admissions/{$owned->id}/edit")->assertForbidden();
         $this->actingAs($this->user(User::ROLE_CONSULTANT))   // a different consultant, no capability
             ->get("/admissions/{$owned->id}/edit")->assertForbidden();
     }

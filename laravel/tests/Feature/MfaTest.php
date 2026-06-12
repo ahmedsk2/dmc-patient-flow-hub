@@ -60,6 +60,30 @@ class MfaTest extends TestCase
         $this->assertGuest();
     }
 
+    /**
+     * K1-5: MFA logins are NEVER remembered — even when the password step was submitted with
+     * remember=true, the challenge authenticates with Auth::login($user, false), so no recaller
+     * cookie is queued and the user re-authenticates (password + code) every session.
+     */
+    public function test_mfa_login_is_never_remembered(): void
+    {
+        [$user, $secret] = $this->enrolledUser();
+
+        // password step WITH remember — parks the pending identity, no auth yet
+        $this->post('/login', ['username' => $user->username, 'password' => 'secret12345', 'remember' => true])
+            ->assertRedirect(route('mfa.challenge'));
+        $this->assertGuest();
+
+        $res = $this->post('/mfa/challenge', ['code' => $this->currentCode($secret)]);
+        $res->assertRedirect(route('dashboard'));
+        $this->assertAuthenticatedAs($user);
+
+        $recaller = collect($res->headers->getCookies())
+            ->first(fn ($c) => str_starts_with($c->getName(), 'remember_web_') && $c->getValue());
+        $this->assertNull($recaller, 'an MFA login must not queue a remember-me recaller cookie');
+        $this->assertEmpty((string) $user->fresh()->remember_token, 'no remember token may be stored for an MFA login');
+    }
+
     public function test_recovery_code_is_single_use(): void
     {
         [$user, , $plain] = $this->enrolledUser(['ZZZZ-9999']);
