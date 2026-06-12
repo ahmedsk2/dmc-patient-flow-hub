@@ -1,6 +1,8 @@
 <script setup>
+import { ref, computed } from 'vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import PasswordMeter from '@/Components/PasswordMeter.vue';
 
 const props = defineProps({ profile: Object });
 
@@ -12,6 +14,10 @@ const saveProfile = () => pForm.put('/profile', { preserveScroll: true });
 
 const wForm = useForm({ current_password: '', password: '', password_confirmation: '' });
 const savePassword = () => wForm.put('/profile/password', { preserveScroll: true, onSuccess: () => wForm.reset() });
+
+// legacy parity: a CHANGED password must be STRONG (zxcvbn score >= 3)
+const pwScore = ref(0);
+const pwTooWeak = computed(() => wForm.password.length > 0 && pwScore.value < 3);
 
 const field = 'w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20';
 </script>
@@ -56,11 +62,11 @@ const field = 'w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm out
                 <p class="mb-4 text-sm text-ink-400">At least 8 characters, with letters and numbers.</p>
                 <div class="grid gap-4 sm:grid-cols-3">
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Current</label><input v-model="wForm.current_password" type="password" :class="[field, wForm.errors.current_password && 'border-danger-500']" /><p v-if="wForm.errors.current_password" class="mt-1 text-xs text-danger-600">{{ wForm.errors.current_password }}</p></div>
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">New</label><input v-model="wForm.password" type="password" :class="[field, wForm.errors.password && 'border-danger-500']" /><p v-if="wForm.errors.password" class="mt-1 text-xs text-danger-600">{{ wForm.errors.password }}</p></div>
+                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">New</label><input v-model="wForm.password" type="password" :class="[field, wForm.errors.password && 'border-danger-500']" /><PasswordMeter :password="wForm.password" @score="pwScore = $event" /><p v-if="wForm.errors.password" class="mt-1 text-xs text-danger-600">{{ wForm.errors.password }}</p></div>
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Confirm</label><input v-model="wForm.password_confirmation" type="password" :class="field" /></div>
                 </div>
                 <div class="mt-4 flex items-center gap-3">
-                    <button @click="savePassword" :disabled="wForm.processing" class="rounded-xl bg-navy-800 px-5 py-2.5 text-sm font-semibold text-white hover:bg-navy-900 disabled:opacity-50">Update password</button>
+                    <button @click="savePassword" :disabled="wForm.processing || pwTooWeak" class="rounded-xl bg-navy-800 px-5 py-2.5 text-sm font-semibold text-white hover:bg-navy-900 disabled:opacity-50">Update password</button>
                     <span v-if="wForm.recentlySuccessful" class="text-sm font-semibold text-success-600">Password changed ✓</span>
                 </div>
             </section>

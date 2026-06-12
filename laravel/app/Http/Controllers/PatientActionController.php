@@ -84,10 +84,27 @@ class PatientActionController extends Controller
         return $u ? ($u->full_name ?: $u->name) : null;
     }
 
-    /** Discharge/delete closes the episode — a still-unsigned handover signature is moot. */
-    private function voidPendingSignatures(Admission $a): void
+    /**
+     * Discharge/delete closes the episode — a still-unsigned signature on IT is moot. And when the
+     * patient's LAST open episode closes, unsigned signatures parked on OLDER closed episodes are
+     * voided too (a specialty transfer leaves its signature on the CLOSING row; once the patient
+     * leaves the unit there is nothing left for the receiving consultant to acknowledge) — L1-5.
+     * $deleting excludes the row being hard-deleted from the still-open check (it is removed
+     * inside the same transaction).
+     */
+    private function voidPendingSignatures(Admission $a, bool $deleting = false): void
     {
         HandoverSignature::voidPendingFor($a->id);
+
+        $stillOpen = Admission::whereNull('discharge_date')
+            ->where('patient_id', $a->patient_id)
+            ->when($deleting, fn ($q) => $q->where('id', '<>', $a->id))
+            ->exists();
+        if (! $stillOpen) {
+            HandoverSignature::query()->pending()
+                ->whereIn('admission_id', Admission::where('patient_id', $a->patient_id)->select('id'))
+                ->update(['voided_at' => now()]);
+        }
     }
 
     /**
@@ -107,6 +124,13 @@ class PatientActionController extends Controller
         $target = ((string) $data['mrn'] !== (string) $patient->mrn)
             ? \App\Models\Patient::where('mrn', $data['mrn'])->where('id', '<>', $patient->id)->first()
             : null;
+
+        // an ACTIVE admission may not be repointed onto a patient who ALREADY has an open episode —
+        // the board would show the same patient twice (mirrors the duplicate active-MRN admit guard)
+        if ($target && ! $admission->discharge_date
+            && Admission::whereNull('discharge_date')->where('patient_id', $target->id)->exists()) {
+            throw ValidationException::withMessages(['mrn' => 'That patient already has an active admission.']);
+        }
 
         // data correction may move the admit date — keep the old one in the audit trail
         $oldAdmitDate = optional($admission->admit_date)->toDateString();
@@ -177,6 +201,13 @@ class PatientActionController extends Controller
         $u = Auth::user();
         if ($u->isObserver()) {
             throw new AccessDeniedHttpException('Observers are read-only.');
+        }
+        // unassigned-queue action ONLY (legacy parity: assign-to-me existed on the new-admissions
+        // queue) — taking over an ASSIGNED patient must go through Assign/Transfer, which carry
+        // the same-day handover gate + receiving-consultant signature (L1-7)
+        if ($admission->consultant_id !== null) {
+            return back()->with('flash', ['type' => 'error',
+                'message' => 'This patient is already assigned — use Assign (or a transfer) instead.']);
         }
         $admission->update(['consultant_id' => $u->id, 'is_new_assignment' => true, 'assigned_on' => now()->toDateString(), 'assigned_at' => now()]);
         $this->audit('admission.assign_to_me', $admission, ['consultant_id' => $u->id]);
@@ -655,7 +686,8 @@ class PatientActionController extends Controller
 
             // receiving ICU episode (legacy INSERT, dmc-patients.php:57): same consultant, bed
             // carried, ADMFROM hardcoded 'Ward', assigned_on stamped today but NOT new-flagged
-            // (legacy left newassign untouched)
+            // (legacy left newassign untouched) — assigned_at stays NULL so the same-consultant
+            // continuation never fires the 24h "New" badge (L1-4)
             $new = Admission::create([
                 'patient_id' => $admission->patient_id,
                 'bed' => $admission->bed,
@@ -666,7 +698,7 @@ class PatientActionController extends Controller
                 'admitted_by' => Auth::id(),
                 'is_new_assignment' => false,
                 'assigned_on' => now()->toDateString(),
-                'assigned_at' => now(),
+                'assigned_at' => null,
             ]);
 
             // carry the diagnoses forward
@@ -804,7 +836,7 @@ class PatientActionController extends Controller
 
         DB::transaction(function () use ($admission, $details) {
             $this->audit('admission.delete', $admission, $details);   // written first — survives the delete
-            $this->voidPendingSignatures($admission);                 // moot before the cascade, but explicit
+            $this->voidPendingSignatures($admission, deleting: true); // moot before the cascade, but explicit
             $admission->diagnoses()->delete();                        // explicit, even though the FK cascades
             $admission->delete();
         });

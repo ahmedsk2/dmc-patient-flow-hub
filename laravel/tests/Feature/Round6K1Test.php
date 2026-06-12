@@ -87,6 +87,7 @@ class Round6K1Test extends TestCase
         $this->assertSame($admin->id, (int) $new->admitted_by);
         $this->assertFalse($new->is_new_assignment, 'legacy left newassign untouched — no New badge');
         $this->assertSame(now()->toDateString(), $new->assigned_on?->toDateString(), 'legacy stamped assigned_on=today');
+        $this->assertNull($new->assigned_at, 'NOT a new assignment — assigned_at stays NULL so the 24h New badge never fires (L1-4)');
         $this->assertSame(['J18.9', 'E11.9'], $new->diagnoses()->orderBy('seq')->pluck('icd10_code')->all(), 'diagnoses carried forward');
 
         $log = AuditLog::where('action', 'admission.transfer_external')->where('entity_id', (string) $a->id)->latest('id')->first();

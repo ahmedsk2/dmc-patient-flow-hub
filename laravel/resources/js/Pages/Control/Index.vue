@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
@@ -28,6 +28,18 @@ const saveSettings = () => sForm.put('/control/settings', { preserveScroll: true
 const q = ref(props.filters.q || '');
 let timer = null;
 watch(q, () => { clearTimeout(timer); timer = setTimeout(() => router.get('/control', { q: q.value || undefined }, { preserveState: true, replace: true, preserveScroll: true }), 300); });
+
+// client-side sort (current page) on Full name / On service — L1-15
+const sort = ref({ key: null, dir: 1 });
+const toggleSort = (key) => { sort.value = sort.value.key === key ? { key, dir: -sort.value.dir } : { key, dir: 1 }; };
+const ariaSort = (key) => (sort.value.key === key ? (sort.value.dir === 1 ? 'ascending' : 'descending') : 'none');
+const sortedUsers = computed(() => {
+    const { key, dir } = sort.value;
+    if (!key) return props.users.data;
+    return [...props.users.data].sort((a, b) => dir * (key === 'full_name'
+        ? String(a.full_name || a.name || '').localeCompare(String(b.full_name || b.name || ''), undefined, { sensitivity: 'base' })
+        : (b.on_service ? 1 : 0) - (a.on_service ? 1 : 0)));   // ascending = on-service first
+});
 
 const editing = ref(null);
 const uForm = useForm({ username: '', full_name: '', email: '', role: 5, active: true, on_service: false, specialty_id: '', can_assign: false, can_add: false, can_manage: false, can_modify: false });
@@ -133,10 +145,17 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
             <div class="overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-ink-100/60">
                 <table class="w-full text-sm">
                     <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
-                        <th scope="col" class="px-5 py-3">User</th><th scope="col" class="px-3 py-3">Role</th><th scope="col" class="px-3 py-3">Capabilities</th><th scope="col" class="px-3 py-3">Status</th><th scope="col" class="px-5 py-3 text-right">Edit</th>
+                        <th scope="col" class="px-5 py-3" :aria-sort="ariaSort('full_name')">
+                            <button @click="toggleSort('full_name')" class="inline-flex items-center gap-1 uppercase tracking-wide hover:text-ink-600">Full name<span aria-hidden="true" class="text-[10px]">{{ sort.key === 'full_name' ? (sort.dir === 1 ? '▲' : '▼') : '↕' }}</span></button>
+                        </th>
+                        <th scope="col" class="px-3 py-3">Role</th><th scope="col" class="px-3 py-3">Capabilities</th>
+                        <th scope="col" class="px-3 py-3" :aria-sort="ariaSort('on_service')">
+                            <button @click="toggleSort('on_service')" class="inline-flex items-center gap-1 uppercase tracking-wide hover:text-ink-600">On service<span aria-hidden="true" class="text-[10px]">{{ sort.key === 'on_service' ? (sort.dir === 1 ? '▲' : '▼') : '↕' }}</span></button>
+                        </th>
+                        <th scope="col" class="px-3 py-3">Status</th><th scope="col" class="px-5 py-3 text-right">Edit</th>
                     </tr></thead>
                     <tbody class="divide-y divide-ink-50">
-                        <tr v-for="u in users.data" :key="u.id" class="hover:bg-brand-50/40">
+                        <tr v-for="u in sortedUsers" :key="u.id" class="hover:bg-brand-50/40">
                             <td class="px-5 py-3"><div class="font-semibold text-ink-800">{{ u.name }}</div><div class="text-xs text-ink-400">{{ u.username }} · {{ u.email || '—' }}</div></td>
                             <td class="px-3 py-3"><span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="roleTone(u.role)">{{ u.role_label }}</span></td>
                             <td class="px-3 py-3">
@@ -145,6 +164,7 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
                                     <span v-if="!Object.values(u.can).some(Boolean)" class="text-xs text-ink-300">—</span>
                                 </div>
                             </td>
+                            <td class="px-3 py-3"><span v-if="u.on_service" class="rounded-full bg-brand-100 px-2.5 py-0.5 text-xs font-semibold text-brand-700">On</span><span v-else class="text-xs text-ink-300">—</span></td>
                             <td class="px-3 py-3"><span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="u.active ? 'bg-success-100 text-success-600' : 'bg-ink-100 text-ink-400'">{{ u.active ? 'Active' : 'Disabled' }}</span></td>
                             <td class="px-5 py-3 text-right"><button @click="editUser(u)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50">Edit</button></td>
                         </tr>

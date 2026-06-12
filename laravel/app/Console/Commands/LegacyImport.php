@@ -150,7 +150,7 @@ class LegacyImport extends Command
         $rows = $this->legacy->table('picupatients as p')
             ->join(DB::raw('(SELECT TRIM(MRN) tm, MAX(ID) mid FROM ' . $this->legacy->getDatabaseName() . '.picupatients WHERE MRN IS NOT NULL AND TRIM(MRN) <> "" GROUP BY tm) agg'),
                 'p.ID', '=', 'agg.mid')
-            ->selectRaw('agg.tm mrn, p.PNAME, p.gender, p.age')
+            ->selectRaw('agg.tm mrn, p.PNAME, p.gender, p.age, p.nationality')
             ->get();
         $batch = [];
         $seen = [];   // PHP trim() strips tab/newline that SQL TRIM() keeps, so two SQL-distinct
@@ -163,6 +163,7 @@ class LegacyImport extends Command
                 'mrn' => $mrn,
                 'name' => $r->PNAME, 'gender' => $r->gender,
                 'age' => is_numeric($r->age) ? (int) $r->age : null,
+                'nationality' => $this->nationality($r->nationality ?? null),
                 'created_at' => now(), 'updated_at' => now(),
             ];
         }
@@ -186,6 +187,7 @@ class LegacyImport extends Command
                     $pid = DB::table('patients')->insertGetId([
                         'mrn' => 'NOMRN-' . $p->ID, 'name' => $p->PNAME, 'gender' => $p->gender,
                         'age' => is_numeric($p->age) ? (int) $p->age : null,
+                        'nationality' => $this->nationality($p->nationality ?? null),
                         'created_at' => now(), 'updated_at' => now(),
                     ]);
                 }
@@ -206,7 +208,11 @@ class LegacyImport extends Command
                     'transfer_type' => $p->trans_discharge,
                     'is_longterm' => ($p->longterm ?? '') === 'longterm',
                     'is_new_assignment' => (string) ($p->newassign ?? '') === '1',
-                    'assigned_on' => $this->date($p->assigned_on ?? null),
+                    'assigned_on' => $assignedOn = $this->date($p->assigned_on ?? null),
+                    // the board's 24h "New" badge keys on assigned_at — backfill new-flagged rows
+                    // at MIDNIGHT of assigned_on so cutover-day badges survive the migration
+                    'assigned_at' => ((string) ($p->newassign ?? '') === '1' && $assignedOn)
+                        ? $assignedOn . ' 00:00:00' : null,
                     'legacy_id' => $p->ID,
                     'created_at' => now(), 'updated_at' => now(),
                 ];
@@ -302,6 +308,14 @@ class LegacyImport extends Command
             'created_at' => now(), 'updated_at' => now(),
         ]);
         $this->info('  settings imported');
+    }
+
+    /** Legacy nationality strings are kept as-is (dirty values stay editable) — blank becomes NULL. */
+    private function nationality($v): ?string
+    {
+        $n = trim((string) ($v ?? ''));
+
+        return $n === '' ? null : mb_substr($n, 0, 191);
     }
 
     private function date($v): ?string

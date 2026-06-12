@@ -26,6 +26,12 @@ class PatientsController extends Controller
         $tbExists = $this->tbExists();
         [$groups, $readmitWindow] = $this->boardGroups($filters, $settings, $scope, $tbExists, $ownOnlyId);
 
+        // chips follow the SAME D1 exemption as boardGroups (J1-7): the longterm/TB views are
+        // unit-wide, so their chips must count the unit too — not the viewer's own list (L1-14)
+        if (in_array($filters['view'] ?? null, ['longterm', 'tb'], true)) {
+            $scope = fn ($q) => $q;
+        }
+
         return Inertia::render('Patients/Index', [
             'groups' => $groups,
             'filters' => $filters,
