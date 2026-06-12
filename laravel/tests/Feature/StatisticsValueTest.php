@@ -92,6 +92,24 @@ class StatisticsValueTest extends TestCase
             ->assertInertia(fn (AssertableInertia $p) => $p->where('kpis.readmissions', 1));
     }
 
+    public function test_null_typed_prior_discharge_counts_as_readmission_anchor(): void
+    {
+        // J1-4 (deliberate definition change, legacy parity): a prior episode closed WITHOUT a
+        // transfer_type (NULL — historical rows) is a valid readmission anchor; explicit
+        // transfer types stay excluded (A5 above). The recon-pinned count may legitimately rise.
+        $this->seedFixture();
+        $p6 = Patient::create(['mrn' => '70000006', 'name' => 'P Six']);
+        Admission::create(['is_longterm' => 0, 'is_new_assignment' => 0, 'patient_id' => $p6->id,
+            'admit_date' => '2024-06-01', 'discharge_date' => '2024-06-10',
+            'current_location' => 'Ward', 'outcome' => 'Alive', 'transfer_type' => null]);
+        Admission::create(['is_longterm' => 0, 'is_new_assignment' => 0, 'patient_id' => $p6->id,
+            'admit_date' => '2024-06-12', 'current_location' => 'Ward']);   // 2d gap -> readmission
+
+        $this->actingAs($this->admin())
+            ->get('/statistics?from=2024-06-01&to=2024-06-30')
+            ->assertInertia(fn (AssertableInertia $p) => $p->where('kpis.readmissions', 2));
+    }
+
     public function test_dashboard_occupancy_is_active_ward_over_ward_beds(): void
     {
         $this->seedFixture(); // active: A4 (Ward) + A5 (ICU)

@@ -89,18 +89,21 @@ class WaveBTest extends TestCase
         $this->assertNull($recent->fresh()->discharge_date, 'same-day discharges remain reversible');
     }
 
-    public function test_transfer_clears_stale_medical_discharge_and_bed(): void
+    public function test_transfer_restamps_medical_discharge_and_clears_bed(): void
     {
         $c = User::create(['username' => 'wb_c3', 'name' => 'Transfer Cons', 'password' => 'secret12345',
             'role' => User::ROLE_CONSULTANT, 'active' => 1]);
         $a = $this->admission(['consultant_id' => $c->id, 'bed' => 'W-12',
-            'medical_discharge_date' => now()->toDateString(), 'outcome' => 'Alive', 'delay_reason' => 'bed']);
+            'medical_discharge_date' => now()->subDay()->toDateString(), 'outcome' => 'Alive', 'delay_reason' => 'bed']);
 
         $this->actingAs($this->admin())->post("/admissions/{$a->id}/transfer", ['target' => 'ICU'])->assertRedirect();
 
         $a->refresh();
         $this->assertNotNull($a->discharge_date);
-        $this->assertNull($a->medical_discharge_date, 'transfer supersedes the pending medical discharge');
+        // J1-5 (deliberate change): legacy stamps med_DISDATE on EVERY close — the transfer
+        // supersedes the pending phase-1 date with the close date instead of clearing it
+        $this->assertSame(now()->toDateString(), $a->medical_discharge_date?->toDateString(),
+            'transfer restamps med_DISDATE with the close date (legacy stamps it on every close)');
         // H1 revert: legacy stamps MORTALITY='Alive' + the destination on every transfer-closed row
         $this->assertSame('Alive', $a->outcome, 'transfer-closed rows carry the legacy Alive stamp');
         $this->assertSame('Intensive Care (ICU)', $a->discharge_to);

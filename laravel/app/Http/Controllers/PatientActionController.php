@@ -37,6 +37,10 @@ class PatientActionController extends Controller
     private function canManage(Admission $a): bool
     {
         $u = Auth::user();
+        if ($u->isObserver()) {
+            return false;   // global read-only guarantee — capability flags never override (J1-9)
+        }
+
         return $u->isAdmin() || $u->can_manage || (int) $a->consultant_id === (int) $u->id;
     }
 
@@ -169,7 +173,7 @@ class PatientActionController extends Controller
     /** Label / unlabel long-term (any clinical role; observers are read-only). */
     public function toggleLongterm(Request $request, Admission $admission): RedirectResponse
     {
-        if ((int) Auth::user()->role === User::ROLE_OBSERVER) {
+        if (Auth::user()->isObserver()) {
             throw new AccessDeniedHttpException('Observers are read-only.');
         }
         $admission->update(['is_longterm' => ! $admission->is_longterm]);
@@ -187,7 +191,7 @@ class PatientActionController extends Controller
     public function bulkReassign(Request $request): RedirectResponse
     {
         $u = Auth::user();
-        if (! ($u->isAdmin() || $u->can_assign || $u->can_manage)) {
+        if ($u->isObserver() || ! ($u->isAdmin() || $u->can_assign || $u->can_manage)) {
             throw new AccessDeniedHttpException('Requires the Assign or Manage capability.');
         }
         $data = $request->validate([
@@ -250,7 +254,7 @@ class PatientActionController extends Controller
     public function shuffle(Request $request, ShuffleService $shuffle): RedirectResponse
     {
         $u = Auth::user();
-        if (! ($u->isAdmin() || $u->can_assign)) {
+        if ($u->isObserver() || ! ($u->isAdmin() || $u->can_assign)) {
             throw new AccessDeniedHttpException('Requires the Assign capability.');
         }
         $r = $shuffle->run(Auth::id());
@@ -267,7 +271,7 @@ class PatientActionController extends Controller
     public function assign(Request $request, Admission $admission): RedirectResponse
     {
         $u = Auth::user();
-        if (! ($u->isAdmin() || $u->can_assign)) {
+        if ($u->isObserver() || ! ($u->isAdmin() || $u->can_assign)) {
             throw new AccessDeniedHttpException('You do not have the Assign capability.');
         }
         $data = $request->validate([
@@ -309,11 +313,14 @@ class PatientActionController extends Controller
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultant assigned.']);
     }
 
-    /** Inline bed edit on a board card. */
+    /**
+     * Inline bed edit on a board card — open to ANY clinical role like the legacy inline edits
+     * (J1-11; was canManage). Observers stay read-only; the change remains audited.
+     */
     public function updateBed(Request $request, Admission $admission): RedirectResponse
     {
-        if (! $this->canManage($admission)) {
-            throw new AccessDeniedHttpException('Only the primary consultant or a manager may change the bed.');
+        if (Auth::user()->isObserver()) {
+            throw new AccessDeniedHttpException('Observers are read-only.');
         }
         $data = $request->validate(['bed' => ['nullable', 'string', 'max:64']]);
         $old = $admission->bed;
@@ -447,6 +454,9 @@ class PatientActionController extends Controller
         DB::transaction(function () use ($admission, $data) {
             $admission->update([
                 'discharge_date' => $data['discharge_date'],
+                // legacy stamps med_DISDATE on EVERY close — the single-step ICU discharge
+                // mirrors it with the discharge date (J1-5)
+                'medical_discharge_date' => $data['discharge_date'],
                 'outcome' => $data['outcome'],
                 // a death can only go to the mortuary — enforced here, not just in the UI
                 'discharge_to' => $data['outcome'] === 'Dead' ? 'Mortuary' : ($data['discharge_to'] ?? null),
@@ -544,14 +554,14 @@ class PatientActionController extends Controller
 
         $sig = null;
         $new = DB::transaction(function () use ($admission, $data, $specialty, $gated, $oldConsultant, &$sig) {
-            // close the episode as a specialty handover (continuation of care); a pending phase-1
-            // medical discharge is superseded — clear its fields like the location transfer does.
-            // Legacy stamps MORTALITY='Alive' on every transfer-closed row (dmc-patients.php:120).
+            // close the episode as a specialty handover (continuation of care); legacy stamps
+            // MORTALITY='Alive' AND med_DISDATE on every close (dmc-patients.php:120) — the
+            // close date supersedes any pending phase-1 medical-discharge date (J1-5).
             $admission->update([
                 'discharge_date' => now()->toDateString(),
                 'transfer_type' => 'transfer to other speciality',
                 'discharge_to' => $specialty->name,
-                'medical_discharge_date' => null,
+                'medical_discharge_date' => now()->toDateString(),
                 'outcome' => 'Alive',
                 'delay_reason' => null,
                 'discharged_by' => Auth::id(),
@@ -607,12 +617,13 @@ class PatientActionController extends Controller
             'service' => ['required', 'string', 'max:128', Rule::exists('specialties', 'name')->where('is_external', true)],
         ]);
 
-        // legacy stamps MORTALITY='Alive' on every transfer-closed row (dmc-patients.php:43)
+        // legacy stamps MORTALITY='Alive' AND med_DISDATE on every close (dmc-patients.php:43);
+        // the close date supersedes any pending phase-1 medical-discharge date (J1-5)
         $admission->update([
             'discharge_date' => now()->toDateString(),
             'transfer_type' => 'other transfer',
             'discharge_to' => $data['service'],
-            'medical_discharge_date' => null,
+            'medical_discharge_date' => now()->toDateString(),
             'outcome' => 'Alive',
             'delay_reason' => null,
             'discharged_by' => Auth::id(),
@@ -632,15 +643,15 @@ class PatientActionController extends Controller
 
         $new = DB::transaction(function () use ($admission, $data) {
             // close the current episode as a transfer (continuation of care, not a discharge);
-            // a pending phase-1 medical discharge is superseded by the transfer, so clear its
-            // fields rather than leaving a stale delay on a transfer-closed row.
-            // Legacy stamps the destination + MORTALITY='Alive' (dmc-patients.php:43,120;
-            // icu-transfer.php:41) — the Trans-to-ICU stat keys on discharge_to='Intensive Care (ICU)'.
+            // legacy stamps the destination + MORTALITY='Alive' + med_DISDATE on every close
+            // (dmc-patients.php:43,120; icu-transfer.php:41) — the Trans-to-ICU stat keys on
+            // discharge_to='Intensive Care (ICU)'; the close date supersedes any pending
+            // phase-1 medical-discharge date (J1-5), and the stale delay reason is cleared.
             $admission->update([
                 'discharge_date' => now()->toDateString(),
                 'transfer_type' => $admission->current_location === 'ICU' ? 'Transfer from ICU' : 'other transfer',
                 'discharge_to' => $data['target'] === 'ICU' ? 'Intensive Care (ICU)' : 'Ward',
-                'medical_discharge_date' => null,
+                'medical_discharge_date' => now()->toDateString(),
                 'outcome' => 'Alive',
                 'delay_reason' => null,
                 'discharged_by' => Auth::id(),
@@ -678,7 +689,7 @@ class PatientActionController extends Controller
     public function icuPull(Request $request, Admission $admission): RedirectResponse
     {
         $u = Auth::user();
-        if (! ($u->isAdmin() || $u->can_add)) {
+        if ($u->isObserver() || ! ($u->isAdmin() || $u->can_add)) {
             throw new AccessDeniedHttpException('Requires the Add capability.');
         }
         if ($admission->discharge_date || $admission->current_location !== 'ICU') {
@@ -687,13 +698,14 @@ class PatientActionController extends Controller
 
         $new = DB::transaction(function () use ($admission) {
             // close the ICU episode as a transfer-out (continuation of care, not a discharge);
-            // any pending phase-1 medical discharge is superseded — clear its fields like transfer().
-            // Legacy stamps DISTO='Ward' + MORTALITY='Alive' (newpatients/dmc-patients-icu-transfer.php:41).
+            // legacy stamps DISTO='Ward' + MORTALITY='Alive' + med_DISDATE on every close
+            // (newpatients/dmc-patients-icu-transfer.php:41) — the close date supersedes any
+            // pending phase-1 medical-discharge date (J1-5).
             $admission->update([
                 'discharge_date' => now()->toDateString(),
                 'transfer_type' => 'Transfer from ICU',
                 'discharge_to' => 'Ward',
-                'medical_discharge_date' => null,
+                'medical_discharge_date' => now()->toDateString(),
                 'outcome' => 'Alive',
                 'delay_reason' => null,
                 'discharged_by' => Auth::id(),

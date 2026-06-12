@@ -47,7 +47,7 @@ class GapWave4aTest extends TestCase
         $cardio = $this->user(['name' => 'Cardio Cons', 'specialty_id' => $spec->id]);
         $owner = $this->user();
         $a = $this->admission(['consultant_id' => $owner->id, 'bed' => 'W-12',
-            'medical_discharge_date' => now()->toDateString(), 'outcome' => 'Alive', 'delay_reason' => 'bed']);
+            'medical_discharge_date' => now()->subDay()->toDateString(), 'outcome' => 'Alive', 'delay_reason' => 'bed']);
         $a->diagnoses()->create(['seq' => 1, 'icd10_code' => 'I21.0']);
         $a->diagnoses()->create(['seq' => 2, 'icd10_code' => 'E11.9']);
         // a consultant-changing transfer requires a handover updated TODAY (HandoverTest covers the gate)
@@ -61,7 +61,10 @@ class GapWave4aTest extends TestCase
         $this->assertSame(now()->toDateString(), $a->discharge_date->toDateString());
         $this->assertSame('transfer to other speciality', $a->transfer_type);
         $this->assertSame('Cardiology', $a->discharge_to);
-        $this->assertNull($a->medical_discharge_date, 'pending phase-1 discharge is superseded');
+        // J1-5 (deliberate change): the pending phase-1 date is RESTAMPED to the close date
+        // (legacy stamps med_DISDATE on every close), not cleared
+        $this->assertSame(now()->toDateString(), $a->medical_discharge_date?->toDateString(),
+            'pending phase-1 discharge is superseded by the close-date stamp');
         $this->assertSame('Alive', $a->outcome, 'H1 revert: legacy stamps MORTALITY=Alive on transfer-closed rows');
         $this->assertNull($a->delay_reason);
         $this->assertSame($admin->id, (int) $a->discharged_by);
@@ -98,7 +101,7 @@ class GapWave4aTest extends TestCase
     {
         $admin = $this->user(['role' => User::ROLE_ADMIN]);
         Specialty::create(['name' => 'Psychiatry (external)', 'is_subspecialty' => true, 'is_external' => true]);
-        $a = $this->admission(['medical_discharge_date' => now()->toDateString(), 'outcome' => 'Alive']);
+        $a = $this->admission(['medical_discharge_date' => now()->subDay()->toDateString(), 'outcome' => 'Alive']);
 
         $this->actingAs($admin)->post("/admissions/{$a->id}/transfer", [
             'mode' => 'external', 'service' => 'Psychiatry (external)',
@@ -108,7 +111,8 @@ class GapWave4aTest extends TestCase
         $this->assertSame(now()->toDateString(), $a->discharge_date->toDateString());
         $this->assertSame('other transfer', $a->transfer_type);
         $this->assertSame('Psychiatry (external)', $a->discharge_to);
-        $this->assertNull($a->medical_discharge_date);
+        // J1-5 (deliberate change): med_DISDATE restamped to the close date, not cleared
+        $this->assertSame(now()->toDateString(), $a->medical_discharge_date?->toDateString());
         $this->assertSame('Alive', $a->outcome, 'H1 revert: legacy stamps MORTALITY=Alive on transfer-closed rows');
         $this->assertSame($admin->id, (int) $a->discharged_by);
         $this->assertSame(1, Admission::where('patient_id', $a->patient_id)->count(), 'NO new episode for an external transfer');

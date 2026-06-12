@@ -7,13 +7,17 @@ use Illuminate\Foundation\Http\FormRequest;
 /**
  * New-admission payload. The patient-demographics rule block is shared with
  * ModifyAdmissionRequest — change the MRN/demographics policy in ONE place.
- * authorize() carries the role gate so a 403 precedes validation (Observers are read-only).
+ * authorize() carries the capability gate so a 403 precedes validation.
  */
 class StoreAdmissionRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return (int) $this->user()->role !== \App\Models\User::ROLE_OBSERVER;
+        // Can-Add capability (legacy add_new_patient flag) — and Observers are read-only
+        // regardless of any capability flag set on the account (J1-3 / J1-9).
+        $u = $this->user();
+
+        return ! $u->isObserver() && ($u->isAdmin() || $u->can_add);
     }
 
     protected function prepareForValidation(): void

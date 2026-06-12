@@ -6,18 +6,15 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * Consultation payload — one rule set for BOTH create and edit (they were duplicated verbatim).
- * authorize() is route-aware: create = any non-Observer; edit = receiving consultant,
- * manager, or admin (the object-level ownership rule).
+ * authorize(): create AND edit are open to any clinical role (admin/registrar/consultant/
+ * resident) — legacy had NO ownership check on modify (J1-10); sign-off and delete keep their
+ * own gates in the controller. Observers are read-only regardless of capability flags.
  */
 class ConsultationRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        $u = $this->user();
-        if ($c = $this->route('consultation')) {
-            return $u->isAdmin() || $u->can_manage || (int) $c->consultant_id === (int) $u->id;
-        }
-        return (int) $u->role !== \App\Models\User::ROLE_OBSERVER;
+        return ! $this->user()->isObserver();
     }
 
     public function rules(): array

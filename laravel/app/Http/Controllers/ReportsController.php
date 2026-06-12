@@ -280,6 +280,11 @@ class ReportsController extends Controller
         $physLosByMonth = $this->losByMonth('discharge_date', $this->nonIcu, $start, $end);
         $icuLosByMonth = $this->losByMonth('discharge_date', "current_location = 'ICU'", $start, $end);
 
+        // census + long-stay cards (J1-14): the a4-monthly "Total Patients" / "Long Stay" counters
+        // reuse the exact a4.php census month-presence formulas (censusFamilies, shared with the
+        // annual booklet); incomplete months render "Pending" like legacy (null below)
+        [$censusByMonth, $censusLongByMonth] = $this->censusFamilies($year);
+
         // destination buckets per month — one grouped query, bucketed in PHP
         $destByMonth = [];
         DB::table('admissions')->whereBetween('discharge_date', [$start, $end])->whereRaw($this->nonIcu)
@@ -316,6 +321,10 @@ class ReportsController extends Controller
 
             $dis = (int) ($disByMonth[$key] ?? 0);
             $wknd = (int) ($weekendByMonth[$key] ?? 0);
+            // census cards are only meaningful once the month has fully elapsed (legacy "Pending")
+            $monthDone = $first->copy()->endOfMonth()->toDateString() <= $today->toDateString();
+            $census = (int) ($censusByMonth[$key] ?? 0);
+            $longStay = (int) ($censusLongByMonth[$key] ?? 0);
             $months[] = [
                 'm' => $m,
                 'name' => $first->format('F'),
@@ -327,6 +336,10 @@ class ReportsController extends Controller
                     'weekend' => $wknd,
                     'weekendPct' => $dis > 0 ? round($wknd / $dis * 100, 2) : 0.0,
                     'readmits' => (int) ($readmitByMonth[$key] ?? 0),
+                    // null => the blade renders "Pending" (incomplete month, legacy a4-monthly)
+                    'census' => $monthDone ? $census : null,
+                    'longStay' => $monthDone ? $longStay : null,
+                    'longStayPct' => ($monthDone && $census > 0) ? round($longStay / $census * 100, 2) : 0.0,
                 ],
                 'los' => [
                     'clinical' => (float) ($clinLosByMonth[$key] ?? 0),

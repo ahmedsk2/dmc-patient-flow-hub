@@ -36,14 +36,20 @@ const addDx = (d) => { if (!selectedDx.value.find((x) => x.code === d.code)) { s
 const removeDx = (code) => { selectedDx.value = selectedDx.value.filter((x) => x.code !== code); f.dx = f.dx.filter((c) => c !== code); };
 const toggleInd = (id) => { f.indication.includes(id) ? (f.indication = f.indication.filter((x) => x !== id)) : f.indication.push(id); };
 
-// edit-from-registry (reuse Modify)
+// edit-from-registry (reuse Modify) — the payload must carry admit_date + current_location
+// (ModifyAdmissionRequest requires them; without them every save silently 422'd)
+const today = new Date().toISOString().slice(0, 10);
+const admitFromOptions = ['ER', 'Clinic', 'OPD', 'OR', 'ICU', 'Referral', 'Transfer', 'Direct', 'Other service'];
 const editing = ref(null);
-const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '', bed: '', diagnoses: [] });
+const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '', bed: '', admit_date: '', admitted_from: '', current_location: 'Ward', diagnoses: [] });
 const mDx = ref([]);
 const openEdit = async (id) => {
     const d = await (await fetch(`/admissions/${id}/edit`, { headers: { Accept: 'application/json' } })).json();
-    editing.value = { id }; mForm.mrn = d.mrn || ''; mForm.name = d.name || ''; mForm.age = d.age ?? ''; mForm.gender = d.gender || '';
-    mForm.nationality = d.nationality || ''; mForm.bed = d.bed || ''; mDx.value = d.diagnoses || []; mForm.diagnoses = mDx.value.map((x) => x.code);
+    editing.value = { id }; mForm.clearErrors();
+    mForm.mrn = d.mrn || ''; mForm.name = d.name || ''; mForm.age = d.age ?? ''; mForm.gender = d.gender || '';
+    mForm.nationality = d.nationality || ''; mForm.bed = d.bed || '';
+    mForm.admit_date = d.admit_date || ''; mForm.admitted_from = d.admitted_from || ''; mForm.current_location = d.current_location || 'Ward';
+    mDx.value = d.diagnoses || []; mForm.diagnoses = mDx.value.map((x) => x.code);
 };
 const mAdd = (d) => { if (!mDx.value.find((x) => x.code === d.code)) { mDx.value.push(d); mForm.diagnoses.push(d.code); } };
 const mRemove = (code) => { mDx.value = mDx.value.filter((x) => x.code !== code); mForm.diagnoses = mForm.diagnoses.filter((c) => c !== code); };
@@ -235,11 +241,14 @@ const toggleExpand = (id) => {
                 <form @submit.prevent="submitEdit" class="space-y-3">
                     <div class="grid grid-cols-2 gap-3">
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">MRN</label><input v-model="mForm.mrn" :class="[fld, mForm.errors.mrn && 'border-danger-500']" /><p v-if="mForm.errors.mrn" class="mt-1 text-xs text-danger-600">{{ mForm.errors.mrn }}</p></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Bed</label><input v-model="mForm.bed" :class="fld" /></div>
-                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Name</label><input v-model="mForm.name" :class="fld" /></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Age</label><input v-model="mForm.age" inputmode="numeric" :class="fld" /></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Gender</label><select v-model="mForm.gender" :class="fld"><option value="">—</option><option>Male</option><option>Female</option></select></div>
-                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Nationality</label><input v-model="mForm.nationality" :class="fld" /></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Bed</label><input v-model="mForm.bed" :class="fld" /><p v-if="mForm.errors.bed" class="mt-1 text-xs text-danger-600">{{ mForm.errors.bed }}</p></div>
+                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Name</label><input v-model="mForm.name" :class="[fld, mForm.errors.name && 'border-danger-500']" /><p v-if="mForm.errors.name" class="mt-1 text-xs text-danger-600">{{ mForm.errors.name }}</p></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Age</label><input v-model="mForm.age" inputmode="numeric" :class="fld" /><p v-if="mForm.errors.age" class="mt-1 text-xs text-danger-600">{{ mForm.errors.age }}</p></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Gender</label><select v-model="mForm.gender" :class="fld"><option value="">—</option><option>Male</option><option>Female</option></select><p v-if="mForm.errors.gender" class="mt-1 text-xs text-danger-600">{{ mForm.errors.gender }}</p></div>
+                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Nationality</label><input v-model="mForm.nationality" :class="fld" /><p v-if="mForm.errors.nationality" class="mt-1 text-xs text-danger-600">{{ mForm.errors.nationality }}</p></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Admit date</label><input v-model="mForm.admit_date" type="date" :max="today" :class="[fld, mForm.errors.admit_date && 'border-danger-500']" /><p v-if="mForm.errors.admit_date" class="mt-1 text-xs text-danger-600">{{ mForm.errors.admit_date }}</p></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Location</label><select v-model="mForm.current_location" :class="fld"><option>ER</option><option>Ward</option><option>ICU</option></select><p v-if="mForm.errors.current_location" class="mt-1 text-xs text-danger-600">{{ mForm.errors.current_location }}</p></div>
+                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Admitted from</label><input v-model="mForm.admitted_from" list="reg-admit-from-options" placeholder="ER, Clinic, Referral…" :class="fld" /><datalist id="reg-admit-from-options"><option v-for="o in admitFromOptions" :key="o" :value="o" /></datalist><p v-if="mForm.errors.admitted_from" class="mt-1 text-xs text-danger-600">{{ mForm.errors.admitted_from }}</p></div>
                     </div>
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-ink-700">Diagnoses</label>

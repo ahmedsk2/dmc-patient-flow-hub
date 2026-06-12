@@ -93,12 +93,14 @@ class RegistryController extends Controller
             ->when($request->boolean('tb'), fn ($q) => $q->whereExists(fn ($s) => $s->selectRaw('1')
                 ->from('admission_diagnoses as adt')->join('tb_diagnoses as tb', 'tb.icd10_code', '=', 'adt.icd10_code')
                 ->whereColumn('adt.admission_id', 'admissions.id')))
+            // prior REAL discharge (typed OR NULL-typed historical close — legacy parity, J1-4)
             ->when($request->boolean('readmit72'), fn ($q) => $q->whereExists(fn ($s) => $s->selectRaw('1')
                 ->from('admissions as prev')->whereColumn('prev.patient_id', 'admissions.patient_id')
                 ->whereColumn('prev.id', '<>', 'admissions.id')->whereColumn('prev.discharge_date', '<=', 'admissions.admit_date')
                 ->whereRaw('DATEDIFF(admissions.admit_date, prev.discharge_date) BETWEEN 0 AND ?',
                     [max(0, (int) (\App\Models\Setting::current()->readmission_window_days ?? 3))])
-                ->whereIn('prev.transfer_type', Admission::REAL_DISCHARGE_TYPES)))
+                ->where(fn ($w) => $w->whereIn('prev.transfer_type', Admission::REAL_DISCHARGE_TYPES)
+                    ->orWhereNull('prev.transfer_type'))))
             ->when($dx, function ($q) use ($dx, $request) {
                 if ($request->input('dx_match') === 'and') {
                     foreach ($dx as $code) {
@@ -143,7 +145,8 @@ class RegistryController extends Controller
                 ->whereColumn('prev.patient_id', 'admissions.patient_id')->whereColumn('prev.id', '<>', 'admissions.id')
                 ->whereColumn('prev.discharge_date', '<=', 'admissions.admit_date')
                 ->whereRaw('DATEDIFF(admissions.admit_date, prev.discharge_date) BETWEEN 0 AND ?', [$window])
-                ->whereIn('prev.transfer_type', Admission::REAL_DISCHARGE_TYPES))
+                ->where(fn ($w) => $w->whereIn('prev.transfer_type', Admission::REAL_DISCHARGE_TYPES)
+                    ->orWhereNull('prev.transfer_type')))
             ->pluck('id')->flip();
 
         $tbIds = $ids->isEmpty() ? collect() : \Illuminate\Support\Facades\DB::table('admission_diagnoses as ad')
@@ -190,14 +193,18 @@ class RegistryController extends Controller
             ->when($request->input('age_from'), fn ($q, $a) => $q->where('age', '>=', (int) $a))
             ->when($request->input('age_to'), fn ($q, $a) => $q->where('age', '<=', (int) $a))
             ->when($request->boolean('signed_only'), fn ($q) => $q->whereNotNull('signoff_date'))
-            // ind_match=and: EVERY selected indication must be present (chained whereJsonContains);
-            // default 'or': any selected indication matches (same pattern as dx_match in admissions)
+            // ind_match=and: EVERY selected indication must be present (chained both-type matches);
+            // default 'or': any selected indication matches (same pattern as dx_match in admissions).
+            // Each id is matched as BOTH JSON types: app rows store ints ([1,3]) but legacy-imported
+            // rows store strings (["1","3"]) — a single-typed whereJsonContains misses half (J1-2).
             ->when($indication, function ($q) use ($indication, $request) {
+                $both = fn ($w, $id) => $w->whereJsonContains('indication', (int) $id)
+                    ->orWhereJsonContains('indication', (string) $id);
                 if ($request->input('ind_match') === 'and') {
-                    foreach ($indication as $id) { $q->whereJsonContains('indication', (int) $id); }
+                    foreach ($indication as $id) { $q->where(fn ($w) => $both($w, $id)); }
                 } else {
-                    $q->where(function ($w) use ($indication) {
-                        foreach ($indication as $id) { $w->orWhereJsonContains('indication', (int) $id); }
+                    $q->where(function ($w) use ($indication, $both) {
+                        foreach ($indication as $id) { $w->orWhere(fn ($x) => $both($x, $id)); }
                     });
                 }
             })
@@ -226,7 +233,9 @@ class RegistryController extends Controller
         if (mb_strlen($kw) < 2) {
             return Admission::query()->whereRaw('1=0');
         }
-        $codes = Icd10::where('name', 'like', "%{$kw}%")->limit(500)->pluck('code');
+        // uncapped (J1-6): a broad keyword may match >500 ICD-10 codes — capping silently
+        // dropped admissions from the page AND the export
+        $codes = Icd10::where('name', 'like', "%{$kw}%")->pluck('code');
 
         return Admission::query()->with(['patient:id,mrn,name,gender,age,nationality', 'consultant:id,full_name,name'])
             ->whereExists(fn ($s) => $s->selectRaw('1')->from('admission_diagnoses as adx')

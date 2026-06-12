@@ -165,11 +165,12 @@ class StatisticsController extends Controller
         arsort($reasonTally);
         $reasonTally = array_slice($reasonTally, 0, 8, true);
 
-        // per-consultant KPI modes (range, ALL consultants): admissions, avg LOS (non-ICU,
+        // per-consultant KPI modes (range, ALL consultants): admissions + discharges are NON-ICU
+        // like the legacy per-physician stats and the headline KPIs (J1-12); avg LOS (non-ICU,
         // discharge-based like the headline) and window readmissions — one grouped query per
         // metric (the 'consultant' alias avoids the users.name collision; see $byCons above)
         $admByCons = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
-            ->whereBetween('a.admit_date', [$f, $t])
+            ->whereBetween('a.admit_date', [$f, $t])->whereRaw($this->nonIcu)
             ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
             ->groupBy('consultant')->pluck('c', 'consultant')->all();
         $losByCons = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
@@ -177,16 +178,19 @@ class StatisticsController extends Controller
             ->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(a.discharge_date, a.admit_date) >= 0')
             ->selectRaw('COALESCE(u.full_name, u.name) consultant, ROUND(AVG(DATEDIFF(a.discharge_date, a.admit_date)), 1) los')
             ->groupBy('consultant')->pluck('los', 'consultant')->all();
+        // readmissions are credited to the PRIOR discharge's consultant (prev.consultant_id) —
+        // legacy semantics: the metric reflects whose discharge bounced back (J1-13)
         $readmitByCons = DB::table('admissions as a')
             ->join('admissions as prev', $this->readmissionJoin($readmitWindow))
-            ->join('users as u', 'u.id', '=', 'a.consultant_id')
+            ->join('users as u', 'u.id', '=', 'prev.consultant_id')
             ->whereBetween('a.admit_date', [$f, $t])
             ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(DISTINCT a.id) c')
             ->groupBy('consultant')->pluck('c', 'consultant')->all();
         // 'activity' mode values: discharges + consultations + sign-offs per consultant over the
-        // range (admissions reuses $admByCons) — one grouped query each, same 'consultant' alias
+        // range (admissions reuses $admByCons) — one grouped query each, same 'consultant' alias;
+        // discharges are NON-ICU like the headline (J1-12)
         $disByCons = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
-            ->whereBetween('a.discharge_date', [$f, $t])
+            ->whereBetween('a.discharge_date', [$f, $t])->whereRaw($this->nonIcu)
             ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
             ->groupBy('consultant')->pluck('c', 'consultant')->all();
         $consByCons = DB::table('consultations as co')->join('users as u', 'u.id', '=', 'co.consultant_id')
@@ -255,11 +259,13 @@ class StatisticsController extends Controller
         $u = \App\Models\User::findOrFail($consultantId);
 
         // bucketed activity time-series, scoped to this consultant (reuses the page's
-        // interval buckets; $consultantId is validated+cast, safe in the raw predicate)
+        // interval buckets; $consultantId is validated+cast, safe in the raw predicate).
+        // admissions/discharges are NON-ICU like legacy and the scoped numbers below (J1-12);
+        // consultations/sign-offs are never location-split.
         $keys = array_column($buckets, 'key');
         $own = "consultant_id = {$consultantId}";
-        $admS = $this->seriesBy('admissions', 'admit_date', $f, $t, $interval, $own);
-        $disS = $this->seriesBy('admissions', 'discharge_date', $f, $t, $interval, $own);
+        $admS = $this->seriesBy('admissions', 'admit_date', $f, $t, $interval, "{$own} AND {$this->nonIcu}");
+        $disS = $this->seriesBy('admissions', 'discharge_date', $f, $t, $interval, "{$own} AND {$this->nonIcu}");
         $consS = $this->seriesBy('consultations', 'consultation_date', $f, $t, $interval, $own);
         $signS = $this->seriesBy('consultations', 'signoff_date', $f, $t, $interval, $own);
 

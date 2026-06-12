@@ -37,17 +37,20 @@ class Admission extends Model
     }
 
     /**
-     * transfer_type values that are REAL discharges — the only valid readmission anchors.
+     * transfer_type values that are REAL discharges — valid readmission anchors.
      * Ward<->ICU / specialty transfers are continuations of care, never readmission anchors.
+     * NULL-typed closed episodes (historical rows discharged without a transfer_type) ALSO count
+     * as anchors — legacy accepted them everywhere (J1-4, deliberate definition change).
      * Used identically by Statistics, Registry and the board badge (guarded by StatisticsValueTest).
      */
     public const REAL_DISCHARGE_TYPES = ['discharge from ward', 'discharge from ICU'];
 
     /**
      * The ONE readmission JOIN predicate (admissions a JOIN admissions prev): a new admission
-     * anchored to a prior REAL discharge of the same patient within the configured window.
-     * Shared by Statistics (headline KPI, grid, per-consultant, drill-down) and Reports so the
-     * definition cannot drift. Guarded by StatisticsValueTest + GapWave2Test.
+     * anchored to a prior REAL discharge (typed real discharge OR NULL-typed historical close)
+     * of the same patient within the configured window. Shared by Statistics (headline KPI,
+     * grid, per-consultant, drill-down) and Reports so the definition cannot drift.
+     * Guarded by StatisticsValueTest + GapWave2Test + Round5J1Test.
      */
     public static function readmissionJoin(int $window): \Closure
     {
@@ -56,7 +59,8 @@ class Admission extends Model
               ->whereColumn('prev.discharge_date', '<=', 'a.admit_date')
               ->whereRaw('DATEDIFF(a.admit_date, prev.discharge_date) BETWEEN 0 AND ?', [$window])
               ->whereColumn('prev.id', '<>', 'a.id')
-              ->whereIn('prev.transfer_type', self::REAL_DISCHARGE_TYPES);
+              ->where(fn ($w) => $w->whereIn('prev.transfer_type', self::REAL_DISCHARGE_TYPES)
+                  ->orWhereNull('prev.transfer_type'));
         };
     }
 

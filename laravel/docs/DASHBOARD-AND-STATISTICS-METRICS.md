@@ -18,7 +18,7 @@
 | **Length of stay (LOS)** | `DATEDIFF(discharge_date, admit_date)` in **days**, only counting rows where the result is `>= 0`. Whole days (a same-day discharge = 0). |
 | **Avg LOS** | `AVG(DATEDIFF(discharge_date, admit_date))` over **discharges in the period**, **non-ICU**. ICU LOS is the same over ICU rows. |
 | **Mortality %** | `deaths / discharges × 100` (deaths counted by `outcome='Dead'`). |
-| **Readmission** | A new admission whose `admit_date` is within **`readmission_window_days`** (settings; default 3 = the "72-hour" rule, **clinically confirmed 2026-06-09**, admin-tunable in Control) of the **same patient's** prior **real** discharge (`prev.transfer_type IN ('discharge from ward','discharge from ICU')`). Ward↔ICU and specialty transfers are continuations of care and are **excluded**, so same-day transfer rows don't inflate it. UI labels (stats KPI, board badge, registry filter) display the configured window. |
+| **Readmission** | A new admission whose `admit_date` is within **`readmission_window_days`** (settings; default 3 = the "72-hour" rule, **clinically confirmed 2026-06-09**, admin-tunable in Control) of the **same patient's** prior **real** discharge (`prev.transfer_type IN ('discharge from ward','discharge from ICU') OR prev.transfer_type IS NULL`). **NULL-typed historical discharges count as anchors** — legacy parity (round-5 J1-4, deliberate): old rows were closed without a transfer type, and the legacy app accepted them everywhere, so the recon-pinned 317 readmissions may legitimately **rise**. Ward↔ICU and specialty transfers (explicit types) are continuations of care and stay **excluded**, so same-day transfer rows don't inflate it. UI labels (stats KPI, board badge, registry filter) display the configured window. |
 | **Admissions counted by** | `admit_date` in range. **Discharges / deaths by** `discharge_date` in range. **Consultations by** `consultation_date`; **sign-offs by** `signoff_date`. |
 
 Operational inputs come from the single `settings` row (editable in **Control → Settings**, every
@@ -85,7 +85,8 @@ Date range defaults to year-to-date; **interval** = Daily / Monthly / Quarterly 
 | **Admission source** (donut) | `COUNT` grouped by `admitted_from` (top 6). |
 | **Top diagnoses** | ICD-10 codes on admissions in range (top 8). |
 | **Consultation indications** | Decode each consultation's `indication` JSON → `consultation_reasons.name`, tally (top 8). |
-| **Admissions by consultant** | `COUNT(admissions in range)` by consultant (top 10). |
+| **Admissions by consultant** | `COUNT(admissions in range)` by consultant (top 10). **Per-consultant admissions and discharges are NON-ICU** like the headline KPIs and the legacy per-physician stats (round-5 J1-12); the physician drill-down admission/discharge series follow the same rule (consultations/sign-offs are never location-split). |
+| **Per-consultant readmissions** | Credited to the **PRIOR discharge's consultant** (`prev.consultant_id`) — legacy semantics: the metric reflects whose discharge bounced back, not who received the readmission (round-5 J1-13). The headline/grid readmission counts are unaffected. |
 | **Discharge destinations** (donut) | `COUNT` grouped by `discharge_to` (blank → "Unspecified"), discharges in range, top 8 — **overall** or, via the selector, **per a chosen consultant** (top 12 consultants pivoted by destination). |
 
 ---
@@ -114,4 +115,5 @@ Per-day table for the chosen month: admissions, discharges, ICU (admissions), mo
 - **Thresholds are operational, not validated:** `short_los`/`long_los` (LOS band colours + LSP), `min/max_hospitalist`/`subs` (shuffle balance) were carried from the legacy app and are flagged **[NEEDS CLINICAL REVIEW]**.
 - **72-hour readmission window is fixed at 3 days** and counts only real discharges (transfers excluded). Changing the window is a code change.
 - **ICU vs ward:** most "ward" metrics exclude ICU by the non-ICU predicate above; ICU has its own admission/LOS figures. Mortality and consultations are **not** split by location.
+- **`medical_discharge_date` is stamped on EVERY close** (round-5 J1-5, legacy med_DISDATE parity): transfers (ward↔ICU, specialty, external, ICU-pull) restamp it with the close date, and the single-step ICU discharge mirrors the discharge date. Clinical-LOS aggregates therefore include transfer-closed episodes, as legacy did.
 - This is a **training/operational reporting tool**, not a validated clinical-decision device; numbers are descriptive aggregates of the recorded data.

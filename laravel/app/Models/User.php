@@ -62,6 +62,9 @@ class User extends Authenticatable
     }
 
     public function isAdmin(): bool { return (int) $this->role === self::ROLE_ADMIN; }
+
+    /** Observers (role 5) are READ-ONLY everywhere — capability flags never override this. */
+    public function isObserver(): bool { return (int) $this->role === self::ROLE_OBSERVER; }
     public function roleLabel(): string { return self::ROLE_LABELS[$this->role] ?? 'User'; }
     public function mfaEnabled(): bool { return $this->mfa_secret !== null && $this->mfa_enrolled_at !== null; }
 

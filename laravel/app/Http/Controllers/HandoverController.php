@@ -8,7 +8,6 @@ use App\Models\Handover;
 use App\Models\HandoverRevision;
 use App\Models\HandoverSignature;
 use App\Models\Notification;
-use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -36,6 +35,9 @@ class HandoverController extends Controller
     private function canManage(Admission $a): bool
     {
         $u = Auth::user();
+        if ($u->isObserver()) {
+            return false;   // global read-only guarantee — capability flags never override (J1-9)
+        }
 
         return $u->isAdmin() || $u->can_manage || (int) $a->consultant_id === (int) $u->id;
     }
@@ -63,7 +65,7 @@ class HandoverController extends Controller
     /** POST /admissions/{admission}/handover — upsert the current text + append a revision. */
     public function save(Request $request, Admission $admission)
     {
-        if ((int) Auth::user()->role === User::ROLE_OBSERVER) {
+        if (Auth::user()->isObserver()) {
             throw new AccessDeniedHttpException('Observers are read-only.');
         }
         // canManage, PLUS the outgoing consultant of a still-pending signature: after a gated
@@ -148,7 +150,7 @@ class HandoverController extends Controller
     public function sign(HandoverSignature $signature)
     {
         $u = Auth::user();
-        if (! ($u->isAdmin() || (int) $signature->to_consultant_id === (int) $u->id)) {
+        if ($u->isObserver() || ! ($u->isAdmin() || (int) $signature->to_consultant_id === (int) $u->id)) {
             throw new AccessDeniedHttpException('Only the receiving consultant may sign.');
         }
         if ($signature->voided_at) {
@@ -165,8 +167,11 @@ class HandoverController extends Controller
     /** POST /handovers/sign-many {ids:[]} — sign every pending signature addressed to me. */
     public function signMany(Request $request)
     {
-        $data = $request->validate(['ids' => ['required', 'array'], 'ids.*' => ['integer']]);
         $u = Auth::user();
+        if ($u->isObserver()) {
+            throw new AccessDeniedHttpException('Observers are read-only.');
+        }
+        $data = $request->validate(['ids' => ['required', 'array'], 'ids.*' => ['integer']]);
 
         $rows = HandoverSignature::whereIn('id', $data['ids'])->pending()
             ->when(! $u->isAdmin(), fn ($q) => $q->where('to_consultant_id', $u->id))

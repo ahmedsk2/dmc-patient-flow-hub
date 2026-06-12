@@ -18,7 +18,10 @@ class ModifyAdmissionRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()->isAdmin() || $this->user()->can_modify;   // Modify capability
+        // Modify capability; Observers are read-only regardless of capability flags (J1-9)
+        $u = $this->user();
+
+        return ! $u->isObserver() && ($u->isAdmin() || $u->can_modify);
     }
 
     protected function prepareForValidation(): void

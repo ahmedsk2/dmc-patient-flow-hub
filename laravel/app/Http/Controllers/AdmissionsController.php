@@ -26,11 +26,17 @@ class AdmissionsController extends Controller
      */
     public function index(): Response
     {
-        $queue = Admission::query()
+        $rows = Admission::query()
             ->whereNull('discharge_date')->whereNull('consultant_id')
-            ->with('patient:id,mrn,name,gender,age')->withCount('diagnoses')
-            ->orderBy('admit_date')->orderBy('id')->get()
-            ->map(fn (Admission $a) => [
+            ->with(['patient:id,mrn,name,gender,age', 'diagnoses:id,admission_id,seq,icd10_code'])
+            ->withCount('diagnoses')
+            ->orderBy('admit_date')->orderBy('id')->get();
+
+        // ICD-10 names for every code on the queue — ONE lookup (J1-15b), like the board cards
+        $codes = $rows->flatMap(fn ($a) => $a->diagnoses->pluck('icd10_code'))->unique()->values();
+        $dxNames = $codes->isEmpty() ? collect() : Icd10::whereIn('code', $codes)->pluck('name', 'code');
+
+        $queue = $rows->map(fn (Admission $a) => [
                 'id' => $a->id,
                 'name' => $a->patient?->name ?? 'Unknown',
                 'mrn' => $a->patient?->mrn,
@@ -41,6 +47,8 @@ class AdmissionsController extends Controller
                 'admitted_from' => $a->admitted_from,
                 'admit_date' => optional($a->admit_date)->toDateString(),
                 'dx_count' => $a->diagnoses_count,
+                'diagnoses' => $a->diagnoses->sortBy('seq')->values()
+                    ->map(fn ($d) => ['code' => $d->icd10_code, 'name' => $dxNames[$d->icd10_code] ?? $d->icd10_code])->all(),
                 'los' => $a->lengthOfStay(),
             ]);
 

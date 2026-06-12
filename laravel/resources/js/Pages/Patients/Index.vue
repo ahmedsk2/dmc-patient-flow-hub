@@ -166,6 +166,10 @@ const specConsultants = computed(() => props.consultants.filter((c) => c.special
 // bulk reassign: the RECEIVING consultant must be on service ('from' stays unfiltered — patients
 // may be moved away from someone who just went off service)
 const onServiceConsultants = computed(() => props.consultants.filter((c) => c.on_service));
+// single-assign modal: on-service only too, but keep the CURRENT assignee selectable even when
+// they just went off service (so the prefilled selection isn't silently dropped) — J1-15a
+const assignConsultants = computed(() => props.consultants.filter((c) =>
+    c.on_service || (modal.value && c.id === modal.value.row.consultant_id)));
 watch(() => tForm.specialty_id, () => (tForm.consultant_id = ''));
 const transferReady = computed(() =>
     tForm.mode === 'location' ? !!tForm.target
@@ -351,13 +355,13 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
 
         <!-- action modal (assign / discharge / transfer) -->
         <div v-if="modal" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="closeModal">
-            <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div class="max-h-[90vh] w-full max-w-md overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
                 <div class="mb-4 flex items-start justify-between">
                     <div><h3 class="text-lg font-bold text-ink-900">{{ ({ assign: 'Reassign consultant', medical: 'Discharge', complete: 'Complete discharge', icu: 'ICU discharge', transfer: 'Transfer' })[modal.mode] }}</h3><p class="text-sm text-ink-400">{{ modal.row.name }} · MRN {{ modal.row.mrn }}</p></div>
                     <button @click="closeModal" class="text-ink-400 hover:text-ink-700">✕</button>
                 </div>
                 <form v-if="modal.mode === 'assign'" @submit.prevent="submitAssign" class="space-y-4">
-                    <select v-model="aForm.consultant_id" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select consultant…</option><option v-for="c in consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select>
+                    <select v-model="aForm.consultant_id" title="On-service consultants only" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select consultant…</option><option v-for="c in assignConsultants" :key="c.id" :value="c.id">{{ c.name }}{{ !c.on_service ? ' (off service)' : '' }}</option></select>
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="aForm.mark_new" class="rounded text-brand-600" /> Mark as new patient <span class="text-xs text-ink-400">(uncheck for a quiet administrative move — no “New” badge)</span></label>
                     <!-- handover gate: write today's handover here, save, retry the assign -->
                     <div v-if="aForm.errors.handover" class="rounded-xl bg-warning-100/60 p-3 ring-1 ring-warning-500/30">
@@ -368,6 +372,22 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                     <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="aForm.processing || !aForm.consultant_id" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Assign</button></div>
                 </form>
                 <form v-else-if="modal.mode === 'medical'" @submit.prevent="submitMedical" class="space-y-4">
+                    <!-- record-review step (J1-15c): legacy discharge embedded the admission record
+                         above the discharge fields — read-only summary here; edits go via Modify -->
+                    <div class="rounded-xl bg-surface/70 p-3 ring-1 ring-ink-100">
+                        <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-warning-500">Kindly review admission details</p>
+                        <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                            <div><dt class="font-semibold text-ink-400">Name</dt><dd class="text-ink-700">{{ modal.row.name }}</dd></div>
+                            <div><dt class="font-semibold text-ink-400">MRN</dt><dd class="nums text-ink-700">{{ modal.row.mrn || '—' }}</dd></div>
+                            <div><dt class="font-semibold text-ink-400">Age / Gender</dt><dd class="nums text-ink-700">{{ modal.row.age ?? '—' }}y · {{ modal.row.gender || '—' }}</dd></div>
+                            <div><dt class="font-semibold text-ink-400">Bed</dt><dd class="nums text-ink-700">{{ modal.row.bed || '—' }}</dd></div>
+                            <div><dt class="font-semibold text-ink-400">Admitted from</dt><dd class="text-ink-700">{{ modal.row.admitted_from || '—' }}</dd></div>
+                            <div><dt class="font-semibold text-ink-400">Admit date</dt><dd class="nums text-ink-700">{{ modal.row.admit_date || '—' }}</dd></div>
+                        </dl>
+                        <ul v-if="modal.row.diagnoses?.length" class="mt-2 space-y-0.5 border-t border-ink-100 pt-2 text-[11px] leading-snug text-ink-600">
+                            <li v-for="d in modal.row.diagnoses" :key="d.code"><span class="nums font-semibold text-brand-700">{{ d.code }}</span> {{ d.name }}</li>
+                        </ul>
+                    </div>
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge type</label>
                         <div class="flex gap-2">
                             <label v-for="t in [[false, 'Medical only (still in bed)'], [true, 'Complete (leaving now)']]" :key="String(t[0])" class="flex-1 cursor-pointer rounded-xl border-2 px-3 py-2.5 text-center text-sm font-semibold transition" :class="mdForm.complete === t[0] ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'"><input type="radio" v-model="mdForm.complete" :value="t[0]" class="hidden" /> {{ t[1] }}</label>

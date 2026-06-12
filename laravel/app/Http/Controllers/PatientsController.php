@@ -106,6 +106,12 @@ class PatientsController extends Controller
         // discharged episodes); every other view shows open episodes only
         $includeDischarged = ($filters['view'] ?? null) === 'longterm';
 
+        // D1 exemption (J1-7): the legacy long-term and TB pages were UNIT-WIDE — a consultant
+        // opening these views sees every consultant's rows; the default board stays own-only
+        if (in_array($filters['view'] ?? null, ['longterm', 'tb'], true)) {
+            $scope = fn ($q) => $q;
+        }
+
         $admissions = Admission::query()
             ->when(! $includeDischarged, fn ($q) => $q->whereNull('discharge_date'))
             ->whereNotNull('consultant_id')                       // assigned only (unassigned → New Admissions)
@@ -121,13 +127,15 @@ class PatientsController extends Controller
             ->get();
 
         // readmission flag: admitted within the configured window of a prior REAL discharge
+        // (typed real discharge OR NULL-typed historical close — legacy parity, J1-4)
         $readmitWindow = max(0, (int) ($settings->readmission_window_days ?? 3));
         $readmitIds = Admission::query()->whereIn('id', $admissions->pluck('id'))
             ->whereExists(fn ($s) => $s->selectRaw('1')->from('admissions as prev')
                 ->whereColumn('prev.patient_id', 'admissions.patient_id')->whereColumn('prev.id', '<>', 'admissions.id')
                 ->whereColumn('prev.discharge_date', '<=', 'admissions.admit_date')
                 ->whereRaw('DATEDIFF(admissions.admit_date, prev.discharge_date) BETWEEN 0 AND ?', [$readmitWindow])
-                ->whereIn('prev.transfer_type', Admission::REAL_DISCHARGE_TYPES))
+                ->where(fn ($w) => $w->whereIn('prev.transfer_type', Admission::REAL_DISCHARGE_TYPES)
+                    ->orWhereNull('prev.transfer_type')))
             ->pluck('id')->flip();
 
         $newCutoff = now()->subDay();   // "New" = assigned within the last 24h (rolling)
@@ -176,6 +184,7 @@ class PatientsController extends Controller
                 'bed' => $a->bed,
                 'location' => $a->current_location,
                 'consultant_id' => $cid,
+                'admitted_from' => $a->admitted_from,   // discharge-modal record-review summary (J1-15c)
                 'admit_date' => optional($a->admit_date)->toDateString(),
                 'los' => $los,
                 'los_band' => $los === null ? null : ($los < $settings->short_los ? 'short' : ($los > $settings->long_los ? 'long' : 'mid')),

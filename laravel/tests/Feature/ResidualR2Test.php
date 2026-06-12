@@ -231,16 +231,21 @@ class ResidualR2Test extends TestCase
         $this->assertSame('B-12', $audit->details['bed'] ?? null);
     }
 
-    public function test_bed_update_rejected_for_observer_and_non_owner(): void
+    public function test_bed_update_rejected_for_observer_but_open_to_clinical_roles(): void
     {
         $owner = $this->user(User::ROLE_CONSULTANT);
         $a = $this->admission(['consultant_id' => $owner->id, 'bed' => 'A-01']);
 
         $this->actingAs($this->user(User::ROLE_OBSERVER))->post("/admissions/{$a->id}/bed", ['bed' => 'X'])->assertForbidden();
-        $this->actingAs($this->user(User::ROLE_CONSULTANT))->post("/admissions/{$a->id}/bed", ['bed' => 'X'])->assertForbidden();
         $this->assertSame('A-01', $a->fresh()->bed);
 
-        // a Manage-capability user who is not the owner may edit
+        // J1-11 (deliberate change): ANY clinical role may inline-edit the bed, like the legacy
+        // inline edits (was canManage) — a non-owner consultant is no longer rejected
+        $this->actingAs($this->user(User::ROLE_CONSULTANT))
+            ->post("/admissions/{$a->id}/bed", ['bed' => 'X'])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame('X', $a->fresh()->bed);
+
+        // a Manage-capability user keeps working too
         $this->actingAs($this->user(User::ROLE_REGISTRAR, ['can_manage' => true]))
             ->post("/admissions/{$a->id}/bed", ['bed' => null])->assertRedirect()->assertSessionHasNoErrors();
         $this->assertNull($a->fresh()->bed);

@@ -57,27 +57,37 @@
         <img class="banner" src="{{ $img('reportheader1.png') }}" alt="">
         <div class="month-title">Internal Medicine Performance Report — {{ $year }}/{{ $m['m'] }} ({{ $m['name'] }})</div>
         <div class="panel">
+            {{-- legacy a4-monthly card row incl. the census-based Total Patients / Long Stay
+                 counters — both read "Pending" until the month has fully elapsed (J1-14) --}}
             <table class="cards">
                 <tr>
-                    <td style="width: 20%;"><div class="counter">
+                    <td style="width: 15%;"><div class="counter">
+                        <div class="val">{{ $m['cards']['census'] ?? 'Pending' }}</div>
+                        <h3>Total Patients</h3><div class="accent"></div>
+                    </div></td>
+                    <td style="width: 14%;"><div class="counter">
                         <div class="val">{{ $m['cards']['admissions'] }}</div>
                         <h3>Admissions</h3><div class="accent"></div>
                     </div></td>
-                    <td style="width: 20%;"><div class="counter">
+                    <td style="width: 14%;"><div class="counter">
                         <div class="val">{{ $m['cards']['discharges'] }}</div>
                         <h3>Discharges</h3><div class="accent"></div>
                     </div></td>
-                    <td style="width: 20%;"><div class="counter">
+                    <td style="width: 14%;"><div class="counter">
                         <div class="val">{{ $m['cards']['deaths'] }}</div>
                         <h3>Mortality</h3><div class="accent"></div>
                     </div></td>
-                    <td style="width: 20%;"><div class="counter">
+                    <td style="width: 14%;"><div class="counter">
                         <div class="val">{{ $m['cards']['weekend'] }} ({{ number_format($m['cards']['weekendPct'], 2) }}%)</div>
                         <h3>Weekend Discharge</h3><div class="accent"></div>
                     </div></td>
-                    <td style="width: 20%;"><div class="counter">
+                    <td style="width: 14%;"><div class="counter">
                         <div class="val">{{ $m['cards']['readmits'] }}</div>
                         <h3>72 hrs Readmissions</h3><div class="accent"></div>
+                    </div></td>
+                    <td style="width: 15%;"><div class="counter">
+                        <div class="val">{{ $m['cards']['longStay'] === null ? 'Pending' : $m['cards']['longStay'] . ' (' . number_format($m['cards']['longStayPct'], 2) . '%)' }}</div>
+                        <h3>Long Stay</h3><div class="accent"></div>
                     </div></td>
                 </tr>
             </table>
