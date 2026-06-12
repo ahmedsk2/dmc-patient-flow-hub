@@ -82,6 +82,9 @@ class AdmissionsController extends Controller
     public function create(): Response
     {
         $this->denyObservers();   // legacy access_PICU_patients [0,2,3,4] page gate (J2-12)
+        // legacy: the New Admission form is Can-Add only (button hidden + page gated)
+        $u = request()->user();
+        abort_unless($u->isAdmin() || $u->can_add, 403, 'Requires the Add capability.');
 
         return Inertia::render('Admissions/Create', [
             'consultants' => User::consultantOptions(),

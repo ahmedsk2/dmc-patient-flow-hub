@@ -34,7 +34,11 @@ class ConsultationRequest extends FormRequest
             'consultant_id' => [$this->toServiceIsInternal() ? 'required' : 'nullable', 'exists:users,id'],
             'indication' => ['required', 'array', 'min:1'],
             'indication.*' => ['integer'],
-            'other_indication' => ['nullable', 'string', 'max:255'],
+            // legacy: free text becomes REQUIRED when the 'Other' indication (reason id 0) is selected
+            'other_indication' => [
+                \Illuminate\Validation\Rule::requiredIf(fn () => in_array(0, array_map('intval', (array) $this->input('indication', [])), true)),
+                'nullable', 'string', 'max:255',
+            ],
         ];
     }
 

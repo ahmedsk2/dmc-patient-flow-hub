@@ -179,7 +179,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                             <label v-for="r in reasons" :key="r.id" class="cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold transition" :class="eForm.indication.includes(r.id) ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'"><input type="checkbox" :value="r.id" v-model="eForm.indication" class="hidden" /> {{ r.name }}</label>
                         </div>
                         <p v-if="eForm.errors.indication" class="mt-1 text-xs text-danger-600">{{ eForm.errors.indication }}</p>
-                        <input v-model="eForm.other_indication" :class="[field, 'mt-2']" placeholder="Other indication (optional)" />
+                        <input v-model="eForm.other_indication" :class="[field, 'mt-2']" placeholder="Other indication (required when 'Other' is selected)" />
                     </div>
                     <div class="flex justify-end gap-2"><button type="button" @click="editing = null" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="eForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Update consultation</button></div>
                 </form>
@@ -220,7 +220,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                             </label>
                         </div>
                         <p v-if="cForm.errors.indication" class="mt-1 text-xs text-danger-600">{{ cForm.errors.indication }}</p>
-                        <input v-model="cForm.other_indication" :class="[field, 'mt-2']" placeholder="Other indication (optional)" />
+                        <input v-model="cForm.other_indication" :class="[field, 'mt-2']" placeholder="Other indication (required when 'Other' is selected)" />
                     </div>
                     <div class="flex justify-end gap-2">
                         <button type="button" @click="showAdd = false" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>

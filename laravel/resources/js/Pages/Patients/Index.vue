@@ -8,8 +8,8 @@ const props = defineProps({ groups: Array, filters: Object, stats: Object, consu
 
 const page = usePage();
 const me = computed(() => page.props.auth.user);
-const canAssign = computed(() => me.value.is_admin || me.value.can.assign);
-const canReassign = computed(() => me.value.is_admin || me.value.can.assign || me.value.can.manage);
+const canAssign = computed(() => me.value.role !== 5 && (me.value.is_admin || me.value.can.assign));   // observers never see assign controls
+const canReassign = computed(() => me.value.role !== 5 && (me.value.is_admin || me.value.can.assign || me.value.can.manage));
 const isObserver = computed(() => me.value.role === 5);
 const canManage = (row) => me.value.is_admin || me.value.can.manage || row.consultant_id === me.value.id;
 
