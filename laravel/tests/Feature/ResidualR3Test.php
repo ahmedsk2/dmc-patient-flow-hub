@@ -83,14 +83,17 @@ class ResidualR3Test extends TestCase
         $this->assertSame(0, Consultation::count());
     }
 
-    public function test_consultation_store_requires_age_bed_from_and_to_service(): void
+    public function test_consultation_store_requires_bed_from_and_to_service(): void
     {
+        // O1-2: age is now NULLABLE (legacy v_int_range skipped empties; keeps imported null-age
+        // consultations re-savable). bed / from / to-service remain required.
         $payload = $this->consultationPayload();
         unset($payload['age'], $payload['bed'], $payload['consultation_from'], $payload['to_service']);
 
         $this->actingAs($this->user(User::ROLE_REGISTRAR))->from('/consultations')
             ->post('/consultations', $payload)
-            ->assertSessionHasErrors(['age', 'bed', 'consultation_from', 'to_service']);
+            ->assertSessionHasErrors(['bed', 'consultation_from', 'to_service'])
+            ->assertSessionDoesntHaveErrors('age');
         $this->assertSame(0, Consultation::count());
     }
 

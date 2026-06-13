@@ -836,6 +836,12 @@ class PatientActionController extends Controller
                 $new->diagnoses()->create(['seq' => $dx->seq, 'icd10_code' => $dx->icd10_code]);
             }
 
+            // the ICU episode is now closed — a pending receiving-consultant signature on IT is moot
+            // (this was the only close path that left it dangling). Patient-wide scoping leaves
+            // signatures on the patient's OTHER episodes alone while the patient stays active (this
+            // pull always reopens a ward episode, so they normally do) — L1-5.
+            $this->voidPendingSignatures($admission);
+
             return $new;
         });
         $this->audit('admission.icu_pull', $admission, ['new_admission_id' => $new->id]);

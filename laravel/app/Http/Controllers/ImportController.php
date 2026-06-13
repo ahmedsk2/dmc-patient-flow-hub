@@ -115,6 +115,13 @@ class ImportController extends Controller
     {
         $lines = preg_split('/\r\n|\r|\n/', trim($text));
         $consultants = null;   // lazy — only loaded when a row actually carries column 11
+        // MRNs that already have an OPEN episode in the DB — an ACTIVE import row for any of them is
+        // a duplicate-active-MRN (mirrors the admit-time + Modify-repoint guard: the board would show
+        // the same patient twice). Built once; $openMrns also accrues active rows seen WITHIN this
+        // batch so two active rows for the same new MRN don't both slip through.
+        $openMrns = DB::table('admissions')->join('patients', 'patients.id', '=', 'admissions.patient_id')
+            ->whereNull('admissions.discharge_date')->pluck('patients.mrn')
+            ->map(fn ($m) => (string) $m)->flip()->all();
         $out = [];
         foreach ($lines as $i => $line) {
             if (trim($line) === '') { continue; }
@@ -168,6 +175,14 @@ class ImportController extends Controller
                 $row['ok'] = false; $row['error'] = 'TransferType must be one of: ' . implode(' / ', self::TRANSFER_TYPES);
             } elseif ($row['transfer_type'] !== null && ! $row['discharge_date']) {
                 $row['ok'] = false; $row['error'] = 'TransferType requires a discharge date';
+            } elseif (! $row['discharge_date'] && isset($openMrns[$mrn])) {
+                // active row (no discharge) for an MRN that already has an open episode (in the DB
+                // or an earlier active row this run) — the patient would appear on the board twice
+                $row['ok'] = false; $row['error'] = 'MRN already has an active (open) admission';
+            }
+            // a committed ACTIVE row makes this MRN open for the rest of the batch
+            if ($row['ok'] && ! $row['discharge_date']) {
+                $openMrns[$mrn] = true;
             }
             $out[] = $row;
         }

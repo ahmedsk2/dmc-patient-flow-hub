@@ -274,7 +274,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
             <table class="w-full text-sm">
                 <thead>
                     <tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
-                        <th scope="col" class="px-5 py-2.5">Consultant</th><th scope="col" class="px-3 py-2.5 text-center">New</th><th scope="col" class="px-3 py-2.5 text-center">Old</th><th scope="col" class="px-3 py-2.5 text-center">Active</th>
+                        <th scope="col" class="px-5 py-2.5">Consultant</th><th scope="col" class="px-3 py-2.5 text-center">Old</th><th scope="col" class="px-3 py-2.5 text-center">New</th><th scope="col" class="px-3 py-2.5 text-center">Active</th>
                         <th scope="col" class="px-3 py-2.5 text-center">Ward</th><th scope="col" class="px-3 py-2.5 text-center">ICU</th><th scope="col" class="px-3 py-2.5 text-center">TB</th>
                     </tr>
                 </thead>
@@ -285,8 +285,8 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                             <td class="px-5 py-2 font-semibold text-ink-700">
                                 <svg class="mr-1.5 inline h-4 w-4 text-ink-300" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" :d="open.has(g.id) ? 'm4.5 15.75 7.5-7.5 7.5 7.5' : 'm19.5 8.25-7.5 7.5-7.5-7.5'" /></svg> Dr. {{ g.name }}
                             </td>
-                            <td class="nums px-3 py-2 text-center text-info-500">{{ g.counts.new || '' }}</td>
                             <td class="nums px-3 py-2 text-center text-ink-600">{{ g.counts.old || '' }}</td>
+                            <td class="nums px-3 py-2 text-center text-info-500">{{ g.counts.new || '' }}</td>
                             <td class="nums px-3 py-2 text-center font-semibold text-brand-700">{{ g.counts.active }}</td>
                             <td class="nums px-3 py-2 text-center text-ink-600">{{ g.counts.ward }}</td>
                             <td class="nums px-3 py-2 text-center text-danger-600">{{ g.counts.icu || '' }}</td>

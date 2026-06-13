@@ -151,6 +151,11 @@ class AdmissionsController extends Controller
         // exact audience of the legacy Can-Modify fragment (K1-10; was also can_manage/owner).
         // Managers/owners act through the action endpoints, not this PHI prefill.
         $u = Auth::user();
+        // Observers are read-only regardless of capability flags (J1-9 global guarantee): an
+        // Observer carrying a stray can_modify=1 must not pull full patient PHI via this endpoint.
+        if ($u->isObserver()) {
+            throw new AccessDeniedHttpException('Observers have read-only access.');
+        }
         if (! ($u->isAdmin() || $u->can_modify)) {
             throw new AccessDeniedHttpException('You do not have access to this patient\'s details.');
         }

@@ -270,7 +270,9 @@ class LegacyImport extends Command
                     $svc = $svcMap[(int) $svc] ?? $svc;   // unmatched numbers self-heal via the data-fix migration
                 }
                 $batch[] = [
-                    'mrn' => $mrn ?: null,
+                    // keep MRN '0' (a real, if garbage, value) like the patient import does —
+                    // `$mrn ?: null` would null '0' and unlink it from its patient (L1-schema)
+                    'mrn' => $mrn === '' ? null : $mrn,
                     'patient_id' => $patientMap[$mrn] ?? null,
                     'patient_name' => $c->PNAME,
                     'age' => is_numeric($c->age) ? (int) $c->age : null,
