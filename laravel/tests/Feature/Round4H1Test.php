@@ -136,7 +136,7 @@ class Round4H1Test extends TestCase
         $a = $this->admission();
 
         $this->actingAs($this->admin())->post("/admissions/{$a->id}/medical-discharge", [
-            'outcome' => 'Dead', 'medical_discharge_date' => now()->toDateString(),
+            'outcome' => 'Dead', 'medical_discharge_date' => now()->toDateString(), 'delay_reason' => 'Physical',   // medical-only needs the delay reason (N1-4)
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertSame('Alive', $a->fresh()->outcome, 'server forces Alive when complete!=true');

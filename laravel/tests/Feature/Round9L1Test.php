@@ -486,24 +486,22 @@ class Round9L1Test extends TestCase
         $tb = $this->admission(['consultant_id' => $other->id]);
         $tb->diagnoses()->create(['seq' => 1, 'icd10_code' => 'A15.0']);
 
-        // longterm view: chips count the UNIT, matching the unit-wide board below them
+        // N1-6: stats.longterm/stats.tb were removed (Patients/Index.vue never read them); the
+        // unit-wide-vs-own-only D1 exemption is still asserted through stats.total, the chip the
+        // board actually renders.
+        // longterm view: stats count the UNIT, matching the unit-wide board below them
         $this->actingAs($me)->get('/patients?view=longterm')
             ->assertInertia(fn (AssertableInertia $p) => $p
-                ->where('stats.longterm', 2)
-                ->where('stats.total', 3)
-                ->where('stats.tb', 1));
+                ->where('stats.total', 3));
 
         // tb view: same exemption
         $this->actingAs($me)->get('/patients?view=tb')
             ->assertInertia(fn (AssertableInertia $p) => $p
-                ->where('stats.tb', 1)
                 ->where('stats.total', 3));
 
-        // the DEFAULT board keeps the D1 own-only chips
+        // the DEFAULT board keeps the D1 own-only scoping
         $this->actingAs($me)->get('/patients')
             ->assertInertia(fn (AssertableInertia $p) => $p
-                ->where('stats.longterm', 1)
-                ->where('stats.total', 1)
-                ->where('stats.tb', 0));
+                ->where('stats.total', 1));
     }
 }

@@ -52,9 +52,9 @@ class ClinicalFlowTest extends TestCase
         $this->assertNotNull($a->medical_discharge_date);
         $this->assertNull($a->discharge_date, 'medical discharge must NOT close the episode');
 
-        // phase 2 - complete discharge: closes the file
+        // phase 2 - complete discharge: closes the file (destination now required at the close, N1-4)
         $this->actingAs($admin)->post("/admissions/{$a->id}/complete-discharge", [
-            'discharge_date' => now()->toDateString(),
+            'discharge_date' => now()->toDateString(), 'discharge_to' => 'Home',
         ])->assertRedirect();
         $a->refresh();
         $this->assertNotNull($a->discharge_date);
@@ -62,7 +62,7 @@ class ClinicalFlowTest extends TestCase
 
         // a second complete-discharge is rejected (already discharged)
         $this->actingAs($admin)->post("/admissions/{$a->id}/complete-discharge", [
-            'discharge_date' => now()->toDateString(),
+            'discharge_date' => now()->toDateString(), 'discharge_to' => 'Home',
         ]);
         $this->assertSame(1, Admission::whereNotNull('discharge_date')->count());
 
@@ -80,7 +80,7 @@ class ClinicalFlowTest extends TestCase
         $a = $this->admission(['current_location' => 'ICU']);
 
         $this->actingAs($admin)->post("/admissions/{$a->id}/icu-discharge", [
-            'outcome' => 'Alive', 'discharge_date' => now()->toDateString(),
+            'outcome' => 'Alive', 'discharge_date' => now()->toDateString(), 'discharge_to' => 'Home',   // destination required (N1-4)
         ])->assertRedirect();
         $a->refresh();
         $this->assertNotNull($a->discharge_date);

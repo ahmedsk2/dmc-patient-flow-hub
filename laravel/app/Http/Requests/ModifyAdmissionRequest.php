@@ -65,9 +65,15 @@ class ModifyAdmissionRequest extends FormRequest
             ? ['nullable', 'string', 'max:64', 'in:' . implode(',', StoreAdmissionRequest::ADMIT_FROM)]
             : ['nullable', 'string', 'max:64'];
         $rules['current_location'] = ['required', 'in:ER,Ward,ICU'];
-        // optional QUIET consultant change (legacy Modify semantics, J2-13) — must be a consultant
-        $rules['consultant_id'] = ['nullable', \Illuminate\Validation\Rule::exists('users', 'id')
-            ->where('role', \App\Models\User::ROLE_CONSULTANT)];
+        // optional QUIET consultant change (legacy Modify semantics, J2-13). The consultant-role
+        // constraint applies ONLY when the value actually CHANGED (validate-on-change, like
+        // mrn/age/gender above): the Modify modals round-trip the CURRENT assignee, and a patient
+        // legitimately held by a registrar/resident (assign-to-me, K1-9) must stay editable for an
+        // unrelated bed/date correction — an unchanged consultant_id always passes (N1-1).
+        $rules['consultant_id'] = ($admission && $this->changed('consultant_id', $admission->consultant_id))
+            ? ['nullable', \Illuminate\Validation\Rule::exists('users', 'id')
+                ->where('role', \App\Models\User::ROLE_CONSULTANT)]
+            : ['nullable', 'exists:users,id'];
 
         return $rules;
     }

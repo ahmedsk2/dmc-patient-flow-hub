@@ -34,6 +34,16 @@ class PatientActionController extends Controller
         ]);
     }
 
+    /**
+     * Validation rule for an assignment/handover TARGET: the user must be an ACTIVE CONSULTANT
+     * (N1-7). Used by assign, bulk-reassign (to side) and specialty transfer so an API caller can
+     * never point a patient at an inactive or non-consultant account.
+     */
+    private static function activeConsultantRule(): \Illuminate\Validation\Rules\Exists
+    {
+        return Rule::exists('users', 'id')->where('role', User::ROLE_CONSULTANT)->where('active', 1);
+    }
+
     private function canManage(Admission $a): bool
     {
         $u = Auth::user();
@@ -241,7 +251,9 @@ class PatientActionController extends Controller
         }
         $data = $request->validate([
             'from_consultant_id' => ['required', 'exists:users,id'],
-            'to_consultant_id' => ['required', 'exists:users,id', 'different:from_consultant_id'],
+            // the RECEIVING consultant must be an active consultant (N1-7); the from side is just a
+            // lookup key (may be inactive — departed staff still have active patients to move off)
+            'to_consultant_id' => ['required', self::activeConsultantRule(), 'different:from_consultant_id'],
             'mark_new' => ['nullable', 'boolean'],
             'admission_ids' => ['nullable', 'array'],
             'admission_ids.*' => ['integer'],
@@ -320,7 +332,9 @@ class PatientActionController extends Controller
             throw new AccessDeniedHttpException('You do not have the Assign capability.');
         }
         $data = $request->validate([
-            'consultant_id' => ['required', 'exists:users,id'],
+            // an assignment target must be an ACTIVE CONSULTANT — a bare exists:users,id let an API
+            // caller point an unassigned patient at an inactive or non-consultant account (N1-7)
+            'consultant_id' => ['required', self::activeConsultantRule()],
             'mark_new' => ['nullable', 'boolean'],
         ]);
         // mark_new=false (legacy "New Patient?" unchecked) = quiet administrative assignment:
@@ -393,12 +407,16 @@ class PatientActionController extends Controller
             throw new AccessDeniedHttpException('Only the primary consultant or a manager may discharge.');
         }
         $complete = $request->boolean('complete');
+        $deadClose = $complete && $request->input('outcome') === 'Dead';   // Dead auto-forces Mortuary
         $data = $request->validate([
             // medical-only carries no status (forced Alive below); the one-step close asks it
             'outcome' => [$complete ? 'required' : 'nullable', 'in:Alive,Dead'],
             'medical_discharge_date' => ['required', 'date', 'before_or_equal:today'],
-            'discharge_to' => ['nullable', self::DISCHARGE_DESTINATIONS],
-            'delay_reason' => ['nullable', 'in:Physical,System'],
+            // legacy required "Discharged to" on every CLOSE (complete=true); a Dead close needs none
+            // (Mortuary is forced). The medical-only path captures no destination (asked at complete).
+            'discharge_to' => [$complete && ! $deadClose ? 'required' : 'nullable', self::DISCHARGE_DESTINATIONS],
+            // legacy required the still-in delay REASON on a medical-only ("discharged still in") close
+            'delay_reason' => [$complete ? 'nullable' : 'required', 'in:Physical,System'],
             'complete' => ['nullable', 'boolean'],
         ]);
         if ($admission->discharge_date) {
@@ -442,10 +460,13 @@ class PatientActionController extends Controller
         if (! $this->canManage($admission)) {
             throw new AccessDeniedHttpException('Only the primary consultant or a manager may discharge.');
         }
+        // effective outcome = submitted override OR the phase-1 value; a Dead close forces Mortuary,
+        // so the destination is NOT required in that case (legacy required it on every other close)
+        $effectiveOutcome = $request->input('outcome') ?? $admission->outcome;
         $data = $request->validate([
             'discharge_date' => ['required', 'date', 'before_or_equal:today'],
             'outcome' => ['nullable', 'in:Alive,Dead'],   // strict vocabulary — LAMA etc. are destinations
-            'discharge_to' => ['nullable', self::DISCHARGE_DESTINATIONS],
+            'discharge_to' => [$effectiveOutcome === 'Dead' ? 'nullable' : 'required', self::DISCHARGE_DESTINATIONS],
         ]);
         if ($admission->discharge_date) {
             return back()->with('flash', ['type' => 'error', 'message' => 'Already discharged.']);
@@ -488,10 +509,12 @@ class PatientActionController extends Controller
         if (! $this->canManage($admission)) {
             throw new AccessDeniedHttpException('Only the primary consultant or a manager may discharge.');
         }
+        // legacy required "Discharged to" on the ICU close too; a Dead close forces Mortuary (no destination needed)
+        $deadClose = $request->input('outcome') === 'Dead';
         $data = $request->validate([
             'outcome' => ['required', 'in:Alive,Dead'],   // strict vocabulary — LAMA etc. are destinations
             'discharge_date' => ['required', 'date', 'before_or_equal:today'],
-            'discharge_to' => ['nullable', self::DISCHARGE_DESTINATIONS],
+            'discharge_to' => [$deadClose ? 'nullable' : 'required', self::DISCHARGE_DESTINATIONS],
         ]);
         if ($admission->discharge_date) {
             return back()->with('flash', ['type' => 'error', 'message' => 'Already discharged.']);
@@ -586,7 +609,8 @@ class PatientActionController extends Controller
     {
         $data = $request->validate([
             'specialty_id' => ['required', Rule::exists('specialties', 'id')->where('is_external', false)],
-            'consultant_id' => ['required', Rule::exists('users', 'id')->where('role', User::ROLE_CONSULTANT)],
+            // the receiving consultant must be an ACTIVE consultant (N1-7)
+            'consultant_id' => ['required', self::activeConsultantRule()],
         ]);
         $specialty = \App\Models\Specialty::findOrFail($data['specialty_id']);
 

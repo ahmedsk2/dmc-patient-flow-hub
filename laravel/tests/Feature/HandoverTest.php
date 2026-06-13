@@ -352,7 +352,7 @@ class HandoverTest extends TestCase
             'to_consultant_id' => $to->id, 'required_at' => now()]);
 
         $this->actingAs($this->user(['role' => User::ROLE_ADMIN]))
-            ->post("/admissions/{$a->id}/complete-discharge", ['discharge_date' => now()->toDateString()])
+            ->post("/admissions/{$a->id}/complete-discharge", ['discharge_date' => now()->toDateString(), 'discharge_to' => 'Home'])   // destination required (N1-4)
             ->assertRedirect();
 
         $this->assertNotNull($a->fresh()->discharge_date);
@@ -367,7 +367,7 @@ class HandoverTest extends TestCase
         $sigIcu = HandoverSignature::create(['admission_id' => $icu->id, 'from_consultant_id' => null,
             'to_consultant_id' => $this->user()->id, 'required_at' => now()]);
         $this->actingAs($admin)->post("/admissions/{$icu->id}/icu-discharge", [
-            'outcome' => 'Alive', 'discharge_date' => now()->toDateString(),
+            'outcome' => 'Alive', 'discharge_date' => now()->toDateString(), 'discharge_to' => 'Home',   // destination required (N1-4)
         ])->assertRedirect();
         $this->assertNotNull($sigIcu->fresh()->voided_at);
 
@@ -377,7 +377,7 @@ class HandoverTest extends TestCase
         $signed = HandoverSignature::create(['admission_id' => $ward->id, 'from_consultant_id' => null,
             'to_consultant_id' => $this->user()->id, 'required_at' => now(), 'signed_at' => now(), 'signed_by' => $admin->id]);
         $this->actingAs($admin)->post("/admissions/{$ward->id}/medical-discharge", [
-            'outcome' => 'Alive', 'medical_discharge_date' => now()->toDateString(), 'complete' => true,
+            'outcome' => 'Alive', 'medical_discharge_date' => now()->toDateString(), 'complete' => true, 'discharge_to' => 'Home',   // destination required (N1-4)
         ])->assertRedirect();
         $this->assertNotNull($sigWard->fresh()->voided_at);
         $this->assertNull($signed->fresh()->voided_at, 'already-signed signatures are never voided');
@@ -390,7 +390,7 @@ class HandoverTest extends TestCase
             'to_consultant_id' => $this->user()->id, 'required_at' => now()]);
 
         $this->actingAs($this->user(['role' => User::ROLE_ADMIN]))->post("/admissions/{$a->id}/medical-discharge", [
-            'outcome' => 'Alive', 'medical_discharge_date' => now()->toDateString(),
+            'outcome' => 'Alive', 'medical_discharge_date' => now()->toDateString(), 'delay_reason' => 'Physical',   // medical-only needs the delay reason (N1-4)
         ])->assertRedirect();
 
         $this->assertNull($sig->fresh()->voided_at, 'phase-1 only: the patient is still in — signature stays');

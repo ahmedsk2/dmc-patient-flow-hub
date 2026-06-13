@@ -46,8 +46,8 @@ class PatientsController extends Controller
                 'total' => Admission::active()->whereNotNull('consultant_id')->tap($scope)->count(),
                 'ward' => Admission::active()->whereNotNull('consultant_id')->tap($scope)->nonIcu()->count(),
                 'icu' => Admission::active()->whereNotNull('consultant_id')->tap($scope)->icu()->count(),
-                'longterm' => Admission::active()->whereNotNull('consultant_id')->tap($scope)->where('is_longterm', true)->count(),
-                'tb' => Admission::active()->whereNotNull('consultant_id')->tap($scope)->where($tbExists)->count(),
+                // N1-6: stats.longterm/stats.tb were never read by Patients/Index.vue (the board's
+                // per-group counts come from $c['tb'] below) — two unused COUNT queries removed
                 'unassigned' => Admission::active()->whereNull('consultant_id')->count(),
             ],
         ]);

@@ -51,6 +51,9 @@ class RegistryController extends Controller
                 'consultants' => User::consultantOptions(activeOnly: false),   // registry filters span inactive consultants
                 'reasons' => ConsultationReason::orderBy('name')->get(['id', 'name']),
                 'readmitWindow' => max(0, (int) (\App\Models\Setting::current()->readmission_window_days ?? 3)),
+                // N1-2: resolve the ACTIVE dx-filter codes to names so the page can rebuild the
+                // removable diagnosis chips after pagination/reload (selectedDx is client-only ref)
+                'dxNames' => $this->dxFilterNames($request),
             ],
         ]);
     }
@@ -66,6 +69,22 @@ class RegistryController extends Controller
     {
         return Admission::query()->whereNotNull($column)->where($column, '<>', '')
             ->distinct()->orderBy($column)->limit(100)->pluck($column);
+    }
+
+    /**
+     * [{code, name}] for each ICD-10 code currently in the dx filter — lets the page rebuild the
+     * removable diagnosis chips on a paginated/reloaded visit (an unresolved code falls back to
+     * its own code as the label so it stays removable). N1-2.
+     */
+    private function dxFilterNames(Request $request): array
+    {
+        $codes = array_values(array_unique(array_filter((array) $request->input('dx', []))));
+        if (! $codes) {
+            return [];
+        }
+        $names = Icd10::whereIn('code', $codes)->pluck('name', 'code');
+
+        return array_map(fn ($code) => ['code' => $code, 'name' => $names[$code] ?? $code], $codes);
     }
 
     /* ---------- Admissions ---------- */

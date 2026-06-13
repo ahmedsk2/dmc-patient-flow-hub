@@ -108,8 +108,11 @@ class FinalSweepG1Test extends TestCase
     {
         $a = $this->medicallyDischarged();
 
+        // N1-4: the destination is now REQUIRED at the close; the modal prefills the phase-1 value,
+        // so the realistic "no override" payload re-sends the SAME destination (Home) — and the
+        // outcome (omitted) must still carry over from phase-1 with no outcome_was audit entry.
         $this->actingAs($this->admin())->post("/admissions/{$a->id}/complete-discharge", [
-            'discharge_date' => now()->toDateString(),
+            'discharge_date' => now()->toDateString(), 'discharge_to' => 'Home',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $a->refresh();

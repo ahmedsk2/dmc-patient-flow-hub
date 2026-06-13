@@ -137,7 +137,7 @@ const ytdCards = computed(() => [
     ['Consultations', props.ytd.consultations], ['Sign-offs', props.ytd.signoffs],
 ]);
 
-const refresh = () => router.reload({ only: ['kpis', 'trend', 'consults', 'consultDonut', 'los', 'mix', 'perConsultant', 'consultantBoard', 'activity24h', 'ytd', 'topDxWeek', 'recent', 'generatedAt'] });
+const refresh = () => router.reload({ only: ['kpis', 'trend', 'consults', 'consultDonut', 'los', 'mix', 'donutTotal', 'donutTb', 'perConsultant', 'consultantBoard', 'activity24h', 'ytd', 'topDxWeek', 'topDxWeekNum', 'recent', 'generatedAt'] });
 
 // 5-minute auto-refresh, visibility-gated: a dashboard left open on a ward screen stays
 // current, but background tabs don't hammer the server.

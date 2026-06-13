@@ -424,12 +424,14 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Status</label>
                             <select v-model="mdForm.outcome" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option v-for="s in statuses" :key="s">{{ s }}</option></select>
                             <p v-if="mdForm.errors.outcome" class="mt-1 text-xs text-danger-600">{{ mdForm.errors.outcome }}</p></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge to</label>
-                            <select v-model="mdForm.discharge_to" :disabled="mdForm.outcome === 'Dead'" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">—</option><option v-for="d in destinations" :key="d">{{ d }}</option></select>
+                        <!-- destination is REQUIRED on a close unless Dead (auto-Mortuary) — N1-4 -->
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge to <span v-if="mdForm.outcome !== 'Dead'" class="text-danger-600">*</span></label>
+                            <select v-model="mdForm.discharge_to" :disabled="mdForm.outcome === 'Dead'" :required="mdForm.outcome !== 'Dead'" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">—</option><option v-for="d in destinations" :key="d">{{ d }}</option></select>
                             <p v-if="mdForm.errors.discharge_to" class="mt-1 text-xs text-danger-600">{{ mdForm.errors.discharge_to }}</p></div>
                     </div>
-                    <div v-else><label class="mb-1 block text-sm font-semibold text-ink-700">Delay reason</label>
-                        <select v-model="mdForm.delay_reason" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">—</option><option value="Physical">Physical bed availability</option><option value="System">System</option></select>
+                    <!-- still-in delay reason is REQUIRED on a medical-only discharge — N1-4 -->
+                    <div v-else><label class="mb-1 block text-sm font-semibold text-ink-700">Delay reason <span class="text-danger-600">*</span></label>
+                        <select v-model="mdForm.delay_reason" required class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">—</option><option value="Physical">Physical bed availability</option><option value="System">System</option></select>
                         <p v-if="mdForm.errors.delay_reason" class="mt-1 text-xs text-danger-600">{{ mdForm.errors.delay_reason }}</p></div>
                     <p class="text-xs text-ink-400">{{ mdForm.complete ? 'Closes the file and frees the bed in one step.' : 'Marks the patient clinically discharged but still in a bed. Status and destination are recorded at Complete discharge, when they physically leave.' }}</p>
                     <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mdForm.processing" class="rounded-xl px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50" :class="mdForm.complete ? 'bg-success-600 hover:bg-success-700' : 'bg-warning-500'">{{ mdForm.complete ? 'Discharge & close file' : 'Medical discharge' }}</button></div>
@@ -442,8 +444,9 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Status</label>
                             <select v-model="cdForm.outcome" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">—</option><option v-for="s in statuses" :key="s">{{ s }}</option></select>
                             <p v-if="cdForm.errors.outcome" class="mt-1 text-xs text-danger-600">{{ cdForm.errors.outcome }}</p></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Destination</label>
-                            <select v-model="cdForm.discharge_to" :disabled="cdForm.outcome === 'Dead'" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">—</option><option v-for="d in destinations" :key="d">{{ d }}</option></select>
+                        <!-- destination is REQUIRED on the close unless Dead (auto-Mortuary) — N1-4 -->
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Destination <span v-if="cdForm.outcome !== 'Dead'" class="text-danger-600">*</span></label>
+                            <select v-model="cdForm.discharge_to" :disabled="cdForm.outcome === 'Dead'" :required="cdForm.outcome !== 'Dead'" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">—</option><option v-for="d in destinations" :key="d">{{ d }}</option></select>
                             <p v-if="cdForm.errors.discharge_to" class="mt-1 text-xs text-danger-600">{{ cdForm.errors.discharge_to }}</p></div>
                     </div>
                     <p class="text-xs text-ink-400">Status and destination carry over from the medical discharge — change them here only if the situation changed before the bed exit.</p>
@@ -467,8 +470,9 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                         </ul>
                     </div>
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Status</label><select v-model="icuForm.outcome" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option v-for="s in statuses" :key="s">{{ s }}</option></select></div>
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge to</label>
-                        <select v-model="icuForm.discharge_to" :disabled="icuForm.outcome === 'Dead'" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">—</option><option v-for="d in destinations" :key="d">{{ d }}</option></select>
+                    <!-- destination is REQUIRED on the ICU close unless Dead (auto-Mortuary) — N1-4 -->
+                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge to <span v-if="icuForm.outcome !== 'Dead'" class="text-danger-600">*</span></label>
+                        <select v-model="icuForm.discharge_to" :disabled="icuForm.outcome === 'Dead'" :required="icuForm.outcome !== 'Dead'" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">—</option><option v-for="d in destinations" :key="d">{{ d }}</option></select>
                         <p v-if="icuForm.errors.discharge_to" class="mt-1 text-xs text-danger-600">{{ icuForm.errors.discharge_to }}</p></div>
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge date</label><input v-model="icuForm.discharge_date" type="date" :max="today" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" /><p v-if="icuForm.errors.discharge_date" class="mt-1 text-xs text-danger-600">{{ icuForm.errors.discharge_date }}</p></div>
                     <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="icuForm.processing" class="rounded-xl bg-success-600 px-5 py-2 text-sm font-semibold text-white hover:bg-success-700 disabled:opacity-50">ICU discharge</button></div>

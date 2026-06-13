@@ -16,8 +16,11 @@ use Illuminate\Support\Facades\DB;
  *   round 4 — subspecialists up to MAX_subs
  *   round 5 — overflow: least-loaded overall (so the queue never stalls when everyone's at cap)
  * "Load" = the consultant's active NON-ICU patients, EXCLUDING medically-discharged ("discharged
- * still in") and TB patients (legacy dmc-patients-shuffle.php:107-141 counted neither; long-term
- * stays included per the 2026-06-09 owner sign-off) — the ward census the shuffle balances.
+ * still in"). TB patients count ASYMMETRICALLY (N1-3, legacy parity): they are EXCLUDED from a
+ * HOSPITALIST's load (dmc-patients-shuffle.php:121-144 skipped TB when counting hospitalists) but
+ * INCLUDED in a SUBSPECIALIST's load (lines 236-242 counted every active non-ICU patient) — TB is
+ * a subspecialty concern, so a TB-heavy sub legitimately looks more loaded. Long-term stays
+ * included per the 2026-06-09 owner sign-off — the ward census the shuffle balances.
  * An unassigned ICU queue row is only ever given to a HOSPITALIST (legacy lines 76-102 distributed
  * ICU rows round-robin across hospitalists; subspecialists never receive ICU patients).
  * Deterministic and race-free (one transaction).
@@ -43,26 +46,39 @@ class ShuffleService
                 return ['assigned' => 0, 'consultants' => 0, 'skipped' => $unassigned->count()];
             }
 
-            // current active load per consultant = active NON-ICU patients, excluding the
-            // medically-discharged ("discharged still in") and TB patients (legacy parity) —
-            // the ward census the balance works against. Long-term stays included (owner sign-off).
-            $load = DB::table('admissions')->whereNull('discharge_date')->whereNotNull('consultant_id')
+            // base active load per consultant = active NON-ICU patients excluding the
+            // medically-discharged ("discharged still in"); long-term stays included (owner sign-off).
+            // This INCLUDES TB — the TB subtraction happens per-consultant below.
+            $tbExists = 'EXISTS (SELECT 1 FROM admission_diagnoses ad
+                JOIN tb_diagnoses tb ON tb.icd10_code = ad.icd10_code
+                WHERE ad.admission_id = admissions.id)';
+            $wardActive = DB::table('admissions')->whereNull('discharge_date')->whereNotNull('consultant_id')
                 ->where(fn ($w) => $w->where('current_location', '<>', 'ICU')->orWhereNull('current_location'))
-                ->whereNull('medical_discharge_date')
-                ->whereRaw('NOT EXISTS (SELECT 1 FROM admission_diagnoses ad
-                    JOIN tb_diagnoses tb ON tb.icd10_code = ad.icd10_code
-                    WHERE ad.admission_id = admissions.id)')
+                ->whereNull('medical_discharge_date');
+            $base = (clone $wardActive)
                 ->selectRaw('consultant_id, COUNT(*) c')->groupBy('consultant_id')->pluck('c', 'consultant_id')->all();
-            foreach ($onService as $u) {
-                $load[$u->id] = (int) ($load[$u->id] ?? 0);
-            }
+            // TB count per consultant (the slice excluded ONLY from a hospitalist's load)
+            $tbCount = (clone $wardActive)->whereRaw($tbExists)
+                ->selectRaw('consultant_id, COUNT(*) c')->groupBy('consultant_id')->pluck('c', 'consultant_id')->all();
 
             $hosp = $onService->where('specialty_id', 1)->pluck('id')->all();
             $subs = $onService->where('specialty_id', '!=', 1)->pluck('id')->all();
+            // hospitalist load = base MINUS TB; subspecialist load = base (TB included) — legacy asymmetry
+            $hospSet = array_flip($hosp);
+            $load = [];
+            foreach ($onService as $u) {
+                $b = (int) ($base[$u->id] ?? 0);
+                $load[$u->id] = isset($hospSet[$u->id]) ? $b - (int) ($tbCount[$u->id] ?? 0) : $b;
+            }
             $minHosp = (int) $settings->min_hospitalist;
             $maxHosp = (int) $settings->max_hospitalist;
             $minSubs = (int) $settings->min_subs;
             $maxSubs = (int) $settings->max_subs;
+
+            // which QUEUED rows are TB — a TB patient assigned to a hospitalist must not raise that
+            // hospitalist's load (TB is excluded from the hospitalist count), but DOES raise a sub's
+            $queueTb = DB::table('admissions')->whereIn('admissions.id', $unassigned->pluck('id'))
+                ->whereRaw($tbExists)->pluck('id')->flip();
 
             $assigned = 0;
             $touched = [];
@@ -88,8 +104,11 @@ class ShuffleService
                     'assigned_on' => now()->toDateString(),
                     'assigned_at' => now(),
                 ]);
-                if ($adm->current_location !== 'ICU') {
-                    $load[$pick]++;   // ICU rows never count toward the ward load (legacy)
+                // ICU rows never count toward the ward load (legacy); a TB row counts only when the
+                // pick is a subspecialist — a hospitalist's TB patients stay off their load (N1-3)
+                if ($adm->current_location !== 'ICU'
+                    && ! ($queueTb->has($adm->id) && isset($hospSet[$pick]))) {
+                    $load[$pick]++;
                 }
                 $touched[$pick] = true;
                 $assigned++;

@@ -179,7 +179,7 @@ class Round5J1Test extends TestCase
         $date = now()->subDay()->toDateString();
 
         $this->actingAs($this->admin())->post("/admissions/{$a->id}/icu-discharge", [
-            'outcome' => 'Alive', 'discharge_date' => $date,
+            'outcome' => 'Alive', 'discharge_date' => $date, 'discharge_to' => 'Home',   // destination required (N1-4)
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $a->refresh();

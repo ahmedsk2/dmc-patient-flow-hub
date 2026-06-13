@@ -103,7 +103,7 @@ class HandoverController extends Controller
             'patient' => $s->admission?->patient?->name ?? 'Unknown',
             'mrn' => $s->admission?->patient?->mrn,
             'bed' => $s->admission?->bed,
-            'location' => $s->admission?->current_location,
+            // N1-6: 'location' (current_location) was never read by Handovers/Index.vue — dropped
             'from' => $s->fromConsultant ? ($s->fromConsultant->full_name ?: $s->fromConsultant->name) : '—',
             'to' => $s->toConsultant ? ($s->toConsultant->full_name ?: $s->toConsultant->name) : '—',
             'required_at' => $s->required_at?->toIso8601String(),

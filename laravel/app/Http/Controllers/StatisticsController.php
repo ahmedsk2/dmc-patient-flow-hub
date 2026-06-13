@@ -179,11 +179,30 @@ class StatisticsController extends Controller
             ->selectRaw('COALESCE(u.full_name, u.name) consultant, ROUND(AVG(DATEDIFF(a.discharge_date, a.admit_date)), 1) los')
             ->groupBy('consultant')->pluck('los', 'consultant')->all();
         // readmissions are credited to the PRIOR discharge's consultant (prev.consultant_id) —
-        // legacy semantics: the metric reflects whose discharge bounced back (J1-13)
+        // legacy semantics: the metric reflects whose discharge bounced back (J1-13). A readmission
+        // can match SEVERAL qualifying prior discharges (different consultants); legacy charts1.php
+        // credited exactly ONE (LIMIT 1). We credit a SINGLE anchor per readmitted admission — the
+        // most-recent qualifying prior discharge (tie-break highest id) — so the per-consultant
+        // column SUMS to the headline distinct count instead of over-counting (N1-8).
         $readmitByCons = DB::table('admissions as a')
             ->join('admissions as prev', $this->readmissionJoin($readmitWindow))
             ->join('users as u', 'u.id', '=', 'prev.consultant_id')
             ->whereBetween('a.admit_date', [$f, $t])
+            // keep only the ANCHOR pair per readmitted admission: no OTHER qualifying prior discharge
+            // for the same admission is more recent (or same date with a higher id)
+            ->whereNotExists(function ($q) use ($readmitWindow) {
+                $q->selectRaw('1')->from('admissions as prev2')
+                    ->whereColumn('prev2.patient_id', '=', 'a.patient_id')
+                    ->whereColumn('prev2.discharge_date', '<=', 'a.admit_date')
+                    ->whereRaw('DATEDIFF(a.admit_date, prev2.discharge_date) BETWEEN 0 AND ?', [$readmitWindow])
+                    ->whereColumn('prev2.id', '<>', 'a.id')
+                    ->whereColumn('prev2.id', '<>', 'prev.id')
+                    ->where(fn ($w) => $w->whereIn('prev2.transfer_type', \App\Models\Admission::REAL_DISCHARGE_TYPES)
+                        ->orWhereNull('prev2.transfer_type'))
+                    ->where(fn ($w) => $w->whereColumn('prev2.discharge_date', '>', 'prev.discharge_date')
+                        ->orWhere(fn ($e) => $e->whereColumn('prev2.discharge_date', '=', 'prev.discharge_date')
+                            ->whereColumn('prev2.id', '>', 'prev.id')));
+            })
             ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(DISTINCT a.id) c')
             ->groupBy('consultant')->pluck('c', 'consultant')->all();
         // 'activity' mode values: discharges + consultations + sign-offs per consultant over the
