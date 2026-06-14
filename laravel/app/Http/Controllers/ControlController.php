@@ -51,8 +51,10 @@ class ControlController extends Controller
             'counts' => [
                 'users' => User::count(),
                 'active_users' => User::where('active', 1)->count(),
-                'patients' => DB::table('patients')->count(),
-                // Phase 4 — Item 1: count live (non-soft-deleted) rows for the admin overview cards
+                // Phase 4 — Item 1/9: count live (non-soft-deleted) rows for the admin overview cards.
+                // patients gained soft-delete in Item 9 (merge retires the duplicate source) — exclude
+                // the retired rows so the headline count tracks distinct live patients.
+                'patients' => DB::table('patients')->whereNull('deleted_at')->count(),
                 'admissions' => DB::table('admissions')->whereNull('deleted_at')->count(),
                 'consultations' => DB::table('consultations')->whereNull('deleted_at')->count(),
                 'icd10' => DB::table('icd10')->count(),

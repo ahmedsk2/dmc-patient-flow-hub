@@ -9,13 +9,15 @@ abstract class TestCase extends BaseTestCase
     protected function setUp(): void
     {
         parent::setUp();
-        // The full suite renders several dompdf booklets + openspout XLSX exports (Phase 3) in one
-        // long-lived process; their peak allocations cumulatively exceed PHP's 128M CLI default and
-        // crash the run ("Premature end of PHP process"). Raise the cap for the test process only —
-        // each individual render is well within this; this just stops the whole-run accumulation OOM.
+        // The full suite renders many dompdf booklets + openspout XLSX exports (Phase 3) in one
+        // long-lived sequential process; PHP does not fully reclaim that memory between tests, so the
+        // peak accumulates across the whole run and crashes it ("Premature end of PHP process") well
+        // before any single render is large. Give the test process generous headroom — 512M was
+        // borderline at this suite size and tipped over intermittently. Test-process only; production
+        // never runs hundreds of renders in one process.
         $limit = trim((string) ini_get('memory_limit'));
-        if ($limit !== '-1' && (int) $limit < 512 && stripos($limit, 'G') === false) {
-            @ini_set('memory_limit', '512M');
+        if ($limit !== '-1' && (int) $limit < 1024 && stripos($limit, 'G') === false) {
+            @ini_set('memory_limit', '1024M');
         }
         // Tests assert backend behaviour; don't require a built Vite manifest to render pages.
         $this->withoutVite();

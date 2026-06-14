@@ -14,6 +14,7 @@ use App\Http\Controllers\ImportController;
 use App\Http\Controllers\MfaController;
 use App\Http\Controllers\OrphanDiagnosesController;
 use App\Http\Controllers\PatientActionController;
+use App\Http\Controllers\PatientMergeController;
 use App\Http\Controllers\PatientsController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RecentController;
@@ -182,5 +183,12 @@ Route::middleware(['auth', 'session.timeout', 'mfa.enroll', 'pwd'])->group(funct
 
         // Phase 4 — Item 6: data-quality dashboard
         Route::get('/data-quality', [DataQualityController::class, 'index'])->name('data-quality.index');
+
+        // Phase 4 — Item 9: patient-merge / MRN-dedup tooling. The merge POST is step-up gated
+        // (high-risk, identity-changing — re-points clinical history between patient records).
+        Route::get('/admin/patient-merge', [PatientMergeController::class, 'index'])->name('patient-merge.index');
+        Route::get('/api/patients/search', [PatientMergeController::class, 'searchPatients'])->name('patient-merge.search-patients');
+        Route::post('/admin/patient-merge/search', [PatientMergeController::class, 'search'])->name('patient-merge.preview');
+        Route::post('/admin/patient-merge', [PatientMergeController::class, 'merge'])->name('patient-merge.merge')->middleware('stepup');
     });
 });
