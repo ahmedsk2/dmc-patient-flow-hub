@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\AuditLog;
 use App\Models\Consultation;
 use App\Models\ConsultationReason;
 use App\Models\Patient;
 use App\Models\Specialty;
 use App\Models\User;
+use App\Support\Audit;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -86,25 +86,23 @@ class ConsultationsController extends Controller
             'indication' => $data['indication'] ?? [],
             'entered_by' => Auth::id(),                  // session-sourced
         ]);
-        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'consultation.create',
-            'entity_type' => 'consultation', 'entity_id' => (string) $c->id, 'details' => ['mrn' => $data['mrn']], 'ip' => $request->ip()]);
+        Audit::log('consultation.create', 'consultation', (string) $c->id, ['mrn' => $data['mrn']]);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultation created.']);
     }
 
     public function signoff(Request $request, Consultation $consultation): RedirectResponse
     {
-        $u = Auth::user();
-        // observers are read-only EVEN with a Manage flag (J1-9 global guarantee)
-        if ($u->isObserver() || ! ($u->isAdmin() || $u->can_manage || (int) $consultation->consultant_id === (int) $u->id)) {
+        // observers are read-only EVEN with a Manage flag (J1-9 global guarantee); the manage rule
+        // (admin / can_manage / receiving consultant) lives on User::canManageConsultation now
+        if (! Auth::user()->canManageConsultation($consultation)) {
             throw new AccessDeniedHttpException('Only the receiving consultant or a manager may sign off.');
         }
         if ($consultation->signoff_date) {
             return back()->with('flash', ['type' => 'error', 'message' => 'Already signed off.']);
         }
         $consultation->update(['signoff_date' => now()->toDateString()]);
-        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'consultation.signoff',
-            'entity_type' => 'consultation', 'entity_id' => (string) $consultation->id, 'ip' => $request->ip()]);
+        Audit::log('consultation.signoff', 'consultation', (string) $consultation->id);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultation signed off.']);
     }
@@ -124,8 +122,7 @@ class ConsultationsController extends Controller
             return back()->with('flash', ['type' => 'error', 'message' => 'Only same-day sign-offs can be reversed.']);
         }
         $consultation->update(['signoff_date' => null]);
-        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'consultation.reverse_signoff',
-            'entity_type' => 'consultation', 'entity_id' => (string) $consultation->id, 'ip' => $request->ip()]);
+        Audit::log('consultation.reverse_signoff', 'consultation', (string) $consultation->id);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Sign-off reversed.']);
     }
@@ -136,8 +133,7 @@ class ConsultationsController extends Controller
         // edit is open to any clinical role (J1-10 legacy parity); gate lives in ConsultationRequest::authorize()
         $data = $request->validated();
         $consultation->update([...$data, 'indication' => $data['indication'] ?? []]);
-        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'consultation.modify',
-            'entity_type' => 'consultation', 'entity_id' => (string) $consultation->id, 'ip' => $request->ip()]);
+        Audit::log('consultation.modify', 'consultation', (string) $consultation->id);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultation updated.']);
     }
@@ -150,8 +146,7 @@ class ConsultationsController extends Controller
         }
         $id = $consultation->id;
         $consultation->delete();
-        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'consultation.delete',
-            'entity_type' => 'consultation', 'entity_id' => (string) $id, 'ip' => $request->ip()]);
+        Audit::log('consultation.delete', 'consultation', (string) $id);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultation deleted.']);
     }

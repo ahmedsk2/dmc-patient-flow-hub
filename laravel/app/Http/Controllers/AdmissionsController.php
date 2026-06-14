@@ -4,11 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Admission;
 use App\Models\AdmissionDiagnosis;
-use App\Models\AuditLog;
 use App\Models\Country;
 use App\Models\Icd10;
 use App\Models\Patient;
 use App\Models\User;
+use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -128,12 +128,8 @@ class AdmissionsController extends Controller
                 AdmissionDiagnosis::create(['admission_id' => $admission->id, 'seq' => $seq++, 'icd10_code' => $code]);
             }
 
-            AuditLog::create([
-                'actor_id' => Auth::id(), 'actor_name' => Auth::user()->name,
-                'action' => 'admission.create', 'entity_type' => 'admission', 'entity_id' => (string) $admission->id,
-                'details' => ['mrn' => $patient->mrn, 'location' => $admission->current_location],
-                'ip' => request()->ip(),
-            ]);
+            Audit::log('admission.create', 'admission', (string) $admission->id,
+                ['mrn' => $patient->mrn, 'location' => $admission->current_location]);
 
             return $admission;
         });

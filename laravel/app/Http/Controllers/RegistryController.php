@@ -115,13 +115,11 @@ class RegistryController extends Controller
                 ->from('admission_diagnoses as adt')->join('tb_diagnoses as tb', 'tb.icd10_code', '=', 'adt.icd10_code')
                 ->whereColumn('adt.admission_id', 'admissions.id')))
             // prior REAL discharge (typed OR NULL-typed historical close — legacy parity, J1-4)
-            ->when($request->boolean('readmit72'), fn ($q) => $q->whereExists(fn ($s) => $s->selectRaw('1')
-                ->from('admissions as prev')->whereColumn('prev.patient_id', 'admissions.patient_id')
-                ->whereColumn('prev.id', '<>', 'admissions.id')->whereColumn('prev.discharge_date', '<=', 'admissions.admit_date')
-                ->whereRaw('DATEDIFF(admissions.admit_date, prev.discharge_date) BETWEEN 0 AND ?',
-                    [max(0, (int) (\App\Models\Setting::current()->readmission_window_days ?? 3))])
-                ->where(fn ($w) => $w->whereIn('prev.transfer_type', Admission::REAL_DISCHARGE_TYPES)
-                    ->orWhereNull('prev.transfer_type'))))
+            ->when($request->boolean('readmit72'), fn ($q) => $q->whereExists(
+                Admission::readmissionExists(
+                    max(0, (int) (\App\Models\Setting::current()->readmission_window_days ?? 3))
+                )
+            ))
             ->when($dx, function ($q) use ($dx, $request) {
                 if ($request->input('dx_match') === 'and') {
                     foreach ($dx as $code) {
@@ -162,12 +160,7 @@ class RegistryController extends Controller
 
         $window = max(0, (int) (\App\Models\Setting::current()->readmission_window_days ?? 3));
         $readmitIds = $ids->isEmpty() ? collect() : Admission::whereIn('id', $ids)
-            ->whereExists(fn ($s) => $s->selectRaw('1')->from('admissions as prev')
-                ->whereColumn('prev.patient_id', 'admissions.patient_id')->whereColumn('prev.id', '<>', 'admissions.id')
-                ->whereColumn('prev.discharge_date', '<=', 'admissions.admit_date')
-                ->whereRaw('DATEDIFF(admissions.admit_date, prev.discharge_date) BETWEEN 0 AND ?', [$window])
-                ->where(fn ($w) => $w->whereIn('prev.transfer_type', Admission::REAL_DISCHARGE_TYPES)
-                    ->orWhereNull('prev.transfer_type')))
+            ->whereExists(Admission::readmissionExists($window))
             ->pluck('id')->flip();
 
         $tbIds = $ids->isEmpty() ? collect() : \Illuminate\Support\Facades\DB::table('admission_diagnoses as ad')

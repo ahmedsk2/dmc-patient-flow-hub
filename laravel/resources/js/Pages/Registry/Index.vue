@@ -3,6 +3,9 @@ import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
+import { useConfirm } from '@/composables/useConfirm';
+
+const { ask } = useConfirm();
 
 const props = defineProps({ mode: String, results: Object, filters: Object, options: Object });
 
@@ -60,10 +63,12 @@ const modifyConsultants = computed(() => props.options.consultants.filter((c) =>
 const mAdd = (d) => { if (!mDx.value.find((x) => x.code === d.code)) { mDx.value.push(d); mForm.diagnoses.push(d.code); } };
 const mRemove = (code) => { mDx.value = mDx.value.filter((x) => x.code !== code); mForm.diagnoses = mForm.diagnoses.filter((c) => c !== code); };
 // identity confirm (K1-3): an MRN/name edit re-points or renames the patient — make it deliberate
-const submitEdit = () => {
-    if ((String(mForm.mrn) !== String(editing.value.mrn) || String(mForm.name) !== String(editing.value.name))
-        && !confirm(`Change patient identity from ${editing.value.name} (MRN ${editing.value.mrn}) to ${mForm.name} (MRN ${mForm.mrn})?`)) return;   // declined — no post
-    mForm.post(`/admissions/${editing.value.id}/modify`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
+const submitEdit = async () => {
+    const loaded = editing.value;
+    if ((String(mForm.mrn) !== String(loaded.mrn) || String(mForm.name) !== String(loaded.name))
+        && !(await ask('Change patient identity',
+            `Change patient identity from ${loaded.name} (MRN ${loaded.mrn}) to ${mForm.name} (MRN ${mForm.mrn})?`, 'danger'))) return;   // declined — no post
+    mForm.post(`/admissions/${loaded.id}/modify`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
 };
 
 // Esc closes the edit modal (the ICD typeahead swallows the first Esc while its dropdown is open)

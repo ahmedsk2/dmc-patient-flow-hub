@@ -1,7 +1,8 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import EhcLogo from '@/Components/EhcLogo.vue';
+import ConfirmDialog from '@/Components/ConfirmDialog.vue';
 
 const logout = () => router.post('/logout');
 
@@ -29,12 +30,40 @@ onMounted(() => {
     applyTheme();
     // when on "system", track OS changes live
     mql?.addEventListener('change', () => { if (themePref.value === 'system') applyTheme(); });
+    // keep the mobile-drawer viewport flag in sync (scopes aria-hidden to the mobile drawer)
+    lgMql?.addEventListener('change', (e) => { mobileViewport.value = e.matches; });
 });
 
 defineProps({ title: { type: String, default: '' } });
 
 const page = usePage();
 const sidebarOpen = ref(false);
+
+// ---- mobile drawer focus management (a11y) ----------------------------------------------------
+// On open: focus the first nav link inside the drawer + trap Tab within it. On close: return
+// focus to the hamburger. The always-visible lg: sidebar is unaffected (the trap only runs while
+// the drawer is in its mobile overlay state).
+const hamburger = ref(null);
+const aside = ref(null);
+// Track whether we're below the lg breakpoint (drawer overlay mode). Used to scope aria-hidden
+// to the mobile drawer only — the always-visible desktop sidebar must NOT be hidden from AT.
+const lgMql = typeof window !== 'undefined' ? window.matchMedia('(max-width: 1023px)') : null;
+const mobileViewport = ref(lgMql?.matches ?? false);
+const focusableIn = (el) => [...(el?.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])') ?? [])];
+const openDrawer = () => {
+    sidebarOpen.value = true;
+    nextTick(() => focusableIn(aside.value)[0]?.focus());
+};
+const closeDrawer = () => { sidebarOpen.value = false; nextTick(() => hamburger.value?.focus()); };
+const onDrawerKeydown = (e) => {
+    if (e.key === 'Escape') { closeDrawer(); return; }
+    if (e.key !== 'Tab') return;
+    const items = focusableIn(aside.value);
+    if (!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+};
 
 // flash toast
 const toast = ref(null);
@@ -112,6 +141,9 @@ const toggleBell = async () => {
     }
 };
 const goInbox = () => { bellOpen.value = false; router.visit('/handovers'); };
+// focus the first actionable element in the bell dropdown when it mounts (a11y). Used as a
+// function ref on the panel — Vue calls it with the element on mount, null on unmount.
+const focusFirstBell = (el) => { if (el) nextTick(() => el.querySelector('button,a')?.focus()); };
 const notifText = (n) => {
     const p = n.payload || {};
     if (p.count) return `Dr. ${p.from_name || 'A consultant'} handed over ${p.count} patient(s) to you`;
@@ -129,10 +161,18 @@ const relTime = (iso) => {
 
 <template>
     <div class="min-h-full">
+        <!-- Skip to content (keyboard users) — visually hidden until focused -->
+        <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:rounded-xl focus:bg-brand-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white">
+            Skip to content
+        </a>
         <!-- Sidebar -->
         <aside
+            id="app-sidebar"
+            ref="aside"
             class="fixed inset-y-0 left-0 z-40 w-64 -translate-x-full bg-gradient-to-b from-navy-900 to-navy-950 text-navy-100 transition-transform lg:translate-x-0"
             :class="{ 'translate-x-0': sidebarOpen }"
+            :aria-hidden="sidebarOpen ? undefined : (mobileViewport ? 'true' : undefined)"
+            @keydown="sidebarOpen && onDrawerKeydown($event)"
         >
             <div class="flex h-16 items-center gap-3 px-5 border-b border-white/5">
                 <div class="grid h-9 w-9 place-items-center rounded-xl bg-card p-1 shadow-lg shadow-brand-950/40"><EhcLogo class="h-7 w-7" /></div>
@@ -176,12 +216,12 @@ const relTime = (iso) => {
         </aside>
 
         <!-- Backdrop (mobile) -->
-        <div v-if="sidebarOpen" class="fixed inset-0 z-30 bg-navy-950/50 lg:hidden" @click="sidebarOpen = false"></div>
+        <div v-if="sidebarOpen" class="fixed inset-0 z-30 bg-navy-950/50 lg:hidden" @click="closeDrawer"></div>
 
         <!-- Main -->
         <div class="lg:pl-64">
             <header class="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-line bg-card/80 px-5 backdrop-blur">
-                <button class="lg:hidden text-ink-500" @click="sidebarOpen = true" aria-label="Open navigation menu">
+                <button ref="hamburger" class="lg:hidden text-ink-500" @click="openDrawer" aria-label="Open navigation menu" :aria-expanded="sidebarOpen" aria-controls="app-sidebar">
                     <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" /></svg>
                 </button>
                 <div class="min-w-0">
@@ -206,12 +246,12 @@ const relTime = (iso) => {
                     </button>
                     <!-- notification bell -->
                     <div class="relative">
-                        <button @click="toggleBell" aria-label="Notifications" title="Notifications" class="relative grid h-9 w-9 place-items-center rounded-full text-ink-400 transition hover:bg-ink-50 hover:text-ink-700">
+                        <button @click="toggleBell" aria-label="Notifications" title="Notifications" :aria-expanded="bellOpen" aria-controls="notifications-panel" aria-haspopup="dialog" class="relative grid h-9 w-9 place-items-center rounded-full text-ink-400 transition hover:bg-ink-50 hover:text-ink-700">
                             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" /></svg>
                             <span v-if="unread > 0" class="nums absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-danger-600 px-1 text-[10px] font-bold leading-none text-white">{{ unread > 9 ? '9+' : unread }}</span>
                         </button>
                         <div v-if="bellOpen" class="fixed inset-0 z-40" @click="bellOpen = false"></div>
-                        <div v-if="bellOpen" class="absolute right-0 top-11 z-50 w-80 overflow-hidden rounded-2xl bg-card shadow-2xl ring-1 ring-line">
+                        <div v-if="bellOpen" id="notifications-panel" role="dialog" aria-label="Notifications" :ref="focusFirstBell" @keydown.esc="bellOpen = false" class="absolute right-0 top-11 z-50 w-80 overflow-hidden rounded-2xl bg-card shadow-2xl ring-1 ring-line">
                             <div class="flex items-center justify-between border-b border-line px-4 py-2.5">
                                 <span class="text-sm font-bold text-ink-800">Notifications</span>
                                 <button @click="goInbox" class="text-xs font-semibold text-brand-600 hover:underline">Handover inbox →</button>
@@ -245,22 +285,29 @@ const relTime = (iso) => {
                 </div>
             </header>
 
-            <main class="p-5 lg:p-7">
+            <main id="main-content" tabindex="-1" class="p-5 lg:p-7">
                 <slot />
             </main>
         </div>
 
-        <!-- Flash toast -->
+        <!-- Flash toast — announced to assistive tech (errors assertive, others polite) -->
         <Transition enter-active-class="transition duration-300" enter-from-class="translate-y-3 opacity-0" leave-active-class="transition duration-300" leave-to-class="translate-y-3 opacity-0">
-            <div v-if="toast" class="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl px-5 py-3.5 text-sm font-semibold text-white shadow-2xl"
+            <div v-if="toast"
+                :role="toast.type === 'error' ? 'alert' : 'status'"
+                :aria-live="toast.type === 'error' ? 'assertive' : 'polite'"
+                aria-atomic="true"
+                class="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl px-5 py-3.5 text-sm font-semibold text-white shadow-2xl"
                 :class="toast.type === 'error' ? 'bg-danger-600' : 'bg-success-600'">
-                <svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
                     <path v-if="toast.type === 'error'" stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0 3.75h.008M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                     <path v-else stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                 </svg>
                 {{ toast.message }}
             </div>
         </Transition>
+
+        <!-- Global themed confirmation dialog (replaces window.confirm; reads useConfirm singleton) -->
+        <ConfirmDialog />
     </div>
 </template>
 

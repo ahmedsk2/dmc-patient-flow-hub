@@ -136,12 +136,7 @@ class PatientsController extends Controller
         // (typed real discharge OR NULL-typed historical close — legacy parity, J1-4)
         $readmitWindow = max(0, (int) ($settings->readmission_window_days ?? 3));
         $readmitIds = Admission::query()->whereIn('id', $admissions->pluck('id'))
-            ->whereExists(fn ($s) => $s->selectRaw('1')->from('admissions as prev')
-                ->whereColumn('prev.patient_id', 'admissions.patient_id')->whereColumn('prev.id', '<>', 'admissions.id')
-                ->whereColumn('prev.discharge_date', '<=', 'admissions.admit_date')
-                ->whereRaw('DATEDIFF(admissions.admit_date, prev.discharge_date) BETWEEN 0 AND ?', [$readmitWindow])
-                ->where(fn ($w) => $w->whereIn('prev.transfer_type', Admission::REAL_DISCHARGE_TYPES)
-                    ->orWhereNull('prev.transfer_type')))
+            ->whereExists(Admission::readmissionExists($readmitWindow))
             ->pluck('id')->flip();
 
         $newCutoff = now()->subDay();   // "New" = assigned within the last 24h (rolling)

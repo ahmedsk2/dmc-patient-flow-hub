@@ -2,6 +2,14 @@
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { useConfirm } from '@/composables/useConfirm';
+import { useModalA11y } from '@/composables/useModalA11y';
+
+const { ask } = useConfirm();
+
+// one focus-trap instance per modal slot (new / edit)
+const a11yAdd = useModalA11y();
+const a11yEdit = useModalA11y();
 
 const props = defineProps({ consultations: Object, filters: Object, stats: Object, reasons: Array, consultants: Array, specialties: Array });
 const page = usePage();
@@ -28,19 +36,23 @@ const cForm = useForm({
     mrn: '', patient_name: '', age: '', bed: '', current_location: 'Ward', consultation_date: today,
     consultation_from: '', to_service: '', consultant_id: '', indication: [], other_indication: '',
 });
-const submitAdd = () => cForm.post('/consultations', { preserveScroll: true, onSuccess: () => { showAdd.value = false; cForm.reset(); } });
+const openAdd = () => { showAdd.value = true; a11yAdd.onOpen(); };
+const closeAdd = () => { showAdd.value = false; a11yAdd.onClose(); };
+const submitAdd = () => cForm.post('/consultations', { preserveScroll: true, onSuccess: () => { closeAdd(); cForm.reset(); } });
 
 // edit + delete
 const canEdit = (c) => me.value.is_admin || me.value.can.manage || c.consultant_id === me.value.id;
 const editing = ref(null);
 const eForm = useForm({ mrn: '', patient_name: '', age: '', bed: '', current_location: 'Ward', consultation_date: today, consultation_from: '', to_service: '', consultant_id: '', indication: [], other_indication: '' });
+const closeEdit = () => { editing.value = null; a11yEdit.onClose(); };
 const openEdit = (c) => {
     editing.value = c;
+    a11yEdit.onOpen();
     eForm.mrn = c.mrn || ''; eForm.patient_name = c.name || ''; eForm.age = c.age ?? ''; eForm.bed = c.bed || '';
     eForm.current_location = c.location || 'Ward'; eForm.consultation_date = c.date || today; eForm.consultation_from = c.from || '';
     eForm.to_service = c.to || ''; eForm.consultant_id = c.consultant_id || ''; eForm.indication = [...(c.indication_ids || [])]; eForm.other_indication = c.other || '';
 };
-const submitEdit = () => eForm.put(`/consultations/${editing.value.id}`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
+const submitEdit = () => eForm.put(`/consultations/${editing.value.id}`, { preserveScroll: true, onSuccess: closeEdit });
 
 // when "to service" names an INTERNAL specialty, narrow the receiving-consultant list to its
 // ON-SERVICE consultants (a previously chosen consultant stays selectable); if none match,
@@ -65,16 +77,20 @@ const cInternal = computed(() => isInternalService(cForm.to_service));
 const eInternal = computed(() => isInternalService(eForm.to_service));
 watch(cInternal, (v) => { if (!v) cForm.consultant_id = ''; });
 watch(eInternal, (v) => { if (!v) eForm.consultant_id = ''; });
-const deleteConsult = (c) => { if (confirm(`Delete the consultation for ${c.name}? This cannot be undone.`)) router.delete(`/consultations/${c.id}`, { preserveScroll: true }); };
+const deleteConsult = async (c) => { if (await ask('Delete consultation', `Permanently delete the consultation for ${c.name} (MRN ${c.mrn}). This cannot be undone.`, 'danger')) router.delete(`/consultations/${c.id}`, { preserveScroll: true }); };
 
-// Esc closes whichever modal is open
-const onEsc = (e) => { if (e.key === 'Escape') { showAdd.value = false; editing.value = null; } };
+// Esc closes whichever modal is open (via helpers so focus returns to the opener)
+const onEsc = (e) => {
+    if (e.key !== 'Escape') return;
+    if (showAdd.value) closeAdd();
+    if (editing.value) closeEdit();
+};
 onMounted(() => window.addEventListener('keydown', onEsc));
 onUnmounted(() => window.removeEventListener('keydown', onEsc));
 
 // sign off
-const signoff = (row) => {
-    if (confirm(`Sign off the consultation for ${row.name}?`)) {
+const signoff = async (row) => {
+    if (await ask('Sign off consultation', `Sign off the consultation for ${row.name} (MRN ${row.mrn}).`, 'neutral')) {
         router.post(`/consultations/${row.id}/signoff`, {}, { preserveScroll: true });
     }
 };
@@ -100,14 +116,15 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                     class="rounded-lg px-3 py-1.5 text-sm font-semibold transition" :class="status === s[0] ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ s[1] }}</button>
             </div>
             <button v-if="isConsultant" @click="toggleMine" class="rounded-xl px-3 py-2 text-sm font-semibold shadow-sm ring-1 transition" :class="scope === 'mine' ? 'bg-accent-500 text-white ring-accent-500' : 'bg-card text-ink-500 ring-line hover:bg-ink-50'">My consultations</button>
-            <button v-if="canAdd" @click="showAdd = true" class="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-700">
+            <button v-if="canAdd" @click="openAdd" class="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-700">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                 New Consultation
             </button>
         </div>
 
         <div class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
-            <table class="w-full text-sm">
+          <div class="overflow-x-auto">
+            <table class="min-w-[640px] w-full text-sm">
                 <thead>
                     <tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
                         <th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Location</th>
@@ -145,7 +162,13 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                     <tr v-if="!consultations.data.length"><td colspan="7" class="px-5 py-10 text-center text-ink-400">No consultations match your filters.</td></tr>
                 </tbody>
             </table>
+          </div>
         </div>
+
+        <!-- result-count announcement for screen readers (filters change the visible rows) -->
+        <span class="sr-only" aria-live="polite" aria-atomic="true">
+            {{ consultations.total ? `${consultations.total} consultation(s) found` : 'No results' }}
+        </span>
 
         <div v-if="consultations.last_page > 1" class="mt-4 flex items-center justify-between text-sm text-ink-500">
             <span class="nums">Showing {{ consultations.from }}–{{ consultations.to }} of {{ consultations.total }}</span>
@@ -156,9 +179,9 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
             </div>
         </div>
         <!-- edit consultation modal -->
-        <div v-if="editing" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="editing = null">
-            <div class="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
-                <div class="mb-4 flex items-center justify-between"><h3 class="text-lg font-bold text-ink-900">Edit consultation</h3><button @click="editing = null" class="text-ink-400 hover:text-ink-700">✕</button></div>
+        <div v-if="editing" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="closeEdit">
+            <div :ref="(el) => (a11yEdit.trapRef.value = el)" role="dialog" aria-modal="true" aria-labelledby="modal-title-cons-edit" @keydown="a11yEdit.onKeydown" class="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
+                <div class="mb-4 flex items-center justify-between"><h3 id="modal-title-cons-edit" class="text-lg font-bold text-ink-900">Edit consultation</h3><button @click="closeEdit" aria-label="Close" class="text-ink-400 hover:text-ink-700">✕</button></div>
                 <form @submit.prevent="submitEdit" class="space-y-4">
                     <div class="grid gap-3 sm:grid-cols-2">
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">MRN</label><input v-model="eForm.mrn" :class="[field, eForm.errors.mrn && 'border-danger-500']" /></div>
@@ -181,17 +204,17 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                         <p v-if="eForm.errors.indication" class="mt-1 text-xs text-danger-600">{{ eForm.errors.indication }}</p>
                         <input v-model="eForm.other_indication" :class="[field, 'mt-2']" placeholder="Other indication (required when 'Other' is selected)" />
                     </div>
-                    <div class="flex justify-end gap-2"><button type="button" @click="editing = null" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="eForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Update consultation</button></div>
+                    <div class="flex justify-end gap-2"><button type="button" @click="closeEdit" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="eForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Update consultation</button></div>
                 </form>
             </div>
         </div>
 
         <!-- new consultation modal -->
-        <div v-if="showAdd" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="showAdd = false">
-            <div class="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
+        <div v-if="showAdd" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="closeAdd">
+            <div :ref="(el) => (a11yAdd.trapRef.value = el)" role="dialog" aria-modal="true" aria-labelledby="modal-title-cons-new" @keydown="a11yAdd.onKeydown" class="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
                 <div class="mb-4 flex items-center justify-between">
-                    <h3 class="text-lg font-bold text-ink-900">New consultation</h3>
-                    <button @click="showAdd = false" class="text-ink-400 hover:text-ink-700">✕</button>
+                    <h3 id="modal-title-cons-new" class="text-lg font-bold text-ink-900">New consultation</h3>
+                    <button @click="closeAdd" aria-label="Close" class="text-ink-400 hover:text-ink-700">✕</button>
                 </div>
                 <form @submit.prevent="submitAdd" class="space-y-4">
                     <div class="grid gap-3 sm:grid-cols-2">
@@ -223,7 +246,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                         <input v-model="cForm.other_indication" :class="[field, 'mt-2']" placeholder="Other indication (required when 'Other' is selected)" />
                     </div>
                     <div class="flex justify-end gap-2">
-                        <button type="button" @click="showAdd = false" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
+                        <button type="button" @click="closeAdd" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
                         <button type="submit" :disabled="cForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Create consultation</button>
                     </div>
                 </form>

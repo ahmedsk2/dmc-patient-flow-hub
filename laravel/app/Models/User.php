@@ -66,6 +66,38 @@ class User extends Authenticatable
     /** Observers (role 5) are READ-ONLY everywhere — capability flags never override this. */
     public function isObserver(): bool { return (int) $this->role === self::ROLE_OBSERVER; }
     public function roleLabel(): string { return self::ROLE_LABELS[$this->role] ?? 'User'; }
+
+    /**
+     * A user may manage (discharge/transfer/edit/undo) an admission when they are:
+     *   - the admin, OR
+     *   - have the can_manage capability flag, OR
+     *   - are the primary consultant on the admission.
+     * Observers are globally read-only and are rejected BEFORE the other conditions are checked
+     * (the capability flags must never override the read-only guarantee — J1-9). The ONE manage
+     * rule, delegated to by PatientActionController + HandoverController.
+     */
+    public function canManageAdmission(Admission $a): bool
+    {
+        if ($this->isObserver()) {
+            return false;
+        }
+
+        return $this->isAdmin() || $this->can_manage || (int) $a->consultant_id === (int) $this->id;
+    }
+
+    /**
+     * Consultation sign-off / edit is CONSULTANT-centric (the receiving consultant), but follows the
+     * SAME observer-first / admin / can_manage / owner pattern as canManageAdmission. Delegated to by
+     * ConsultationsController::signoff.
+     */
+    public function canManageConsultation(Consultation $c): bool
+    {
+        if ($this->isObserver()) {
+            return false;
+        }
+
+        return $this->isAdmin() || $this->can_manage || (int) $c->consultant_id === (int) $this->id;
+    }
     public function mfaEnabled(): bool { return $this->mfa_secret !== null && $this->mfa_enrolled_at !== null; }
 
     /**

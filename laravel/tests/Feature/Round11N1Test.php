@@ -282,4 +282,43 @@ class Round11N1Test extends TestCase
                         && ($rows->firstWhere('name', 'Dr Early')['readmits'] ?? null) === 0;
                 }));
     }
+
+    // ---- Phase-0 Item 5: Admission::readmissionExists single source of truth --------------------
+
+    /**
+     * The unified whereExists closure must select an admission iff it is a readmission within the
+     * window of a prior REAL discharge — the exact rule the board badge / registry filter / registry
+     * badge all rebuild by hand today. A within-window prior discharge => true; outside => false.
+     */
+    public function test_readmission_exists_matches_board_badge(): void
+    {
+        $window = 3;
+
+        // patient WITH a prior real discharge 2 days before the new admit (inside the window)
+        $p1 = Patient::create(['mrn' => (string) random_int(10000000, 99999999), 'name' => 'Readmit In']);
+        $this->admission([
+            'admit_date' => now()->subDays(10)->toDateString(),
+            'discharge_date' => now()->subDays(2)->toDateString(),
+            'transfer_type' => 'discharge from ward',
+        ], $p1);
+        $within = $this->admission(['admit_date' => now()->toDateString()], $p1);
+
+        // patient WHOSE prior discharge is well outside the window (10 days before the new admit)
+        $p2 = Patient::create(['mrn' => (string) random_int(10000000, 99999999), 'name' => 'Readmit Out']);
+        $this->admission([
+            'admit_date' => now()->subDays(20)->toDateString(),
+            'discharge_date' => now()->subDays(10)->toDateString(),
+            'transfer_type' => 'discharge from ward',
+        ], $p2);
+        $outside = $this->admission(['admit_date' => now()->toDateString()], $p2);
+
+        $this->assertTrue(
+            Admission::whereExists(Admission::readmissionExists($window))->whereIn('id', [$within->id])->exists(),
+            'an admission within the window of a prior real discharge IS a readmission'
+        );
+        $this->assertFalse(
+            Admission::whereExists(Admission::readmissionExists($window))->whereIn('id', [$outside->id])->exists(),
+            'an admission outside the window is NOT a readmission'
+        );
+    }
 }

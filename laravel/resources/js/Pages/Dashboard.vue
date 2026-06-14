@@ -142,6 +142,7 @@ const ytdCards = computed(() => [
 ]);
 
 const refresh = () => router.reload({ only: ['kpis', 'trend', 'consults', 'consultDonut', 'los', 'mix', 'donutTotal', 'donutTb', 'perConsultant', 'consultantBoard', 'activity24h', 'ytd', 'topDxWeek', 'topDxWeekNum', 'recent', 'generatedAt'] });
+const print = () => window.print();
 
 // 5-minute auto-refresh, visibility-gated: a dashboard left open on a ward screen stays
 // current, but background tabs don't hammer the server.
@@ -162,7 +163,11 @@ onUnmounted(() => clearInterval(autoRefresh));
             </div>
             <div class="flex items-center gap-3 text-sm text-ink-400">
                 <span class="nums">Updated {{ generatedAt }}</span>
-                <button @click="refresh" class="inline-flex items-center gap-2 rounded-xl border border-line bg-card px-3 py-2 font-semibold text-ink-600 shadow-sm transition hover:border-brand-300 hover:text-brand-700">
+                <button @click="print" class="no-print inline-flex items-center gap-2 rounded-xl border border-line bg-card px-3 py-2 font-semibold text-ink-600 shadow-sm transition hover:border-brand-300 hover:text-brand-700">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.4 42.4 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.32 0H6.34m11.32 0 .55-6.171M6.34 18l-.55-6.171m0 0a42.4 42.4 0 0 1 12.42 0M5.79 11.829V6.75A2.25 2.25 0 0 1 8.04 4.5h7.92a2.25 2.25 0 0 1 2.25 2.25v5.079" /></svg>
+                    Print
+                </button>
+                <button @click="refresh" class="no-print inline-flex items-center gap-2 rounded-xl border border-line bg-card px-3 py-2 font-semibold text-ink-600 shadow-sm transition hover:border-brand-300 hover:text-brand-700">
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992V4.356M2.985 19.644v-4.992h4.992m-4.49-4.51a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m-15.91 8.51 3.181 3.182a8.25 8.25 0 0 0 13.803-3.7" /></svg>
                     Refresh
                 </button>
@@ -274,7 +279,7 @@ onUnmounted(() => clearInterval(autoRefresh));
         </div>
 
         <!-- top diagnoses: this calendar week-number across ALL years (legacy seasonal view) -->
-        <div class="mt-5 rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
+        <div class="print-break-before mt-5 rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
             <h3 class="mb-4 font-semibold text-ink-700">Top diagnoses <span class="font-normal text-ink-400">(week {{ topDxWeekNum }}, all years)</span></h3>
             <div class="grid gap-x-8 gap-y-2 sm:grid-cols-2">
                 <div v-for="(d, i) in topDxWeek" :key="i" class="flex items-center gap-3">

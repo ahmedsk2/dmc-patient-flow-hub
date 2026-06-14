@@ -2,6 +2,9 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { useConfirm } from '@/composables/useConfirm';
+
+const { ask } = useConfirm();
 
 const props = defineProps({ settings: Object, users: Object, filters: Object, roles: Object, counts: Object, specialties: Array, reasons: Array, settingHistory: Array });
 
@@ -51,10 +54,10 @@ const editUser = (u) => {
     uForm.can_assign = u.can.assign; uForm.can_add = u.can.add; uForm.can_manage = u.can.manage; uForm.can_modify = u.can.modify;
 };
 const saveUser = () => uForm.put(`/control/users/${editing.value.id}`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
-const resetMfa = (u) => { if (confirm(`Reset two-factor for ${u.username}? They'll re-enrol on next login.`)) router.post(`/control/users/${u.id}/reset-mfa`, {}, { preserveScroll: true }); };
+const resetMfa = async (u) => { if (await ask('Reset two-factor', `Reset two-factor for ${u.username}. They'll re-enrol on next login.`, 'neutral')) router.post(`/control/users/${u.id}/reset-mfa`, {}, { preserveScroll: true }); };
 const sendReset = (u) => router.post(`/control/users/${u.id}/send-reset`, {}, { preserveScroll: true });
-const deleteUser = (u) => {
-    if (confirm(`Delete ${u.username} permanently? Their historical admissions/consultations are kept (attribution cleared). This cannot be undone.`))
+const deleteUser = async (u) => {
+    if (await ask('Delete user', `Permanently delete ${u.username}. Their historical admissions/consultations are kept (attribution cleared). This cannot be undone.`, 'danger'))
         router.delete(`/control/users/${u.id}`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
 };
 

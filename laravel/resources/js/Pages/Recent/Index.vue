@@ -2,12 +2,15 @@
 import { ref, computed } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { useConfirm } from '@/composables/useConfirm';
+
+const { ask } = useConfirm();
 
 const props = defineProps({ discharges: Array, signoffs: Array, since: String });
 
 const tab = ref('discharges');
-const undoDischarge = (id) => { if (confirm('Reverse this discharge? The patient returns to the active board.')) router.post(`/admissions/${id}/reverse-discharge`, {}, { preserveScroll: true }); };
-const undoSignoff = (id) => { if (confirm('Reverse this sign-off? The consultation returns to active.')) router.post(`/consultations/${id}/reverse-signoff`, {}, { preserveScroll: true }); };
+const undoDischarge = async (d) => { if (await ask('Reverse discharge', `Reverse the discharge for ${d.name} (MRN ${d.mrn}) — the patient returns to the active board.`, 'danger')) router.post(`/admissions/${d.id}/reverse-discharge`, {}, { preserveScroll: true }); };
+const undoSignoff = async (s) => { if (await ask('Reverse sign-off', `Reverse the sign-off for ${s.name} (MRN ${s.mrn}) — the consultation returns to active.`, 'danger')) router.post(`/consultations/${s.id}/reverse-signoff`, {}, { preserveScroll: true }); };
 
 // discharges grouped per consultant like the legacy "Dr X Patient List" sections (J1-8);
 // rows arrive ordered by discharge date — groups keep first-appearance order
@@ -62,7 +65,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                             <td class="px-3 py-3 text-ink-600">{{ d.admitter || '—' }}</td>
                             <td class="px-3 py-3 text-ink-600">{{ d.actor || '—' }}</td>
                             <td class="px-5 py-3 text-right">
-                                <button v-if="d.reversible" @click="undoDischarge(d.id)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-danger-600 hover:bg-danger-100">Undo</button>
+                                <button v-if="d.reversible" @click="undoDischarge(d)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-danger-600 hover:bg-danger-100">Undo</button>
                                 <span v-else class="text-xs text-ink-300" title="Undo is same-day only">—</span>
                             </td>
                         </tr>
@@ -92,7 +95,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                         <td class="px-3 py-3 text-ink-600">{{ s.consultant || '—' }}</td>
                         <td class="px-3 py-3 text-ink-600">{{ s.entered_by || '—' }}</td>
                         <td class="px-5 py-3 text-right">
-                            <button v-if="s.reversible" @click="undoSignoff(s.id)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-danger-600 hover:bg-danger-100">Undo</button>
+                            <button v-if="s.reversible" @click="undoSignoff(s)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-danger-600 hover:bg-danger-100">Undo</button>
                             <span v-else class="text-xs text-ink-300" title="Undo is same-day only">—</span>
                         </td>
                     </tr>

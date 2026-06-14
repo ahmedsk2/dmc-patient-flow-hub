@@ -3,13 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Admission;
-use App\Models\AuditLog;
 use App\Models\Handover;
 use App\Models\HandoverRevision;
 use App\Models\HandoverSignature;
 use App\Models\Notification;
 use App\Models\User;
 use App\Services\ShuffleService;
+use App\Support\Audit;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -25,15 +25,6 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
  */
 class PatientActionController extends Controller
 {
-    private function audit(string $action, Admission $a, array $details = []): void
-    {
-        AuditLog::create([
-            'actor_id' => Auth::id(), 'actor_name' => Auth::user()->name,
-            'action' => $action, 'entity_type' => 'admission', 'entity_id' => (string) $a->id,
-            'details' => $details, 'ip' => request()->ip(),
-        ]);
-    }
-
     /**
      * Validation rule for an assignment/handover TARGET: the user must be an ACTIVE CONSULTANT
      * (N1-7). Used by assign, bulk-reassign (to side) and specialty transfer so an API caller can
@@ -42,16 +33,6 @@ class PatientActionController extends Controller
     private static function activeConsultantRule(): \Illuminate\Validation\Rules\Exists
     {
         return Rule::exists('users', 'id')->where('role', User::ROLE_CONSULTANT)->where('active', 1);
-    }
-
-    private function canManage(Admission $a): bool
-    {
-        $u = Auth::user();
-        if ($u->isObserver()) {
-            return false;   // global read-only guarantee — capability flags never override (J1-9)
-        }
-
-        return $u->isAdmin() || $u->can_manage || (int) $a->consultant_id === (int) $u->id;
     }
 
     // ---- same-day handover gate (consultant-changing moves only) --------------------------------
@@ -155,7 +136,7 @@ class PatientActionController extends Controller
         DB::transaction(function () use ($admission, $patient, $target, $data, $newAdmitDate, $consultantChanged, $newConsultant) {
             if ($target) {
                 $admission->update(['patient_id' => $target->id]);
-                $this->audit('patient.repoint', $admission, [
+                Audit::log('patient.repoint', 'admission', (string) $admission->id, [
                     'from_patient_id' => $patient->id, 'to_patient_id' => $target->id, 'mrn' => $target->mrn,
                 ]);
                 // only deliberately-changed fields propagate — the form was prefilled from the
@@ -196,7 +177,7 @@ class PatientActionController extends Controller
             $details['consultant_id'] = $newConsultant;
             $details['consultant_was'] = $oldConsultant;
         }
-        $this->audit('patient.modify', $admission, $details);
+        Audit::log('patient.modify', 'admission', (string) $admission->id, $details);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Patient details updated.']);
     }
@@ -220,7 +201,7 @@ class PatientActionController extends Controller
                 'message' => 'This patient is already assigned — use Assign (or a transfer) instead.']);
         }
         $admission->update(['consultant_id' => $u->id, 'is_new_assignment' => true, 'assigned_on' => now()->toDateString(), 'assigned_at' => now()]);
-        $this->audit('admission.assign_to_me', $admission, ['consultant_id' => $u->id]);
+        Audit::log('admission.assign_to_me', 'admission', (string) $admission->id, ['consultant_id' => $u->id]);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Assigned to you.']);
     }
@@ -232,7 +213,7 @@ class PatientActionController extends Controller
             throw new AccessDeniedHttpException('Observers are read-only.');
         }
         $admission->update(['is_longterm' => ! $admission->is_longterm]);
-        $this->audit('admission.longterm', $admission, ['is_longterm' => $admission->is_longterm]);
+        Audit::log('admission.longterm', 'admission', (string) $admission->id, ['is_longterm' => $admission->is_longterm]);
 
         return back()->with('flash', ['type' => 'success', 'message' => $admission->is_longterm ? 'Marked long-term.' : 'Long-term label removed.']);
     }
@@ -299,10 +280,9 @@ class PatientActionController extends Controller
 
             return [$count, $sigIds];
         });
-        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'admission.bulk_reassign',
-            'entity_type' => 'consultant', 'entity_id' => (string) $data['from_consultant_id'],
-            'details' => ['to' => $data['to_consultant_id'], 'count' => $count, 'mark_new' => $markNew,
-                'handover_signature_ids' => $sigIds], 'ip' => $request->ip()]);
+        Audit::log('admission.bulk_reassign', 'consultant', (string) $data['from_consultant_id'],
+            ['to' => $data['to_consultant_id'], 'count' => $count, 'mark_new' => $markNew,
+                'handover_signature_ids' => $sigIds]);
 
         return back()->with('flash', ['type' => 'success', 'message' => "Reassigned {$count} patient(s)."]);
     }
@@ -315,8 +295,7 @@ class PatientActionController extends Controller
             throw new AccessDeniedHttpException('Requires the Assign capability.');
         }
         $r = $shuffle->run(Auth::id());
-        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'admission.shuffle',
-            'entity_type' => 'admission', 'entity_id' => null, 'details' => $r, 'ip' => $request->ip()]);
+        Audit::log('admission.shuffle', 'admission', null, $r);
 
         $msg = $r['assigned'] > 0
             ? "Shuffle assigned {$r['assigned']} patient(s) across {$r['consultants']} consultant(s)." . ($r['skipped'] ? " {$r['skipped']} skipped (at capacity)." : '')
@@ -366,7 +345,7 @@ class PatientActionController extends Controller
 
             return $sig;
         });
-        $this->audit('admission.assign', $admission, ['consultant_id' => $data['consultant_id'], 'mark_new' => $markNew]
+        Audit::log('admission.assign', 'admission', (string) $admission->id, ['consultant_id' => $data['consultant_id'], 'mark_new' => $markNew]
             + ($sig ? ['handover_signature_id' => $sig->id] : []));
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultant assigned.']);
@@ -384,7 +363,7 @@ class PatientActionController extends Controller
         $data = $request->validate(['bed' => ['nullable', 'string', 'max:64']]);
         $old = $admission->bed;
         $admission->update(['bed' => $data['bed'] ?? null]);
-        $this->audit('admission.bed', $admission, ['bed' => $admission->bed, 'was' => $old]);
+        Audit::log('admission.bed', 'admission', (string) $admission->id, ['bed' => $admission->bed, 'was' => $old]);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Bed updated.']);
     }
@@ -403,7 +382,7 @@ class PatientActionController extends Controller
      */
     public function medicalDischarge(Request $request, Admission $admission): RedirectResponse
     {
-        if (! $this->canManage($admission)) {
+        if (! Auth::user()->canManageAdmission($admission)) {
             throw new AccessDeniedHttpException('Only the primary consultant or a manager may discharge.');
         }
         $complete = $request->boolean('complete');
@@ -443,7 +422,7 @@ class PatientActionController extends Controller
                 $this->voidPendingSignatures($admission);
             }
         });
-        $this->audit($complete ? 'admission.discharge_both' : 'admission.medical_discharge', $admission, ['outcome' => $outcome]);
+        Audit::log($complete ? 'admission.discharge_both' : 'admission.medical_discharge', 'admission', (string) $admission->id, ['outcome' => $outcome]);
 
         return back()->with('flash', ['type' => 'success', 'message' => $complete
             ? 'Patient discharged — file closed.'
@@ -457,7 +436,7 @@ class PatientActionController extends Controller
      */
     public function completeDischarge(Request $request, Admission $admission): RedirectResponse
     {
-        if (! $this->canManage($admission)) {
+        if (! Auth::user()->canManageAdmission($admission)) {
             throw new AccessDeniedHttpException('Only the primary consultant or a manager may discharge.');
         }
         // effective outcome = submitted override OR the phase-1 value; a Dead close forces Mortuary,
@@ -498,7 +477,7 @@ class PatientActionController extends Controller
             $details['outcome'] = $updates['outcome'];
             $details['outcome_was'] = $oldOutcome;
         }
-        $this->audit('admission.complete_discharge', $admission, $details);
+        Audit::log('admission.complete_discharge', 'admission', (string) $admission->id, $details);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Discharge completed.']);
     }
@@ -506,7 +485,7 @@ class PatientActionController extends Controller
     /** Single-step ICU discharge. */
     public function icuDischarge(Request $request, Admission $admission): RedirectResponse
     {
-        if (! $this->canManage($admission)) {
+        if (! Auth::user()->canManageAdmission($admission)) {
             throw new AccessDeniedHttpException('Only the primary consultant or a manager may discharge.');
         }
         // legacy required "Discharged to" on the ICU close too; a Dead close forces Mortuary (no destination needed)
@@ -533,7 +512,7 @@ class PatientActionController extends Controller
             ]);
             $this->voidPendingSignatures($admission);   // the file is closed — nothing left to sign
         });
-        $this->audit('admission.icu_discharge', $admission, ['outcome' => $data['outcome']]);
+        Audit::log('admission.icu_discharge', 'admission', (string) $admission->id, ['outcome' => $data['outcome']]);
 
         return back()->with('flash', ['type' => 'success', 'message' => "ICU discharge complete ({$data['outcome']})."]);
     }
@@ -553,7 +532,7 @@ class PatientActionController extends Controller
             return back()->with('flash', ['type' => 'error', 'message' => 'Only same-day discharges can be reversed.']);
         }
         $admission->update(['discharge_date' => null, 'medical_discharge_date' => null, 'outcome' => null, 'discharge_to' => null, 'transfer_type' => null, 'discharged_by' => null]);
-        $this->audit('admission.reverse_discharge', $admission);
+        Audit::log('admission.reverse_discharge', 'admission', (string) $admission->id);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Discharge reversed.']);
     }
@@ -561,7 +540,7 @@ class PatientActionController extends Controller
     /** Undo a phase-1 medical discharge ("discharged still in") — returns the row to plain active. */
     public function undoMedicalDischarge(Admission $admission): RedirectResponse
     {
-        if (! $this->canManage($admission)) {
+        if (! Auth::user()->canManageAdmission($admission)) {
             throw new AccessDeniedHttpException('Only the primary consultant or a manager may undo a medical discharge.');
         }
         // a fully-discharged file is out of scope here — that correction is reverseDischarge (admin, ≤48h)
@@ -572,7 +551,7 @@ class PatientActionController extends Controller
             return back()->with('flash', ['type' => 'error', 'message' => 'This admission has no medical discharge to undo.']);
         }
         $admission->update(['medical_discharge_date' => null, 'outcome' => null, 'discharge_to' => null, 'delay_reason' => null, 'discharged_by' => null]);
-        $this->audit('admission.undo_medical_discharge', $admission);
+        Audit::log('admission.undo_medical_discharge', 'admission', (string) $admission->id);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Medical discharge undone.']);
     }
@@ -588,7 +567,7 @@ class PatientActionController extends Controller
      */
     public function transfer(Request $request, Admission $admission): RedirectResponse
     {
-        if (! $this->canManage($admission)) {
+        if (! Auth::user()->canManageAdmission($admission)) {
             throw new AccessDeniedHttpException('Only the primary consultant or a manager may transfer.');
         }
         $mode = $request->validate(['mode' => ['nullable', 'in:location,specialty,external']])['mode'] ?? 'location';
@@ -672,7 +651,7 @@ class PatientActionController extends Controller
 
             return $new;
         });
-        $this->audit('admission.transfer_specialty', $admission, [
+        Audit::log('admission.transfer_specialty', 'admission', (string) $admission->id, [
             'specialty_id' => (int) $data['specialty_id'], 'specialty' => $specialty->name,
             'consultant_id' => (int) $data['consultant_id'], 'new_admission_id' => $new->id,
         ] + ($sig ? ['handover_signature_id' => $sig->id] : []));
@@ -732,7 +711,7 @@ class PatientActionController extends Controller
 
             return $new;
         });
-        $this->audit('admission.transfer_external', $admission, ['service' => $data['service']]
+        Audit::log('admission.transfer_external', 'admission', (string) $admission->id, ['service' => $data['service']]
             + ($new ? ['new_admission_id' => $new->id] : []));
 
         return back()->with('flash', ['type' => 'success', 'message' => "Patient transferred to {$data['service']}."]);
@@ -782,7 +761,7 @@ class PatientActionController extends Controller
 
             return $new;
         });
-        $this->audit('admission.transfer', $admission, ['to' => $data['target'], 'new_admission_id' => $new->id]);
+        Audit::log('admission.transfer', 'admission', (string) $admission->id, ['to' => $data['target'], 'new_admission_id' => $new->id]);
 
         return back()->with('flash', ['type' => 'success', 'message' => "Patient transferred to {$data['target']}."]);
     }
@@ -844,7 +823,7 @@ class PatientActionController extends Controller
 
             return $new;
         });
-        $this->audit('admission.icu_pull', $admission, ['new_admission_id' => $new->id]);
+        Audit::log('admission.icu_pull', 'admission', (string) $admission->id, ['new_admission_id' => $new->id]);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Patient admitted from ICU — now in the assignment queue.']);
     }
@@ -865,7 +844,7 @@ class PatientActionController extends Controller
         ];
 
         DB::transaction(function () use ($admission, $details) {
-            $this->audit('admission.delete', $admission, $details);   // written first — survives the delete
+            Audit::log('admission.delete', 'admission', (string) $admission->id, $details);   // written first — survives the delete
             $this->voidPendingSignatures($admission, deleting: true); // moot before the cascade, but explicit
             $admission->diagnoses()->delete();                        // explicit, even though the FK cascades
             $admission->delete();

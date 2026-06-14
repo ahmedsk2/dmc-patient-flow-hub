@@ -3,11 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Admission;
-use App\Models\AuditLog;
 use App\Models\ConsultationReason;
 use App\Models\Setting;
 use App\Models\Specialty;
 use App\Models\User;
+use App\Support\Audit;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -89,8 +89,7 @@ class ControlController extends Controller
         }
 
         $settings->update($data);
-        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'settings.update',
-            'entity_type' => 'settings', 'entity_id' => '1', 'details' => $data, 'ip' => $request->ip()]);
+        Audit::log('settings.update', 'settings', '1', $data);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Settings saved.']);
     }
@@ -124,8 +123,7 @@ class ControlController extends Controller
         }
 
         $user->update($data);
-        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'user.update',
-            'entity_type' => 'user', 'entity_id' => (string) $user->id, 'details' => $data, 'ip' => $request->ip()]);
+        Audit::log('user.update', 'user', (string) $user->id, $data);
 
         return back()->with('flash', ['type' => 'success', 'message' => "Updated {$user->username}."]);
     }
@@ -146,10 +144,8 @@ class ControlController extends Controller
                 'message' => "{$user->username} still has active patients — reassign or discharge them first."]);
         }
 
-        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'user.delete',
-            'entity_type' => 'user', 'entity_id' => (string) $user->id,
-            'details' => ['username' => $user->username, 'name' => $user->full_name ?: $user->name, 'role' => (int) $user->role],
-            'ip' => $request->ip()]);
+        Audit::log('user.delete', 'user', (string) $user->id,
+            ['username' => $user->username, 'name' => $user->full_name ?: $user->name, 'role' => (int) $user->role]);
         $user->delete();
 
         return back()->with('flash', ['type' => 'success', 'message' => "Deleted {$user->username}."]);
@@ -159,8 +155,7 @@ class ControlController extends Controller
     public function resetMfa(Request $request, User $user): RedirectResponse
     {
         $user->update(['mfa_secret' => null, 'mfa_recovery_codes' => null, 'mfa_enrolled_at' => null]);
-        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'user.reset_mfa',
-            'entity_type' => 'user', 'entity_id' => (string) $user->id, 'ip' => $request->ip()]);
+        Audit::log('user.reset_mfa', 'user', (string) $user->id);
 
         return back()->with('flash', ['type' => 'success', 'message' => "Two-factor reset for {$user->username}."]);
     }
@@ -172,8 +167,7 @@ class ControlController extends Controller
             return back()->with('flash', ['type' => 'error', 'message' => 'That user has no email on file.']);
         }
         Password::sendResetLink(['email' => $user->email]);
-        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'user.send_reset',
-            'entity_type' => 'user', 'entity_id' => (string) $user->id, 'ip' => $request->ip()]);
+        Audit::log('user.send_reset', 'user', (string) $user->id);
 
         return back()->with('flash', ['type' => 'success', 'message' => "Password-reset link sent to {$user->email}."]);
     }
@@ -186,9 +180,8 @@ class ControlController extends Controller
             'is_subspecialty' => $request->boolean('is_subspecialty', true),
             'is_external' => $request->boolean('is_external', false),   // external/allied service = transfer-out target only
         ]);
-        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'specialty.add',
-            'entity_type' => 'specialty', 'entity_id' => null,
-            'details' => ['name' => $data['name'], 'is_external' => $request->boolean('is_external', false)], 'ip' => $request->ip()]);
+        Audit::log('specialty.add', 'specialty', null,
+            ['name' => $data['name'], 'is_external' => $request->boolean('is_external', false)]);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Specialty added.']);
     }
@@ -197,8 +190,7 @@ class ControlController extends Controller
     {
         $data = $request->validate(['name' => ['required', 'string', 'max:191']]);
         ConsultationReason::create(['name' => $data['name']]);
-        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'reason.add',
-            'entity_type' => 'consultation_reason', 'entity_id' => null, 'details' => ['name' => $data['name']], 'ip' => $request->ip()]);
+        Audit::log('reason.add', 'consultation_reason', null, ['name' => $data['name']]);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultation indication added.']);
     }

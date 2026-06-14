@@ -7,6 +7,10 @@
 /* Class-based dark mode: `.dark` on <html> flips the variant (Tailwind v4 custom variant). */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Coarse-pointer (touch) variant — `coarse:` utilities apply only on touch devices. Used to
+ * enlarge the board card action buttons to >=40px and collapse rare actions into a kebab. */
+@custom-variant coarse (@media (pointer: coarse));
+
 /* Accessibility: honor a user's "reduce motion" OS setting — neutralize animations,
  * transitions, and smooth-scroll (covers the dashboard auto-refresh + chart animations). */
 @media (prefers-reduced-motion: reduce) {
@@ -233,4 +237,28 @@
     & > :not([hidden]) ~ :not([hidden]) {
         border-color: var(--color-line);
     }
+}
+
+/* ----- Print layer ---------------------------------------------------------------------------
+ * Extends ActiveList.vue's per-page @media print so Dashboard + Statistics (and any AppLayout
+ * page with a `.no-print` Print button) print cleanly: hide the sidebar/header chrome, drop the
+ * lg:pl-64 sidebar offset, force a white background, give charts full width, and allow explicit
+ * page breaks. Placed at the END so it overrides the Tailwind utilities above it. */
+@media print {
+    /* Hide chrome: sidebar, sticky header, mobile drawer backdrop, and anything opted out. */
+    aside, header, .no-print { display: none !important; }
+    /* Remove the sidebar offset so content uses the full page width. */
+    .lg\:pl-64 { padding-left: 0 !important; }
+    main { padding: 0 !important; }
+    /* White background, black text for ink economy + legibility. */
+    body, .bg-card, .bg-app { background: #fff !important; color: #000 !important; }
+    /* Full width for ApexCharts containers so charts don't print clipped/half-size. */
+    [data-apexcharts-chart], .apexcharts-canvas, .apexcharts-svg { max-width: 100% !important; width: 100% !important; }
+    /* Explicit page breaks between major report sections. */
+    .print-break-before { break-before: page; }
+    /* Flatten depth — print doesn't need shadows/rings; keep a hairline so panels stay legible. */
+    .shadow-card, .shadow-card-lg { box-shadow: none !important; }
+    .ring-1 { box-shadow: none !important; border: 1px solid #e0e0e0 !important; }
+    /* Keep the ActiveList report header visible (its own @media print hides chrome differently). */
+    .report header { display: block !important; }
 }

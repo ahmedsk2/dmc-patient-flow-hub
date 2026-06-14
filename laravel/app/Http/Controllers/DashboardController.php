@@ -65,15 +65,26 @@ class DashboardController extends Controller
             $trend['discharges'][] = (int) ($disBy[$d] ?? 0);
         }
 
-        // consultations vs sign-offs (6 months)
+        // consultations vs sign-offs — 6 calendar months including current (M-5 .. M), 2 queries
+        // total (was a 12-query month loop). Same DATE_FORMAT('%Y-%m') GROUP BY + PHP-zip pattern
+        // as the 31-day admissions trend above; the output shape (and numbers) are unchanged.
+        $sixMonthsAgo = Carbon::today()->startOfMonth()->subMonths(5)->toDateString();
+        $consByMonth = DB::table('consultations')
+            ->selectRaw("DATE_FORMAT(consultation_date, '%Y-%m') ym, COUNT(*) c")
+            ->where('consultation_date', '>=', $sixMonthsAgo)
+            ->groupBy('ym')->pluck('c', 'ym');
+        $signedByMonth = DB::table('consultations')
+            ->selectRaw("DATE_FORMAT(signoff_date, '%Y-%m') ym, COUNT(*) c")
+            ->where('signoff_date', '>=', $sixMonthsAgo)
+            ->groupBy('ym')->pluck('c', 'ym');
+
         $cons = ['labels' => [], 'new' => [], 'signed' => []];
         for ($i = 5; $i >= 0; $i--) {
             $m = Carbon::today()->subMonths($i);
-            $s = $m->copy()->startOfMonth()->toDateString();
-            $e = $m->copy()->endOfMonth()->toDateString();
+            $ym = $m->format('Y-m');
             $cons['labels'][] = $m->format('M');
-            $cons['new'][] = (int) DB::table('consultations')->whereBetween('consultation_date', [$s, $e])->count();
-            $cons['signed'][] = (int) DB::table('consultations')->whereBetween('signoff_date', [$s, $e])->count();
+            $cons['new'][] = (int) ($consByMonth[$ym] ?? 0);
+            $cons['signed'][] = (int) ($signedByMonth[$ym] ?? 0);
         }
 
         // LOS distribution (discharged this year, non-ICU)

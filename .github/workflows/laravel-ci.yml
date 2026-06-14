@@ -72,5 +72,8 @@ jobs:
       - name: Build front-end (catches Vue/Inertia build breakage)
         run: npm ci && npm run build
 
+      - name: Front-end unit tests (Vitest)
+        run: npm run test
+
       - name: Dependency advisories (npm, production)
         run: npm audit --omit=dev

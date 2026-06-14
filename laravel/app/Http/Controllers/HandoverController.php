@@ -3,11 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Admission;
-use App\Models\AuditLog;
 use App\Models\Handover;
 use App\Models\HandoverRevision;
 use App\Models\HandoverSignature;
 use App\Models\Notification;
+use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -22,26 +22,6 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
  */
 class HandoverController extends Controller
 {
-    private function audit(string $action, int $admissionId, array $details = []): void
-    {
-        AuditLog::create([
-            'actor_id' => Auth::id(), 'actor_name' => Auth::user()->name,
-            'action' => $action, 'entity_type' => 'admission', 'entity_id' => (string) $admissionId,
-            'details' => $details, 'ip' => request()->ip(),
-        ]);
-    }
-
-    /** Same rule as PatientActionController::canManage (owner consultant / Manage capability / admin). */
-    private function canManage(Admission $a): bool
-    {
-        $u = Auth::user();
-        if ($u->isObserver()) {
-            return false;   // global read-only guarantee — capability flags never override (J1-9)
-        }
-
-        return $u->isAdmin() || $u->can_manage || (int) $a->consultant_id === (int) $u->id;
-    }
-
     /** GET /admissions/{admission}/handover — current text + latest 20 revisions (all roles, read-only). */
     public function show(Admission $admission): JsonResponse
     {
@@ -73,7 +53,7 @@ class HandoverController extends Controller
         // the receiver signs (the inbox "My outgoing" editor).
         $isOutgoing = HandoverSignature::where('admission_id', $admission->id)->pending()
             ->where('from_consultant_id', Auth::id())->exists();
-        if (! ($this->canManage($admission) || $isOutgoing)) {
+        if (! (Auth::user()->canManageAdmission($admission) || $isOutgoing)) {
             throw new AccessDeniedHttpException('Only the primary consultant or a manager may update the handover.');
         }
         $data = $request->validate(['body' => ['required', 'string', 'max:5000']]);
@@ -86,7 +66,7 @@ class HandoverController extends Controller
             $h->save();
             HandoverRevision::create(['admission_id' => $admission->id, 'body' => $data['body'], 'author_id' => Auth::id()]);
         });
-        $this->audit('handover.update', $admission->id, ['revision_id' => HandoverRevision::latestIdFor($admission->id)]);
+        Audit::log('handover.update', 'admission', (string) $admission->id, ['revision_id' => HandoverRevision::latestIdFor($admission->id)]);
 
         return $request->expectsJson()
             ? response()->json(['saved' => true, 'updated_at' => now()->toIso8601String()])
@@ -193,7 +173,7 @@ class HandoverController extends Controller
             'signed_at' => now(), 'signed_by' => Auth::id(),
             'revision_id' => HandoverRevision::latestIdFor($s->admission_id) ?? $s->revision_id,
         ]);
-        $this->audit('handover.sign', $s->admission_id, ['signature_id' => $s->id, 'revision_id' => $s->revision_id]);
+        Audit::log('handover.sign', 'admission', (string) $s->admission_id, ['signature_id' => $s->id, 'revision_id' => $s->revision_id]);
     }
 
     /** GET /api/notifications — latest 15 for the bell dropdown + unread count. */

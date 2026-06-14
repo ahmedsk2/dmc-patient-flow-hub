@@ -3,6 +3,15 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
+import { useConfirm } from '@/composables/useConfirm';
+import { useModalA11y } from '@/composables/useModalA11y';
+
+const { ask } = useConfirm();
+
+// one focus-trap instance per modal slot (assign / ICU / modify)
+const a11yAssign = useModalA11y();
+const a11yIcu = useModalA11y();
+const a11yModify = useModalA11y();
 
 const props = defineProps({ queue: Array, icuPatients: Array, consultants: Array, countries: Array });
 
@@ -25,7 +34,7 @@ const byDate = computed(() => {
 });
 const dayName = (d) => d && d !== 'Undated' ? new Date(d + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' }) : '';
 
-const shuffle = () => { if (confirm('Auto-assign all unassigned patients across on-service consultants?')) router.post('/admissions/shuffle', {}, { preserveScroll: true }); };
+const shuffle = async () => { if (await ask('Auto-assign unassigned patients', 'Distribute all unassigned patients across the on-service consultants using the balancing shuffle.', 'neutral')) router.post('/admissions/shuffle', {}, { preserveScroll: true }); };
 
 // queue patients are unassigned — the assign-to-primary list offers ON-SERVICE consultants only
 // (J1-15a; no current assignee to preserve here, unlike the board's reassign modal)
@@ -39,13 +48,16 @@ const toggleDx = (id) => (dxOpen.value = dxOpen.value === id ? null : id);
 // admission gets its "New" badge from the shuffle/board flows, not the queue assign)
 const assigning = ref(null);
 const aForm = useForm({ consultant_id: '', mark_new: false });
-const openAssign = (p) => { assigning.value = p; aForm.consultant_id = ''; aForm.mark_new = false; };
-const submitAssign = () => aForm.post(`/admissions/${assigning.value.id}/assign`, { preserveScroll: true, onSuccess: () => (assigning.value = null) });
+const closeAssign = () => { assigning.value = null; a11yAssign.onClose(); };
+const openAssign = (p) => { assigning.value = p; aForm.consultant_id = ''; aForm.mark_new = false; a11yAssign.onOpen(); };
+const submitAssign = () => aForm.post(`/admissions/${assigning.value.id}/assign`, { preserveScroll: true, onSuccess: closeAssign });
 const assignToMe = (p) => router.post(`/admissions/${p.id}/assign-to-me`, {}, { preserveScroll: true });
 
 // admission from ICU — dedicated icu-pull endpoint (Add capability; new episode is unassigned)
 const showIcu = ref(false);
-const fromIcu = (p) => { if (confirm(`Admit ${p.name} (MRN ${p.mrn}) from ICU to the ward?`)) router.post(`/admissions/${p.id}/icu-pull`, {}, { preserveScroll: true, onSuccess: () => (showIcu.value = false) }); };
+const openIcu = () => { showIcu.value = true; a11yIcu.onOpen(); };
+const closeIcu = () => { showIcu.value = false; a11yIcu.onClose(); };
+const fromIcu = async (p) => { if (await ask('Admit from ICU', `Pull ${p.name} (MRN ${p.mrn}) from ICU onto the ward — they enter the assignment queue for a new consultant.`, 'neutral')) router.post(`/admissions/${p.id}/icu-pull`, {}, { preserveScroll: true, onSuccess: () => (showIcu.value = false) }); };
 
 // modify a queued (unassigned) patient — reuses /admissions/{id}/edit + /modify
 const today = new Date().toISOString().slice(0, 10);
@@ -53,10 +65,12 @@ const admitFromOptions = ['ER', 'Clinic', 'OPD', 'OR', 'ICU', 'Referral', 'Trans
 const editing = ref(null);
 const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '', bed: '', admit_date: '', admitted_from: '', current_location: 'Ward', consultant_id: '', diagnoses: [] });
 const mDx = ref([]);
+const closeModify = () => { editing.value = null; a11yModify.onClose(); };
 const openModify = async (p) => {
     const d = await (await fetch(`/admissions/${p.id}/edit`, { headers: { Accept: 'application/json' } })).json();
     // keep the LOADED identity so a changed MRN/name is confirmed before posting (K1-3)
     editing.value = { id: p.id, mrn: d.mrn || '', name: d.name || '' };
+    a11yModify.onOpen();
     mForm.mrn = d.mrn || ''; mForm.name = d.name || ''; mForm.age = d.age ?? ''; mForm.gender = d.gender || '';
     mForm.nationality = d.nationality || ''; mForm.bed = d.bed || '';
     mForm.admit_date = d.admit_date || ''; mForm.admitted_from = d.admitted_from || ''; mForm.current_location = d.current_location || 'Ward';
@@ -68,21 +82,29 @@ const modifyConsultants = computed(() => props.consultants.filter((c) => c.on_se
 const mAdd = (d) => { if (!mDx.value.find((x) => x.code === d.code)) { mDx.value.push(d); mForm.diagnoses.push(d.code); } };
 const mRemove = (code) => { mDx.value = mDx.value.filter((x) => x.code !== code); mForm.diagnoses = mForm.diagnoses.filter((c) => c !== code); };
 // identity confirm (K1-3): an MRN/name edit re-points or renames the patient — make it deliberate
-const submitModify = () => {
-    if ((String(mForm.mrn) !== String(editing.value.mrn) || String(mForm.name) !== String(editing.value.name))
-        && !confirm(`Change patient identity from ${editing.value.name} (MRN ${editing.value.mrn}) to ${mForm.name} (MRN ${mForm.mrn})?`)) return;   // declined — no post
-    mForm.post(`/admissions/${editing.value.id}/modify`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
+const submitModify = async () => {
+    const loaded = editing.value;
+    if ((String(mForm.mrn) !== String(loaded.mrn) || String(mForm.name) !== String(loaded.name))
+        && !(await ask('Change patient identity',
+            `Change patient identity from ${loaded.name} (MRN ${loaded.mrn}) to ${mForm.name} (MRN ${mForm.mrn})?`, 'danger'))) return;   // declined — no post
+    mForm.post(`/admissions/${loaded.id}/modify`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
 };
 const fld = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500';
 
-// Esc closes whichever modal is open
-const onEsc = (e) => { if (e.key === 'Escape') { assigning.value = null; showIcu.value = false; editing.value = null; } };
+// Esc closes whichever modal is open (via helpers so focus returns to the opener)
+const onEsc = (e) => {
+    if (e.key !== 'Escape') return;
+    if (assigning.value) closeAssign();
+    if (showIcu.value) closeIcu();
+    if (editing.value) closeModify();
+};
 onMounted(() => window.addEventListener('keydown', onEsc));
 onUnmounted(() => window.removeEventListener('keydown', onEsc));
 
 // hard delete (admin only — server re-checks)
-const destroyAdmission = (p) => {
-    if (confirm(`Delete the admission for ${p.name} (MRN ${p.mrn})? This permanently removes the episode and its diagnoses.`))
+const destroyAdmission = async (p) => {
+    if (await ask('Delete admission',
+        `Permanently remove the episode for ${p.name} (MRN ${p.mrn}) and its diagnoses. This cannot be undone.`, 'danger'))
         router.delete(`/admissions/${p.id}`, { preserveScroll: true });
 };
 
@@ -102,7 +124,7 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" /></svg>
                     Shuffle / auto-assign
                 </button>
-                <button v-if="canAdd && icuPatients.length" @click="showIcu = true" class="inline-flex items-center gap-1.5 rounded-xl bg-card px-4 py-2 text-sm font-semibold text-ink-600 shadow ring-1 ring-ink-200 transition hover:bg-ink-50">
+                <button v-if="canAdd && icuPatients.length" @click="openIcu" class="inline-flex items-center gap-1.5 rounded-xl bg-card px-4 py-2 text-sm font-semibold text-ink-600 shadow ring-1 ring-ink-200 transition hover:bg-ink-50">
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m12.75 15 3-3m0 0-3-3m3 3h-7.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
                     Admission from ICU <span class="nums text-danger-600">{{ icuPatients.length }}</span>
                 </button>
@@ -158,9 +180,9 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
         </div>
 
         <!-- assign modal -->
-        <div v-if="assigning" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="assigning = null">
-            <div class="w-full max-w-md rounded-2xl bg-card p-6 shadow-2xl">
-                <h3 class="text-lg font-bold text-ink-900">Assign to primary</h3>
+        <div v-if="assigning" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="closeAssign">
+            <div :ref="(el) => (a11yAssign.trapRef.value = el)" role="dialog" aria-modal="true" aria-labelledby="modal-title-assign" @keydown="a11yAssign.onKeydown" class="w-full max-w-md rounded-2xl bg-card p-6 shadow-2xl">
+                <h3 id="modal-title-assign" class="text-lg font-bold text-ink-900">Assign to primary</h3>
                 <p class="mb-4 text-sm text-ink-400">{{ assigning.name }} · MRN {{ assigning.mrn }}</p>
                 <form @submit.prevent="submitAssign" class="space-y-4">
                     <select v-model="aForm.consultant_id" title="On-service consultants only" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500">
@@ -169,7 +191,7 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
                     </select>
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="aForm.mark_new" class="rounded text-brand-600" /> Mark as new patient <span class="text-xs text-ink-400">(check to show the “New” badge on the board)</span></label>
                     <div class="flex justify-end gap-2">
-                        <button type="button" @click="assigning = null" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
+                        <button type="button" @click="closeAssign" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
                         <button type="submit" :disabled="aForm.processing || !aForm.consultant_id" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Assign</button>
                     </div>
                 </form>
@@ -177,9 +199,9 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
         </div>
 
         <!-- admission-from-ICU modal -->
-        <div v-if="showIcu" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="showIcu = false">
-            <div class="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
-                <div class="mb-4 flex items-center justify-between"><h3 class="text-lg font-bold text-ink-900">Admit from ICU</h3><button @click="showIcu = false" class="text-ink-400 hover:text-ink-700">✕</button></div>
+        <div v-if="showIcu" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="closeIcu">
+            <div :ref="(el) => (a11yIcu.trapRef.value = el)" role="dialog" aria-modal="true" aria-labelledby="modal-title-icu" @keydown="a11yIcu.onKeydown" class="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
+                <div class="mb-4 flex items-center justify-between"><h3 id="modal-title-icu" class="text-lg font-bold text-ink-900">Admit from ICU</h3><button @click="closeIcu" aria-label="Close" class="text-ink-400 hover:text-ink-700">✕</button></div>
                 <p class="mb-3 text-sm text-ink-400">Pull a current ICU patient onto the ward — they enter the assignment queue for a (new) consultant.</p>
                 <table class="w-full text-sm">
                     <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400"><th scope="col" class="px-3 py-2">MRN</th><th scope="col" class="px-3 py-2">Patient</th><th scope="col" class="px-3 py-2">Bed</th><th scope="col" class="px-3 py-2">Consultant</th><th scope="col" class="px-3 py-2"></th></tr></thead>
@@ -198,9 +220,9 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
         </div>
 
         <!-- modify queued patient modal -->
-        <div v-if="editing" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="editing = null">
-            <div class="max-h-[90vh] w-full max-w-lg overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
-                <div class="mb-4 flex items-center justify-between"><h3 class="text-lg font-bold text-ink-900">Edit patient</h3><button @click="editing = null" class="text-ink-400 hover:text-ink-700">✕</button></div>
+        <div v-if="editing" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="closeModify">
+            <div :ref="(el) => (a11yModify.trapRef.value = el)" role="dialog" aria-modal="true" aria-labelledby="modal-title-q-modify" @keydown="a11yModify.onKeydown" class="max-h-[90vh] w-full max-w-lg overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
+                <div class="mb-4 flex items-center justify-between"><h3 id="modal-title-q-modify" class="text-lg font-bold text-ink-900">Edit patient</h3><button @click="closeModify" aria-label="Close" class="text-ink-400 hover:text-ink-700">✕</button></div>
                 <form @submit.prevent="submitModify" class="space-y-3">
                     <div class="grid grid-cols-2 gap-3">
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">MRN</label><input v-model="mForm.mrn" inputmode="numeric" :class="[fld, mForm.errors.mrn && 'border-danger-500']" /><p v-if="mForm.errors.mrn" class="mt-1 text-xs text-danger-600">{{ mForm.errors.mrn }}</p></div>
@@ -231,7 +253,7 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
                         <IcdTypeahead :input-class="fld" @select="mAdd" />
                         <div v-if="mDx.length" class="mt-2 flex flex-wrap gap-1.5"><span v-for="d in mDx" :key="d.code" class="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700"><span class="nums">{{ d.code }}</span> {{ d.name }} <button type="button" @click="mRemove(d.code)" class="text-brand-500 hover:text-danger-600">✕</button></span></div>
                     </div>
-                    <div class="flex justify-end gap-2 pt-1"><button type="button" @click="editing = null" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save changes</button></div>
+                    <div class="flex justify-end gap-2 pt-1"><button type="button" @click="closeModify" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save changes</button></div>
                 </form>
             </div>
         </div>

@@ -2,6 +2,9 @@
 import { ref, computed } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { useConfirm } from '@/composables/useConfirm';
+
+const { ask } = useConfirm();
 
 const props = defineProps({ awaiting: Array, outgoing: Array });
 
@@ -23,9 +26,9 @@ const open = ref(null);
 const toggle = (id) => (open.value = open.value === id ? null : id);
 
 const sign = (s) => router.post(`/handovers/${s.id}/sign`, {}, { preserveScroll: true });
-const signAll = () => {
+const signAll = async () => {
     if (!props.awaiting.length) return;
-    if (confirm(`Sign all ${props.awaiting.length} pending handover(s)? Make sure you have reviewed each one.`))
+    if (await ask('Sign all handovers', `Sign all ${props.awaiting.length} pending handover(s). Make sure you have reviewed each one.`, 'neutral'))
         router.post('/handovers/sign-many', { ids: props.awaiting.map((s) => s.id) }, { preserveScroll: true });
 };
 
@@ -45,6 +48,10 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
 <template>
     <Head title="Handovers" />
     <AppLayout title="Handovers">
+        <!-- live region: announces the pending-signature count to screen readers as it changes -->
+        <span class="sr-only" aria-live="polite" aria-atomic="true">
+            {{ awaiting.length ? `${awaiting.length} handover(s) awaiting your signature` : 'No handovers awaiting your signature' }}
+        </span>
         <div class="mb-5 flex flex-wrap items-center gap-3">
             <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line w-fit">
                 <button @click="tab = 'awaiting'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="tab === 'awaiting' ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">Awaiting my signature ({{ awaiting.length }})</button>

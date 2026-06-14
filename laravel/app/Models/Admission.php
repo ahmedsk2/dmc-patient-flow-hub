@@ -64,6 +64,28 @@ class Admission extends Model
         };
     }
 
+    /**
+     * The ONE readmission whereExists predicate: a row on the `admissions` table that is anchored
+     * to a prior REAL discharge (typed real discharge OR NULL-typed historical close) of the same
+     * patient within $window days. Pass to ->whereExists(...). Encodes the SAME rule as
+     * readmissionJoin (which is the JOIN form Statistics/Reports use) from REAL_DISCHARGE_TYPES +
+     * DATEDIFF, so the board badge, the registry readmit72 filter and the registry row badge can
+     * no longer drift. $alias names the "prev" self-reference (default 'prev' matches every
+     * existing inline copy); pass a distinct alias only if two readmission sub-queries nest.
+     * Guarded by Round11N1Test + StatisticsValueTest + GapWave2Test.
+     */
+    public static function readmissionExists(int $window, string $alias = 'prev'): \Closure
+    {
+        return fn ($s) => $s->selectRaw('1')
+            ->from("admissions as {$alias}")
+            ->whereColumn("{$alias}.patient_id", 'admissions.patient_id')
+            ->whereColumn("{$alias}.id", '<>', 'admissions.id')
+            ->whereColumn("{$alias}.discharge_date", '<=', 'admissions.admit_date')
+            ->whereRaw("DATEDIFF(admissions.admit_date, {$alias}.discharge_date) BETWEEN 0 AND ?", [$window])
+            ->where(fn ($w) => $w->whereIn("{$alias}.transfer_type", self::REAL_DISCHARGE_TYPES)
+                ->orWhereNull("{$alias}.transfer_type"));
+    }
+
     protected $guarded = ['id'];
 
     protected function casts(): array

@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\AuditLog;
 use App\Models\Patient;
+use App\Support\Audit;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -103,8 +103,7 @@ class ImportController extends Controller
 
         $n = count($valid);
         $skipped = count($parsed) - $n;
-        AuditLog::create(['actor_id' => Auth::id(), 'actor_name' => Auth::user()->name, 'action' => 'import.bulk',
-            'entity_type' => 'admission', 'entity_id' => null, 'details' => ['imported' => $n, 'skipped' => $skipped], 'ip' => $request->ip()]);
+        Audit::log('import.bulk', 'admission', null, ['imported' => $n, 'skipped' => $skipped]);
 
         return redirect()->route('import.index')->with('flash', ['type' => $n > 0 ? 'success' : 'error',
             'message' => "Imported {$n} admission(s)" . ($skipped ? ", skipped {$skipped} invalid." : '.')]);
