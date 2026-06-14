@@ -204,12 +204,15 @@ class Round4H1Test extends TestCase
 
     public function test_dirty_legacy_mrn_stays_editable_when_unchanged(): void
     {
-        $p = Patient::create(['mrn' => 'TBA-99/x', 'name' => 'Dirty Legacy', 'age' => 200, 'gender' => 'unknown']);
+        // dirty MRN format + non-vocabulary gender are the editable-dirty proof. (Age 200 is no
+        // longer storable — the Phase 4 — Item 7 CHECK caps age at 150 — so a valid-but-edge age
+        // is used; the point is the MRN/gender that the Modify validate-on-change leaves alone.)
+        $p = Patient::create(['mrn' => 'TBA-99/x', 'name' => 'Dirty Legacy', 'age' => 95, 'gender' => 'unknown']);
         $a = $this->admission([], $p);
 
         // bed-only edit: untouched dirty MRN / age / gender must NOT block the save
         $this->actingAs($this->admin())->post("/admissions/{$a->id}/modify", [
-            'mrn' => 'TBA-99/x', 'name' => 'Dirty Legacy', 'age' => 200, 'gender' => 'unknown',
+            'mrn' => 'TBA-99/x', 'name' => 'Dirty Legacy', 'age' => 95, 'gender' => 'unknown',
             'bed' => 'W-77', 'admit_date' => $a->admit_date->toDateString(), 'current_location' => 'Ward',
             'diagnoses' => [],
         ])->assertRedirect()->assertSessionHasNoErrors();
@@ -287,6 +290,7 @@ class Round4H1Test extends TestCase
     {
         $c = $this->user(User::ROLE_CONSULTANT, ['full_name' => 'Dr LT']);
         $this->admission(['consultant_id' => $c->id, 'is_longterm' => 1,
+            'admit_date' => now()->subDays(45)->toDateString(),   // admit precedes discharge (Phase 4 — Item 7 CHECK)
             'discharge_date' => now()->subDays(30)->toDateString(), 'transfer_type' => 'discharge from ward', 'outcome' => 'Alive']);
         $active = $this->admission(['consultant_id' => $c->id, 'is_longterm' => 1]);
 

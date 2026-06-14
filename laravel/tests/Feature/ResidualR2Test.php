@@ -173,7 +173,10 @@ class ResidualR2Test extends TestCase
     {
         $admin = $this->admin();
 
-        $this->actingAs($admin)->delete("/control/users/{$admin->id}")
+        // Phase 4 — Item 4: user delete is step-up gated; provide a fresh step-up so the controller's
+        // self-delete guard (not the gate) is what blocks it
+        $this->actingAs($admin)->withSession(['stepup.verified_at' => now()->getTimestamp()])
+            ->delete("/control/users/{$admin->id}")
             ->assertRedirect()->assertSessionHas('flash.type', 'error');
         $this->assertNotNull(User::find($admin->id));
     }
@@ -183,7 +186,8 @@ class ResidualR2Test extends TestCase
         $c = $this->user(User::ROLE_CONSULTANT);
         $this->admission(['consultant_id' => $c->id]);
 
-        $this->actingAs($this->admin())->delete("/control/users/{$c->id}")
+        $this->actingAs($this->admin())->withSession(['stepup.verified_at' => now()->getTimestamp()])
+            ->delete("/control/users/{$c->id}")
             ->assertRedirect()->assertSessionHas('flash.type', 'error');
         $this->assertNotNull(User::find($c->id));
     }
@@ -192,15 +196,20 @@ class ResidualR2Test extends TestCase
     {
         $u = $this->user(User::ROLE_RESIDENT, ['full_name' => 'Dr Deletable']);
         $username = $u->username;
-        // a DISCHARGED admission referencing the user must not block (FKs null on delete)
+        // a DISCHARGED admission referencing the user must not block the delete
         $a = $this->admission(['consultant_id' => $u->id, 'discharge_date' => now()->subDay()->toDateString(),
             'transfer_type' => 'discharge from ward', 'outcome' => 'Alive']);
 
-        $this->actingAs($this->admin())->delete("/control/users/{$u->id}")
+        $this->actingAs($this->admin())->withSession(['stepup.verified_at' => now()->getTimestamp()])
+            ->delete("/control/users/{$u->id}")
             ->assertRedirect()->assertSessionHasNoErrors();
 
+        // Phase 4 — Item 1: user delete is now a SOFT delete — the global scope hides the user, but
+        // the row survives so the nullOnDelete FK never fires and historical attribution is KEPT
+        // (the raw per-consultant joins still resolve the name).
         $this->assertNull(User::find($u->id));
-        $this->assertNull($a->fresh()->consultant_id, 'admissions.consultant_id must be nulled, not orphaned');
+        $this->assertNotNull(User::withTrashed()->find($u->id)->deleted_at);
+        $this->assertSame($u->id, (int) $a->fresh()->consultant_id, 'historical attribution is preserved across a soft-delete');
         $audit = AuditLog::where('action', 'user.delete')->where('entity_id', (string) $u->id)->first();
         $this->assertNotNull($audit, 'user deletion must be audited');
         $this->assertSame($username, $audit->details['username'] ?? null);

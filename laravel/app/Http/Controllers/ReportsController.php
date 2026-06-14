@@ -46,7 +46,7 @@ class ReportsController extends Controller
         $year = (int) ($request->query('year') ?: Carbon::today()->year);
 
         $available = DB::table('admissions')->selectRaw('DISTINCT YEAR(admit_date) y')
-            ->whereNotNull('admit_date')->orderByDesc('y')->pluck('y')->filter()->values();
+            ->whereNotNull('admit_date')->whereNull('deleted_at')->orderByDesc('y')->pluck('y')->filter()->values();
         if ($available->isNotEmpty() && ! $available->contains($year)) {
             $year = (int) $available->first();
         }
@@ -89,14 +89,14 @@ class ReportsController extends Controller
 
         // unit-wide avg ward LOS over the same range — the "vs unit median" comparison figure
         $unitMedianLos = round((float) (DB::table('admissions')->whereBetween('discharge_date', [$f, $t])
-            ->whereNotNull('admit_date')->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
+            ->whereNotNull('admit_date')->whereRaw($this->nonIcu)->whereNull('deleted_at')->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
             ->avg(DB::raw('DATEDIFF(discharge_date, admit_date)')) ?? 0), 1);
 
         // weekend-discharge rate for this consultant (Fri/Sat non-ICU discharges — decision D4)
         $consDischarges = (int) DB::table('admissions')->where('consultant_id', $user->id)
-            ->whereBetween('discharge_date', [$f, $t])->whereRaw($this->nonIcu)->count();
+            ->whereBetween('discharge_date', [$f, $t])->whereRaw($this->nonIcu)->whereNull('deleted_at')->count();
         $consWeekend = (int) DB::table('admissions')->where('consultant_id', $user->id)
-            ->whereBetween('discharge_date', [$f, $t])->whereRaw($this->nonIcu)
+            ->whereBetween('discharge_date', [$f, $t])->whereRaw($this->nonIcu)->whereNull('deleted_at')
             ->whereRaw('DAYOFWEEK(discharge_date) IN (6,7)')->count();
         $weekendPct = $consDischarges > 0 ? round($consWeekend / $consDischarges * 100, 1) : 0.0;
 
@@ -119,7 +119,7 @@ class ReportsController extends Controller
     {
         return Inertia::render('Reports/Governance', [
             'availableYears' => DB::table('admissions')->selectRaw('DISTINCT YEAR(admit_date) y')
-                ->whereNotNull('admit_date')->orderByDesc('y')->pluck('y')->filter()->values(),
+                ->whereNotNull('admit_date')->whereNull('deleted_at')->orderByDesc('y')->pluck('y')->filter()->values(),
         ]);
     }
 
@@ -147,16 +147,16 @@ class ReportsController extends Controller
         $window = max(0, (int) (Setting::current()->readmission_window_days ?? 3));
 
         // ---- headline safety KPIs (same formulas as gather()) ----
-        $deaths = (int) DB::table('admissions')->where('outcome', 'Dead')->whereBetween('discharge_date', [$f, $t])->count();
-        $discharges = (int) DB::table('admissions')->whereBetween('discharge_date', [$f, $t])->whereRaw($this->nonIcu)->count();
+        $deaths = (int) DB::table('admissions')->where('outcome', 'Dead')->whereBetween('discharge_date', [$f, $t])->whereNull('deleted_at')->count();
+        $discharges = (int) DB::table('admissions')->whereBetween('discharge_date', [$f, $t])->whereRaw($this->nonIcu)->whereNull('deleted_at')->count();
         $mortalityRate = $discharges > 0 ? round($deaths / $discharges * 100, 1) : 0.0;
         $readmissions = (int) DB::table('admissions as a')->join('admissions as prev', Admission::readmissionJoin($window))
-            ->whereBetween('a.admit_date', [$f, $t])->distinct()->count('a.id');
+            ->whereBetween('a.admit_date', [$f, $t])->whereNull('a.deleted_at')->whereNull('prev.deleted_at')->distinct()->count('a.id');
         $longLos = (int) (Setting::current()->long_los ?? 11);
-        $longStay = (int) DB::table('admissions')->whereBetween('discharge_date', [$f, $t])->whereRaw($this->nonIcu)
+        $longStay = (int) DB::table('admissions')->whereBetween('discharge_date', [$f, $t])->whereRaw($this->nonIcu)->whereNull('deleted_at')
             ->whereNotNull('admit_date')->whereRaw("DATEDIFF(discharge_date, admit_date) > {$longLos}")->count();
         $longStayPct = $discharges > 0 ? round($longStay / $discharges * 100, 1) : 0.0;
-        $weekend = (int) DB::table('admissions')->whereBetween('discharge_date', [$f, $t])->whereRaw($this->nonIcu)
+        $weekend = (int) DB::table('admissions')->whereBetween('discharge_date', [$f, $t])->whereRaw($this->nonIcu)->whereNull('deleted_at')
             ->whereRaw('DAYOFWEEK(discharge_date) IN (6,7)')->count();
         $weekendPct = $discharges > 0 ? round($weekend / $discharges * 100, 1) : 0.0;
 
@@ -183,7 +183,7 @@ class ReportsController extends Controller
         $deathList = DB::table('admissions as a')
             ->join('patients as p', 'p.id', '=', 'a.patient_id')
             ->leftJoin('users as u', 'u.id', '=', 'a.consultant_id')
-            ->whereBetween('a.discharge_date', [$f, $t])->where('a.outcome', 'Dead')
+            ->whereBetween('a.discharge_date', [$f, $t])->where('a.outcome', 'Dead')->whereNull('a.deleted_at')   // Phase 4 — Item 1
             ->select('a.id', 'p.mrn', 'p.age', DB::raw('DATEDIFF(a.discharge_date, a.admit_date) los'),
                 'a.current_location', DB::raw("COALESCE(u.full_name, u.name) consultant"))
             ->orderBy('a.discharge_date')->get();
@@ -200,7 +200,7 @@ class ReportsController extends Controller
             ->join('admissions as prev', Admission::readmissionJoin($window))
             ->join('patients as p', 'p.id', '=', 'a.patient_id')
             ->leftJoin('users as u', 'u.id', '=', 'a.consultant_id')
-            ->whereBetween('a.admit_date', [$f, $t])->distinct()
+            ->whereBetween('a.admit_date', [$f, $t])->whereNull('a.deleted_at')->whereNull('prev.deleted_at')->distinct()   // Phase 4 — Item 1
             ->select('p.mrn', 'p.age', 'a.admit_date', DB::raw('DATEDIFF(a.admit_date, prev.discharge_date) gap_days'),
                 DB::raw("COALESCE(u.full_name, u.name) consultant"))
             ->orderBy('a.admit_date')->get()
@@ -325,38 +325,39 @@ class ReportsController extends Controller
         ];
 
         $avgLos = (float) DB::table('admissions')->whereBetween('discharge_date', [$start, $end])
-            ->whereNotNull('admit_date')->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
+            ->whereNotNull('admit_date')->whereRaw($this->nonIcu)->whereNull('deleted_at')->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
             ->avg(DB::raw('DATEDIFF(discharge_date, admit_date)'));
 
         $topDx = DB::table('admission_diagnoses as ad')->join('admissions as a', 'a.id', '=', 'ad.admission_id')
             ->leftJoin('icd10 as i', 'i.code', '=', 'ad.icd10_code')
-            ->whereBetween('a.admit_date', [$start, $end])
+            ->whereBetween('a.admit_date', [$start, $end])->whereNull('a.deleted_at')   // Phase 4 — Item 1
             ->selectRaw('ad.icd10_code code, MAX(i.name) name, COUNT(*) c')
             ->groupBy('ad.icd10_code')->orderByDesc('c')->limit(10)->get()
             ->map(fn ($r) => ['code' => $r->code, 'name' => $r->name ?: $r->code, 'count' => (int) $r->c]);
 
         $perConsultant = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
-            ->whereBetween('a.admit_date', [$start, $end])
+            ->whereBetween('a.admit_date', [$start, $end])->whereNull('a.deleted_at')   // Phase 4 — Item 1
             ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')   // non-colliding alias (cross-engine GROUP BY)
             ->groupBy('consultant')->orderByDesc('c')->limit(15)->get()
             ->map(fn ($r) => ['name' => $r->consultant, 'count' => (int) $r->c]);
 
         // discharge destinations for the year
         $destinations = DB::table('admissions')->whereBetween('discharge_date', [$start, $end])
+            ->whereNull('deleted_at')   // Phase 4 — Item 1
             ->selectRaw("COALESCE(NULLIF(TRIM(discharge_to), ''), 'Unspecified') dest, COUNT(*) c")
             ->groupBy('dest')->orderByDesc('c')->limit(12)->get()
             ->map(fn ($r) => ['dest' => $r->dest, 'count' => (int) $r->c]);
 
         // average ward LOS per consultant (discharges in year)
         $perConsultantLos = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
-            ->whereBetween('a.discharge_date', [$start, $end])->whereNotNull('a.admit_date')
+            ->whereBetween('a.discharge_date', [$start, $end])->whereNotNull('a.admit_date')->whereNull('a.deleted_at')   // Phase 4 — Item 1
             ->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(a.discharge_date, a.admit_date) >= 0')
             ->selectRaw('COALESCE(u.full_name, u.name) consultant, ROUND(AVG(DATEDIFF(a.discharge_date, a.admit_date)), 1) los, COUNT(*) n')
             ->groupBy('consultant')->orderByDesc('n')->limit(15)->get()
             ->map(fn ($r) => ['name' => $r->consultant, 'los' => (float) $r->los, 'n' => (int) $r->n]);
 
         $icuLos = (float) DB::table('admissions')->whereBetween('discharge_date', [$start, $end])
-            ->whereNotNull('admit_date')->where('current_location', 'ICU')->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
+            ->whereNotNull('admit_date')->where('current_location', 'ICU')->whereNull('deleted_at')->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
             ->avg(DB::raw('DATEDIFF(discharge_date, admit_date)'));
 
         return [
@@ -383,7 +384,7 @@ class ReportsController extends Controller
         return Inertia::render('Reports/Monthly', [
             ...$this->gatherMonth($year, $month),
             'availableYears' => DB::table('admissions')->selectRaw('DISTINCT YEAR(admit_date) y')
-                ->whereNotNull('admit_date')->orderByDesc('y')->pluck('y')->filter()->values(),
+                ->whereNotNull('admit_date')->whereNull('deleted_at')->orderByDesc('y')->pluck('y')->filter()->values(),
         ]);
     }
 
@@ -502,6 +503,7 @@ class ReportsController extends Controller
         // destination buckets per month — one grouped query, bucketed in PHP
         $destByMonth = [];
         DB::table('admissions')->whereBetween('discharge_date', [$start, $end])->whereRaw($this->nonIcu)
+            ->whereNull('deleted_at')   // Phase 4 — Item 1
             ->selectRaw("DATE_FORMAT(discharge_date, '%Y-%m') mk, COALESCE(discharge_to, '') dst, COUNT(*) c")
             ->groupBy('mk', 'dst')->get()
             ->each(function ($r) use (&$destByMonth) { $destByMonth[$r->mk][$r->dst] = (int) $r->c; });
@@ -511,7 +513,7 @@ class ReportsController extends Controller
             ->orderBy('full_name')->get(['id', 'full_name', 'name']);
         $cLosByMonth = [];
         DB::table('admissions')->whereBetween('discharge_date', [$start, $end])->whereRaw($this->nonIcu)
-            ->whereNotNull('admit_date')->whereNotNull('consultant_id')
+            ->whereNotNull('admit_date')->whereNotNull('consultant_id')->whereNull('deleted_at')   // Phase 4 — Item 1
             ->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
             ->selectRaw("DATE_FORMAT(discharge_date, '%Y-%m') mk, consultant_id cid, ROUND(AVG(DATEDIFF(discharge_date, admit_date)), 1) v")
             ->groupBy('mk', 'cid')->get()
@@ -581,6 +583,7 @@ class ReportsController extends Controller
     {
         return DB::table('admissions as a')->join('admissions as prev', Admission::readmissionJoin($window))
             ->whereBetween('a.admit_date', [$start, $end])
+            ->whereNull('a.deleted_at')->whereNull('prev.deleted_at')   // Phase 4 — Item 1: both sides of the readmit join
             ->selectRaw("DATE_FORMAT(a.admit_date, '%Y-%m') mk, COUNT(DISTINCT a.id) c")
             ->groupBy('mk')->pluck('c', 'mk')->all();
     }
@@ -593,6 +596,7 @@ class ReportsController extends Controller
     {
         return DB::table('admissions')->whereBetween('discharge_date', [$from, $to])
             ->whereRaw($extra)->whereNotNull('admit_date')->whereNotNull($endCol)
+            ->whereNull('deleted_at')   // Phase 4 — Item 1
             ->whereRaw("DATEDIFF($endCol, admit_date) >= 0")
             ->selectRaw("DATE_FORMAT(discharge_date, '%Y-%m') mk, ROUND(AVG(DATEDIFF($endCol, admit_date)), 2) v")
             ->groupBy('mk')->pluck('v', 'mk')->all();
@@ -612,7 +616,7 @@ class ReportsController extends Controller
         $yEnd = "{$year}-12-31";
         $today = Carbon::today()->toDateString();
 
-        $rows = DB::table('admissions')->whereRaw($this->nonIcu)
+        $rows = DB::table('admissions')->whereRaw($this->nonIcu)->whereNull('deleted_at')   // Phase 4 — Item 1
             ->where(function ($q) use ($yStart, $yEnd) {
                 $q->where(fn ($w) => $w->where('admit_date', '<=', $yEnd)
                         ->where(fn ($x) => $x->whereNull('discharge_date')->orWhere('discharge_date', '>=', $yStart)))
@@ -667,6 +671,7 @@ class ReportsController extends Controller
     private function destinationBuckets(string $from, string $to): array
     {
         $byDest = DB::table('admissions')->whereBetween('discharge_date', [$from, $to])->whereRaw($this->nonIcu)
+            ->whereNull('deleted_at')   // Phase 4 — Item 1
             ->selectRaw("COALESCE(discharge_to, '') dst, COUNT(*) c")
             ->groupBy('dst')->pluck('c', 'dst')->all();
 
@@ -677,7 +682,7 @@ class ReportsController extends Controller
     private function consultantLos(string $from, string $to): array
     {
         $byId = DB::table('admissions')->whereBetween('discharge_date', [$from, $to])->whereRaw($this->nonIcu)
-            ->whereNotNull('admit_date')->whereNotNull('consultant_id')
+            ->whereNotNull('admit_date')->whereNotNull('consultant_id')->whereNull('deleted_at')   // Phase 4 — Item 1
             ->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
             ->selectRaw('consultant_id cid, ROUND(AVG(DATEDIFF(discharge_date, admit_date)), 2) v')
             ->groupBy('cid')->pluck('v', 'cid')->all();
@@ -697,12 +702,14 @@ class ReportsController extends Controller
     private function byDay(string $col, string $start, string $end, string $where, string $table = 'admissions'): array
     {
         return DB::table($table)->whereBetween($col, [$start, $end])->whereRaw($where)
+            ->whereNull('deleted_at')   // Phase 4 — Item 1: exclude soft-deleted (admissions + consultations)
             ->selectRaw("DATE($col) k, COUNT(*) c")->groupBy('k')->pluck('c', 'k')->toArray();
     }
 
     private function byMonth(string $col, string $from, string $to, string $extra, string $table = 'admissions'): array
     {
         return DB::table($table)->whereBetween($col, [$from, $to])->whereRaw($extra)
+            ->whereNull('deleted_at')   // Phase 4 — Item 1: exclude soft-deleted (admissions + consultations)
             ->selectRaw("DATE_FORMAT($col, '%Y-%m') m, COUNT(*) c")->groupBy('m')->pluck('c', 'm')->all();
     }
 }

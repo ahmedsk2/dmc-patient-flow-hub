@@ -68,10 +68,12 @@ class Phase1DashboardValueTest extends TestCase
 
     public function test_boarding_count_matches_independent_sql(): void
     {
-        // one fully active, one boarding (medically cleared, bed occupied), one fully discharged
+        // one fully active, one boarding (medically cleared, bed occupied), one fully discharged.
+        // admit_date precedes the medical-discharge dates (Phase 4 — Item 7 CHECK: med_disch >= admit).
+        $early = Carbon::today()->subDays(20)->toDateString();
         $this->admission();   // active, non-boarding
-        $this->admission(['medical_discharge_date' => Carbon::today()->subDays(5)->toDateString()]); // boarding
-        $this->admission(['medical_discharge_date' => Carbon::today()->subDays(2)->toDateString(),
+        $this->admission(['admit_date' => $early, 'medical_discharge_date' => Carbon::today()->subDays(5)->toDateString()]); // boarding
+        $this->admission(['admit_date' => $early, 'medical_discharge_date' => Carbon::today()->subDays(2)->toDateString(),
             'discharge_date' => Carbon::today()->toDateString(), 'outcome' => 'Alive']); // discharged
 
         // independent SQL — the defining boarding predicate
@@ -87,8 +89,9 @@ class Phase1DashboardValueTest extends TestCase
 
     public function test_boarding_worklist_ranks_by_delay_desc(): void
     {
-        $this->admission(['medical_discharge_date' => Carbon::today()->subDays(2)->toDateString()]);
-        $this->admission(['medical_discharge_date' => Carbon::today()->subDays(7)->toDateString()]);
+        $early = Carbon::today()->subDays(20)->toDateString();
+        $this->admission(['admit_date' => $early, 'medical_discharge_date' => Carbon::today()->subDays(2)->toDateString()]);
+        $this->admission(['admit_date' => $early, 'medical_discharge_date' => Carbon::today()->subDays(7)->toDateString()]);
 
         $this->actingAs($this->admin())->get('/')->assertOk()
             ->assertInertia(fn (AssertableInertia $p) => $p
@@ -112,7 +115,9 @@ class Phase1DashboardValueTest extends TestCase
     {
         $c = $this->consultant();
         $this->admission(['consultant_id' => $c->id]);                                              // not boarding
-        $this->admission(['consultant_id' => $c->id, 'medical_discharge_date' => Carbon::today()->subDay()->toDateString()]); // boarding
+        // admit precedes the medical discharge (Phase 4 — Item 7 CHECK)
+        $this->admission(['consultant_id' => $c->id, 'admit_date' => Carbon::today()->subDays(10)->toDateString(),
+            'medical_discharge_date' => Carbon::today()->subDay()->toDateString()]); // boarding
 
         $this->actingAs($this->admin())->get('/patients?view=boarding')->assertOk()
             ->assertInertia(fn (AssertableInertia $p) => $p
@@ -232,7 +237,8 @@ class Phase1DashboardValueTest extends TestCase
         Setting::current()->update(['alert_boarding_max' => 3, 'ward_beds' => 100, 'alert_overcensus_pct' => 200]);
         $c = $this->consultant();
         foreach (range(1, 4) as $i) {
-            $this->admission(['consultant_id' => $c->id, 'medical_discharge_date' => Carbon::today()->subDay()->toDateString()]);
+            $this->admission(['consultant_id' => $c->id, 'admit_date' => Carbon::today()->subDays(10)->toDateString(),
+                'medical_discharge_date' => Carbon::today()->subDay()->toDateString()]);
         }
 
         $this->actingAs($this->admin())->get('/')->assertOk()
@@ -244,12 +250,13 @@ class Phase1DashboardValueTest extends TestCase
     {
         Setting::current()->update(['alert_deaths_delta_pct' => 50, 'ward_beds' => 100, 'alert_overcensus_pct' => 200]);
         $priorMonth = Carbon::today()->subMonthNoOverflow()->startOfMonth();
+        $early = $priorMonth->copy()->subMonth()->toDateString();   // admit precedes discharge (Phase 4 — Item 7 CHECK)
         // 2 prior, 4 this month = 100% rise (>= 50%)
         foreach (range(1, 2) as $i) {
-            $this->admission(['discharge_date' => $priorMonth->toDateString(), 'outcome' => 'Dead', 'transfer_type' => 'discharge from ward']);
+            $this->admission(['admit_date' => $early, 'discharge_date' => $priorMonth->toDateString(), 'outcome' => 'Dead', 'transfer_type' => 'discharge from ward']);
         }
         foreach (range(1, 4) as $i) {
-            $this->admission(['discharge_date' => Carbon::today()->toDateString(), 'outcome' => 'Dead', 'transfer_type' => 'discharge from ward']);
+            $this->admission(['admit_date' => $early, 'discharge_date' => Carbon::today()->toDateString(), 'outcome' => 'Dead', 'transfer_type' => 'discharge from ward']);
         }
 
         $this->actingAs($this->admin())->get('/')->assertOk()
@@ -261,12 +268,13 @@ class Phase1DashboardValueTest extends TestCase
     {
         Setting::current()->update(['alert_deaths_delta_pct' => 50, 'ward_beds' => 100, 'alert_overcensus_pct' => 200]);
         $priorMonth = Carbon::today()->subMonthNoOverflow()->startOfMonth();
+        $early = $priorMonth->copy()->subMonth()->toDateString();   // admit precedes discharge (Phase 4 — Item 7 CHECK)
         // 3 prior, 4 this month = 33% rise (< 50%)
         foreach (range(1, 3) as $i) {
-            $this->admission(['discharge_date' => $priorMonth->toDateString(), 'outcome' => 'Dead', 'transfer_type' => 'discharge from ward']);
+            $this->admission(['admit_date' => $early, 'discharge_date' => $priorMonth->toDateString(), 'outcome' => 'Dead', 'transfer_type' => 'discharge from ward']);
         }
         foreach (range(1, 4) as $i) {
-            $this->admission(['discharge_date' => Carbon::today()->toDateString(), 'outcome' => 'Dead', 'transfer_type' => 'discharge from ward']);
+            $this->admission(['admit_date' => $early, 'discharge_date' => Carbon::today()->toDateString(), 'outcome' => 'Dead', 'transfer_type' => 'discharge from ward']);
         }
 
         $this->actingAs($this->admin())->get('/')->assertOk()
@@ -337,6 +345,7 @@ class Phase1DashboardValueTest extends TestCase
         $c = $this->consultant();
         // 3 active: 1 ward+boarding, 1 ICU, 1 new-since-yesterday (assigned now). total=3.
         $this->admission(['consultant_id' => $c->id, 'current_location' => 'Ward',
+            'admit_date' => Carbon::today()->subDays(10)->toDateString(),   // admit precedes med discharge (Phase 4 — Item 7 CHECK)
             'medical_discharge_date' => Carbon::today()->subDay()->toDateString()]);             // ward + boarding
         $this->admission(['consultant_id' => $c->id, 'current_location' => 'ICU']);              // ICU
         $this->admission(['consultant_id' => $c->id, 'current_location' => 'Ward', 'assigned_at' => now()]); // new
@@ -549,6 +558,9 @@ class Phase1DashboardValueTest extends TestCase
             'mfa_enforcement' => $s->mfa_enforcement ?? 0,
             'alert_overcensus_pct' => 95, 'alert_boarding_max' => 7,
             'alert_readmit_rate_pct' => 12, 'alert_deaths_delta_pct' => 40,
+            // Phase 4 thresholds (now required by updateSettings)
+            'idle_timeout_minutes' => $s->idle_timeout_minutes ?? 30, 'abs_timeout_minutes' => $s->abs_timeout_minutes ?? 0,
+            'failed_login_notify_threshold' => $s->failed_login_notify_threshold ?? 5, 'dq_los_multiplier' => $s->dq_los_multiplier ?? 2,
         ];
 
         $this->actingAs($this->admin())->put('/control/settings', $payload)->assertRedirect();

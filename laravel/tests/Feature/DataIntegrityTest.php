@@ -30,6 +30,8 @@ class DataIntegrityTest extends TestCase
     {
         // B1 (legacy Fill-All): age/gender/nationality/bed + ≥1 diagnosis are REQUIRED on admit
         \App\Models\Country::firstOrCreate(['name' => 'Saudi Arabia'], ['code' => 'SA']);
+        // Phase 4 — Item 5: the diagnosis code must exist in the icd10 reference table
+        \Illuminate\Support\Facades\DB::table('icd10')->updateOrInsert(['code' => 'J18.9'], ['name' => 'Pneumonia']);
 
         return array_merge([
             'mrn' => '12345', 'name' => 'Test Patient', 'age' => 50, 'gender' => 'Male',

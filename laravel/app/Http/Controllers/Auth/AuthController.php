@@ -3,10 +3,14 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
+use App\Models\Notification;
+use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -30,6 +34,19 @@ class AuthController extends Controller
         // interpose a second factor before establishing the session.
         $user = User::where('username', $data['username'])->where('active', 1)->first();
         if (! $user || ! Hash::check($data['password'], $user->password)) {
+            // Phase 4 — Item 3: record the failed attempt (actor_name = the submitted username; no
+            // actor_id since identity is unconfirmed) and notify admins on a consecutive-failure run.
+            AuditLog::create([
+                'actor_id' => null,
+                'actor_name' => $data['username'],
+                'action' => 'login.failed',
+                'entity_type' => 'user',
+                'entity_id' => null,
+                'details' => ['reason' => 'bad_credentials'],
+                'ip' => $request->ip(),
+            ]);
+            $this->notifyOnFailureBurst($data['username'], $request->ip());
+
             throw ValidationException::withMessages([
                 'username' => 'These credentials do not match an active account.',
             ]);
@@ -49,6 +66,20 @@ class AuthController extends Controller
 
         Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
+        // Phase 4 — Item 2: stamp the session-start clock for the absolute-timeout check
+        $request->session()->put('session_started_at', now()->getTimestamp());
+        $request->session()->put('last_activity_at', now()->getTimestamp());
+        // Phase 4 — Item 3: audit the successful (password-only) login; the MFA path audits its own
+        // login.success in MfaController::verifyChallenge.
+        AuditLog::create([
+            'actor_id' => $user->id,
+            'actor_name' => $user->name,
+            'action' => 'login.success',
+            'entity_type' => 'user',
+            'entity_id' => (string) $user->id,
+            'details' => ['mfa' => false],
+            'ip' => $request->ip(),
+        ]);
 
         return redirect()->intended(route('dashboard'));
     }
@@ -60,5 +91,38 @@ class AuthController extends Controller
         $request->session()->regenerateToken();
 
         return redirect()->route('login');
+    }
+
+    /**
+     * Phase 4 — Item 3: when the count of recent (last 10 min) login.failed rows for this username
+     * EXACTLY reaches the admin-tunable threshold, raise ONE security.failed_logins notification for
+     * every active admin. "Exactly equals" (not >=) so the alert fires once per burst, not on every
+     * further attempt. Threshold 0 disables it. The login.failed audit row has already been written.
+     */
+    private function notifyOnFailureBurst(string $username, ?string $ip): void
+    {
+        $threshold = (int) (Setting::current()->failed_login_notify_threshold ?? 0);
+        if ($threshold <= 0) {
+            return;
+        }
+        // audit_log.created_at is written by the DB (useCurrent) in the DB session timezone, which
+        // may differ from the app timezone — compare against the DB clock (NOW()) so the 10-minute
+        // window is correct regardless of any app/DB timezone offset.
+        $recentFailures = (int) DB::table('audit_log')
+            ->where('action', 'login.failed')
+            ->where('actor_name', $username)
+            ->where('created_at', '>=', DB::raw('NOW() - INTERVAL 10 MINUTE'))
+            ->count();
+        if ($recentFailures !== $threshold) {
+            return;
+        }
+        foreach (User::where('role', User::ROLE_ADMIN)->where('active', 1)->pluck('id') as $adminId) {
+            Notification::create([
+                'user_id' => $adminId,
+                'type' => 'security.failed_logins',
+                'created_at' => now(),
+                'payload' => ['username' => $username, 'count' => $recentFailures, 'ip' => $ip],
+            ]);
+        }
     }
 }

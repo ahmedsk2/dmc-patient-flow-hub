@@ -221,4 +221,137 @@ class LegacyImportTest extends TestCase
         $this->assertSame(now()->toDateString() . ' 00:00:00',
             DB::table('admissions')->where('legacy_id', 2)->value('assigned_at'));
     }
+
+    // ============================================================================================
+    // Phase 4 — Item 8: expanded ImportController validator coverage. These exercise the bulk-import
+    // CSV parser/committer (NOT the legacy:import command) — they call ImportController::parse via
+    // reflection or POST the preview/store endpoints as an admin.
+    // ============================================================================================
+
+    private function parse(string $csv): array
+    {
+        $m = new \ReflectionMethod(\App\Http\Controllers\ImportController::class, 'parse');
+        $m->setAccessible(true);
+
+        return $m->invoke(app(\App\Http\Controllers\ImportController::class), $csv);
+    }
+
+    private function importAdmin(): \App\Models\User
+    {
+        return \App\Models\User::create([
+            'username' => 'imp_' . substr(md5(uniqid('', true)), 0, 8),
+            'name' => 'Import Admin', 'role' => \App\Models\User::ROLE_ADMIN, 'active' => 1, 'password' => 'secret12345',
+        ]);
+    }
+
+    public function test_header_row_is_skipped_when_first_column_is_mrn(): void
+    {
+        $rows = $this->parse("MRN,Name,Age,Gender,Nationality,AdmitDate\n12345,Real Pt,40,M,Saudi Arabia,2024-01-01");
+        $this->assertCount(1, $rows, 'the MRN header row is not counted');
+        $this->assertSame('12345', $rows[0]['mrn']);
+    }
+
+    public function test_header_row_without_mrn_label_is_not_skipped(): void
+    {
+        // first row has a numeric MRN — it is a data row, not a header
+        $rows = $this->parse("12340,First Pt,40,M,Saudi Arabia,2024-01-01\n12341,Second Pt,41,F,Saudi Arabia,2024-01-02");
+        $this->assertCount(2, $rows);
+        $this->assertSame('12340', $rows[0]['mrn']);
+    }
+
+    public function test_within_batch_duplicate_active_mrn_rejected(): void
+    {
+        // two active (no discharge) rows for the same MRN — the second is rejected
+        $rows = $this->parse("50500,A,40,M,Saudi Arabia,2024-01-01\n50500,A,40,M,Saudi Arabia,2024-02-01");
+        $this->assertTrue($rows[0]['ok']);
+        $this->assertFalse($rows[1]['ok']);
+        $this->assertStringContainsString('already has an active', (string) $rows[1]['error']);
+    }
+
+    public function test_within_batch_duplicate_active_mrn_second_discharged_allowed(): void
+    {
+        // first active, second discharged — both valid (no double-open)
+        $rows = $this->parse("50600,A,40,M,Saudi Arabia,2024-01-01\n50600,A,40,M,Saudi Arabia,2024-02-01,2024-02-05,Alive,Ward");
+        $this->assertTrue($rows[0]['ok']);
+        $this->assertTrue($rows[1]['ok']);
+    }
+
+    public function test_transfertype_without_discharge_date_rejected(): void
+    {
+        // TransferType is column 18; provide it with no DischargeDate (col 7)
+        $csv = '50700,A,40,M,Saudi Arabia,2024-01-01,,Alive,Ward,,,,,,,,,other transfer';
+        $rows = $this->parse($csv);
+        $this->assertFalse($rows[0]['ok']);
+        $this->assertStringContainsString('requires a discharge date', (string) $rows[0]['error']);
+    }
+
+    public function test_invalid_transfer_type_literal_rejected(): void
+    {
+        $csv = '50710,A,40,M,Saudi Arabia,2024-01-01,2024-01-05,Alive,Ward,,,,,,,,,random string';
+        $rows = $this->parse($csv);
+        $this->assertFalse($rows[0]['ok']);
+        $this->assertStringContainsString('TransferType must be one of', (string) $rows[0]['error']);
+    }
+
+    public function test_transfertype_with_discharge_date_overrides_location_derived(): void
+    {
+        // Location=Ward + DischargeDate set + TransferType='discharge from ICU' => committed type is the explicit one
+        $admin = $this->importAdmin();
+        $csv = '50720,Over Pt,40,M,Saudi Arabia,2024-01-01,2024-01-05,Alive,Ward,,,,,,,,,Transfer from ICU';
+        $this->actingAs($admin)->post('/import', ['rows' => $csv])->assertRedirect();
+
+        $row = DB::table('admissions as a')->join('patients as p', 'p.id', '=', 'a.patient_id')
+            ->where('p.mrn', '50720')->first(['a.transfer_type']);
+        $this->assertSame('Transfer from ICU', $row->transfer_type, 'explicit TransferType overrides the location-derived type');
+    }
+
+    public function test_consultant_name_not_matched_is_warning_not_rejection(): void
+    {
+        // column 11 (Consultant) holds an unrecognized name
+        $csv = '50730,Cons Pt,40,M,Saudi Arabia,2024-01-01,2024-01-05,Alive,Ward,,Dr Nobody';
+        $rows = $this->parse($csv);
+        $this->assertTrue($rows[0]['ok']);
+        $this->assertStringContainsString('not matched', (string) $rows[0]['warning']);
+        $this->assertNull($rows[0]['consultant_id']);
+    }
+
+    public function test_diagnosis_deduplicated_on_import(): void
+    {
+        $admin = $this->importAdmin();
+        DB::table('icd10')->insert([['code' => 'A00', 'name' => 'Cholera'], ['code' => 'B00', 'name' => 'Herpes']]);
+        $csv = '50740,Dedup Pt,40,M,Saudi Arabia,2024-01-01,2024-01-05,Alive,Ward,A00|A00|B00';
+        $this->actingAs($admin)->post('/import', ['rows' => $csv])->assertRedirect();
+
+        $admissionId = DB::table('admissions as a')->join('patients as p', 'p.id', '=', 'a.patient_id')
+            ->where('p.mrn', '50740')->value('a.id');
+        $this->assertSame(2, DB::table('admission_diagnoses')->where('admission_id', $admissionId)->count(),
+            'A00 stored once, B00 once');
+    }
+
+    public function test_committed_rows_match_preview_valid_count(): void
+    {
+        $admin = $this->importAdmin();
+        // 2 valid + 1 invalid (date inversion)
+        $csv = "50750,P1,40,M,Saudi Arabia,2024-01-01,2024-01-05,Alive,Ward\n"
+            . "50751,P2,41,F,Saudi Arabia,2024-02-01,2024-02-03,Alive,Ward\n"
+            . "50752,P3,42,M,Saudi Arabia,2024-03-10,2024-03-01,Alive,Ward";
+
+        $this->actingAs($admin)->post('/import/preview', ['rows' => $csv])
+            ->assertInertia(fn ($page) => $page->where('preview.valid', 2)->where('preview.invalid', 1));
+
+        $this->actingAs($admin)->post('/import', ['rows' => $csv])->assertRedirect();
+        $audit = \App\Models\AuditLog::where('action', 'import.bulk')->latest('id')->first();
+        $this->assertSame(2, (int) ($audit->details['imported'] ?? 0));
+    }
+
+    public function test_preview_does_not_write_to_db(): void
+    {
+        $admin = $this->importAdmin();
+        $before = DB::table('admissions')->count();
+        $csv = '50760,Preview Pt,40,M,Saudi Arabia,2024-01-01,2024-01-05,Alive,Ward';
+
+        $this->actingAs($admin)->post('/import/preview', ['rows' => $csv])->assertOk();
+
+        $this->assertSame($before, DB::table('admissions')->count(), 'preview must not write any rows');
+    }
 }

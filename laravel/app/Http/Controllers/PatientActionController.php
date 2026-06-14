@@ -587,7 +587,7 @@ class PatientActionController extends Controller
             return back()->with('flash', ['type' => 'error', 'message' => 'Only same-day discharges can be reversed.']);
         }
         $admission->update(['discharge_date' => null, 'medical_discharge_date' => null, 'outcome' => null, 'discharge_to' => null, 'transfer_type' => null, 'discharged_by' => null]);
-        Audit::log('admission.reverse_discharge', 'admission', (string) $admission->id);
+        Audit::log('admission.reverse_discharge', 'admission', (string) $admission->id, $this->stepUpDetail());
         $this->bustDashboardCache();
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Discharge reversed.']);
@@ -890,8 +890,12 @@ class PatientActionController extends Controller
     }
 
     /**
-     * Hard-delete an admission (admin only) — the legacy "delete" on the queue/board. The audit
-     * row captures the identifying details BEFORE the row disappears; recovery is via backups.
+     * Soft-delete an admission (admin only) — the legacy "delete" on the queue/board. Phase 4 —
+     * Item 1: delete() now sets deleted_at (the row survives, hidden by the SoftDeletes global
+     * scope); recovery is the admin "Recently Deleted" restore. The audit row still captures the
+     * identifying details FIRST (and a step_up flag — Item 4 — when the action was step-up gated).
+     * Diagnoses are NOT touched: they are children of the admission row and are naturally hidden
+     * with their soft-deleted parent (a future hard purge cascades the FK).
      */
     public function destroy(Admission $admission): RedirectResponse
     {
@@ -902,16 +906,27 @@ class PatientActionController extends Controller
             'mrn' => $admission->patient?->mrn,
             'patient' => $admission->patient?->name,
             'admit_date' => optional($admission->admit_date)->toDateString(),
-        ];
+        ] + $this->stepUpDetail();
 
         DB::transaction(function () use ($admission, $details) {
             Audit::log('admission.delete', 'admission', (string) $admission->id, $details);   // written first — survives the delete
-            $this->voidPendingSignatures($admission, deleting: true); // moot before the cascade, but explicit
-            $admission->diagnoses()->delete();                        // explicit, even though the FK cascades
-            $admission->delete();
+            $this->voidPendingSignatures($admission, deleting: true);
+            $admission->delete();   // SoftDeletes — sets deleted_at, the FK cascade is never triggered
         });
         $this->bustDashboardCache();
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Admission deleted.']);
+    }
+
+    /**
+     * Phase 4 — Item 4: when the current action was reached through a recent step-up re-auth, stamp
+     * `step_up => true` into the audit detail. Returns [] when no step-up is in session, so the audit
+     * payload is unchanged for non-gated paths (and in tests that don't exercise step-up).
+     */
+    private function stepUpDetail(): array
+    {
+        $verifiedAt = session('stepup.verified_at');
+
+        return ($verifiedAt && (now()->getTimestamp() - (int) $verifiedAt) <= 300) ? ['step_up' => true] : [];
     }
 }

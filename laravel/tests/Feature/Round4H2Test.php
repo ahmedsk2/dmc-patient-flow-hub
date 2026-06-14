@@ -71,6 +71,7 @@ class Round4H2Test extends TestCase
     private function admitPayload(array $overrides = []): array
     {
         Country::firstOrCreate(['name' => 'Saudi Arabia'], ['code' => 'SA']);
+        \Illuminate\Support\Facades\DB::table('icd10')->updateOrInsert(['code' => 'J18.9'], ['name' => 'Pneumonia']);   // Phase 4 — Item 5
 
         return array_merge([
             'mrn' => (string) random_int(10000000, 99999999), 'name' => 'Full Payload', 'age' => 47,
@@ -219,14 +220,16 @@ class Round4H2Test extends TestCase
 
     public function test_reverse_discharge_is_same_day_only(): void
     {
+        // Phase 4 — Item 4: reverse-discharge is step-up gated
+        $stepup = ['stepup.verified_at' => now()->getTimestamp()];
         $yesterday = $this->admission(['discharge_date' => now()->subDay()->toDateString(),
             'outcome' => 'Alive', 'transfer_type' => 'discharge from ward']);
-        $this->actingAs($this->admin())->post("/admissions/{$yesterday->id}/reverse-discharge")->assertRedirect();
+        $this->actingAs($this->admin())->withSession($stepup)->post("/admissions/{$yesterday->id}/reverse-discharge")->assertRedirect();
         $this->assertNotNull($yesterday->fresh()->discharge_date, 'yesterday\'s discharge must NOT be reversible (legacy same-day undo)');
 
         $today = $this->admission(['discharge_date' => now()->toDateString(),
             'outcome' => 'Alive', 'transfer_type' => 'discharge from ward']);
-        $this->actingAs($this->admin())->post("/admissions/{$today->id}/reverse-discharge")->assertRedirect();
+        $this->actingAs($this->admin())->withSession($stepup)->post("/admissions/{$today->id}/reverse-discharge")->assertRedirect();
         $this->assertNull($today->fresh()->discharge_date, 'same-day discharges remain reversible');
     }
 

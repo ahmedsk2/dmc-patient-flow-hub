@@ -19,6 +19,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => \App\Http\Middleware\EnsureAdmin::class,
             'mfa.enroll' => \App\Http\Middleware\EnsureMfaEnrolled::class,
             'pwd' => \App\Http\Middleware\EnsurePasswordNotExpired::class,
+            'session.timeout' => \App\Http\Middleware\SessionTimeout::class,   // Phase 4 — Item 2
+            'stepup' => \App\Http\Middleware\RequireStepUp::class,             // Phase 4 — Item 4
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -52,8 +52,9 @@ class ControlController extends Controller
                 'users' => User::count(),
                 'active_users' => User::where('active', 1)->count(),
                 'patients' => DB::table('patients')->count(),
-                'admissions' => DB::table('admissions')->count(),
-                'consultations' => DB::table('consultations')->count(),
+                // Phase 4 — Item 1: count live (non-soft-deleted) rows for the admin overview cards
+                'admissions' => DB::table('admissions')->whereNull('deleted_at')->count(),
+                'consultations' => DB::table('consultations')->whereNull('deleted_at')->count(),
                 'icd10' => DB::table('icd10')->count(),
                 'specialties' => DB::table('specialties')->count(),
             ],
@@ -73,6 +74,13 @@ class ControlController extends Controller
             'icu_beds' => ['required', 'integer', 'min:0', 'max:1000'],
             'readmission_window_days' => ['required', 'integer', 'min:0', 'max:30'],
             'mfa_enforcement' => ['required', 'integer', 'in:0,1,2'],
+            // Phase 4, Item 2 — session timeout (idle min 5, max 8h; absolute 0=off, max 24h)
+            'idle_timeout_minutes' => ['required', 'integer', 'min:5', 'max:480'],
+            'abs_timeout_minutes' => ['required', 'integer', 'min:0', 'max:1440'],
+            // Phase 4, Item 3 — consecutive-failure notify threshold (0 = off)
+            'failed_login_notify_threshold' => ['required', 'integer', 'min:0', 'max:50'],
+            // Phase 4, Item 6 — data-quality stale-episode LOS multiplier (× long_los)
+            'dq_los_multiplier' => ['required', 'integer', 'min:1', 'max:10'],
             // Phase 2, Item 3 — break-glass: also log per-record detail opens (default off)
             'log_record_opens' => ['sometimes', 'boolean'],
             // Phase 1, Item 4 — dashboard alert thresholds (clinician-tunable)
@@ -105,6 +113,15 @@ class ControlController extends Controller
         return back()->with('flash', ['type' => 'success', 'message' => 'Settings saved.']);
     }
 
+    /** Phase 4 — Item 4: ['step_up' => true] when a recent step-up is in session, else []. */
+    private function stepUpDetail(): array
+    {
+        $verifiedAt = session('stepup.verified_at');
+
+        return ($verifiedAt && (now()->getTimestamp() - (int) $verifiedAt) <= \App\Http\Middleware\RequireStepUp::WINDOW_SECONDS)
+            ? ['step_up' => true] : [];
+    }
+
     public function updateUser(Request $request, User $user): RedirectResponse
     {
         $data = $request->validate([
@@ -121,6 +138,20 @@ class ControlController extends Controller
             'can_manage' => ['required', 'boolean'],
             'can_modify' => ['required', 'boolean'],
         ]);
+
+        // Phase 4 — Item 4: granting admin (role -> 0 on a non-admin) is a highest-risk action and
+        // needs a recent step-up re-auth. The route is shared with non-escalating updates, so the
+        // guard is inline rather than route middleware. A fresh step-up (< 5 min) lets it proceed.
+        if ((int) $data['role'] === User::ROLE_ADMIN && (int) $user->role !== User::ROLE_ADMIN) {
+            $verifiedAt = session('stepup.verified_at');
+            if (! $verifiedAt || (now()->getTimestamp() - (int) $verifiedAt) > \App\Http\Middleware\RequireStepUp::WINDOW_SECONDS) {
+                session(['stepup.intended' => route('control.index'), 'stepup.intended_method' => 'GET']);
+
+                return redirect()->route('stepup.show')->with('flash', [
+                    'type' => 'error', 'message' => 'Re-authentication required to grant admin access.',
+                ]);
+            }
+        }
 
         // guard against an admin locking themselves out
         if ($user->id === Auth::id() && ((int) $data['role'] !== User::ROLE_ADMIN || ! $data['active'])) {
@@ -139,9 +170,11 @@ class ControlController extends Controller
         $fields = ['username', 'full_name', 'email', 'role', 'active', 'on_service',
             'specialty_id', 'can_assign', 'can_add', 'can_manage', 'can_modify'];
         $before = $user->only($fields);
+        $escalated = (int) $data['role'] === User::ROLE_ADMIN && (int) ($before['role'] ?? 99) !== User::ROLE_ADMIN;
         $user->update($data);
         $diff = AuditDiff::diff($before, $user->fresh()->only($fields), ['password']);
-        Audit::log('user.update', 'user', (string) $user->id, $diff);
+        // Phase 4 — Item 4: flag the step-up on a role-escalation update (admin grant)
+        Audit::log('user.update', 'user', (string) $user->id, $diff + ($escalated ? $this->stepUpDetail() : []));
 
         return back()->with('flash', ['type' => 'success', 'message' => "Updated {$user->username}."]);
     }
@@ -163,8 +196,9 @@ class ControlController extends Controller
         }
 
         Audit::log('user.delete', 'user', (string) $user->id,
-            ['username' => $user->username, 'name' => $user->full_name ?: $user->name, 'role' => (int) $user->role]);
-        $user->delete();
+            ['username' => $user->username, 'name' => $user->full_name ?: $user->name, 'role' => (int) $user->role]
+            + $this->stepUpDetail());
+        $user->delete();   // SoftDeletes — attribution survives; recover via /trashed
 
         return back()->with('flash', ['type' => 'success', 'message' => "Deleted {$user->username}."]);
     }

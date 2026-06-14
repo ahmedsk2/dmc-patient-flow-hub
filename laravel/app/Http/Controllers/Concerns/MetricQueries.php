@@ -30,10 +30,16 @@ trait MetricQueries
         };
     }
 
-    /** Grouped COUNT(*) keyed by interval bucket — [bucketKey => count]. */
+    /**
+     * Grouped COUNT(*) keyed by interval bucket — [bucketKey => count]. Phase 4 — Item 1: the
+     * bare-table form (no alias) excludes soft-deleted rows; this is the single chokepoint every
+     * Statistics/Reports time-series passes through, so the deleted_at guard is added once here for
+     * the bare 'admissions'/'consultations' callers (every existing caller passes the bare name).
+     */
     protected function seriesBy(string $table, string $col, string $f, string $t, string $interval, string $where): array
     {
         return DB::table($table)->whereBetween($col, [$f, $t])->whereRaw($where)
+            ->when(in_array($table, ['admissions', 'consultations'], true), fn ($q) => $q->whereNull('deleted_at'))
             ->selectRaw($this->keyExpr($col, $interval) . ' k, COUNT(*) c')->groupBy('k')->pluck('c', 'k')->all();
     }
 

@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * New-admission payload. The patient-demographics rule block is shared with
@@ -39,7 +40,10 @@ class StoreAdmissionRequest extends FormRequest
             'nationality' => ['nullable', 'string', 'max:191'],
             'bed' => ['nullable', 'string', 'max:64'],
             'diagnoses' => ['array'],
-            'diagnoses.*' => ['string', 'max:100'],
+            // Phase 4 — Item 5: each diagnosis code must exist in the icd10 reference table. Modify
+            // (validate-on-change) relaxes this for unchanged dirty legacy codes — see
+            // ModifyAdmissionRequest::rules(); NEW admissions enforce it fully (rules() below).
+            'diagnoses.*' => ['string', 'max:100', Rule::exists('icd10', 'code')],
         ];
     }
 
@@ -57,7 +61,7 @@ class StoreAdmissionRequest extends FormRequest
             'nationality' => ['required', 'string', 'max:191', 'exists:countries,name'],
             'bed' => ['required', 'string', 'max:64'],
             'diagnoses' => ['required', 'array', 'min:1'],
-            'diagnoses.*' => ['required', 'string', 'max:100'],
+            'diagnoses.*' => ['required', 'string', 'max:100', Rule::exists('icd10', 'code')],   // Phase 4 — Item 5: full ICD-10 enforcement on new admissions
             'admit_date' => ['required', 'date', 'before_or_equal:today'],
             'admitted_from' => ['nullable', 'string', 'max:64', 'in:' . implode(',', self::ADMIT_FROM)],
             'current_location' => ['required', 'in:ER,Ward,ICU'],

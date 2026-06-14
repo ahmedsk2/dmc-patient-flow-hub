@@ -66,8 +66,10 @@ class ClinicalFlowTest extends TestCase
         ]);
         $this->assertSame(1, Admission::whereNotNull('discharge_date')->count());
 
-        // reverse (admin) returns the patient to active — clears the destination too (legacy nulled DISTO)
-        $this->actingAs($admin)->post("/admissions/{$a->id}/reverse-discharge")->assertRedirect();
+        // reverse (admin) returns the patient to active — clears the destination too (legacy nulled DISTO).
+        // Phase 4 — Item 4: reverse-discharge is step-up gated.
+        $this->actingAs($admin)->withSession(['stepup.verified_at' => now()->getTimestamp()])
+            ->post("/admissions/{$a->id}/reverse-discharge")->assertRedirect();
         $a->refresh();
         $this->assertNull($a->discharge_date);
         $this->assertNull($a->medical_discharge_date);
@@ -160,6 +162,9 @@ class ClinicalFlowTest extends TestCase
             // Phase 1 alert thresholds (now required by updateSettings)
             'alert_overcensus_pct' => $s->alert_overcensus_pct, 'alert_boarding_max' => $s->alert_boarding_max,
             'alert_readmit_rate_pct' => $s->alert_readmit_rate_pct, 'alert_deaths_delta_pct' => $s->alert_deaths_delta_pct,
+            // Phase 4 thresholds (now required by updateSettings)
+            'idle_timeout_minutes' => $s->idle_timeout_minutes ?? 30, 'abs_timeout_minutes' => $s->abs_timeout_minutes ?? 0,
+            'failed_login_notify_threshold' => $s->failed_login_notify_threshold ?? 5, 'dq_los_multiplier' => $s->dq_los_multiplier ?? 2,
         ])->assertRedirect();
 
         $this->assertDatabaseHas('setting_changes', [

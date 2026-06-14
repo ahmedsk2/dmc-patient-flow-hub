@@ -162,6 +162,7 @@ class GapWave4aTest extends TestCase
         $admin = $this->user(['role' => User::ROLE_ADMIN]);
         $a = $this->admission(['admit_date' => '2026-06-01', 'admitted_from' => 'ER', 'current_location' => 'Ward']);
         $mrn = $a->patient->mrn;
+        \Illuminate\Support\Facades\DB::table('icd10')->insert(['code' => 'A15.0', 'name' => 'TB of lung']);   // Phase 4 — Item 5: code must exist
 
         $this->actingAs($admin)->post("/admissions/{$a->id}/modify", [
             'mrn' => $mrn, 'name' => 'G4 Patient', 'age' => 40, 'gender' => 'Male', 'bed' => 'W-9',
@@ -218,10 +219,17 @@ class GapWave4aTest extends TestCase
         $mrn = $a->patient->mrn;
         $id = $a->id;
 
-        $this->actingAs($admin)->delete("/admissions/{$id}")->assertRedirect();
+        // Phase 4 — Item 4: admission delete is step-up gated — provide a fresh step-up window
+        $this->actingAs($admin)
+            ->withSession(['stepup.verified_at' => now()->getTimestamp()])
+            ->delete("/admissions/{$id}")->assertRedirect();
 
-        $this->assertDatabaseMissing('admissions', ['id' => $id]);
-        $this->assertDatabaseMissing('admission_diagnoses', ['admission_id' => $id]);
+        // Phase 4 — Item 1: delete is now a SOFT delete — the row (and its diagnoses) survive in the
+        // table but carry deleted_at, and the Eloquent global scope hides them.
+        $this->assertDatabaseHas('admissions', ['id' => $id]);
+        $this->assertNotNull(\App\Models\Admission::withTrashed()->find($id)->deleted_at);
+        $this->assertNull(\App\Models\Admission::find($id), 'soft-deleted admission is hidden from Eloquent');
+        $this->assertDatabaseHas('admission_diagnoses', ['admission_id' => $id]);   // children kept (hidden with parent)
         $log = AuditLog::where('action', 'admission.delete')->where('entity_id', (string) $id)->first();
         $this->assertNotNull($log, 'delete must be audited');
         $this->assertSame($mrn, $log->details['mrn'] ?? null);
@@ -233,8 +241,11 @@ class GapWave4aTest extends TestCase
         $cons = $this->user(['can_manage' => 1, 'can_modify' => 1]);   // even a fully-capable consultant
         $a = $this->admission(['consultant_id' => $cons->id]);
 
-        $this->actingAs($cons)->delete("/admissions/{$a->id}")->assertForbidden();
-        $this->assertDatabaseHas('admissions', ['id' => $a->id]);
+        // pass the step-up gate (Item 4) so the controller's admin-only check is what denies (403)
+        $this->actingAs($cons)
+            ->withSession(['stepup.verified_at' => now()->getTimestamp()])
+            ->delete("/admissions/{$a->id}")->assertForbidden();
+        $this->assertNull(\App\Models\Admission::find($a->id)?->deleted_at);
     }
 
     // ---- 4. D1 — consultants see only their own patients ---------------------------------------

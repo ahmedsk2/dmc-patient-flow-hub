@@ -6,9 +6,15 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Admission extends Model
 {
+    // Phase 4 — Item 1: soft-delete. delete() now sets deleted_at (no physical DELETE); the global
+    // scope hides trashed rows from every Eloquent query. Raw DB::table() analytics must add
+    // whereNull('...deleted_at') by hand — see migration 2026_06_14_010002 + SoftDeleteTest.
+    use SoftDeletes;
+
     protected static function booted(): void
     {
         // Keep the dashboard heavy-tier cache fresh: bust on any admission write so a

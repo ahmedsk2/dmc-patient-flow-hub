@@ -41,6 +41,18 @@ class ModifyAdmissionRequest extends FormRequest
         $admission = $this->route('admission');
         $patient = $admission?->patient;
 
+        // Phase 4 — Item 5: ICD-10 validate-on-change. demographicRules() applies Rule::exists on
+        // every diagnosis code; relax it here UNLESS the submitted set introduces a NEW code vs. the
+        // stored set — so an unrelated bed/date correction never trips on pre-existing dirty codes,
+        // but adding a brand-new code is validated against icd10. (Mirrors the mrn/age/gender
+        // validate-on-change policy below.)
+        $storedCodes = $admission ? $admission->diagnoses->pluck('icd10_code')->all() : [];
+        $submitted = array_map(fn ($c) => trim((string) $c), (array) $this->input('diagnoses', []));
+        $newCodes = array_diff($submitted, $storedCodes);
+        $rules['diagnoses.*'] = count($newCodes) > 0
+            ? ['string', 'max:100', \Illuminate\Validation\Rule::exists('icd10', 'code')]
+            : ['string', 'max:100'];
+
         // validate-only-on-change (legacy decision): untouched dirty values stay save-able
         if ($patient) {
             if (! $this->changed('mrn', $patient->mrn)) {

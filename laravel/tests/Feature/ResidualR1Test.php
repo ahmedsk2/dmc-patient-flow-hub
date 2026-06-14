@@ -174,6 +174,7 @@ class ResidualR1Test extends TestCase
             'outcome' => 'Alive', 'transfer_type' => 'discharge from ward']);
 
         \App\Models\Country::firstOrCreate(['name' => 'Saudi Arabia'], ['code' => 'SA']);
+        \Illuminate\Support\Facades\DB::table('icd10')->insert(['code' => 'J18.9', 'name' => 'Pneumonia']);   // Phase 4 — Item 5: code must exist
         $this->actingAs($this->admin())->post('/admissions', [
             'mrn' => '55667799', 'name' => 'Readmit Test', 'age' => 50, 'gender' => 'Male',
             'nationality' => 'Saudi Arabia', 'bed' => 'W-1', 'diagnoses' => ['J18.9'],   // B1 Fill-All

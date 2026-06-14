@@ -8,16 +8,21 @@ use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\ConsultationsController;
 use App\Http\Controllers\ControlController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DataQualityController;
 use App\Http\Controllers\HandoverController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\MfaController;
+use App\Http\Controllers\OrphanDiagnosesController;
 use App\Http\Controllers\PatientActionController;
 use App\Http\Controllers\PatientsController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RecentController;
 use App\Http\Controllers\RegistryController;
 use App\Http\Controllers\ReportsController;
+use App\Http\Controllers\SecurityController;
 use App\Http\Controllers\StatisticsController;
+use App\Http\Controllers\StepUpController;
+use App\Http\Controllers\TrashedController;
 use Illuminate\Support\Facades\Route;
 
 // Legacy URL compatibility — bookmarks / printed links / muscle memory from the old file-based
@@ -58,8 +63,9 @@ Route::middleware('guest')->group(function () {
 Route::get('/mfa/challenge', [MfaController::class, 'challenge'])->name('mfa.challenge');
 Route::post('/mfa/challenge', [MfaController::class, 'verifyChallenge'])->middleware('throttle:auth');   // brute-force guard on the 6-digit code (pending-user+IP key)
 
-// Authenticated
-Route::middleware(['auth', 'mfa.enroll', 'pwd'])->group(function () {
+// Authenticated. session.timeout (Phase 4 — Item 2) runs first so an idle/expired session is
+// bounced to login before any page work; the MFA/pwd gates follow.
+Route::middleware(['auth', 'session.timeout', 'mfa.enroll', 'pwd'])->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard.alt');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
@@ -79,9 +85,13 @@ Route::middleware(['auth', 'mfa.enroll', 'pwd'])->group(function () {
     Route::post('/admissions/{admission}/icu-discharge', [PatientActionController::class, 'icuDischarge'])->name('admissions.icuDischarge');
     Route::post('/admissions/{admission}/transfer', [PatientActionController::class, 'transfer'])->name('admissions.transfer');
     Route::post('/admissions/{admission}/icu-pull', [PatientActionController::class, 'icuPull'])->name('admissions.icuPull');
-    Route::post('/admissions/{admission}/reverse-discharge', [PatientActionController::class, 'reverseDischarge'])->name('admissions.reverse');
+    Route::post('/admissions/{admission}/reverse-discharge', [PatientActionController::class, 'reverseDischarge'])->name('admissions.reverse')->middleware('stepup');   // Phase 4 — Item 4
     Route::post('/admissions/{admission}/undo-medical-discharge', [PatientActionController::class, 'undoMedicalDischarge'])->name('admissions.undoMedical');
-    Route::delete('/admissions/{admission}', [PatientActionController::class, 'destroy'])->name('admissions.destroy');   // admin-only (enforced in the action)
+    Route::delete('/admissions/{admission}', [PatientActionController::class, 'destroy'])->name('admissions.destroy')->middleware('stepup');   // admin-only + step-up (Phase 4 — Item 4)
+
+    // Phase 4 — Item 4: step-up re-auth form (auth-only; the gated actions enforce admin themselves)
+    Route::get('/stepup', [StepUpController::class, 'show'])->name('stepup.show');
+    Route::post('/stepup', [StepUpController::class, 'verify'])->name('stepup.verify');
 
     // Handovers — read is all-roles; save is canManage/outgoing (enforced in the action)
     Route::get('/admissions/{admission}/handover', [HandoverController::class, 'show'])->name('admissions.handover.show');
@@ -144,7 +154,7 @@ Route::middleware(['auth', 'mfa.enroll', 'pwd'])->group(function () {
         Route::get('/control', [ControlController::class, 'index'])->name('control.index');
         Route::put('/control/settings', [ControlController::class, 'updateSettings'])->name('control.settings');
         Route::put('/control/users/{user}', [ControlController::class, 'updateUser'])->name('control.users.update');
-        Route::delete('/control/users/{user}', [ControlController::class, 'destroyUser'])->name('control.users.destroy');
+        Route::delete('/control/users/{user}', [ControlController::class, 'destroyUser'])->name('control.users.destroy')->middleware('stepup');   // Phase 4 — Item 4
         Route::post('/control/users/{user}/reset-mfa', [ControlController::class, 'resetMfa'])->name('control.users.resetMfa');
         Route::post('/control/users/{user}/send-reset', [ControlController::class, 'sendReset'])->name('control.users.sendReset');
         Route::post('/control/specialties', [ControlController::class, 'addSpecialty'])->name('control.specialties.add');
@@ -157,5 +167,20 @@ Route::middleware(['auth', 'mfa.enroll', 'pwd'])->group(function () {
         Route::get('/audit', [AuditController::class, 'index'])->name('audit.index');
         Route::get('/audit/export', [AuditController::class, 'export'])->name('audit.export');
         Route::get('/audit/export-xlsx', [AuditController::class, 'exportXlsx'])->name('audit.export.xlsx');
+
+        // Phase 4 — Item 1: Recently Deleted (soft-delete) view + Restore actions
+        Route::get('/trashed', [TrashedController::class, 'index'])->name('trashed.index');
+        Route::post('/trashed/admissions/{id}/restore', [TrashedController::class, 'restoreAdmission'])->name('trashed.admissions.restore');
+        Route::post('/trashed/consultations/{id}/restore', [TrashedController::class, 'restoreConsultation'])->name('trashed.consultations.restore');
+        Route::post('/trashed/users/{id}/restore', [TrashedController::class, 'restoreUser'])->name('trashed.users.restore');
+
+        // Phase 4 — Item 3: Security panel (read-only login-anomaly surfacing)
+        Route::get('/security', [SecurityController::class, 'index'])->name('security.index');
+
+        // Phase 4 — Item 5: orphan ICD-10 code report (admission diagnoses with no icd10 row)
+        Route::get('/admin/orphan-diagnoses', [OrphanDiagnosesController::class, 'index'])->name('orphan.diagnoses');
+
+        // Phase 4 — Item 6: data-quality dashboard
+        Route::get('/data-quality', [DataQualityController::class, 'index'])->name('data-quality.index');
     });
 });

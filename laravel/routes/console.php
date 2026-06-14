@@ -13,3 +13,7 @@ Schedule::call(function () {
     $prior = \Illuminate\Support\Carbon::today()->subMonth();
     \App\Jobs\GenerateMonthlyReport::dispatch($prior->year, $prior->month);
 })->monthlyOn(1, '06:00')->name('monthly-report-email')->withoutOverlapping();
+
+// Phase 4 — Item 6: daily data-quality digest for admins (one notification per run when anything
+// needs review). Read-only; no auto-fix.
+Schedule::command('dq:notify')->dailyAt('07:00')->name('data-quality-digest')->withoutOverlapping();

@@ -16,6 +16,8 @@ const fieldLabels = {
     readmission_window_days: 'Readmission window (days)', mfa_enforcement: 'MFA enforcement',
     alert_overcensus_pct: 'Over-census alert (%)', alert_boarding_max: 'Boarding alert (max)',
     alert_readmit_rate_pct: 'Readmission-rate alert (%)', alert_deaths_delta_pct: 'Mortality-rise alert (%)',
+    idle_timeout_minutes: 'Idle session timeout (min)', abs_timeout_minutes: 'Absolute session cap (min)',
+    failed_login_notify_threshold: 'Failed-login alert threshold', dq_los_multiplier: 'Data-quality LOS multiplier',
 };
 
 const tab = ref('overview');
@@ -31,6 +33,11 @@ const sForm = useForm({
     alert_boarding_max: props.settings.alert_boarding_max ?? 5,
     alert_readmit_rate_pct: props.settings.alert_readmit_rate_pct ?? 10,
     alert_deaths_delta_pct: props.settings.alert_deaths_delta_pct ?? 50,
+    // Phase 4 — Items 2/3/6
+    idle_timeout_minutes: props.settings.idle_timeout_minutes ?? 30,
+    abs_timeout_minutes: props.settings.abs_timeout_minutes ?? 0,
+    failed_login_notify_threshold: props.settings.failed_login_notify_threshold ?? 5,
+    dq_los_multiplier: props.settings.dq_los_multiplier ?? 2,
 });
 const saveSettings = () => sForm.put('/control/settings', { preserveScroll: true });
 
@@ -94,9 +101,16 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
 <template>
     <Head title="Control Panel" />
     <AppLayout title="Control Panel">
-        <div class="mb-5 flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line w-fit">
-            <button v-for="t in ['overview','settings','users','reference']" :key="t" @click="tab = t"
-                class="rounded-lg px-4 py-2 text-sm font-semibold capitalize transition" :class="tab === t ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ t }}</button>
+        <div class="mb-5 flex flex-wrap items-center gap-3">
+            <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line w-fit">
+                <button v-for="t in ['overview','settings','users','reference']" :key="t" @click="tab = t"
+                    class="rounded-lg px-4 py-2 text-sm font-semibold capitalize transition" :class="tab === t ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ t }}</button>
+            </div>
+            <!-- Phase 4 — Item 1: opens the soft-delete "Recently Deleted" view -->
+            <button @click="router.visit('/trashed')"
+                class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500 ring-1 ring-line transition hover:bg-ink-50">
+                Recently Deleted
+            </button>
         </div>
 
         <!-- Overview -->
@@ -139,6 +153,16 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
                 <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Boarding alert (max)</span><input v-model="sForm.alert_boarding_max" type="number" min="0" max="100" :class="field" /><span class="mt-1 block text-xs text-ink-400">More boarding (medically-cleared) patients than this fires an alert.</span></label>
                 <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Readmission-rate alert (%)</span><input v-model="sForm.alert_readmit_rate_pct" type="number" min="1" max="100" :class="field" /><span class="mt-1 block text-xs text-ink-400">YTD non-ICU readmission rate at/above this fires an alert.</span></label>
                 <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Mortality-rise alert (%)</span><input v-model="sForm.alert_deaths_delta_pct" type="number" min="10" max="500" :class="field" /><span class="mt-1 block text-xs text-ink-400">Month-over-month rise in deaths at/above this fires an alert.</span></label>
+            </div>
+
+            <!-- Phase 4 — security & data-quality thresholds -->
+            <h4 class="mb-1 mt-6 font-bold text-ink-800">Security &amp; data quality</h4>
+            <p class="mb-4 text-sm text-ink-400">Session timeouts, failed-login alerting, and the data-quality stale-episode threshold.</p>
+            <div class="grid gap-4 sm:grid-cols-2">
+                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Idle session timeout (min)</span><input v-model="sForm.idle_timeout_minutes" type="number" min="5" max="480" :class="field" /><span class="mt-1 block text-xs text-ink-400">Sign a user out after this many minutes of inactivity (default 30).</span></label>
+                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Absolute session cap (min)</span><input v-model="sForm.abs_timeout_minutes" type="number" min="0" max="1440" :class="field" /><span class="mt-1 block text-xs text-ink-400">Maximum session length regardless of activity; 0 disables it (default off).</span></label>
+                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Failed-login alert threshold</span><input v-model="sForm.failed_login_notify_threshold" type="number" min="0" max="50" :class="field" /><span class="mt-1 block text-xs text-ink-400">Notify admins after this many failed logins for one account in 10 minutes; 0 disables it.</span></label>
+                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Data-quality LOS multiplier</span><input v-model="sForm.dq_los_multiplier" type="number" min="1" max="10" :class="field" /><span class="mt-1 block text-xs text-ink-400">Flag active non-long-term episodes with LOS &gt; Long&nbsp;LOS × this (default 2).</span></label>
             </div>
 
             <div class="mt-5 flex items-center gap-3">

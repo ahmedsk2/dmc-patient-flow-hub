@@ -67,12 +67,17 @@ class ImportController extends Controller
                 $patient = Patient::firstOrCreate(['mrn' => $r['mrn']], [
                     'name' => $r['name'], 'gender' => $r['gender'], 'age' => $r['age'], 'nationality' => $r['nationality'],
                 ]);
+                // Phase 4 — Item 7: a Dead outcome can only go to the Mortuary — force it at commit
+                // (mirrors the live discharge rule; the preview already warns if a different
+                // destination was submitted). A Dead row with no destination also lands at Mortuary.
+                $dischargedTo = (strcasecmp((string) $r['outcome'], 'Dead') === 0)
+                    ? 'Mortuary' : $r['discharged_to'];
                 $admissionId = DB::table('admissions')->insertGetId([
                     'patient_id' => $patient->id,
                     'admit_date' => $r['admit_date'],
                     'discharge_date' => $r['discharge_date'],
                     'medical_discharge_date' => $r['medical_discharge_date'],
-                    'discharge_to' => $r['discharged_to'],
+                    'discharge_to' => $dischargedTo,
                     'outcome' => $r['outcome'],
                     'current_location' => $r['location'],
                     'admitted_from' => $r['admitted_from'],
@@ -119,7 +124,8 @@ class ImportController extends Controller
         // the same patient twice). Built once; $openMrns also accrues active rows seen WITHIN this
         // batch so two active rows for the same new MRN don't both slip through.
         $openMrns = DB::table('admissions')->join('patients', 'patients.id', '=', 'admissions.patient_id')
-            ->whereNull('admissions.discharge_date')->pluck('patients.mrn')
+            ->whereNull('admissions.discharge_date')->whereNull('admissions.deleted_at')   // Phase 4 — Item 1: a soft-deleted open episode is not a live duplicate
+            ->pluck('patients.mrn')
             ->map(fn ($m) => (string) $m)->flip()->all();
         $out = [];
         foreach ($lines as $i => $line) {
@@ -174,17 +180,56 @@ class ImportController extends Controller
                 $row['ok'] = false; $row['error'] = 'TransferType must be one of: ' . implode(' / ', self::TRANSFER_TYPES);
             } elseif ($row['transfer_type'] !== null && ! $row['discharge_date']) {
                 $row['ok'] = false; $row['error'] = 'TransferType requires a discharge date';
+            } elseif ($row['discharge_date'] && $row['discharge_date'] < $row['admit_date']) {
+                // Phase 4 — Item 7: REJECT impossible date ordering (mirrors the CHECK constraints +
+                // the live-action invariants). A newly-imported row has no excuse for it.
+                $row['ok'] = false; $row['error'] = 'Discharge date before admit date';
+            } elseif ($row['medical_discharge_date'] && $row['medical_discharge_date'] < $row['admit_date']) {
+                $row['ok'] = false; $row['error'] = 'Clinical discharge date before admit date';
+            } elseif ($row['discharge_date'] && $row['medical_discharge_date'] && $row['discharge_date'] < $row['medical_discharge_date']) {
+                $row['ok'] = false; $row['error'] = 'Discharge date before clinical discharge date';
             } elseif (! $row['discharge_date'] && isset($openMrns[$mrn])) {
                 // active row (no discharge) for an MRN that already has an open episode (in the DB
                 // or an earlier active row this run) — the patient would appear on the board twice
                 $row['ok'] = false; $row['error'] = 'MRN already has an active (open) admission';
             }
+
+            // Phase 4 — Item 7: outcome/destination + delay-reason consistency WARNINGS (not
+            // rejections — the commit path auto-corrects, mirroring the live discharge rules).
+            if ($row['ok']) {
+                // Dead => Mortuary forced at commit; warn if a different destination was submitted
+                if (strcasecmp((string) $row['outcome'], 'Dead') === 0
+                    && $row['discharged_to'] !== null && strcasecmp((string) $row['discharged_to'], 'Mortuary') !== 0) {
+                    $row['warning'] = ($row['warning'] ? $row['warning'] . '; ' : '')
+                        . 'Dead outcome forces Mortuary destination; submitted DischargedTo overridden';
+                }
+                // phase-1 state (clinical discharge set, no physical discharge) with no delay reason
+                if (! $row['discharge_date'] && $row['medical_discharge_date'] && ! $row['delay_reason']) {
+                    $row['warning'] = ($row['warning'] ? $row['warning'] . '; ' : '')
+                        . 'Medically discharged without delay reason — imported with NULL delay_reason';
+                }
+            }
+
             // a committed ACTIVE row makes this MRN open for the rest of the batch
             if ($row['ok'] && ! $row['discharge_date']) {
                 $openMrns[$mrn] = true;
             }
             $out[] = $row;
         }
+
+        // Phase 4 — Item 5: flag unknown ICD-10 codes as a per-row WARNING (not a rejection — the
+        // admin sees it in the preview and can import anyway). One bulk lookup over the whole batch's
+        // distinct codes, then a per-row set-membership check (no N×codes queries).
+        $allCodes = collect($out)->flatMap(fn ($r) => $r['diagnoses'])->unique()->filter()->values()->all();
+        $validCodes = $allCodes ? DB::table('icd10')->whereIn('code', $allCodes)->pluck('code')->flip()->all() : [];
+        foreach ($out as &$row) {
+            $badCodes = array_values(array_filter($row['diagnoses'], fn ($c) => ! isset($validCodes[$c])));
+            if ($badCodes) {
+                $row['warning'] = ($row['warning'] ? $row['warning'] . '; ' : '') . 'Unknown ICD-10: ' . implode(', ', $badCodes);
+            }
+        }
+        unset($row);
+
         return $out;
     }
 

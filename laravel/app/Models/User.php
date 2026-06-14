@@ -5,6 +5,7 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -12,6 +13,12 @@ class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
+
+    // Phase 4 — Item 1: soft-delete. ControlController::destroyUser now sets deleted_at instead of a
+    // physical DELETE — so the nullOnDelete FKs (admissions.consultant_id/admitted_by, etc.) never
+    // fire and historical per-consultant joins still resolve the name. The global scope excludes a
+    // trashed user from auth (login lookups go through Eloquent) AND from User::consultantOptions().
+    use SoftDeletes;
 
     public const ROLE_ADMIN = 0;
     public const ROLE_REGISTRAR = 2;

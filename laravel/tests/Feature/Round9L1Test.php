@@ -232,11 +232,13 @@ class Round9L1Test extends TestCase
     {
         [$sig, $new] = $this->specialtyTransferWithSignature($this->user(), $this->user());
 
-        $this->actingAs($this->admin())->delete("/admissions/{$new->id}")
+        // Phase 4 — Item 4: admission delete is step-up gated
+        $this->actingAs($this->admin())->withSession(['stepup.verified_at' => now()->getTimestamp()])
+            ->delete("/admissions/{$new->id}")
             ->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertNotNull($sig->fresh()->voided_at,
-            'hard-deleting the patient\'s last open episode must void the older episode\'s signature');
+            'soft-deleting the patient\'s last open episode must void the older episode\'s signature');
     }
 
     // ---- 6. duplicate-MRN repoint guard -----------------------------------------------------------
@@ -457,7 +459,9 @@ class Round9L1Test extends TestCase
             'medical_discharge_date' => now()->toDateString(), 'outcome' => 'Alive',
             'transfer_type' => 'discharge from ward']);
 
-        $this->actingAs($manager)->post("/admissions/{$a->id}/reverse-discharge")->assertForbidden();
+        // pass the step-up gate (Item 4) so the controller's admin-only check is what denies (403)
+        $this->actingAs($manager)->withSession(['stepup.verified_at' => now()->getTimestamp()])
+            ->post("/admissions/{$a->id}/reverse-discharge")->assertForbidden();
 
         $this->assertNotNull($a->fresh()->discharge_date, 'the discharge must stand');
     }

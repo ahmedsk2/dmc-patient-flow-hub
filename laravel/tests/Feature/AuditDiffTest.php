@@ -98,6 +98,7 @@ class AuditDiffTest extends TestCase
         $a = Admission::create(['patient_id' => $p->id, 'admit_date' => '2024-01-10',
             'current_location' => 'Ward', 'is_longterm' => 0, 'is_new_assignment' => 0]);
         AdmissionDiagnosis::create(['admission_id' => $a->id, 'seq' => 1, 'icd10_code' => 'A01']);
+        \Illuminate\Support\Facades\DB::table('icd10')->insert(['code' => 'A02', 'name' => 'Typhoid']);   // Phase 4 — Item 5: added code must exist
 
         $this->actingAs($admin)->post("/admissions/{$a->id}/modify", [
             'mrn' => '70000009', 'name' => 'Dx Pt', 'admit_date' => '2024-01-10', 'current_location' => 'Ward',

@@ -30,17 +30,18 @@ class DashboardController extends Controller
         $settings = Setting::current();
         $wardBeds = max(1, (int) ($settings->ward_beds ?? 50));   // licensed ward (non-ICU) beds — set in Control
 
-        $active = (int) DB::table('admissions')->whereNull('discharge_date')->count();
-        $activeIcu = (int) DB::table('admissions')->whereNull('discharge_date')->where('current_location', 'ICU')->count();
+        // Phase 4 — Item 1: every raw admissions/consultations analytic excludes soft-deleted rows.
+        $active = (int) DB::table('admissions')->whereNull('discharge_date')->whereNull('deleted_at')->count();
+        $activeIcu = (int) DB::table('admissions')->whereNull('discharge_date')->where('current_location', 'ICU')->whereNull('deleted_at')->count();
         $activeWard = $active - $activeIcu;
 
-        $admissionsToday = (int) DB::table('admissions')->whereDate('admit_date', $today)->whereRaw($this->nonIcu)->count();
-        $dischargesToday = (int) DB::table('admissions')->whereDate('discharge_date', $today)->whereRaw($this->nonIcu)->count();
-        $activeConsults = (int) DB::table('consultations')->whereNull('signoff_date')->count();
+        $admissionsToday = (int) DB::table('admissions')->whereDate('admit_date', $today)->whereRaw($this->nonIcu)->whereNull('deleted_at')->count();
+        $dischargesToday = (int) DB::table('admissions')->whereDate('discharge_date', $today)->whereRaw($this->nonIcu)->whereNull('deleted_at')->count();
+        $activeConsults = (int) DB::table('consultations')->whereNull('signoff_date')->whereNull('deleted_at')->count();
         // consultation donut = [signed-off in the last 24h, active] — legacy dashboard/1.php
         // (`signoff_date + INTERVAL 1 DAY >= CURDATE()`, i.e. yesterday + today) (J2-5)
-        $signed24h = (int) DB::table('consultations')->where('signoff_date', '>=', Carbon::yesterday()->toDateString())->count();
-        $deathsMonth = (int) DB::table('admissions')->where('outcome', 'Dead')->whereBetween('discharge_date', [$monthStart, $today])->count();
+        $signed24h = (int) DB::table('consultations')->where('signoff_date', '>=', Carbon::yesterday()->toDateString())->whereNull('deleted_at')->count();
+        $deathsMonth = (int) DB::table('admissions')->where('outcome', 'Dead')->whereBetween('discharge_date', [$monthStart, $today])->whereNull('deleted_at')->count();
 
         // ── Boarding (Phase 1, Item 1) ─────────────────────────────────────────────────────────
         // medically cleared but the bed is still occupied — the "Disch. still in" board badge
@@ -48,11 +49,11 @@ class DashboardController extends Controller
         // delay_days = DATEDIFF(today, medical_discharge_date) = days since clearance (NOT lengthOfStay,
         // which measures from admit). LIVE tier — never cached, must reflect the last action.
         $boardingCount = (int) DB::table('admissions')
-            ->whereNull('discharge_date')->whereNotNull('medical_discharge_date')->count();
+            ->whereNull('discharge_date')->whereNotNull('medical_discharge_date')->whereNull('deleted_at')->count();
         $boardingWorklist = DB::table('admissions as a')
             ->join('patients as p', 'p.id', '=', 'a.patient_id')
             ->leftJoin('users as u', 'u.id', '=', 'a.consultant_id')
-            ->whereNull('a.discharge_date')->whereNotNull('a.medical_discharge_date')
+            ->whereNull('a.discharge_date')->whereNotNull('a.medical_discharge_date')->whereNull('a.deleted_at')
             ->selectRaw('a.id, p.name, p.mrn, a.medical_discharge_date,
                          DATEDIFF(CURDATE(), a.medical_discharge_date) delay_days,
                          COALESCE(u.full_name, u.name) consultant')
@@ -67,7 +68,7 @@ class DashboardController extends Controller
         // like the legacy dashboard figure (J2-6)
         $avgLosMonth = round((float) (DB::table('admissions')
             ->whereBetween('discharge_date', [$monthStart, $today])->whereNotNull('admit_date')
-            ->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
+            ->whereRaw($this->nonIcu)->whereNull('deleted_at')->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
             ->selectRaw('AVG(DATEDIFF(discharge_date, admit_date)) v')->value('v') ?? 0), 2);
 
         // real bed occupancy: active WARD (non-ICU) patients ÷ licensed ward beds. True % may exceed
@@ -85,8 +86,8 @@ class DashboardController extends Controller
         // 31-point admissions-vs-discharges trend: today-30 .. today INCLUSIVE, like the legacy
         // 31-day loop (dashboard/1.php) — non-ICU (J2-2)
         $start30 = Carbon::today()->subDays(30)->toDateString();
-        $admBy = DB::table('admissions')->selectRaw('admit_date d, COUNT(*) c')->whereBetween('admit_date', [$start30, $today])->whereRaw($nonIcu)->groupBy('admit_date')->pluck('c', 'd');
-        $disBy = DB::table('admissions')->selectRaw('discharge_date d, COUNT(*) c')->whereBetween('discharge_date', [$start30, $today])->whereRaw($nonIcu)->groupBy('discharge_date')->pluck('c', 'd');
+        $admBy = DB::table('admissions')->selectRaw('admit_date d, COUNT(*) c')->whereBetween('admit_date', [$start30, $today])->whereRaw($nonIcu)->whereNull('deleted_at')->groupBy('admit_date')->pluck('c', 'd');
+        $disBy = DB::table('admissions')->selectRaw('discharge_date d, COUNT(*) c')->whereBetween('discharge_date', [$start30, $today])->whereRaw($nonIcu)->whereNull('deleted_at')->groupBy('discharge_date')->pluck('c', 'd');
         $trend = ['labels' => [], 'admissions' => [], 'discharges' => []];
         for ($i = 30; $i >= 0; $i--) {
             $d = Carbon::today()->subDays($i)->toDateString();
@@ -101,11 +102,11 @@ class DashboardController extends Controller
         $sixMonthsAgo = Carbon::today()->startOfMonth()->subMonths(5)->toDateString();
         $consByMonth = DB::table('consultations')
             ->selectRaw("DATE_FORMAT(consultation_date, '%Y-%m') ym, COUNT(*) c")
-            ->where('consultation_date', '>=', $sixMonthsAgo)
+            ->where('consultation_date', '>=', $sixMonthsAgo)->whereNull('deleted_at')
             ->groupBy('ym')->pluck('c', 'ym');
         $signedByMonth = DB::table('consultations')
             ->selectRaw("DATE_FORMAT(signoff_date, '%Y-%m') ym, COUNT(*) c")
-            ->where('signoff_date', '>=', $sixMonthsAgo)
+            ->where('signoff_date', '>=', $sixMonthsAgo)->whereNull('deleted_at')
             ->groupBy('ym')->pluck('c', 'ym');
 
         $cons = ['labels' => [], 'new' => [], 'signed' => []];
@@ -120,7 +121,7 @@ class DashboardController extends Controller
         // LOS distribution (discharged this year, non-ICU)
         $losRows = DB::table('admissions')->selectRaw('DATEDIFF(discharge_date, admit_date) los')
             ->whereNotNull('discharge_date')->whereNotNull('admit_date')->whereBetween('discharge_date', [$yearStart, $today])
-            ->whereRaw($nonIcu)->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')->pluck('los');
+            ->whereRaw($nonIcu)->whereNull('deleted_at')->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')->pluck('los');
         $losBuckets = ['0–2' => 0, '3–5' => 0, '6–10' => 0, '11–20' => 0, '21+' => 0];
         foreach ($losRows as $l) {
             $l = (int) $l;
@@ -135,7 +136,7 @@ class DashboardController extends Controller
                 SUM(CASE WHEN u.specialty_id = 1 AND a.is_longterm = 0 THEN 1 ELSE 0 END) hosp,
                 SUM(CASE WHEN (u.specialty_id <> 1 OR u.specialty_id IS NULL) AND a.is_longterm = 0 THEN 1 ELSE 0 END) subs,
                 SUM(CASE WHEN a.is_longterm = 1 THEN 1 ELSE 0 END) longterm")
-            ->whereNull('a.discharge_date')->whereRaw('(a.current_location <> "ICU" OR a.current_location IS NULL)')->first();
+            ->whereNull('a.discharge_date')->whereNull('a.deleted_at')->whereRaw('(a.current_location <> "ICU" OR a.current_location IS NULL)')->first();
 
         // census-donut headline 'Current patients: N (incl. M TB)' — the DONUT'S OWN population
         // (assigned non-ICU active), i.e. the sum of the mix slices, with its TB subset counted
@@ -143,7 +144,7 @@ class DashboardController extends Controller
         // query INNER JOINed members too). The Active Census KPI tile (kpis.census) stays all-active.
         $donutTotal = (int) (($mix->hosp ?? 0) + ($mix->subs ?? 0) + ($mix->longterm ?? 0));
         $donutTb = (int) DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
-            ->whereNull('a.discharge_date')->whereRaw('(a.current_location <> "ICU" OR a.current_location IS NULL)')
+            ->whereNull('a.discharge_date')->whereNull('a.deleted_at')->whereRaw('(a.current_location <> "ICU" OR a.current_location IS NULL)')
             ->whereExists(fn ($s) => $s->selectRaw('1')->from('admission_diagnoses as ad')
                 ->join('tb_diagnoses as tb', 'tb.icd10_code', '=', 'ad.icd10_code')
                 ->whereColumn('ad.admission_id', 'a.id'))->count();
@@ -156,7 +157,7 @@ class DashboardController extends Controller
         // the GROUP BY stays well-formed on only_full_group_by (MySQL/MariaDB) when listed explicitly.
         $perConsultant = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
             ->selectRaw('u.id consultant_id, u.specialty_id, COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
-            ->whereNull('a.discharge_date')->whereRaw('(a.current_location <> "ICU" OR a.current_location IS NULL)')
+            ->whereNull('a.discharge_date')->whereNull('a.deleted_at')->whereRaw('(a.current_location <> "ICU" OR a.current_location IS NULL)')
             ->groupByRaw('u.id, u.specialty_id, consultant')->orderByDesc('c')->limit(8)->get()
             ->map(fn ($r) => (object) ['id' => (int) $r->consultant_id, 'specialty_id' => (int) $r->specialty_id,
                 'name' => $r->consultant, 'c' => (int) $r->c]);
@@ -169,12 +170,13 @@ class DashboardController extends Controller
         $tbExists = "EXISTS (SELECT 1 FROM admission_diagnoses ad JOIN tb_diagnoses tb ON tb.icd10_code = ad.icd10_code WHERE ad.admission_id = a.id)";
         $newCutoff = now()->subDay();   // "New" = assigned within the last 24h (rolling)
         $consultantBoard = DB::table('users as u')
-            ->leftJoin('admissions as a', fn ($j) => $j->on('u.id', '=', 'a.consultant_id')->whereNull('a.discharge_date'))
+            ->leftJoin('admissions as a', fn ($j) => $j->on('u.id', '=', 'a.consultant_id')->whereNull('a.discharge_date')->whereNull('a.deleted_at'))
             ->where('u.active', 1)
+            ->whereNull('u.deleted_at')   // Phase 4 — Item 1: a soft-deleted consultant drops off the board
             ->where(fn ($w) => $w
                 ->where(fn ($w2) => $w2->where('u.on_service', 1)->where('u.role', \App\Models\User::ROLE_CONSULTANT))
                 ->orWhereExists(fn ($s) => $s->selectRaw('1')->from('admissions as ax')
-                    ->whereColumn('ax.consultant_id', 'u.id')->whereNull('ax.discharge_date')))
+                    ->whereColumn('ax.consultant_id', 'u.id')->whereNull('ax.discharge_date')->whereNull('ax.deleted_at')))
             ->selectRaw("u.id, COALESCE(u.full_name, u.name) consultant, u.on_service, u.specialty_id,
                 SUM(CASE WHEN a.id IS NOT NULL AND a.assigned_at >= ? THEN 1 ELSE 0 END) new,
                 SUM(CASE WHEN a.id IS NOT NULL AND (a.assigned_at IS NULL OR a.assigned_at < ?) THEN 1 ELSE 0 END) old,
@@ -199,11 +201,11 @@ class DashboardController extends Controller
         $since = Carbon::today()->subDay()->toDateString();
         $activeConsultant = fn ($q) => $q->where('u.role', \App\Models\User::ROLE_CONSULTANT)->where('u.active', 1);
         $adm24 = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
-            ->where('a.admit_date', '>=', $since)->whereRaw($nonIcu)->tap($activeConsultant)
+            ->where('a.admit_date', '>=', $since)->whereRaw($nonIcu)->whereNull('a.deleted_at')->tap($activeConsultant)
             ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
             ->groupBy('consultant')->pluck('c', 'consultant');
         $dis24 = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
-            ->where('a.discharge_date', '>=', $since)->whereRaw($nonIcu)->tap($activeConsultant)
+            ->where('a.discharge_date', '>=', $since)->whereRaw($nonIcu)->whereNull('a.deleted_at')->tap($activeConsultant)
             ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
             ->groupBy('consultant')->pluck('c', 'consultant');
         // every ON-SERVICE active consultant appears, zeros included — the legacy table was
@@ -220,10 +222,10 @@ class DashboardController extends Controller
 
         // year-to-date counter strip (non-ICU admissions/discharges, per docs/METRICS.md)
         $ytd = [
-            'admissions' => (int) DB::table('admissions')->whereBetween('admit_date', [$yearStart, $today])->whereRaw($nonIcu)->count(),
-            'discharges' => (int) DB::table('admissions')->whereBetween('discharge_date', [$yearStart, $today])->whereRaw($nonIcu)->count(),
-            'consultations' => (int) DB::table('consultations')->whereBetween('consultation_date', [$yearStart, $today])->count(),
-            'signoffs' => (int) DB::table('consultations')->whereBetween('signoff_date', [$yearStart, $today])->count(),
+            'admissions' => (int) DB::table('admissions')->whereBetween('admit_date', [$yearStart, $today])->whereRaw($nonIcu)->whereNull('deleted_at')->count(),
+            'discharges' => (int) DB::table('admissions')->whereBetween('discharge_date', [$yearStart, $today])->whereRaw($nonIcu)->whereNull('deleted_at')->count(),
+            'consultations' => (int) DB::table('consultations')->whereBetween('consultation_date', [$yearStart, $today])->whereNull('deleted_at')->count(),
+            'signoffs' => (int) DB::table('consultations')->whereBetween('signoff_date', [$yearStart, $today])->whereNull('deleted_at')->count(),
         ];
 
         // top 5 diagnoses for THIS calendar week-number across ALL years — the legacy card
@@ -233,7 +235,7 @@ class DashboardController extends Controller
         $topDxWeekNum = (int) DB::selectOne('SELECT WEEK(CURDATE()) wk')->wk;
         $topDxWeek = DB::table('admission_diagnoses as ad')->join('admissions as a', 'a.id', '=', 'ad.admission_id')
             ->leftJoin('icd10 as i', 'i.code', '=', 'ad.icd10_code')
-            ->whereRaw('WEEK(a.admit_date) = WEEK(CURDATE())')
+            ->whereRaw('WEEK(a.admit_date) = WEEK(CURDATE())')->whereNull('a.deleted_at')   // Phase 4 — Item 1
             ->selectRaw('ad.icd10_code code, MAX(i.name) name, COUNT(*) c')
             ->groupBy('ad.icd10_code')->orderByDesc('c')->limit(5)->get()
             ->map(fn ($r) => ['name' => $r->name ?: $r->code, 'count' => (int) $r->c]);
@@ -256,7 +258,7 @@ class DashboardController extends Controller
         $recent = DB::table('admissions as a')->join('patients as p', 'p.id', '=', 'a.patient_id')
             ->leftJoin('users as u', 'u.id', '=', 'a.consultant_id')
             ->selectRaw('p.name name, p.mrn mrn, a.admit_date admitted, a.current_location loc, COALESCE(u.full_name, u.name) consultant')
-            ->whereNull('a.discharge_date')->orderByDesc('a.id')->limit(8)->get();
+            ->whereNull('a.discharge_date')->whereNull('a.deleted_at')->orderByDesc('a.id')->limit(8)->get();
 
         // ── KPI period-over-period deltas (Phase 1, Item 2) ─────────────────────────────────────
         // {value, delta, direction} for the volatile KPIs. admissions/discharges reuse the in-memory
@@ -270,14 +272,14 @@ class DashboardController extends Controller
         $priorMonthStart = Carbon::today()->subMonthNoOverflow()->startOfMonth()->toDateString();
         $priorMonthEnd = Carbon::today()->subMonthNoOverflow()->endOfMonth()->toDateString();
         $deathsPrior = (int) DB::table('admissions')->where('outcome', 'Dead')
-            ->whereBetween('discharge_date', [$priorMonthStart, $priorMonthEnd])->count();
+            ->whereBetween('discharge_date', [$priorMonthStart, $priorMonthEnd])->whereNull('deleted_at')->count();
 
         // prior-week occupancy: point-in-time ward census exactly 7 days ago (single-query proxy for a
         // true rolling mean — clinically adequate, keeps the page fast). Promotable in Item 7 if needed.
         $priorWeekOccupancy = round((float) (DB::table('admissions')
             ->whereRaw('admit_date <= DATE_SUB(CURDATE(), INTERVAL 7 DAY)')
             ->whereRaw('(discharge_date IS NULL OR discharge_date > DATE_SUB(CURDATE(), INTERVAL 7 DAY))')
-            ->whereRaw($nonIcu)->count()) / $wardBeds * 100, 1);
+            ->whereRaw($nonIcu)->whereNull('deleted_at')->count()) / $wardBeds * 100, 1);
 
         $deltas = [
             'admissions' => [
@@ -333,6 +335,7 @@ class DashboardController extends Controller
                 ->join('admissions as prev', Admission::readmissionJoin($readmitWindow))
                 ->whereBetween('a.admit_date', [$yearStart, $today])
                 ->whereRaw('(a.current_location <> "ICU" OR a.current_location IS NULL)')
+                ->whereNull('a.deleted_at')->whereNull('prev.deleted_at')   // Phase 4 — Item 1
                 ->count();
             $readmitRate = round($readmitYtd / $ytd['admissions'] * 100, 1);
             if ($readmitRate >= $settings->alert_readmit_rate_pct) {
@@ -349,7 +352,7 @@ class DashboardController extends Controller
         $viewer = auth()->user();
         if ($viewer && (int) $viewer->role === User::ROLE_CONSULTANT) {
             $myId = $viewer->id;
-            $myActive = fn () => DB::table('admissions')->whereNull('discharge_date')->where('consultant_id', $myId);
+            $myActive = fn () => DB::table('admissions')->whereNull('discharge_date')->where('consultant_id', $myId)->whereNull('deleted_at');
             $myUnit = [
                 'total' => (int) $myActive()->count(),
                 'ward' => (int) $myActive()->whereRaw($nonIcu)->count(),
@@ -359,7 +362,7 @@ class DashboardController extends Controller
                 'signPending' => (int) DB::table('handover_signatures as hs')
                     ->where('hs.to_consultant_id', $myId)->whereNull('hs.signed_at')->whereNull('hs.voided_at')->count(),
                 'myConsults' => (int) DB::table('consultations')
-                    ->where('consultant_id', $myId)->whereNull('signoff_date')->count(),
+                    ->where('consultant_id', $myId)->whereNull('signoff_date')->whereNull('deleted_at')->count(),
             ];
         }
 

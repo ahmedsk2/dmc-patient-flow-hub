@@ -63,6 +63,7 @@ class Round5J1Test extends TestCase
     public function test_registry_style_modify_payload_saves(): void
     {
         \App\Models\Country::firstOrCreate(['name' => 'Saudi Arabia'], ['code' => 'SA']);
+        \Illuminate\Support\Facades\DB::table('icd10')->insert(['code' => 'J18.9', 'name' => 'Pneumonia']);   // Phase 4 — Item 5: code must exist
         $a = $this->admission(['admit_date' => '2026-06-01', 'admitted_from' => 'ER', 'current_location' => 'Ward'],
             Patient::create(['mrn' => '92000001', 'name' => 'Registry Edit', 'age' => 50, 'gender' => 'Male']));
 

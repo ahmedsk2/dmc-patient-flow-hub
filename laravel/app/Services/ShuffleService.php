@@ -54,7 +54,7 @@ class ShuffleService
                 WHERE ad.admission_id = admissions.id)';
             $wardActive = DB::table('admissions')->whereNull('discharge_date')->whereNotNull('consultant_id')
                 ->where(fn ($w) => $w->where('current_location', '<>', 'ICU')->orWhereNull('current_location'))
-                ->whereNull('medical_discharge_date');
+                ->whereNull('medical_discharge_date')->whereNull('deleted_at');   // Phase 4 — Item 1: live rows only
             $base = (clone $wardActive)
                 ->selectRaw('consultant_id, COUNT(*) c')->groupBy('consultant_id')->pluck('c', 'consultant_id')->all();
             // TB count per consultant (the slice excluded ONLY from a hospitalist's load)

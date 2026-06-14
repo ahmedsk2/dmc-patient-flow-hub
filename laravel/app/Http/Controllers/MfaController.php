@@ -122,10 +122,13 @@ class MfaController extends Controller
         if ($counter !== null) {
             // replay guard: a code (time-step) accepted once cannot be reused within its window
             if ($user->mfa_last_counter !== null && $counter <= $user->mfa_last_counter) {
+                $this->auditFailed($user, 'replayed_mfa_code', $attempts);
                 throw ValidationException::withMessages(['code' => 'That code was already used — wait for the next one.']);
             }
             $user->update(['mfa_last_counter' => $counter]);
         } elseif (! $this->consumeRecoveryCode($user, $input)) {
+            // Phase 4 — Item 3: a bad MFA code is a login.failed (identity is already known here)
+            $this->auditFailed($user, 'bad_mfa_code', $attempts);
             throw ValidationException::withMessages(['code' => 'Invalid authentication code.']);
         }
 
@@ -134,7 +137,16 @@ class MfaController extends Controller
         Auth::login($user, false);
         $request->session()->forget(['mfa.pending.id', 'mfa.pending.at', 'mfa.pending.attempts', 'mfa.pending.remember']);
         $request->session()->regenerate();
-        $this->audit($user, 'login.mfa');
+        // Phase 4 — Item 2: stamp the session-start clock (the Auth::login(.., false) behavior is preserved)
+        $request->session()->put('session_started_at', now()->getTimestamp());
+        $request->session()->put('last_activity_at', now()->getTimestamp());
+        // Phase 4 — Item 3: a successful MFA login is a login.success (mfa:true) — consistent with
+        // the password-only path so the Security panel sees both kinds of successful sign-in.
+        AuditLog::create([
+            'actor_id' => $user->id, 'actor_name' => $user->name, 'action' => 'login.success',
+            'entity_type' => 'user', 'entity_id' => (string) $user->id,
+            'details' => ['mfa' => true], 'ip' => request()->ip(),
+        ]);
 
         return redirect()->intended(route('dashboard'));
     }
@@ -158,6 +170,16 @@ class MfaController extends Controller
         AuditLog::create([
             'actor_id' => $user->id, 'actor_name' => $user->name, 'action' => $action,
             'entity_type' => 'user', 'entity_id' => (string) $user->id, 'ip' => request()->ip(),
+        ]);
+    }
+
+    /** Phase 4 — Item 3: a failed MFA challenge — identity is known, so actor_id is populated. */
+    private function auditFailed(User $user, string $reason, int $attempts): void
+    {
+        AuditLog::create([
+            'actor_id' => $user->id, 'actor_name' => $user->name, 'action' => 'login.failed',
+            'entity_type' => 'user', 'entity_id' => (string) $user->id,
+            'details' => ['reason' => $reason, 'attempts' => $attempts], 'ip' => request()->ip(),
         ]);
     }
 }

@@ -78,14 +78,16 @@ class WaveBTest extends TestCase
     public function test_reverse_discharge_blocked_when_not_same_day(): void
     {
         // H2/B4: tightened from 48h to legacy SAME-DAY undo (48discharge.php)
+        // Phase 4 — Item 4: reverse-discharge is step-up gated — provide a fresh window throughout
+        $stepup = ['stepup.verified_at' => now()->getTimestamp()];
         $old = $this->admission(['admit_date' => '2024-01-01', 'discharge_date' => '2024-01-10',
             'outcome' => 'Alive', 'transfer_type' => 'discharge from ward']);
-        $this->actingAs($this->admin())->post("/admissions/{$old->id}/reverse-discharge")->assertRedirect();
+        $this->actingAs($this->admin())->withSession($stepup)->post("/admissions/{$old->id}/reverse-discharge")->assertRedirect();
         $this->assertNotNull($old->fresh()->discharge_date, 'months-old discharges must not be silently reopened');
 
         $recent = $this->admission(['discharge_date' => now()->toDateString(),
             'outcome' => 'Alive', 'transfer_type' => 'discharge from ward']);
-        $this->actingAs($this->admin())->post("/admissions/{$recent->id}/reverse-discharge")->assertRedirect();
+        $this->actingAs($this->admin())->withSession($stepup)->post("/admissions/{$recent->id}/reverse-discharge")->assertRedirect();
         $this->assertNull($recent->fresh()->discharge_date, 'same-day discharges remain reversible');
     }
 
