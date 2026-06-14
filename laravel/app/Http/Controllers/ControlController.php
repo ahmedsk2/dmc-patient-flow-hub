@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Admission;
 use App\Models\ConsultationReason;
+use App\Models\ReportRecipient;
 use App\Models\Setting;
 use App\Models\Specialty;
 use App\Models\User;
@@ -45,6 +46,8 @@ class ControlController extends Controller
                 ->orderByDesc('sc.id')->limit(25)
                 ->selectRaw('sc.field, sc.old_value, sc.new_value, COALESCE(u.full_name, u.name) changed_by, sc.created_at')
                 ->get(),
+            // Phase 3 — §3.3: scheduled monthly-report recipients (merged into the existing page)
+            'reportRecipients' => ReportRecipient::orderByDesc('created_at')->get(['id', 'email', 'active']),
             'counts' => [
                 'users' => User::count(),
                 'active_users' => User::where('active', 1)->count(),
@@ -208,5 +211,27 @@ class ControlController extends Controller
         Audit::log('reason.add', 'consultation_reason', null, ['name' => $data['name']]);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultation indication added.']);
+    }
+
+    /** Phase 3 — §3.3: add a monthly-report email recipient. */
+    public function addReportRecipient(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'email' => ['required', 'email', 'max:255', 'unique:report_recipients,email'],
+        ]);
+        $recipient = ReportRecipient::create(['email' => $data['email'], 'active' => true, 'added_by_id' => Auth::id()]);
+        Audit::log('report_recipient.add', 'report_recipient', (string) $recipient->id, ['email' => $data['email']]);
+
+        return back()->with('flash', ['type' => 'success', 'message' => "Added {$data['email']} to monthly report recipients."]);
+    }
+
+    /** Phase 3 — §3.3: remove a monthly-report email recipient. */
+    public function removeReportRecipient(ReportRecipient $recipient): RedirectResponse
+    {
+        $email = $recipient->email;
+        Audit::log('report_recipient.remove', 'report_recipient', (string) $recipient->id, ['email' => $email]);
+        $recipient->delete();
+
+        return back()->with('flash', ['type' => 'success', 'message' => "Removed {$email} from monthly report recipients."]);
     }
 }

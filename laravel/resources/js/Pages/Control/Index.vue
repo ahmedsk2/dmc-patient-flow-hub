@@ -6,7 +6,7 @@ import { useConfirm } from '@/composables/useConfirm';
 
 const { ask } = useConfirm();
 
-const props = defineProps({ settings: Object, users: Object, filters: Object, roles: Object, counts: Object, specialties: Array, reasons: Array, settingHistory: Array });
+const props = defineProps({ settings: Object, users: Object, filters: Object, roles: Object, counts: Object, specialties: Array, reasons: Array, settingHistory: Array, reportRecipients: { type: Array, default: () => [] } });
 
 const fieldLabels = {
     min_hospitalist: 'Min hospitalist census', max_hospitalist: 'Max hospitalist census',
@@ -77,6 +77,11 @@ const specForm = useForm({ name: '', is_subspecialty: true, is_external: false }
 const submitSpec = () => specForm.post('/control/specialties', { preserveScroll: true, onSuccess: () => specForm.reset() });
 const reasonForm = useForm({ name: '' });
 const submitReason = () => reasonForm.post('/control/reasons', { preserveScroll: true, onSuccess: () => reasonForm.reset() });
+
+// §3.3: monthly-report email recipients
+const recipientForm = useForm({ email: '' });
+const submitRecipient = () => recipientForm.post('/control/report-recipients', { preserveScroll: true, onSuccess: () => recipientForm.reset() });
+const removeRecipient = async (r) => { if (await ask('Remove recipient', `Stop sending the monthly report to ${r.email}?`, 'neutral')) router.delete(`/control/report-recipients/${r.id}`, { preserveScroll: true }); };
 
 const countCards = [
     ['Users', 'users'], ['Active users', 'active_users'], ['Patients', 'patients'],
@@ -210,6 +215,24 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
                 <h3 class="mb-3 font-bold text-ink-800">Consultation indications</h3>
                 <div class="mb-4 flex max-h-48 flex-wrap gap-2 overflow-auto"><span v-for="r in reasons" :key="r.id" class="rounded-full bg-app px-3 py-1 text-sm text-ink-600">{{ r.name }}</span></div>
                 <form @submit.prevent="submitReason" class="flex gap-2"><input v-model="reasonForm.name" :class="field" placeholder="New indication" /><button :disabled="reasonForm.processing || !reasonForm.name" class="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Add</button></form>
+            </div>
+
+            <!-- §3.3: monthly-report email recipients -->
+            <div class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line lg:col-span-2">
+                <h3 class="mb-1 font-bold text-ink-800">Monthly report recipients</h3>
+                <p class="mb-3 text-sm text-ink-400">Each address receives the prior month's activity booklet (PDF) automatically on the 1st of the month.</p>
+                <ul v-if="reportRecipients.length" class="mb-4 divide-y divide-line rounded-xl ring-1 ring-line">
+                    <li v-for="r in reportRecipients" :key="r.id" class="flex items-center justify-between gap-2 px-4 py-2.5 text-sm">
+                        <span class="text-ink-700">{{ r.email }}<span v-if="!r.active" class="ml-2 rounded-full bg-ink-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-ink-500">inactive</span></span>
+                        <button @click="removeRecipient(r)" class="rounded-lg px-3 py-1 text-xs font-semibold text-danger-600 hover:bg-danger-50">Remove</button>
+                    </li>
+                </ul>
+                <p v-else class="mb-4 text-sm text-ink-300">No recipients yet — the scheduled email will send to no one.</p>
+                <form @submit.prevent="submitRecipient" class="flex gap-2">
+                    <input v-model="recipientForm.email" type="email" :class="field" placeholder="name@dmc-im.com" />
+                    <button :disabled="recipientForm.processing || !recipientForm.email" class="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Add</button>
+                </form>
+                <p v-if="recipientForm.errors.email" class="mt-1 text-xs text-danger-600">{{ recipientForm.errors.email }}</p>
             </div>
         </div>
 

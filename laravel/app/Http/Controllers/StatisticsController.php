@@ -2,11 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StatisticsExportRequest;
 use App\Models\Admission;
 use App\Models\ConsultationReason;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use OpenSpout\Common\Entity\Row;
+use OpenSpout\Writer\XLSX\Writer as XlsxWriter;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -17,6 +23,8 @@ use Inertia\Response;
  */
 class StatisticsController extends Controller
 {
+    use \App\Http\Controllers\Concerns\MetricQueries;
+
     private string $nonIcu = Admission::NON_ICU_SQL;
 
     public function index(Request $request): Response
@@ -26,6 +34,8 @@ class StatisticsController extends Controller
             'to' => ['nullable', 'date'],
             'interval' => ['nullable', 'in:day,month,quarter'],
             'consultant_id' => ['nullable', 'integer', 'exists:users,id'],
+            // Phase 3 — §3.5: year-over-year / prior-period overlay (null when absent)
+            'compare' => ['nullable', 'in:prior_year,prior_period'],
         ]);
         $to = isset($data['to']) ? Carbon::parse($data['to']) : Carbon::today();
         $from = isset($data['from']) ? Carbon::parse($data['from']) : $to->copy()->startOfYear();
@@ -96,16 +106,9 @@ class StatisticsController extends Controller
             'signoffs' => array_map(fn ($k) => (int) ($signBy[$k] ?? 0), $keys),
         ];
         // grid splits deaths into ICU/ward (legacy KPI grid) — the headline 'deaths' KPI and the
-        // monthly chart keep the single reconciled all-locations figure above
-        $kpiGrid = array_map(fn ($b) => [
-            'label' => $b['label'],
-            'admissions' => (int) ($admBy[$b['key']] ?? 0), 'discharges' => (int) ($disBy[$b['key']] ?? 0),
-            'icu' => (int) ($icuBy[$b['key']] ?? 0), 'transToIcu' => (int) ($icuTransBy[$b['key']] ?? 0),
-            'icuDeaths' => (int) ($icuDeathBy[$b['key']] ?? 0), 'wardDeaths' => (int) ($wardDeathBy[$b['key']] ?? 0),
-            'readmits' => (int) ($readmitBy[$b['key']] ?? 0),
-            'consultations' => (int) ($consBy[$b['key']] ?? 0), 'signoffs' => (int) ($signBy[$b['key']] ?? 0),
-            'avgLos' => (float) ($losBy[$b['key']] ?? 0),
-        ], $buckets);
+        // monthly chart keep the single reconciled all-locations figure above. Extracted to
+        // buildKpiGrid so /statistics/export emits the SAME rows (the §3.8 "can't drift" contract).
+        $kpiGrid = $this->buildKpiGrid($buckets, $admBy, $disBy, $icuBy, $icuTransBy, $icuDeathBy, $wardDeathBy, $readmitBy, $consBy, $signBy, $losBy);
 
         // discharge destinations (range) for a donut — overall uses the SHARED legacy 7-bucket
         // split over non-ICU closed episodes (Admission::bucketizeDestinations, same as Reports);
@@ -248,6 +251,10 @@ class StatisticsController extends Controller
             ? null
             : $this->physician((int) $data['consultant_id'], $f, $t, $readmitWindow, $interval, $buckets);
 
+        // Phase 3 — §3.5: optional year-over-year / prior-period overlay. Reuses the SAME
+        // seriesBy / nonIcu helpers as the primary period, so the comparison series cannot drift.
+        $compareData = $this->compareBlock($data['compare'] ?? null, $from, $to, $interval);
+
         return Inertia::render('Statistics/Index', [
             'range' => ['from' => $f, 'to' => $t],
             'kpis' => [
@@ -272,7 +279,75 @@ class StatisticsController extends Controller
             // queryable over historical ranges, like the registry filter
             'consultants' => \App\Models\User::consultantOptions(activeOnly: false),
             'physician' => $physician,
+            'compareData' => $compareData,
         ]);
+    }
+
+    /**
+     * Phase 3 — §3.4: the KPI-grid row map, extracted so /statistics/export emits byte-identical
+     * rows (the §3.8 "can't drift" contract — export and screen share this ONE construction).
+     */
+    private function buildKpiGrid(array $buckets, array $admBy, array $disBy, array $icuBy, array $icuTransBy, array $icuDeathBy, array $wardDeathBy, array $readmitBy, array $consBy, array $signBy, array $losBy): array
+    {
+        return array_map(fn ($b) => [
+            'label' => $b['label'],
+            'admissions' => (int) ($admBy[$b['key']] ?? 0), 'discharges' => (int) ($disBy[$b['key']] ?? 0),
+            'icu' => (int) ($icuBy[$b['key']] ?? 0), 'transToIcu' => (int) ($icuTransBy[$b['key']] ?? 0),
+            'icuDeaths' => (int) ($icuDeathBy[$b['key']] ?? 0), 'wardDeaths' => (int) ($wardDeathBy[$b['key']] ?? 0),
+            'readmits' => (int) ($readmitBy[$b['key']] ?? 0),
+            'consultations' => (int) ($consBy[$b['key']] ?? 0), 'signoffs' => (int) ($signBy[$b['key']] ?? 0),
+            'avgLos' => (float) ($losBy[$b['key']] ?? 0),
+        ], $buckets);
+    }
+
+    /**
+     * Phase 3 — §3.5: the comparison data block (null when $compare is absent). Derives the
+     * comparison range (same calendar dates a year earlier, or the immediately-preceding
+     * equal-length window) and rebuilds the 3 chart series + 5 headline KPIs through the SAME
+     * seriesBy / nonIcu helpers used for the primary period — guarded by YoyComparisonTest.
+     */
+    private function compareBlock(?string $compare, Carbon $from, Carbon $to, string $interval): ?array
+    {
+        if (! $compare) {
+            return null;
+        }
+
+        $span = $from->diffInDays($to);
+        if ($compare === 'prior_year') {
+            $cf = $from->copy()->subYear()->toDateString();
+            $ct = $to->copy()->subYear()->toDateString();
+        } else { // prior_period: equal-length window immediately before $from
+            $cf = $from->copy()->subDays($span + 1)->toDateString();
+            $ct = $from->copy()->subDay()->toDateString();
+        }
+
+        $cBuckets = $this->buckets(Carbon::parse($cf), Carbon::parse($ct), $interval);
+        $cKeys = array_column($cBuckets, 'key');
+        $cAdm = $this->seriesBy('admissions', 'admit_date', $cf, $ct, $interval, $this->nonIcu);
+        $cDis = $this->seriesBy('admissions', 'discharge_date', $cf, $ct, $interval, $this->nonIcu);
+        $cDeath = $this->seriesBy('admissions', 'discharge_date', $cf, $ct, $interval, "outcome = 'Dead'");
+
+        $cAdmissions = (int) DB::table('admissions')->whereBetween('admit_date', [$cf, $ct])->whereRaw($this->nonIcu)->count();
+        $cDischarges = (int) DB::table('admissions')->whereBetween('discharge_date', [$cf, $ct])->whereRaw($this->nonIcu)->count();
+        $cDeaths = (int) DB::table('admissions')->where('outcome', 'Dead')->whereBetween('discharge_date', [$cf, $ct])->count();
+        $cAvgLos = round((float) (DB::table('admissions')->whereBetween('discharge_date', [$cf, $ct])->whereNotNull('admit_date')
+            ->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
+            ->avg(DB::raw('DATEDIFF(discharge_date, admit_date)')) ?? 0), 1);
+
+        return [
+            'labels' => array_column($cBuckets, 'label'),
+            'admissions' => array_map(fn ($k) => (int) ($cAdm[$k] ?? 0), $cKeys),
+            'discharges' => array_map(fn ($k) => (int) ($cDis[$k] ?? 0), $cKeys),
+            'deaths' => array_map(fn ($k) => (int) ($cDeath[$k] ?? 0), $cKeys),
+            'kpis' => [
+                'admissions' => $cAdmissions,
+                'discharges' => $cDischarges,
+                'deaths' => $cDeaths,
+                'mortalityRate' => $cDischarges > 0 ? round($cDeaths / $cDischarges * 100, 1) : 0.0,
+                'avgLos' => $cAvgLos,
+            ],
+            'range' => ['from' => $cf, 'to' => $ct],
+        ];
     }
 
     /**
@@ -280,7 +355,7 @@ class StatisticsController extends Controller
      * episodes, top-5 diagnoses, the headline KPI formulas scoped to one consultant, and a
      * bucketed 4-series (admissions/discharges/consultations/sign-offs) over the range.
      */
-    private function physician(int $consultantId, string $f, string $t, int $readmitWindow, string $interval, array $buckets): array
+    public function physician(int $consultantId, string $f, string $t, int $readmitWindow, string $interval, array $buckets): array
     {
         $u = \App\Models\User::findOrFail($consultantId);
 
@@ -379,37 +454,166 @@ class StatisticsController extends Controller
         return \App\Models\Admission::readmissionJoin($window);
     }
 
-    /** SQL bucket-key expression for the chosen interval (sargable enough; grouped over a bounded range). */
-    private function keyExpr(string $col, string $interval): string
+    /* ----------------------------- Phase 3 — §3.4 exports ----------------------------- */
+
+    /**
+     * Parse + clamp the export filter range identically to index() (the FormRequest already
+     * validated the shapes). Returns [from Carbon, to Carbon, $f, $t, interval, readmitWindow].
+     */
+    private function exportRange(StatisticsExportRequest $request): array
     {
-        return match ($interval) {
-            'day' => "DATE($col)",
-            'quarter' => "CONCAT(YEAR($col), '-Q', QUARTER($col))",
-            default => "DATE_FORMAT($col, '%Y-%m')",
-        };
+        $data = $request->validated();
+        $to = isset($data['to']) ? Carbon::parse($data['to']) : Carbon::today();
+        $from = isset($data['from']) ? Carbon::parse($data['from']) : $to->copy()->startOfYear();
+        if ($from->gt($to)) { [$from, $to] = [$to, $from]; }
+        $interval = $data['interval'] ?? 'month';
+        $window = max(0, (int) (\App\Models\Setting::current()->readmission_window_days ?? 3));
+
+        return [$from, $to, $from->toDateString(), $to->toDateString(), $interval, $window];
     }
 
-    private function seriesBy(string $table, string $col, string $f, string $t, string $interval, string $where): array
+    /**
+     * The three export tables (KPI grid, per-consultant, interval series). Routes the grid through
+     * the SHARED buildKpiGrid + the SAME query methods as index() — never re-deriving a metric, so
+     * the exported figures track the screen exactly (the §3.8 drift contract).
+     */
+    private function gatherExportTables(string $f, string $t, string $interval, int $window): array
     {
-        return DB::table($table)->whereBetween($col, [$f, $t])->whereRaw($where)
-            ->selectRaw($this->keyExpr($col, $interval) . ' k, COUNT(*) c')->groupBy('k')->pluck('c', 'k')->all();
+        $buckets = $this->buckets(Carbon::parse($f), Carbon::parse($t), $interval);
+        $admBy = $this->seriesBy('admissions', 'admit_date', $f, $t, $interval, $this->nonIcu);
+        $disBy = $this->seriesBy('admissions', 'discharge_date', $f, $t, $interval, $this->nonIcu);
+        $icuBy = $this->seriesBy('admissions', 'admit_date', $f, $t, $interval, "current_location = 'ICU'");
+        $icuTransBy = $this->seriesBy('admissions', 'discharge_date', $f, $t, $interval, "discharge_to = 'Intensive Care (ICU)'");
+        $icuDeathBy = $this->seriesBy('admissions', 'discharge_date', $f, $t, $interval, "outcome = 'Dead' AND current_location = 'ICU'");
+        $wardDeathBy = $this->seriesBy('admissions', 'discharge_date', $f, $t, $interval, "outcome = 'Dead' AND {$this->nonIcu}");
+        $consBy = $this->seriesBy('consultations', 'consultation_date', $f, $t, $interval, '1=1');
+        $signBy = $this->seriesBy('consultations', 'signoff_date', $f, $t, $interval, '1=1');
+        $deathBy = $this->seriesBy('admissions', 'discharge_date', $f, $t, $interval, "outcome = 'Dead'");
+        $readmitBy = DB::table('admissions as a')->join('admissions as prev', $this->readmissionJoin($window))
+            ->whereBetween('a.admit_date', [$f, $t])
+            ->selectRaw($this->keyExpr('a.admit_date', $interval) . ' k, COUNT(DISTINCT a.id) c')
+            ->groupBy('k')->pluck('c', 'k')->all();
+        $losBy = DB::table('admissions')->whereBetween('discharge_date', [$f, $t])->whereNotNull('admit_date')
+            ->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
+            ->selectRaw($this->keyExpr('discharge_date', $interval) . ' k, ROUND(AVG(DATEDIFF(discharge_date, admit_date)), 1) los')
+            ->groupBy('k')->pluck('los', 'k')->all();
+
+        $kpiGrid = $this->buildKpiGrid($buckets, $admBy, $disBy, $icuBy, $icuTransBy, $icuDeathBy, $wardDeathBy, $readmitBy, $consBy, $signBy, $losBy);
+
+        // interval series (Period | Adm | Disch | Deaths | Consults | Sign-offs)
+        $series = array_map(fn ($b) => [
+            'label' => $b['label'],
+            'admissions' => (int) ($admBy[$b['key']] ?? 0), 'discharges' => (int) ($disBy[$b['key']] ?? 0),
+            'deaths' => (int) ($deathBy[$b['key']] ?? 0),
+            'consultations' => (int) ($consBy[$b['key']] ?? 0), 'signoffs' => (int) ($signBy[$b['key']] ?? 0),
+        ], $buckets);
+
+        // per-consultant table — the SAME grouped queries index() uses (admissions/LOS/readmits/
+        // consultations/sign-offs over the range). Built compactly here, identical predicates.
+        $admByCons = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
+            ->whereBetween('a.admit_date', [$f, $t])->whereRaw($this->nonIcu)
+            ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')->groupBy('consultant')->pluck('c', 'consultant')->all();
+        $disByCons = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
+            ->whereBetween('a.discharge_date', [$f, $t])->whereRaw($this->nonIcu)
+            ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')->groupBy('consultant')->pluck('c', 'consultant')->all();
+        $losByCons = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
+            ->whereBetween('a.discharge_date', [$f, $t])->whereNotNull('a.admit_date')
+            ->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(a.discharge_date, a.admit_date) >= 0')
+            ->selectRaw('COALESCE(u.full_name, u.name) consultant, ROUND(AVG(DATEDIFF(a.discharge_date, a.admit_date)), 1) los')
+            ->groupBy('consultant')->pluck('los', 'consultant')->all();
+        $consByCons = DB::table('consultations as co')->join('users as u', 'u.id', '=', 'co.consultant_id')
+            ->whereBetween('co.consultation_date', [$f, $t])
+            ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')->groupBy('consultant')->pluck('c', 'consultant')->all();
+        $signByCons = DB::table('consultations as co')->join('users as u', 'u.id', '=', 'co.consultant_id')
+            ->whereBetween('co.signoff_date', [$f, $t])
+            ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')->groupBy('consultant')->pluck('c', 'consultant')->all();
+        $readmitByCons = DB::table('admissions as a')->join('admissions as prev', $this->readmissionJoin($window))
+            ->join('users as u', 'u.id', '=', 'prev.consultant_id')->whereBetween('a.admit_date', [$f, $t])
+            ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(DISTINCT a.id) c')->groupBy('consultant')->pluck('c', 'consultant')->all();
+        $perConsultant = collect(array_keys($admByCons))->merge(array_keys($disByCons))->merge(array_keys($losByCons))
+            ->merge(array_keys($consByCons))->merge(array_keys($signByCons))->merge(array_keys($readmitByCons))->unique()
+            ->map(fn ($name) => [
+                'name' => $name,
+                'admissions' => (int) ($admByCons[$name] ?? 0),
+                'discharges' => (int) ($disByCons[$name] ?? 0),
+                'avgLos' => (float) ($losByCons[$name] ?? 0),
+                'readmits' => (int) ($readmitByCons[$name] ?? 0),
+                'consultations' => (int) ($consByCons[$name] ?? 0),
+                'signoffs' => (int) ($signByCons[$name] ?? 0),
+            ])->sortByDesc('admissions')->values();
+
+        return ['kpiGrid' => $kpiGrid, 'series' => $series, 'perConsultant' => $perConsultant];
     }
 
-    /** Ordered [{key,label}] buckets spanning [from,to] at the chosen interval. */
-    private function buckets(Carbon $from, Carbon $to, string $interval): array
+    /**
+     * Multi-sheet XLSX of the currently-filtered statistics (openspout v5 supports named sheets).
+     * Reuses the openspout writer pattern from RegistryController and the EXACT query methods —
+     * the KPI-grid sheet is the §3.8 "export == index" drift contract.
+     */
+    public function exportXlsx(StatisticsExportRequest $request): BinaryFileResponse
     {
-        $out = [];
-        if ($interval === 'day') {
-            $c = $from->copy()->startOfDay();
-            while ($c->lte($to) && count($out) <= 370) { $out[] = ['key' => $c->toDateString(), 'label' => $c->format('d M')]; $c->addDay(); }
-        } elseif ($interval === 'quarter') {
-            $c = $from->copy()->firstOfQuarter();
-            while ($c->lte($to)) { $out[] = ['key' => $c->year . '-Q' . $c->quarter, 'label' => 'Q' . $c->quarter . ' ' . $c->year]; $c->addQuarter(); }
-        } else {
-            $c = $from->copy()->startOfMonth();
-            while ($c->lte($to)) { $out[] = ['key' => $c->format('Y-m'), 'label' => $c->format('M y')]; $c->addMonth(); }
+        [, , $f, $t, $interval, $window] = $this->exportRange($request);
+        $tables = $this->gatherExportTables($f, $t, $interval, $window);
+
+        $tmp = tempnam(sys_get_temp_dir(), 'stat') . '.xlsx';
+        $writer = new XlsxWriter();
+        $writer->openToFile($tmp);
+
+        // Sheet 1 — KPI grid
+        $writer->getCurrentSheet()->setName('KPI Grid');
+        $writer->addRow(Row::fromValues(['Period', 'Adm', 'Disch', 'ICU adm', '→ICU', 'ICU deaths', 'Ward deaths', 'Readmits', 'Consults', 'Sign-offs', 'Avg LOS']));
+        foreach ($tables['kpiGrid'] as $r) {
+            $writer->addRow(Row::fromValues([$r['label'], $r['admissions'], $r['discharges'], $r['icu'], $r['transToIcu'],
+                $r['icuDeaths'], $r['wardDeaths'], $r['readmits'], $r['consultations'], $r['signoffs'], $r['avgLos']]));
         }
 
-        return $out;
+        // Sheet 2 — per consultant
+        $writer->addNewSheetAndMakeItCurrent()->setName('Per Consultant');
+        $writer->addRow(Row::fromValues(['Consultant', 'Admissions', 'Discharges', 'Avg LOS', 'Readmits', 'Consultations', 'Sign-offs']));
+        foreach ($tables['perConsultant'] as $r) {
+            $writer->addRow(Row::fromValues([$r['name'], $r['admissions'], $r['discharges'], $r['avgLos'], $r['readmits'], $r['consultations'], $r['signoffs']]));
+        }
+
+        // Sheet 3 — interval series
+        $writer->addNewSheetAndMakeItCurrent()->setName('Interval Series');
+        $writer->addRow(Row::fromValues(['Period', 'Admissions', 'Discharges', 'Deaths', 'Consultations', 'Sign-offs']));
+        foreach ($tables['series'] as $r) {
+            $writer->addRow(Row::fromValues([$r['label'], $r['admissions'], $r['discharges'], $r['deaths'], $r['consultations'], $r['signoffs']]));
+        }
+
+        $writer->close();
+
+        return response()->download($tmp, "dmc-statistics-{$f}-{$t}.xlsx")->deleteFileAfterSend();
+    }
+
+    /** Printable A4-landscape PDF of the currently-filtered statistics (KPI cards + grid + per-consultant). */
+    public function exportPdf(StatisticsExportRequest $request): SymfonyResponse
+    {
+        [, , $f, $t, $interval, $window] = $this->exportRange($request);
+        $tables = $this->gatherExportTables($f, $t, $interval, $window);
+
+        // headline KPI tiles — same reconciled formulas as index()'s $kpis block
+        $kpis = [
+            'admissions' => (int) DB::table('admissions')->whereBetween('admit_date', [$f, $t])->whereRaw($this->nonIcu)->count(),
+            'discharges' => (int) DB::table('admissions')->whereBetween('discharge_date', [$f, $t])->whereRaw($this->nonIcu)->count(),
+            'deaths' => (int) DB::table('admissions')->where('outcome', 'Dead')->whereBetween('discharge_date', [$f, $t])->count(),
+            'icuAdmissions' => (int) DB::table('admissions')->whereBetween('admit_date', [$f, $t])->where('current_location', 'ICU')->count(),
+            'consultations' => (int) DB::table('consultations')->whereBetween('consultation_date', [$f, $t])->count(),
+            'signoffs' => (int) DB::table('consultations')->whereBetween('signoff_date', [$f, $t])->count(),
+            'avgLos' => round((float) (DB::table('admissions')->whereBetween('discharge_date', [$f, $t])->whereNotNull('admit_date')
+                ->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
+                ->avg(DB::raw('DATEDIFF(discharge_date, admit_date)')) ?? 0), 1),
+            'readmissions' => (int) DB::table('admissions as a')->join('admissions as prev', $this->readmissionJoin($window))
+                ->whereBetween('a.admit_date', [$f, $t])->distinct()->count('a.id'),
+        ];
+        $kpis['mortalityRate'] = $kpis['discharges'] > 0 ? round($kpis['deaths'] / $kpis['discharges'] * 100, 1) : 0.0;
+
+        $pdf = Pdf::loadView('reports.statistics-pdf', [
+            'from' => $f, 'to' => $t, 'interval' => $interval, 'readmitWindow' => $window,
+            'kpis' => $kpis, 'kpiGrid' => $tables['kpiGrid'], 'perConsultant' => $tables['perConsultant'],
+            'generatedAt' => now()->format('D, d M Y · H:i'),
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download("dmc-statistics-{$f}-{$t}.pdf");
     }
 }

@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
@@ -9,6 +9,12 @@ const month = ref(props.month);
 const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const change = () => router.get('/reports/monthly', { year: year.value, month: month.value }, { preserveState: true });
 const print = () => window.print();
+
+// §3.6: offer a queued (background) generation path for the heavy current-year full booklet
+// (12-month × per-day chart data). Client heuristic: current year and >6 months elapsed.
+const now = new Date();
+const heavyBooklet = computed(() => Number(year.value) === now.getFullYear() && now.getMonth() >= 6);
+const generateAsync = () => router.get('/reports/monthly/pdf', { year: year.value, async: 1 }, { preserveState: true, preserveScroll: true });
 </script>
 
 <template>
@@ -22,6 +28,8 @@ const print = () => window.print();
                 <option v-for="y in availableYears" :key="y" :value="y">{{ y }}</option>
             </select>
             <a :href="`/reports/monthly/pdf?year=${year}&month=${month}`" class="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-700">Download PDF</a>
+            <!-- §3.6: queue the heavy full-year booklet and get notified when ready -->
+            <button v-if="heavyBooklet" @click="generateAsync" class="inline-flex items-center gap-2 rounded-xl bg-card px-4 py-2 text-sm font-semibold text-brand-700 shadow ring-1 ring-brand-200 transition hover:bg-brand-50" title="Generate the full-year booklet in the background and notify when ready">Generate in background</button>
             <button @click="print" class="inline-flex items-center gap-2 rounded-xl bg-card px-4 py-2 text-sm font-semibold text-ink-600 shadow ring-1 ring-ink-200 transition hover:bg-ink-50">Print</button>
             <Link href="/reports" class="ml-auto inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-brand-700 ring-1 ring-brand-200 transition hover:bg-brand-50">← Annual report</Link>
         </div>

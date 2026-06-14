@@ -50,6 +50,12 @@ const print = () => window.print();
                 </div>
             </div>
 
+            <!-- §3.7: explicit empty state instead of an all-zeros booklet -->
+            <div v-if="totals.admissions === 0 && totals.discharges === 0" class="rounded-2xl bg-app p-10 text-center ring-1 ring-line">
+                <p class="text-ink-400">No admissions or discharges recorded for {{ year }}.</p>
+                <p v-if="availableYears.length" class="mt-2 text-sm text-ink-400">Available years: {{ availableYears.join(', ') }}</p>
+            </div>
+
             <!-- monthly table -->
             <h2 class="mb-2 text-sm font-bold uppercase tracking-wide text-navy-800">Monthly breakdown</h2>
             <table class="mb-6 w-full border-collapse text-sm">

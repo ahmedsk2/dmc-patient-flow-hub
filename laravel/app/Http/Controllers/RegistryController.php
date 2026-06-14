@@ -26,6 +26,15 @@ class RegistryController extends Controller
 {
     public function index(Request $request): Response
     {
+        // Phase 3 — §3.7: reject garbage date/age filters before they reach the query builder
+        // (mirrors StatisticsController::index). FormRequest avoided here — minimal gain for 4 rules.
+        $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date'],
+            'age_from' => ['nullable', 'integer', 'min:0', 'max:150'],
+            'age_to' => ['nullable', 'integer', 'min:0', 'max:150'],
+        ]);
+
         $mode = $this->mode($request);
 
         $results = match ($mode) {
@@ -73,6 +82,22 @@ class RegistryController extends Controller
     {
         return in_array($request->query('mode'), ['admissions', 'consultations', 'diagnosis'], true)
             ? $request->query('mode') : 'admissions';
+    }
+
+    /**
+     * Phase 3 — §3.6: cheap COUNT of the current mode's filtered query, so the Registry UI can
+     * surface the matched row count before a potentially slow export and advise a queued path above
+     * ~20k rows. Admin-only (route group).
+     */
+    public function matchCount(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $count = match ($this->mode($request)) {
+            'consultations' => $this->consultationQuery($request)->count(),
+            'diagnosis' => $this->diagnosisQuery($request)->count(),
+            default => $this->admissionQuery($request)->count(),
+        };
+
+        return response()->json(['count' => $count]);
     }
 
     /**

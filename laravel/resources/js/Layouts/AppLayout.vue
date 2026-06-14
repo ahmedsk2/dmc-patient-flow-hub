@@ -91,6 +91,7 @@ const admin = [
     { label: 'Registry', href: '/registry', icon: 'search' },
     { label: 'Statistics', href: '/statistics', icon: 'chart' },
     { label: 'Reports', href: '/reports', icon: 'doc' },
+    { label: 'M&M Pack', href: '/reports/governance', icon: 'doc' },
     { label: 'Recent Activity', href: '/recent', icon: 'clock' },
     { label: 'Audit Log', href: '/audit', icon: 'shield' },
     { label: 'Bulk Import', href: '/import', icon: 'upload' },

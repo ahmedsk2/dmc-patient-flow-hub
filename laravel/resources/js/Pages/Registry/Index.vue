@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
@@ -33,6 +33,24 @@ const qs = computed(() => new URLSearchParams(
     Object.entries({ mode: props.mode, ...f }).flatMap(([k, v]) =>
         Array.isArray(v) ? v.map((x) => [`${k}[]`, x]) : (v === '' || v === false ? [] : [[k, v]]))
 ).toString());
+
+// §3.6: surface the matched row count on-demand (hover/focus the export buttons) so the user can
+// see how large the export is before starting it; advise a slower path above ~20k rows.
+const matchCount = ref(null);
+const loadMatchCount = async () => {
+    if (matchCount.value !== null) return;
+    try {
+        const r = await fetch('/registry/count?' + qs.value, { headers: { Accept: 'application/json' } });
+        matchCount.value = (await r.json()).count;
+    } catch { /* advisory only — never blocks the export */ }
+};
+// invalidate the cached count whenever the filter set changes
+watch(qs, () => { matchCount.value = null; });
+
+// §3.7: distinguish "first page load" from "searched and got nothing" so the empty state only
+// shows after the user actually applied a filter (any non-default value)
+const hasSearched = computed(() => Object.values(f).some(
+    (v) => v !== '' && v !== false && !(Array.isArray(v) && v.length === 0) && v !== 'or'));
 
 // diagnosis ICD picker (admissions mode). Seed the chips from the ACTIVE dx filter (resolved
 // server-side to {code,name}) so they reappear — and stay removable — after a paginated/reloaded
@@ -132,7 +150,7 @@ const toggleExpand = (id) => {
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.readmit72" class="rounded text-brand-600" /> {{ options.readmitWindow ?? 3 }}-day readmissions</label>
                     <button @click="apply" class="ml-auto rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">Search</button>
                     <button @click="reset" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 hover:text-ink-700">Reset</button>
-                    <a :href="`/registry/export-xlsx?${qs}`" class="rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</a>
+                    <a :href="`/registry/export-xlsx?${qs}`" @mouseenter="loadMatchCount" @focus="loadMatchCount" class="rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</a>
                     <a :href="`/registry/export?${qs}`" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50">CSV</a>
                 </div>
             </div>
@@ -158,7 +176,7 @@ const toggleExpand = (id) => {
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.signed_only" class="rounded text-brand-600" /> Signed off only</label>
                     <button @click="apply" class="ml-auto rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">Search</button>
                     <button @click="reset" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 hover:text-ink-700">Reset</button>
-                    <a :href="`/registry/export-xlsx?${qs}`" class="rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</a>
+                    <a :href="`/registry/export-xlsx?${qs}`" @mouseenter="loadMatchCount" @focus="loadMatchCount" class="rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</a>
                     <a :href="`/registry/export?${qs}`" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50">CSV</a>
                 </div>
             </div>
@@ -169,12 +187,21 @@ const toggleExpand = (id) => {
                 <div><label class="text-xs text-ink-400">to</label><input v-model="f.to" type="date" :class="fld" /></div>
                 <button @click="apply" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">Search</button>
                 <button @click="reset" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 hover:text-ink-700">Reset</button>
-                <a :href="`/registry/export-xlsx?${qs}`" class="rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</a>
+                <a :href="`/registry/export-xlsx?${qs}`" @mouseenter="loadMatchCount" @focus="loadMatchCount" class="rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</a>
                 <a :href="`/registry/export?${qs}`" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50">CSV</a>
             </div>
         </div>
 
-        <div class="mb-2 text-sm text-ink-400"><span class="nums font-semibold text-ink-600">{{ results.total }}</span> result(s)</div>
+        <div class="mb-2 flex flex-wrap items-center gap-2 text-sm text-ink-400">
+            <span><span class="nums font-semibold text-ink-600">{{ results.total }}</span> result(s)</span>
+            <!-- §3.6: pre-export matched-row count (loaded on hover/focus of the export buttons) -->
+            <span v-if="matchCount !== null" class="nums text-xs">· export contains {{ matchCount.toLocaleString() }} rows</span>
+        </div>
+        <!-- §3.6: advisory banner for very large exports -->
+        <div v-if="matchCount !== null && matchCount > 20000" class="mb-3 flex items-start gap-2 rounded-xl bg-warning-100 px-4 py-3 text-sm font-medium text-warning-500 ring-1 ring-warning-500/20" role="alert">
+            <svg class="mt-0.5 h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
+            <span>This export contains {{ matchCount.toLocaleString() }} rows and may take several minutes. Consider narrowing the filters.</span>
+        </div>
 
         <!-- results -->
         <div class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
@@ -190,7 +217,7 @@ const toggleExpand = (id) => {
                         <td class="nums px-3 py-3 text-ink-500">{{ c.date || '—' }}</td>
                         <td class="px-5 py-3"><span v-if="c.signoff" class="rounded-full bg-success-100 px-2.5 py-0.5 text-xs font-semibold text-success-600">Signed {{ c.signoff }}</span><span v-else class="rounded-full bg-accent-300/40 px-2.5 py-0.5 text-xs font-semibold text-accent-600">Active</span></td>
                     </tr>
-                    <tr v-if="!results.data.length"><td colspan="7" class="px-5 py-10 text-center text-ink-400">No consultations match.</td></tr>
+                    <tr v-if="!results.data.length"><td colspan="7" class="px-5 py-10 text-center text-ink-400">{{ hasSearched ? 'No consultations match the current filters.' : 'No consultations match.' }}</td></tr>
                 </tbody>
             </table>
             <table v-else class="w-full text-sm">
@@ -247,7 +274,7 @@ const toggleExpand = (id) => {
                             </td>
                         </tr>
                     </template>
-                    <tr v-if="!results.data.length"><td :colspan="mode === 'admissions' ? 10 : 9" class="px-5 py-10 text-center text-ink-400">No admissions match.</td></tr>
+                    <tr v-if="!results.data.length"><td :colspan="mode === 'admissions' ? 10 : 9" class="px-5 py-10 text-center text-ink-400">{{ hasSearched ? 'No admissions match the current filters.' : 'No admissions match.' }}</td></tr>
                 </tbody>
             </table>
         </div>

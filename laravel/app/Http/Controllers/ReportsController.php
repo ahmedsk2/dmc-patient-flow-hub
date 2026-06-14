@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ConsultantScorecardRequest;
+use App\Http\Requests\GovernanceReportRequest;
+use App\Http\Requests\ReportYearRequest;
 use App\Models\Admission;
 use App\Models\Setting;
 use App\Models\User;
@@ -30,25 +33,209 @@ use Inertia\Response;
  */
 class ReportsController extends Controller
 {
+    use \App\Http\Controllers\Concerns\MetricQueries;
+
     private string $nonIcu = Admission::NON_ICU_SQL;
 
     public function index(Request $request): Response
     {
+        // §3.7: the SCREEN is lenient on year (any sane integer) and silently CLAMPS to a year with
+        // data — a future/empty year shows real numbers, not an all-zeros booklet (a redirect loop
+        // would be worse UX). The PDF endpoint (pdf()) is strict via ReportYearRequest instead.
+        $request->validate(['year' => ['nullable', 'integer', 'min:1900', 'max:9999']]);
         $year = (int) ($request->query('year') ?: Carbon::today()->year);
+
+        $available = DB::table('admissions')->selectRaw('DISTINCT YEAR(admit_date) y')
+            ->whereNotNull('admit_date')->orderByDesc('y')->pluck('y')->filter()->values();
+        if ($available->isNotEmpty() && ! $available->contains($year)) {
+            $year = (int) $available->first();
+        }
 
         return Inertia::render('Reports/Index', [
             ...$this->gather($year),
+            'availableYears' => $available,
+        ]);
+    }
+
+    public function pdf(ReportYearRequest $request): SymfonyResponse
+    {
+        @ini_set('max_execution_time', '120'); // §3.6 stopgap: bound the synchronous annual booklet
+        $year = (int) ($request->validated('year') ?: Carbon::today()->year);
+        $pdf = Pdf::loadView('reports.annual-pdf', $this->gather($year))->setPaper('a4', 'landscape');
+
+        return $pdf->download("dmc-annual-report-{$year}.pdf");
+    }
+
+    /**
+     * Phase 3 — §3.1: per-consultant scorecard PDF (2-page A4 landscape) over a date range.
+     * Reuses StatisticsController::physician (the SAME per-consultant figures the Statistics
+     * drill-down shows) plus a unit-wide median ward LOS for the "vs unit" comparison. The
+     * monthly trend is the physician's already month-bucketed activity series.
+     */
+    public function consultantPdf(ConsultantScorecardRequest $request, User $user, StatisticsController $stats): SymfonyResponse
+    {
+        @ini_set('max_execution_time', '120');
+        $data = $request->validated();
+        $to = isset($data['to']) ? Carbon::parse($data['to']) : Carbon::today();
+        $from = isset($data['from']) ? Carbon::parse($data['from']) : $to->copy()->startOfYear();
+        if ($from->gt($to)) { [$from, $to] = [$to, $from]; }
+        $f = $from->toDateString();
+        $t = $to->toDateString();
+
+        $window = max(0, (int) (Setting::current()->readmission_window_days ?? 3));
+        // hard-code MONTH interval for the PDF (a day-interval trend over a long range is unreadable on A4)
+        $buckets = $this->buckets($from, $to, 'month');
+        $physician = $stats->physician($user->id, $f, $t, $window, 'month', $buckets);
+
+        // unit-wide avg ward LOS over the same range — the "vs unit median" comparison figure
+        $unitMedianLos = round((float) (DB::table('admissions')->whereBetween('discharge_date', [$f, $t])
+            ->whereNotNull('admit_date')->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
+            ->avg(DB::raw('DATEDIFF(discharge_date, admit_date)')) ?? 0), 1);
+
+        // weekend-discharge rate for this consultant (Fri/Sat non-ICU discharges — decision D4)
+        $consDischarges = (int) DB::table('admissions')->where('consultant_id', $user->id)
+            ->whereBetween('discharge_date', [$f, $t])->whereRaw($this->nonIcu)->count();
+        $consWeekend = (int) DB::table('admissions')->where('consultant_id', $user->id)
+            ->whereBetween('discharge_date', [$f, $t])->whereRaw($this->nonIcu)
+            ->whereRaw('DAYOFWEEK(discharge_date) IN (6,7)')->count();
+        $weekendPct = $consDischarges > 0 ? round($consWeekend / $consDischarges * 100, 1) : 0.0;
+
+        $pdf = Pdf::loadView('reports.consultant-pdf', [
+            'physician' => $physician,
+            'monthlyTrend' => $physician['series'],   // alias for blade clarity
+            'unitMedianLos' => $unitMedianLos,
+            'weekend' => $consWeekend,
+            'weekendPct' => $weekendPct,
+            'readmitWindow' => $window,
+            'from' => $f, 'to' => $t,
+            'generatedAt' => now()->format('D, d M Y · H:i'),
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download("scorecard-{$user->id}-{$f}-{$t}.pdf");
+    }
+
+    /** Phase 3 — §3.2: the Governance / M&M pack form (month/quarter picker + download). */
+    public function governance(Request $request): Response
+    {
+        return Inertia::render('Reports/Governance', [
             'availableYears' => DB::table('admissions')->selectRaw('DISTINCT YEAR(admit_date) y')
                 ->whereNotNull('admit_date')->orderByDesc('y')->pluck('y')->filter()->values(),
         ]);
     }
 
-    public function pdf(Request $request): SymfonyResponse
+    /**
+     * Phase 3 — §3.2: de-identified Morbidity & Mortality pack for a chosen month/quarter —
+     * headline safety KPIs + trend bars + line lists of every death and every readmission in the
+     * period. Reuses the SAME mortality/readmission/long-stay/weekend queries as the booklet and
+     * Admission::readmissionJoin / REAL_DISCHARGE_TYPES. MRN is included (clinical identifier, same
+     * de-identification policy as the registry exports); patient NAME is never included.
+     */
+    public function governancePdf(GovernanceReportRequest $request): SymfonyResponse
     {
-        $year = (int) ($request->query('year') ?: Carbon::today()->year);
-        $pdf = Pdf::loadView('reports.annual-pdf', $this->gather($year))->setPaper('a4', 'landscape');
+        @ini_set('max_execution_time', '120');
+        $data = $request->validated();
+        if ($data['period_type'] === 'quarter') {
+            $startMonth = ($data['quarter'] - 1) * 3 + 1;
+            $f = Carbon::createFromDate($data['year'], $startMonth, 1)->startOfMonth()->toDateString();
+            $t = Carbon::createFromDate($data['year'], $startMonth, 1)->addMonths(2)->endOfMonth()->toDateString();
+            $title = 'Q' . $data['quarter'] . ' ' . $data['year'];
+        } else {
+            $f = Carbon::createFromDate($data['year'], $data['month'], 1)->startOfMonth()->toDateString();
+            $t = Carbon::createFromDate($data['year'], $data['month'], 1)->endOfMonth()->toDateString();
+            $title = Carbon::createFromDate($data['year'], $data['month'], 1)->format('F Y');
+        }
+        $window = max(0, (int) (Setting::current()->readmission_window_days ?? 3));
 
-        return $pdf->download("dmc-annual-report-{$year}.pdf");
+        // ---- headline safety KPIs (same formulas as gather()) ----
+        $deaths = (int) DB::table('admissions')->where('outcome', 'Dead')->whereBetween('discharge_date', [$f, $t])->count();
+        $discharges = (int) DB::table('admissions')->whereBetween('discharge_date', [$f, $t])->whereRaw($this->nonIcu)->count();
+        $mortalityRate = $discharges > 0 ? round($deaths / $discharges * 100, 1) : 0.0;
+        $readmissions = (int) DB::table('admissions as a')->join('admissions as prev', Admission::readmissionJoin($window))
+            ->whereBetween('a.admit_date', [$f, $t])->distinct()->count('a.id');
+        $longLos = (int) (Setting::current()->long_los ?? 11);
+        $longStay = (int) DB::table('admissions')->whereBetween('discharge_date', [$f, $t])->whereRaw($this->nonIcu)
+            ->whereNotNull('admit_date')->whereRaw("DATEDIFF(discharge_date, admit_date) > {$longLos}")->count();
+        $longStayPct = $discharges > 0 ? round($longStay / $discharges * 100, 1) : 0.0;
+        $weekend = (int) DB::table('admissions')->whereBetween('discharge_date', [$f, $t])->whereRaw($this->nonIcu)
+            ->whereRaw('DAYOFWEEK(discharge_date) IN (6,7)')->count();
+        $weekendPct = $discharges > 0 ? round($weekend / $discharges * 100, 1) : 0.0;
+
+        // ---- trend bars: 3 monthly buckets spanning the period (the byMonth families) ----
+        $trendStart = Carbon::parse($f)->startOfMonth();
+        $trendEnd = Carbon::parse($t)->endOfMonth();
+        $admByMonth = $this->byMonth('admit_date', $trendStart->toDateString(), $trendEnd->toDateString(), $this->nonIcu);
+        $disByMonth = $this->byMonth('discharge_date', $trendStart->toDateString(), $trendEnd->toDateString(), $this->nonIcu);
+        $deathByMonth = $this->byMonth('discharge_date', $trendStart->toDateString(), $trendEnd->toDateString(), "outcome = 'Dead'");
+        $readmitByMonth = $this->readmitsByMonth($trendStart->toDateString(), $trendEnd->toDateString(), $window);
+        $trend = [];
+        for ($c = $trendStart->copy(); $c->lte($trendEnd); $c->addMonth()) {
+            $k = $c->format('Y-m');
+            $trend[] = [
+                'label' => $c->format('M'),
+                'admissions' => (int) ($admByMonth[$k] ?? 0),
+                'discharges' => (int) ($disByMonth[$k] ?? 0),
+                'deaths' => (int) ($deathByMonth[$k] ?? 0),
+                'readmits' => (int) ($readmitByMonth[$k] ?? 0),
+            ];
+        }
+
+        // ---- death line list (DE-IDENTIFIED: MRN, no name) ----
+        $deathList = DB::table('admissions as a')
+            ->join('patients as p', 'p.id', '=', 'a.patient_id')
+            ->leftJoin('users as u', 'u.id', '=', 'a.consultant_id')
+            ->whereBetween('a.discharge_date', [$f, $t])->where('a.outcome', 'Dead')
+            ->select('a.id', 'p.mrn', 'p.age', DB::raw('DATEDIFF(a.discharge_date, a.admit_date) los'),
+                'a.current_location', DB::raw("COALESCE(u.full_name, u.name) consultant"))
+            ->orderBy('a.discharge_date')->get();
+        // primary diagnosis name per death (small set — one whereIn load)
+        $deathIds = $deathList->pluck('id');
+        $primaryDx = $this->primaryDiagnoses($deathIds);
+        $deathRows = $deathList->map(fn ($r) => [
+            'mrn' => $r->mrn, 'age' => $r->age, 'los' => $r->los, 'location' => $r->current_location,
+            'dx' => $primaryDx[$r->id] ?? '—', 'consultant' => $r->consultant ?: '—',
+        ]);
+
+        // ---- readmission line list (DE-IDENTIFIED, reuses readmissionJoin) ----
+        $readmitRows = DB::table('admissions as a')
+            ->join('admissions as prev', Admission::readmissionJoin($window))
+            ->join('patients as p', 'p.id', '=', 'a.patient_id')
+            ->leftJoin('users as u', 'u.id', '=', 'a.consultant_id')
+            ->whereBetween('a.admit_date', [$f, $t])->distinct()
+            ->select('p.mrn', 'p.age', 'a.admit_date', DB::raw('DATEDIFF(a.admit_date, prev.discharge_date) gap_days'),
+                DB::raw("COALESCE(u.full_name, u.name) consultant"))
+            ->orderBy('a.admit_date')->get()
+            ->map(fn ($r) => ['mrn' => $r->mrn, 'age' => $r->age,
+                'admit_date' => $r->admit_date, 'gap_days' => $r->gap_days, 'consultant' => $r->consultant ?: '—']);
+
+        $pdf = Pdf::loadView('reports.governance-pdf', [
+            'title' => $title, 'from' => $f, 'to' => $t, 'readmitWindow' => $window,
+            'kpis' => ['mortalityRate' => $mortalityRate, 'deaths' => $deaths, 'readmissions' => $readmissions,
+                'longStay' => $longStay, 'longStayPct' => $longStayPct, 'weekend' => $weekend, 'weekendPct' => $weekendPct],
+            'trend' => $trend, 'deaths' => $deathRows, 'readmits' => $readmitRows,
+            'generatedAt' => now()->format('D, d M Y · H:i'),
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download("governance-{$data['year']}-" . ($data['period_type'] === 'quarter' ? "Q{$data['quarter']}" : sprintf('%02d', $data['month'])) . '.pdf');
+    }
+
+    /** Primary (seq-first) diagnosis name per admission id, for the governance death list. */
+    private function primaryDiagnoses($admissionIds): array
+    {
+        if ($admissionIds->isEmpty()) {
+            return [];
+        }
+        $rows = DB::table('admission_diagnoses as ad')->leftJoin('icd10 as i', 'i.code', '=', 'ad.icd10_code')
+            ->whereIn('ad.admission_id', $admissionIds)
+            ->orderBy('ad.admission_id')->orderBy('ad.seq')
+            ->get(['ad.admission_id', 'ad.icd10_code', 'i.name']);
+        $out = [];
+        foreach ($rows as $r) {
+            if (! isset($out[$r->admission_id])) {
+                $out[$r->admission_id] = $r->name ?: $r->icd10_code;
+            }
+        }
+
+        return $out;
     }
 
     /** Shared data set for both the screen page and the PDF. */
@@ -200,13 +387,40 @@ class ReportsController extends Controller
         ]);
     }
 
-    /** Full-year monthly booklet (legacy statistics/a4-monthly.php): two landscape pages per elapsed month. */
-    public function monthlyPdf(Request $request): SymfonyResponse
+    /**
+     * Full-year monthly booklet (legacy statistics/a4-monthly.php): two landscape pages per elapsed
+     * month. Synchronous by default (existing behaviour); ?async=1 dispatches the queued job
+     * (§3.6) which stores the PDF and notifies the requester when ready.
+     */
+    public function monthlyPdf(Request $request): SymfonyResponse|\Illuminate\Http\RedirectResponse
     {
         $year = (int) ($request->query('year') ?: Carbon::today()->year);
+
+        if ($request->boolean('async')) {
+            \App\Jobs\GenerateMonthlyPdf::dispatch($year, (int) auth()->id());
+
+            return back()->with('flash', ['type' => 'info',
+                'message' => 'Your PDF is being generated — you will be notified when it is ready.']);
+        }
+
+        @ini_set('max_execution_time', '120'); // §3.6 stopgap: bound the synchronous monthly booklet
         $pdf = Pdf::loadView('reports.monthly-pdf', $this->gatherBooklet($year))->setPaper('a4', 'landscape');
 
         return $pdf->download("dmc-monthly-report-{$year}.pdf");
+    }
+
+    /**
+     * Phase 3 — §3.6: stream a queued-generated booklet PDF stored under storage/app/reports and
+     * delete it after send. Admin-only (route group). The file lives on the private `local` disk —
+     * no PHI is ever exposed through the public disk.
+     */
+    public function downloadGenerated(string $key): SymfonyResponse
+    {
+        $path = "reports/{$key}";
+        abort_unless(\Illuminate\Support\Facades\Storage::disk('local')->exists($path), 404);
+        $abs = \Illuminate\Support\Facades\Storage::disk('local')->path($path);
+
+        return response()->download($abs, basename($path))->deleteFileAfterSend();
     }
 
     private function gatherMonth(int $year, int $month): array
@@ -254,7 +468,7 @@ class ReportsController extends Controller
      * once its first day is in the past). All series come from year-wide grouped queries that
      * are then split per month in PHP — no per-month/per-day query loops.
      */
-    private function gatherBooklet(int $year): array
+    public function gatherBooklet(int $year): array
     {
         $start = "{$year}-01-01";
         $end = "{$year}-12-31";

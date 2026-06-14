@@ -117,13 +117,25 @@ Route::middleware(['auth', 'mfa.enroll', 'pwd'])->group(function () {
     // non-admins' only statistics is the dashboard).
     Route::middleware('admin')->group(function () {
         Route::get('/statistics', [StatisticsController::class, 'index'])->name('statistics.index');
+        // Phase 3 — §3.4: currently-filtered statistics exports (reuse the index query methods)
+        Route::get('/statistics/export', [StatisticsController::class, 'exportXlsx'])->name('statistics.export.xlsx');
+        Route::get('/statistics/export/pdf', [StatisticsController::class, 'exportPdf'])->name('statistics.export.pdf');
         Route::get('/registry', [RegistryController::class, 'index'])->name('registry.index');
+        // Phase 3 — §3.6: cheap match-count for the pre-export row-count advisory (before the exports)
+        Route::get('/registry/count', [RegistryController::class, 'matchCount'])->name('registry.count');
         Route::get('/registry/export', [RegistryController::class, 'export'])->name('registry.export');
         Route::get('/registry/export-xlsx', [RegistryController::class, 'exportXlsx'])->name('registry.export.xlsx');
         Route::get('/reports', [ReportsController::class, 'index'])->name('reports.index');
         Route::get('/reports/pdf', [ReportsController::class, 'pdf'])->name('reports.pdf');
         Route::get('/reports/monthly', [ReportsController::class, 'monthly'])->name('reports.monthly');
         Route::get('/reports/monthly/pdf', [ReportsController::class, 'monthlyPdf'])->name('reports.monthly.pdf');
+        // Phase 3 — §3.6: stream a queued-generated (async) booklet PDF, deleted after send
+        Route::get('/reports/pdf-download/{key}', [ReportsController::class, 'downloadGenerated'])->name('reports.pdf.download');
+        // Phase 3 — §3.1: per-consultant scorecard PDF over a date range
+        Route::get('/reports/consultant/{user}/pdf', [ReportsController::class, 'consultantPdf'])->name('reports.consultant.pdf');
+        // Phase 3 — §3.2: governance / M&M pack (screen form + de-identified PDF)
+        Route::get('/reports/governance', [ReportsController::class, 'governance'])->name('reports.governance');
+        Route::get('/reports/governance/pdf', [ReportsController::class, 'governancePdf'])->name('reports.governance.pdf');
 
         Route::get('/recent', [RecentController::class, 'index'])->name('recent.index');
         Route::get('/import', [ImportController::class, 'index'])->name('import.index');
@@ -137,6 +149,9 @@ Route::middleware(['auth', 'mfa.enroll', 'pwd'])->group(function () {
         Route::post('/control/users/{user}/send-reset', [ControlController::class, 'sendReset'])->name('control.users.sendReset');
         Route::post('/control/specialties', [ControlController::class, 'addSpecialty'])->name('control.specialties.add');
         Route::post('/control/reasons', [ControlController::class, 'addReason'])->name('control.reasons.add');
+        // Phase 3 — §3.3: monthly-report email recipients
+        Route::post('/control/report-recipients', [ControlController::class, 'addReportRecipient'])->name('control.recipients.add');
+        Route::delete('/control/report-recipients/{recipient}', [ControlController::class, 'removeReportRecipient'])->name('control.recipients.destroy');
 
         // Audit log viewer + exports (Phase 2 — Item 1). Admin-only (route group + FormRequest::authorize).
         Route::get('/audit', [AuditController::class, 'index'])->name('audit.index');

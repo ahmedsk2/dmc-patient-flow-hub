@@ -7,19 +7,29 @@ import { useChartTheme } from '@/composables/useChartTheme';
 // theme-aware grid/axis colors (legible in light + dark)
 const { gridColor, axisColor } = useChartTheme();
 
-const props = defineProps({ range: Object, kpis: Object, monthly: Object, los: Object, topDx: Array, reasons: Object, perConsultant: Array, sourceMix: Array, kpiGrid: Array, interval: String, truncated: Boolean, destinations: Object, destByConsultant: Array, readmitWindow: Number, consultants: Array, physician: Object });
+const props = defineProps({ range: Object, kpis: Object, monthly: Object, los: Object, topDx: Array, reasons: Object, perConsultant: Array, sourceMix: Array, kpiGrid: Array, interval: String, truncated: Boolean, destinations: Object, destByConsultant: Array, readmitWindow: Number, consultants: Array, physician: Object, compareData: Object });
 
 const from = ref(props.range.from);
 const to = ref(props.range.to);
 const interval = ref(props.interval || 'month');
 // per-physician drill-down selection (server-computed prop; selection round-trips via the URL)
 const physChoice = ref(props.physician?.id ?? '');
+// §3.5: year-over-year / prior-period comparison overlay ('' = off)
+const compareMode = ref(props.compareData ? (props.compareData.range.from.slice(0, 4) !== from.value.slice(0, 4) ? 'prior_year' : 'prior_period') : '');
 const apply = () => router.get('/statistics', {
     from: from.value, to: to.value, interval: interval.value,
     ...(physChoice.value ? { consultant_id: physChoice.value } : {}),
+    ...(compareMode.value ? { compare: compareMode.value } : {}),
 }, { preserveState: true, preserveScroll: true });
 const setInterval2 = (i) => { interval.value = i; apply(); };
 const print = () => window.print();
+
+// §3.4: export the currently-filtered statistics (XLSX / PDF) — same filters, no re-entry
+const exportHref = computed(() => '/statistics/export?' + new URLSearchParams(
+    Object.entries({ from: from.value, to: to.value, interval: interval.value,
+        ...(physChoice.value ? { consultant_id: physChoice.value } : {}) })
+        .filter(([, v]) => v !== '' && v != null)).toString());
+const exportPdfHref = computed(() => exportHref.value.replace('/export?', '/export/pdf?'));
 
 // per-consultant discharge-destination donut (All = overall)
 const destChoice = ref('');
@@ -63,22 +73,52 @@ const tickColors = computed(() => props.interval !== 'day'
         const dow = new Date(`${k}T00:00:00Z`).getUTCDay();   // 5 = Fri, 6 = Sat
         return dow === 5 || dow === 6 ? '#d9a23c' : axisColor.value;
     }));
+// §3.5: when a comparison is active, append 3 dashed "ghost" series (admissions/discharges/deaths
+// of the comparison period) drawn at reduced opacity on top of the primary 5-series area chart
+const cyr = computed(() => props.compareData?.range?.from?.slice(0, 4) ?? '');
 const monthlyChart = computed(() => ({
     chart: { type: 'area', toolbar: dlToolbar, fontFamily: 'inherit' },
-    colors: [C.teal, C.blue, C.red, C.gold, C.slate], stroke: { width: [3, 3, 2, 2, 2], curve: 'smooth' },
+    colors: props.compareData
+        ? [C.teal, C.blue, C.red, C.gold, C.slate, C.teal, C.blue, C.red]
+        : [C.teal, C.blue, C.red, C.gold, C.slate],
+    stroke: props.compareData
+        ? { width: [3, 3, 2, 2, 2, 2, 2, 2], curve: 'smooth', dashArray: [0, 0, 0, 0, 0, 5, 5, 5] }
+        : { width: [3, 3, 2, 2, 2], curve: 'smooth' },
     fill: { type: 'gradient', gradient: { opacityFrom: 0.25, opacityTo: 0.02 } },
     dataLabels: { enabled: false }, legend: { position: 'top', horizontalAlign: 'right' },
     xaxis: { categories: props.monthly.labels, labels: { style: { colors: tickColors.value } } },
     yaxis: { labels: { style: { colors: axisColor.value } } }, grid: { borderColor: gridColor.value },
 }));
-const monthlySeries = computed(() => [
-    { name: 'Admissions', data: props.monthly.admissions },
-    { name: 'Discharges', data: props.monthly.discharges },
-    { name: 'Mortality', data: props.monthly.deaths },
-    // extra context series — toggle off via the legend if noisy
-    { name: 'Consultations', data: props.monthly.consultations },
-    { name: 'Sign-offs', data: props.monthly.signoffs },
-]);
+const monthlySeries = computed(() => {
+    const base = [
+        { name: 'Admissions', data: props.monthly.admissions },
+        { name: 'Discharges', data: props.monthly.discharges },
+        { name: 'Mortality', data: props.monthly.deaths },
+        // extra context series — toggle off via the legend if noisy
+        { name: 'Consultations', data: props.monthly.consultations },
+        { name: 'Sign-offs', data: props.monthly.signoffs },
+    ];
+    if (!props.compareData) return base;
+    return [...base,
+        { name: `Admissions (${cyr.value})`, data: props.compareData.admissions },
+        { name: `Discharges (${cyr.value})`, data: props.compareData.discharges },
+        { name: `Deaths (${cyr.value})`, data: props.compareData.deaths },
+    ];
+});
+
+// §3.5: delta chips (current minus comparison) below the headline KPIs when comparison is active
+const deltaCards = computed(() => {
+    if (!props.compareData) return [];
+    const c = props.compareData.kpis;
+    const r1 = (v) => Math.round(v * 10) / 10;
+    return [
+        { label: 'Admissions', delta: props.kpis.admissions - c.admissions },
+        { label: 'Discharges', delta: props.kpis.discharges - c.discharges },
+        { label: 'Deaths', delta: props.kpis.deaths - c.deaths },
+        { label: 'Avg LOS', delta: r1(props.kpis.avgLos - c.avgLos) },
+        { label: 'Mortality %', delta: r1(props.kpis.mortalityRate - c.mortalityRate) },
+    ];
+});
 
 // KPI-grid header tracks the selected interval + actual applied range
 const gridTitle = computed(() => ({ day: 'Daily', quarter: 'Quarterly' }[props.interval] ?? 'Monthly') + ' KPI grid');
@@ -175,12 +215,21 @@ const donut = (labels) => ({
                 <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-400">To</label>
                 <input v-model="to" type="date" class="rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" />
             </div>
-            <button @click="apply" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-700">Apply</button>
             <div class="flex items-end gap-1">
                 <div class="flex gap-1 rounded-xl bg-app p-1 ring-1 ring-line">
                     <button v-for="iv in [['day','Daily'],['month','Monthly'],['quarter','Quarterly']]" :key="iv[0]" @click="setInterval2(iv[0])" class="rounded-lg px-3 py-1.5 text-sm font-semibold transition" :class="interval === iv[0] ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ iv[1] }}</button>
                 </div>
             </div>
+            <!-- §3.5: year-over-year / prior-period comparison overlay -->
+            <select v-model="compareMode" @change="apply" aria-label="Comparison period" class="rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500">
+                <option value="">No comparison</option>
+                <option value="prior_year">vs prior year</option>
+                <option value="prior_period">vs prior period</option>
+            </select>
+            <button @click="apply" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-700">Apply</button>
+            <!-- §3.4: export the currently-filtered statistics -->
+            <a :href="exportHref" class="inline-flex items-center gap-2 rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-success-700">Excel</a>
+            <a :href="exportPdfHref" class="inline-flex items-center gap-2 rounded-xl bg-card px-4 py-2 text-sm font-semibold text-ink-600 shadow-sm ring-1 ring-line transition hover:bg-ink-50">Export PDF</a>
             <button @click="print" class="inline-flex items-center gap-2 rounded-xl bg-card px-4 py-2 text-sm font-semibold text-ink-500 shadow-sm ring-1 ring-line transition hover:bg-ink-50">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.4 42.4 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.32 0H6.34m11.32 0 .55-6.171M6.34 18l-.55-6.171m0 0a42.4 42.4 0 0 1 12.42 0M5.79 11.829V6.75A2.25 2.25 0 0 1 8.04 4.5h7.92a2.25 2.25 0 0 1 2.25 2.25v5.079" /></svg>
                 Print
@@ -195,7 +244,7 @@ const donut = (labels) => ({
         </div>
 
         <!-- KPIs -->
-        <div class="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4 xl:grid-cols-8">
+        <div class="mb-2 grid grid-cols-2 gap-4 sm:grid-cols-4 xl:grid-cols-8">
             <div v-for="k in kpiCards" :key="k.label" class="rounded-2xl bg-card p-4 shadow-card ring-1 ring-line">
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-400">{{ k.label }}</div>
                 <div class="mt-1 flex items-baseline gap-1">
@@ -204,6 +253,14 @@ const donut = (labels) => ({
                 </div>
             </div>
         </div>
+        <!-- §3.5: delta chips vs the comparison period (red = up, brand = down) -->
+        <div v-if="compareData" class="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-5">
+            <div v-for="k in deltaCards" :key="k.label" class="rounded-xl bg-app p-2 text-center ring-1 ring-line text-sm">
+                <div class="text-[10px] uppercase tracking-wide text-ink-400">{{ k.label }} vs {{ compareData.range.from }}–{{ compareData.range.to }}</div>
+                <div class="nums font-bold" :class="k.delta > 0 ? 'text-danger-600' : k.delta < 0 ? 'text-brand-600' : 'text-ink-400'">{{ k.delta > 0 ? '+' : '' }}{{ k.delta }}</div>
+            </div>
+        </div>
+        <div v-else class="mb-6"></div>
 
         <!-- charts -->
         <div class="grid gap-5 lg:grid-cols-2">
@@ -267,6 +324,11 @@ const donut = (labels) => ({
                             <div class="nums mt-0.5 text-xl font-bold text-ink-800">{{ n[1] }}</div>
                         </div>
                     </div>
+                    <!-- §3.1: per-consultant scorecard PDF over the current range -->
+                    <a :href="`/reports/consultant/${physician.id}/pdf?from=${from}&to=${to}`" class="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-700">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m.75 12 3 3m0 0 3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
+                        Download scorecard PDF
+                    </a>
                     <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                         <div>
                             <h4 class="mb-2 text-sm font-semibold text-ink-600">Discharge destinations</h4>
