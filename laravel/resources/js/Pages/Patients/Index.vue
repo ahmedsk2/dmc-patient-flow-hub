@@ -3,6 +3,7 @@ import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
+import ActivityPanel from '@/Components/ActivityPanel.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { useModalA11y } from '@/composables/useModalA11y';
 
@@ -234,11 +235,13 @@ const undoMedical = async (row) => { if (await ask('Undo medical discharge', `Re
 const canModify = computed(() => me.value.is_admin || me.value.can.modify);
 const admitFromOptions = ['ER', 'Clinic', 'OPD', 'OR', 'ICU', 'Referral', 'Transfer', 'Direct', 'Other service'];
 const editing = ref(null);
+const mActivity = ref([]);   // per-patient audit trail (Phase 2 — Item 2)
 const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '', bed: '', admit_date: '', admitted_from: '', current_location: 'Ward', consultant_id: '', diagnoses: [] });
 const selectedDx = ref([]);
 const closeModify = () => { editing.value = null; a11yModify.onClose(); };
 const openModify = async (p) => {
     const d = await (await fetch(`/admissions/${p.id}/edit`, { headers: { Accept: 'application/json' } })).json();
+    mActivity.value = d.activity || [];
     // keep the LOADED identity so a changed MRN/name is confirmed before posting (K1-3)
     editing.value = { id: p.id, mrn: d.mrn || '', name: d.name || '' };
     a11yModify.onOpen();
@@ -726,6 +729,11 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                             <span v-for="d in selectedDx" :key="d.code" class="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700"><span class="nums">{{ d.code }}</span> {{ d.name }} <button type="button" @click="removeDx(d.code)" class="text-brand-500 hover:text-danger-600">✕</button></span>
                         </div>
                     </div>
+                    <!-- per-patient activity trail (Phase 2 — Item 2) -->
+                    <details class="rounded-xl ring-1 ring-line">
+                        <summary class="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-ink-700">Activity <span class="nums font-normal text-ink-400">({{ mActivity.length }})</span></summary>
+                        <div class="px-3 pb-3"><ActivityPanel :items="mActivity" /></div>
+                    </details>
                     <div class="flex justify-end gap-2 pt-1"><button type="button" @click="closeModify" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save changes</button></div>
                 </form>
             </div>

@@ -177,7 +177,9 @@ class GapWave4aTest extends TestCase
 
         $log = AuditLog::where('action', 'patient.modify')->where('entity_id', (string) $a->id)->latest('id')->first();
         $this->assertNotNull($log);
-        $this->assertSame('2026-06-01', $log->details['admit_date_was'] ?? null, 'audit must record the OLD admit date');
+        // Phase 2 — Item 4: the audit detail is now a structured {field:{from,to}} diff
+        $this->assertSame('2026-06-01', $log->details['admit_date']['from'] ?? null, 'audit must record the OLD admit date');
+        $this->assertSame('2026-06-05', $log->details['admit_date']['to'] ?? null, 'audit must record the NEW admit date');
     }
 
     public function test_modify_audit_omits_old_date_when_admit_date_unchanged(): void
@@ -192,7 +194,8 @@ class GapWave4aTest extends TestCase
 
         $log = AuditLog::where('action', 'patient.modify')->where('entity_id', (string) $a->id)->latest('id')->first();
         $this->assertNotNull($log);
-        $this->assertArrayNotHasKey('admit_date_was', $log->details ?? []);
+        // Phase 2 — Item 4: an unchanged admit_date never appears in the {field:{from,to}} diff
+        $this->assertArrayNotHasKey('admit_date', $log->details ?? []);
     }
 
     public function test_edit_json_exposes_the_new_modify_fields(): void

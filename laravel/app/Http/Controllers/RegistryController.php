@@ -7,7 +7,9 @@ use App\Models\Consultation;
 use App\Models\ConsultationReason;
 use App\Models\Country;
 use App\Models\Icd10;
+use App\Models\Setting;
 use App\Models\User;
+use App\Support\Audit;
 use Illuminate\Http\Request;
 use OpenSpout\Common\Entity\Row;
 use OpenSpout\Writer\XLSX\Writer as XlsxWriter;
@@ -31,6 +33,15 @@ class RegistryController extends Controller
             'diagnosis' => $this->diagnosisResults($request),
             default => $this->admissionResults($request),
         };
+
+        // PHI-read logging (Phase 2 — Item 3): every registry search that returns patient-
+        // identifiable data is logged ONCE per request — actor + applied filters (free-text terms
+        // redacted to a length) + result count. Break-glass intent: zero-result searches log too.
+        Audit::log('registry.search', 'registry', null, [
+            'mode' => $mode,
+            'filters' => $this->redactedFilters($request),
+            'result_count' => $results->total(),
+        ]);
 
         return Inertia::render('Registry/Index', [
             'mode' => $mode,
@@ -62,6 +73,29 @@ class RegistryController extends Controller
     {
         return in_array($request->query('mode'), ['admissions', 'consultations', 'diagnosis'], true)
             ? $request->query('mode') : 'admissions';
+    }
+
+    /**
+     * The applied filters for the PHI-read audit detail (Item 3): the free-text PHI fields (search
+     * name/MRN, diagnosis keyword) are reduced to a length-only marker so the audit trail records
+     * THAT a search happened without storing the searched name/MRN itself; all other filters are
+     * non-PHI (dates, outcome enums, consultant IDs) and kept verbatim for investigative value.
+     * Empty/false/unset filters are dropped.
+     */
+    private function redactedFilters(Request $request): array
+    {
+        $f = $request->only(['search', 'from', 'to', 'outcome', 'location', 'gender', 'nationality',
+            'age_from', 'age_to', 'admitted_from', 'discharged_to', 'delay', 'consultant_id', 'longterm',
+            'discharged', 'tb', 'readmit72',
+            'dx', 'dx_match', 'keyword', 'indication', 'ind_match', 'consultation_from', 'to_service', 'signed_only']);
+
+        foreach (['search', 'keyword'] as $phi) {
+            if (! empty($f[$phi])) {
+                $f[$phi] = mb_strlen((string) $f[$phi]) . ' chars';
+            }
+        }
+
+        return array_filter($f, fn ($v) => $v !== null && $v !== '' && $v !== [] && $v !== false && $v !== '0');
     }
 
     /** DISTINCT non-empty values of an admissions column — registry filter options from live data. */
@@ -285,8 +319,33 @@ class RegistryController extends Controller
         return 'Export-' . now()->format('d-m-Y') . '.' . $ext;
     }
 
+    /** Row count of the CURRENT export mode's query — one cheap COUNT for the PHI-read audit detail. */
+    private function exportRowCount(Request $request): int
+    {
+        $mode = $this->mode($request);
+        $query = match ($mode) {
+            'consultations' => $this->consultationQuery($request),
+            'diagnosis' => $this->diagnosisQuery($request),
+            default => $this->admissionQuery($request),
+        };
+
+        return $query->count();
+    }
+
+    /** One break-glass audit row per export request (Item 3): mode + redacted filters + row count. */
+    private function logExport(Request $request, string $action): void
+    {
+        Audit::log($action, 'registry', null, [
+            'mode' => $this->mode($request),
+            'filters' => $this->redactedFilters($request),
+            'row_count' => $this->exportRowCount($request),
+        ]);
+    }
+
     public function export(Request $request): StreamedResponse
     {
+        $this->logExport($request, 'registry.export');
+
         return response()->streamDownload(function () use ($request) {
             $out = fopen('php://output', 'w');
             $this->writeExport($request, fn (array $row) => fputcsv($out, array_map(self::csvSafe(...), $row)));
@@ -307,6 +366,8 @@ class RegistryController extends Controller
 
     public function exportXlsx(Request $request): BinaryFileResponse
     {
+        $this->logExport($request, 'registry.export_xlsx');
+
         $tmp = tempnam(sys_get_temp_dir(), 'reg') . '.xlsx';
         $writer = new XlsxWriter();
         $writer->openToFile($tmp);

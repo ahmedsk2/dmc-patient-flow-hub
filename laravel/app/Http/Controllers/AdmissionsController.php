@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Admission;
 use App\Models\AdmissionDiagnosis;
+use App\Models\AuditLog;
 use App\Models\Country;
 use App\Models\Icd10;
 use App\Models\Patient;
+use App\Models\Setting;
 use App\Models\User;
 use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
@@ -158,6 +160,15 @@ class AdmissionsController extends Controller
         $admission->load('patient', 'diagnoses');
         $names = Icd10::whereIn('code', $admission->diagnoses->pluck('icd10_code'))->pluck('name', 'code');
 
+        // PHI-read logging (Item 3): per-record detail opens are OFF by default — the request-level
+        // registry search/export logs already cover the access event. When an admin turns
+        // `log_record_opens` ON (Control → Settings) this writes ONE break-glass row per open.
+        if (Setting::current()->log_record_opens) {
+            Audit::log('registry.open', 'admission', (string) $admission->id, [
+                'mrn' => $admission->patient?->mrn,
+            ]);
+        }
+
         return response()->json([
             'id' => $admission->id,
             'mrn' => $admission->patient?->mrn,
@@ -171,6 +182,21 @@ class AdmissionsController extends Controller
             'current_location' => $admission->current_location,
             'consultant_id' => $admission->consultant_id,   // prefills the Modify consultant select (J2-13)
             'diagnoses' => $admission->diagnoses->map(fn ($d) => ['code' => $d->icd10_code, 'name' => $names[$d->icd10_code] ?? $d->icd10_code])->values(),
+            // Per-patient activity panel (Item 2): the audit trail for THIS admission, latest first.
+            // Behind the same admin/Can-Modify gate as the demographics above. Composite index
+            // (entity_type, entity_id) backs this lookup.
+            'activity' => AuditLog::where('entity_type', 'admission')
+                ->where('entity_id', (string) $admission->id)
+                ->latest('created_at')->latest('id')
+                ->limit(50)
+                ->get(['id', 'action', 'actor_name', 'details', 'created_at'])
+                ->map(fn ($row) => [
+                    'id' => $row->id,
+                    'action' => $row->action,
+                    'actor' => $row->actor_name,
+                    'details' => $row->details,   // already array-cast
+                    'at' => $row->created_at?->toIso8601String(),
+                ])->all(),
         ]);
     }
 

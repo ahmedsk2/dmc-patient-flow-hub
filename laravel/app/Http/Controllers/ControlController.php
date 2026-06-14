@@ -8,6 +8,7 @@ use App\Models\Setting;
 use App\Models\Specialty;
 use App\Models\User;
 use App\Support\Audit;
+use App\Support\AuditDiff;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -69,6 +70,8 @@ class ControlController extends Controller
             'icu_beds' => ['required', 'integer', 'min:0', 'max:1000'],
             'readmission_window_days' => ['required', 'integer', 'min:0', 'max:30'],
             'mfa_enforcement' => ['required', 'integer', 'in:0,1,2'],
+            // Phase 2, Item 3 — break-glass: also log per-record detail opens (default off)
+            'log_record_opens' => ['sometimes', 'boolean'],
             // Phase 1, Item 4 — dashboard alert thresholds (clinician-tunable)
             'alert_overcensus_pct' => ['required', 'integer', 'min:50', 'max:200'],
             'alert_boarding_max' => ['required', 'integer', 'min:0', 'max:100'],
@@ -127,8 +130,15 @@ class ControlController extends Controller
                 'message' => "{$user->username} still has active patients — reassign or discharge them first."]);
         }
 
+        // field-level diff (Item 4): snapshot the editable fields before update, diff after — so the
+        // audit detail shows only what CHANGED (role 4 → 0, can_manage false → true), not the whole
+        // payload. Passwords are not edited here, but omit defensively.
+        $fields = ['username', 'full_name', 'email', 'role', 'active', 'on_service',
+            'specialty_id', 'can_assign', 'can_add', 'can_manage', 'can_modify'];
+        $before = $user->only($fields);
         $user->update($data);
-        Audit::log('user.update', 'user', (string) $user->id, $data);
+        $diff = AuditDiff::diff($before, $user->fresh()->only($fields), ['password']);
+        Audit::log('user.update', 'user', (string) $user->id, $diff);
 
         return back()->with('flash', ['type' => 'success', 'message' => "Updated {$user->username}."]);
     }

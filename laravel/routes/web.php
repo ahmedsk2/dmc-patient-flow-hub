@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdmissionsController;
+use App\Http\Controllers\AuditController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\RegisterController;
@@ -136,5 +137,10 @@ Route::middleware(['auth', 'mfa.enroll', 'pwd'])->group(function () {
         Route::post('/control/users/{user}/send-reset', [ControlController::class, 'sendReset'])->name('control.users.sendReset');
         Route::post('/control/specialties', [ControlController::class, 'addSpecialty'])->name('control.specialties.add');
         Route::post('/control/reasons', [ControlController::class, 'addReason'])->name('control.reasons.add');
+
+        // Audit log viewer + exports (Phase 2 — Item 1). Admin-only (route group + FormRequest::authorize).
+        Route::get('/audit', [AuditController::class, 'index'])->name('audit.index');
+        Route::get('/audit/export', [AuditController::class, 'export'])->name('audit.export');
+        Route::get('/audit/export-xlsx', [AuditController::class, 'exportXlsx'])->name('audit.export.xlsx');
     });
 });

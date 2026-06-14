@@ -8,6 +8,7 @@ use App\Models\Patient;
 use App\Models\Specialty;
 use App\Models\User;
 use App\Support\Audit;
+use App\Support\AuditDiff;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -132,8 +133,13 @@ class ConsultationsController extends Controller
     {
         // edit is open to any clinical role (J1-10 legacy parity); gate lives in ConsultationRequest::authorize()
         $data = $request->validated();
+        // field-level diff (Item 4): snapshot the editable fields before the update, diff after
+        $fields = ['patient_name', 'mrn', 'age', 'bed', 'current_location',
+            'consultation_from', 'to_service', 'consultant_id', 'indication', 'other_indication'];
+        $before = $consultation->only($fields);
         $consultation->update([...$data, 'indication' => $data['indication'] ?? []]);
-        Audit::log('consultation.modify', 'consultation', (string) $consultation->id);
+        $diff = AuditDiff::diff($before, $consultation->fresh()->only($fields));
+        Audit::log('consultation.modify', 'consultation', (string) $consultation->id, $diff);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultation updated.']);
     }

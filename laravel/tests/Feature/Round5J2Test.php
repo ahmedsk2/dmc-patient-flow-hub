@@ -342,10 +342,10 @@ class Round5J2Test extends TestCase
         // QUIET legacy Modify semantics: no New badge, no assignment stamps
         $this->assertFalse($a->is_new_assignment);
         $this->assertNull($a->assigned_at);
-        // audited inside the modify audit
+        // audited inside the modify audit (Phase 2 — Item 4: structured {field:{from,to}} diff)
         $audit = AuditLog::where('action', 'patient.modify')->where('entity_id', (string) $a->id)->latest('id')->first();
-        $this->assertSame($to->id, (int) ($audit->details['consultant_id'] ?? 0));
-        $this->assertSame($from->id, (int) ($audit->details['consultant_was'] ?? 0));
+        $this->assertSame($to->id, (int) ($audit->details['consultant_id']['to'] ?? 0));
+        $this->assertSame($from->id, (int) ($audit->details['consultant_id']['from'] ?? 0));
     }
 
     public function test_modify_without_consultant_id_leaves_the_assignment_untouched(): void

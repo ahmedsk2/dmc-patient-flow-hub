@@ -10,6 +10,7 @@ use App\Models\Notification;
 use App\Models\User;
 use App\Services\ShuffleService;
 use App\Support\Audit;
+use App\Support\AuditDiff;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -34,6 +35,22 @@ class PatientActionController extends Controller
     private static function activeConsultantRule(): \Illuminate\Validation\Rules\Exists
     {
         return Rule::exists('users', 'id')->where('role', User::ROLE_CONSULTANT)->where('active', 1);
+    }
+
+    /**
+     * Normalise date-cast values to plain YYYY-MM-DD strings for a clean audit diff (an admit-date
+     * correction should read 2024-01-10 → 2024-01-12, not a full datetime). Used by modify()'s
+     * field-level diff so a Carbon vs Carbon comparison doesn't store noisy time components.
+     */
+    private function normalizeDates(array $attrs): array
+    {
+        foreach ($attrs as $k => $v) {
+            if ($v instanceof \Carbon\CarbonInterface) {
+                $attrs[$k] = $v->toDateString();
+            }
+        }
+
+        return $attrs;
     }
 
     /**
@@ -135,8 +152,6 @@ class PatientActionController extends Controller
             throw ValidationException::withMessages(['mrn' => 'That patient already has an active admission.']);
         }
 
-        // data correction may move the admit date — keep the old one in the audit trail
-        $oldAdmitDate = optional($admission->admit_date)->toDateString();
         $newAdmitDate = \Carbon\Carbon::parse($data['admit_date'])->toDateString();
 
         // optional QUIET consultant change (legacy Modify semantics, J2-13): the assignment moves
@@ -144,6 +159,14 @@ class PatientActionController extends Controller
         $oldConsultant = $admission->consultant_id ? (int) $admission->consultant_id : null;
         $newConsultant = ! empty($data['consultant_id']) ? (int) $data['consultant_id'] : null;
         $consultantChanged = $newConsultant !== null && $newConsultant !== $oldConsultant;
+
+        // Field-level diff (Item 4): snapshot the patient demographics + admission facts + the
+        // diagnosis code set BEFORE the mutation; the structured {field:{from,to}} payload is built
+        // after the transaction. Demographics are read from the record being edited (re-point edits
+        // a DIFFERENT patient, so its diff is computed against the resolved subject below).
+        $oldPatient = $patient->only(['mrn', 'name', 'age', 'gender', 'nationality']);
+        $oldAdmission = $admission->only(['bed', 'admit_date', 'admitted_from', 'current_location', 'consultant_id']);
+        $oldCodes = $admission->diagnoses->pluck('icd10_code')->sort()->values()->all();
 
         DB::transaction(function () use ($admission, $patient, $target, $data, $newAdmitDate, $consultantChanged, $newConsultant) {
             if ($target) {
@@ -181,13 +204,23 @@ class PatientActionController extends Controller
                 $admission->diagnoses()->create(['seq' => $seq++, 'icd10_code' => $code]);
             }
         });
-        $details = ['mrn' => $data['mrn']];
-        if ($oldAdmitDate !== $newAdmitDate) {
-            $details['admit_date_was'] = $oldAdmitDate;
-        }
-        if ($consultantChanged) {
-            $details['consultant_id'] = $newConsultant;
-            $details['consultant_was'] = $oldConsultant;
+        // build the field-level diff against the post-mutation state (Item 4). For a re-point the
+        // demographics subject is the TARGET patient; otherwise the same patient that was edited.
+        $admission->refresh();
+        $subject = $target ? $target->fresh() : $patient->fresh();
+        $newCodes = $admission->diagnoses()->orderBy('seq')->pluck('icd10_code')->sort()->values()->all();
+        $details = array_merge(
+            AuditDiff::diff(
+                $this->normalizeDates($oldPatient),
+                $this->normalizeDates($subject->only(['mrn', 'name', 'age', 'gender', 'nationality']))
+            ),
+            AuditDiff::diff(
+                $this->normalizeDates($oldAdmission),
+                $this->normalizeDates($admission->only(['bed', 'admit_date', 'admitted_from', 'current_location', 'consultant_id']))
+            ),
+        );
+        if ($dxDiff = AuditDiff::diagnosisDiff($oldCodes, $newCodes)) {
+            $details['diagnoses'] = $dxDiff;
         }
         Audit::log('patient.modify', 'admission', (string) $admission->id, $details);
         $this->bustDashboardCache();
