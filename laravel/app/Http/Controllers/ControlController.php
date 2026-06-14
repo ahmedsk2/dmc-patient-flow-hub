@@ -69,6 +69,11 @@ class ControlController extends Controller
             'icu_beds' => ['required', 'integer', 'min:0', 'max:1000'],
             'readmission_window_days' => ['required', 'integer', 'min:0', 'max:30'],
             'mfa_enforcement' => ['required', 'integer', 'in:0,1,2'],
+            // Phase 1, Item 4 — dashboard alert thresholds (clinician-tunable)
+            'alert_overcensus_pct' => ['required', 'integer', 'min:50', 'max:200'],
+            'alert_boarding_max' => ['required', 'integer', 'min:0', 'max:100'],
+            'alert_readmit_rate_pct' => ['required', 'integer', 'min:1', 'max:100'],
+            'alert_deaths_delta_pct' => ['required', 'integer', 'min:10', 'max:500'],
         ]);
         $settings = Setting::current();
 

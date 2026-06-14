@@ -14,6 +14,8 @@ const fieldLabels = {
     short_los: 'Short LOS', long_los: 'Long LOS',
     ward_beds: 'Licensed ward beds', icu_beds: 'Licensed ICU beds',
     readmission_window_days: 'Readmission window (days)', mfa_enforcement: 'MFA enforcement',
+    alert_overcensus_pct: 'Over-census alert (%)', alert_boarding_max: 'Boarding alert (max)',
+    alert_readmit_rate_pct: 'Readmission-rate alert (%)', alert_deaths_delta_pct: 'Mortality-rise alert (%)',
 };
 
 const tab = ref('overview');
@@ -25,6 +27,10 @@ const sForm = useForm({
     ward_beds: props.settings.ward_beds ?? 50, icu_beds: props.settings.icu_beds ?? 10,
     readmission_window_days: props.settings.readmission_window_days ?? 3,
     mfa_enforcement: props.settings.mfa_enforcement ?? 0,
+    alert_overcensus_pct: props.settings.alert_overcensus_pct ?? 100,
+    alert_boarding_max: props.settings.alert_boarding_max ?? 5,
+    alert_readmit_rate_pct: props.settings.alert_readmit_rate_pct ?? 10,
+    alert_deaths_delta_pct: props.settings.alert_deaths_delta_pct ?? 50,
 });
 const saveSettings = () => sForm.put('/control/settings', { preserveScroll: true });
 
@@ -119,6 +125,17 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
                     </select>
                 </label>
             </div>
+
+            <!-- Phase 1 — dashboard alert thresholds (clinician-tunable) -->
+            <h4 class="mb-1 mt-6 font-bold text-ink-800">Alert thresholds</h4>
+            <p class="mb-4 text-sm text-ink-400">Fire the dashboard alert strip when these operational limits are crossed. Defaults are conservative placeholders — review for your unit.</p>
+            <div class="grid gap-4 sm:grid-cols-2">
+                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Over-census alert (%)</span><input v-model="sForm.alert_overcensus_pct" type="number" min="50" max="200" :class="field" /><span class="mt-1 block text-xs text-ink-400">Occupancy at/above this fires an over-census alert (100 = full ward).</span></label>
+                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Boarding alert (max)</span><input v-model="sForm.alert_boarding_max" type="number" min="0" max="100" :class="field" /><span class="mt-1 block text-xs text-ink-400">More boarding (medically-cleared) patients than this fires an alert.</span></label>
+                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Readmission-rate alert (%)</span><input v-model="sForm.alert_readmit_rate_pct" type="number" min="1" max="100" :class="field" /><span class="mt-1 block text-xs text-ink-400">YTD non-ICU readmission rate at/above this fires an alert.</span></label>
+                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Mortality-rise alert (%)</span><input v-model="sForm.alert_deaths_delta_pct" type="number" min="10" max="500" :class="field" /><span class="mt-1 block text-xs text-ink-400">Month-over-month rise in deaths at/above this fires an alert.</span></label>
+            </div>
+
             <div class="mt-5 flex items-center gap-3">
                 <button @click="saveSettings" :disabled="sForm.processing" class="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save settings</button>
                 <span v-if="sForm.recentlySuccessful" class="text-sm font-semibold text-success-600">Saved ✓</span>

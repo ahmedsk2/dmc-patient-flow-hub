@@ -13,6 +13,7 @@ use App\Support\Audit;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -33,6 +34,17 @@ class PatientActionController extends Controller
     private static function activeConsultantRule(): \Illuminate\Validation\Rules\Exists
     {
         return Rule::exists('users', 'id')->where('role', User::ROLE_CONSULTANT)->where('active', 1);
+    }
+
+    /**
+     * Bust the heavy dashboard cache (Phase 1, Item 7). Called at the end of every method that
+     * mutates `admissions` rows — the heavy tier (consultant board, 6-month consults, YTD, top-dx,
+     * load chart) aggregates that table, so a patient-flow action must invalidate it. The live KPI
+     * tier (census, today's counts, boarding) is uncached and always reflects current state.
+     */
+    private function bustDashboardCache(): void
+    {
+        \App\Support\DashboardCache::bust();
     }
 
     // ---- same-day handover gate (consultant-changing moves only) --------------------------------
@@ -178,6 +190,7 @@ class PatientActionController extends Controller
             $details['consultant_was'] = $oldConsultant;
         }
         Audit::log('patient.modify', 'admission', (string) $admission->id, $details);
+        $this->bustDashboardCache();
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Patient details updated.']);
     }
@@ -202,6 +215,7 @@ class PatientActionController extends Controller
         }
         $admission->update(['consultant_id' => $u->id, 'is_new_assignment' => true, 'assigned_on' => now()->toDateString(), 'assigned_at' => now()]);
         Audit::log('admission.assign_to_me', 'admission', (string) $admission->id, ['consultant_id' => $u->id]);
+        $this->bustDashboardCache();
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Assigned to you.']);
     }
@@ -214,6 +228,7 @@ class PatientActionController extends Controller
         }
         $admission->update(['is_longterm' => ! $admission->is_longterm]);
         Audit::log('admission.longterm', 'admission', (string) $admission->id, ['is_longterm' => $admission->is_longterm]);
+        $this->bustDashboardCache();
 
         return back()->with('flash', ['type' => 'success', 'message' => $admission->is_longterm ? 'Marked long-term.' : 'Long-term label removed.']);
     }
@@ -283,6 +298,7 @@ class PatientActionController extends Controller
         Audit::log('admission.bulk_reassign', 'consultant', (string) $data['from_consultant_id'],
             ['to' => $data['to_consultant_id'], 'count' => $count, 'mark_new' => $markNew,
                 'handover_signature_ids' => $sigIds]);
+        $this->bustDashboardCache();
 
         return back()->with('flash', ['type' => 'success', 'message' => "Reassigned {$count} patient(s)."]);
     }
@@ -296,6 +312,7 @@ class PatientActionController extends Controller
         }
         $r = $shuffle->run(Auth::id());
         Audit::log('admission.shuffle', 'admission', null, $r);
+        $this->bustDashboardCache();
 
         $msg = $r['assigned'] > 0
             ? "Shuffle assigned {$r['assigned']} patient(s) across {$r['consultants']} consultant(s)." . ($r['skipped'] ? " {$r['skipped']} skipped (at capacity)." : '')
@@ -347,6 +364,7 @@ class PatientActionController extends Controller
         });
         Audit::log('admission.assign', 'admission', (string) $admission->id, ['consultant_id' => $data['consultant_id'], 'mark_new' => $markNew]
             + ($sig ? ['handover_signature_id' => $sig->id] : []));
+        $this->bustDashboardCache();
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultant assigned.']);
     }
@@ -364,6 +382,7 @@ class PatientActionController extends Controller
         $old = $admission->bed;
         $admission->update(['bed' => $data['bed'] ?? null]);
         Audit::log('admission.bed', 'admission', (string) $admission->id, ['bed' => $admission->bed, 'was' => $old]);
+        $this->bustDashboardCache();
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Bed updated.']);
     }
@@ -423,6 +442,7 @@ class PatientActionController extends Controller
             }
         });
         Audit::log($complete ? 'admission.discharge_both' : 'admission.medical_discharge', 'admission', (string) $admission->id, ['outcome' => $outcome]);
+        $this->bustDashboardCache();
 
         return back()->with('flash', ['type' => 'success', 'message' => $complete
             ? 'Patient discharged — file closed.'
@@ -478,6 +498,7 @@ class PatientActionController extends Controller
             $details['outcome_was'] = $oldOutcome;
         }
         Audit::log('admission.complete_discharge', 'admission', (string) $admission->id, $details);
+        $this->bustDashboardCache();
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Discharge completed.']);
     }
@@ -513,6 +534,7 @@ class PatientActionController extends Controller
             $this->voidPendingSignatures($admission);   // the file is closed — nothing left to sign
         });
         Audit::log('admission.icu_discharge', 'admission', (string) $admission->id, ['outcome' => $data['outcome']]);
+        $this->bustDashboardCache();
 
         return back()->with('flash', ['type' => 'success', 'message' => "ICU discharge complete ({$data['outcome']})."]);
     }
@@ -533,6 +555,7 @@ class PatientActionController extends Controller
         }
         $admission->update(['discharge_date' => null, 'medical_discharge_date' => null, 'outcome' => null, 'discharge_to' => null, 'transfer_type' => null, 'discharged_by' => null]);
         Audit::log('admission.reverse_discharge', 'admission', (string) $admission->id);
+        $this->bustDashboardCache();
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Discharge reversed.']);
     }
@@ -552,6 +575,7 @@ class PatientActionController extends Controller
         }
         $admission->update(['medical_discharge_date' => null, 'outcome' => null, 'discharge_to' => null, 'delay_reason' => null, 'discharged_by' => null]);
         Audit::log('admission.undo_medical_discharge', 'admission', (string) $admission->id);
+        $this->bustDashboardCache();
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Medical discharge undone.']);
     }
@@ -655,6 +679,7 @@ class PatientActionController extends Controller
             'specialty_id' => (int) $data['specialty_id'], 'specialty' => $specialty->name,
             'consultant_id' => (int) $data['consultant_id'], 'new_admission_id' => $new->id,
         ] + ($sig ? ['handover_signature_id' => $sig->id] : []));
+        $this->bustDashboardCache();
 
         return back()->with('flash', ['type' => 'success', 'message' => "Patient transferred to {$specialty->name}."]);
     }
@@ -713,6 +738,7 @@ class PatientActionController extends Controller
         });
         Audit::log('admission.transfer_external', 'admission', (string) $admission->id, ['service' => $data['service']]
             + ($new ? ['new_admission_id' => $new->id] : []));
+        $this->bustDashboardCache();
 
         return back()->with('flash', ['type' => 'success', 'message' => "Patient transferred to {$data['service']}."]);
     }
@@ -762,6 +788,7 @@ class PatientActionController extends Controller
             return $new;
         });
         Audit::log('admission.transfer', 'admission', (string) $admission->id, ['to' => $data['target'], 'new_admission_id' => $new->id]);
+        $this->bustDashboardCache();
 
         return back()->with('flash', ['type' => 'success', 'message' => "Patient transferred to {$data['target']}."]);
     }
@@ -824,6 +851,7 @@ class PatientActionController extends Controller
             return $new;
         });
         Audit::log('admission.icu_pull', 'admission', (string) $admission->id, ['new_admission_id' => $new->id]);
+        $this->bustDashboardCache();
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Patient admitted from ICU — now in the assignment queue.']);
     }
@@ -849,6 +877,7 @@ class PatientActionController extends Controller
             $admission->diagnoses()->delete();                        // explicit, even though the FK cascades
             $admission->delete();
         });
+        $this->bustDashboardCache();
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Admission deleted.']);
     }

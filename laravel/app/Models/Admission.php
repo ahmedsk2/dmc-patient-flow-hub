@@ -9,6 +9,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Admission extends Model
 {
+    protected static function booted(): void
+    {
+        // Keep the dashboard heavy-tier cache fresh: bust on any admission write so a
+        // clinician's own admit/assign/discharge shows up immediately, not after the TTL.
+        static::saved(fn () => \App\Support\DashboardCache::bust());
+        static::deleted(fn () => \App\Support\DashboardCache::bust());
+    }
+
     /**
      * Canonical "not in ICU" predicate — raw SQL form for the DB::table() analytics
      * (Dashboard/Statistics/Reports). Eloquent callers use scopeNonIcu(), which encodes

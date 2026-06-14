@@ -157,6 +157,9 @@ class ClinicalFlowTest extends TestCase
             'ward_beds' => 64, 'icu_beds' => $s->icu_beds,
             'readmission_window_days' => $s->readmission_window_days ?? 3,
             'mfa_enforcement' => $s->mfa_enforcement ?? 0,
+            // Phase 1 alert thresholds (now required by updateSettings)
+            'alert_overcensus_pct' => $s->alert_overcensus_pct, 'alert_boarding_max' => $s->alert_boarding_max,
+            'alert_readmit_rate_pct' => $s->alert_readmit_rate_pct, 'alert_deaths_delta_pct' => $s->alert_deaths_delta_pct,
         ])->assertRedirect();
 
         $this->assertDatabaseHas('setting_changes', [

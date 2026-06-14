@@ -26,9 +26,15 @@ const canManage = (row) => me.value.is_admin || me.value.can.manage || row.consu
 const search = ref(props.filters.search || '');
 const location = ref(props.filters.location || '');
 const view = ref(props.filters.view || '');
+// dashboard drill-through filters (Phase 1, Item 3) — set programmatically from the dashboard, carried
+// through apply() so toolbar changes don't drop them; a Clear-filters chip resets everything.
+const consultantId = ref(props.filters.consultant_id || '');
+const specialtyId = ref(props.filters.specialty_id || '');
 let timer = null;
-const apply = () => router.get('/patients', { search: search.value || undefined, location: location.value || undefined, view: view.value || undefined },
-    { preserveState: true, replace: true, preserveScroll: true });
+const apply = () => router.get('/patients', {
+        search: search.value || undefined, location: location.value || undefined, view: view.value || undefined,
+        consultant_id: consultantId.value || undefined, specialty_id: specialtyId.value || undefined,
+    }, { preserveState: true, replace: true, preserveScroll: true });
 watch(search, () => { clearTimeout(timer); timer = setTimeout(apply, 300); });
 const setLocation = (l) => { location.value = location.value === l ? '' : l; apply(); };
 const setView = (v) => { view.value = view.value === v ? '' : v; apply(); };
@@ -40,8 +46,14 @@ onMounted(() => { const d = localStorage.getItem('dmc-density'); if (d === 'comp
 const setDensity = (d) => { density.value = d; localStorage.setItem('dmc-density', d); };
 const compact = computed(() => density.value === 'compact');
 
+// clear ALL filters (incl. the dashboard drill-through ones) — reset to the default board
+const clearFilters = () => {
+    search.value = ''; location.value = ''; view.value = ''; consultantId.value = ''; specialtyId.value = '';
+    apply();
+};
 // collapsible consultant sections — expanded when a filter is active, else collapsed
-const filtering = computed(() => !!(props.filters.search || props.filters.view || props.filters.location));
+const filtering = computed(() => !!(props.filters.search || props.filters.view || props.filters.location
+    || props.filters.consultant_id || props.filters.specialty_id));
 const open = ref(new Set(filtering.value ? props.groups.map((g) => g.id) : []));
 const toggle = (id) => { open.value.has(id) ? open.value.delete(id) : open.value.add(id); open.value = new Set(open.value); };
 const allOpen = () => (open.value = new Set(props.groups.map((g) => g.id)));
@@ -299,8 +311,12 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
             </div>
             <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line">
                 <button v-for="l in ['Ward','ICU','ER']" :key="l" @click="setLocation(l)" class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="location === l ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ l }}</button>
-                <button v-for="v in [['longterm','Long-term'],['tb','TB']]" :key="v[0]" @click="setView(v[0])" class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="view === v[0] ? 'bg-accent-500 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ v[1] }}</button>
+                <button v-for="v in [['longterm','Long-term'],['tb','TB'],['boarding','Boarding']]" :key="v[0]" @click="setView(v[0])" class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="view === v[0] ? 'bg-accent-500 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ v[1] }}</button>
             </div>
+            <!-- a dashboard drill-through (consultant/specialty) or any filter shows a Clear chip -->
+            <button v-if="filtering" @click="clearFilters" class="inline-flex items-center gap-1.5 rounded-xl bg-ink-100 px-3 py-2 text-sm font-semibold text-ink-600 transition hover:bg-ink-200">
+                Clear filters ✕
+            </button>
             <!-- density: Comfortable/Compact (localStorage 'dmc-density'); compact tightens card padding + gaps -->
             <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line" role="group" aria-label="Board density">
                 <button v-for="d in [['comfortable','Comfortable'],['compact','Compact']]" :key="d[0]" @click="setDensity(d[0])"

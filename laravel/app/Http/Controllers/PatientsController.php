@@ -21,7 +21,9 @@ class PatientsController extends Controller
     public function index(Request $request): Response
     {
         $settings = Setting::current();
-        $filters = $request->only('search', 'location', 'view');
+        // consultant_id / specialty_id are dashboard drill-through filters (Phase 1, Item 3); they
+        // apply ON TOP of the D1 consultant scope, never replacing it.
+        $filters = $request->only('search', 'location', 'view', 'consultant_id', 'specialty_id');
         [$scope, $ownOnlyId] = $this->boardScope($request);
         $tbExists = $this->tbExists();
         [$groups, $readmitWindow] = $this->boardGroups($filters, $settings, $scope, $tbExists, $ownOnlyId);
@@ -127,6 +129,14 @@ class PatientsController extends Controller
             ->when($filters['location'] ?? null, fn ($q, $loc) => $q->where('current_location', $loc))
             ->when(($filters['view'] ?? null) === 'longterm', fn ($q) => $q->where('is_longterm', true))
             ->when(($filters['view'] ?? null) === 'tb', $tbExists)
+            // boarding (Phase 1, Item 1): medically cleared, bed still occupied. Open episodes only
+            // ($includeDischarged is false here), so whereNotNull(medical_discharge_date) is the rule.
+            // It does NOT get the D1 scope exemption (boarding belongs to specific consultants).
+            ->when(($filters['view'] ?? null) === 'boarding', fn ($q) => $q->whereNotNull('medical_discharge_date'))
+            // drill-through filters (Phase 1, Item 3): applied ON TOP of the D1 scope above
+            ->when($filters['consultant_id'] ?? null, fn ($q, $id) => $q->where('consultant_id', (int) $id))
+            ->when($filters['specialty_id'] ?? null, fn ($q, $id) =>
+                $q->whereHas('consultant', fn ($u) => $u->where('specialty_id', (int) $id)))
             ->when($filters['search'] ?? null, fn ($q, $s) => $q->whereHas('patient',
                 fn ($p) => $p->where('name', 'like', "%{$s}%")->orWhere('mrn', 'like', "%{$s}%")))
             ->orderBy('admit_date')
@@ -221,8 +231,9 @@ class PatientsController extends Controller
         }
 
         // zero-census on-service consultants get an empty group on the UNFILTERED board only —
-        // a search / location / view filter shouldn't drown its hits in empty sections
-        if (empty($filters['search']) && empty($filters['location']) && empty($filters['view'])) {
+        // a search / location / view / drill-through filter shouldn't drown its hits in empty sections
+        if (empty($filters['search']) && empty($filters['location']) && empty($filters['view'])
+            && empty($filters['consultant_id']) && empty($filters['specialty_id'])) {
             $zeroCensus = User::where('role', User::ROLE_CONSULTANT)->where('active', 1)->where('on_service', 1)
                 ->when($ownOnlyId !== null, fn ($q) => $q->where('id', $ownOnlyId))
                 ->get(['id', 'full_name', 'name', 'specialty_id', 'on_service']);

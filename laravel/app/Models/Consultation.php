@@ -10,6 +10,13 @@ class Consultation extends Model
 {
     protected $guarded = ['id'];
 
+    protected static function booted(): void
+    {
+        // Consultations feed the dashboard's 6-month consults chart (heavy tier) — bust on write.
+        static::saved(fn () => \App\Support\DashboardCache::bust());
+        static::deleted(fn () => \App\Support\DashboardCache::bust());
+    }
+
     protected function casts(): array
     {
         return [

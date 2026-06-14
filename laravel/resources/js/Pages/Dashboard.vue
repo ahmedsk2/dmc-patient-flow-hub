@@ -1,6 +1,6 @@
 <script setup>
-import { computed, onMounted, onUnmounted } from 'vue';
-import { Head, router } from '@inertiajs/vue3';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { useChartTheme } from '@/composables/useChartTheme';
 
@@ -9,6 +9,12 @@ const { gridColor, axisColor, strokeColor, inkColor } = useChartTheme();
 
 const props = defineProps({
     kpis: Object,
+    boardingCount: Number,
+    boardingWorklist: Array,
+    deltas: Object,
+    alerts: Array,
+    myUnit: Object,
+    loadBands: Object,
     trend: Object,
     consults: Object,
     consultDonut: Object,
@@ -26,6 +32,90 @@ const props = defineProps({
     generatedAt: String,
 });
 
+const page = usePage();
+const auth = computed(() => page.props.auth.user);
+
+// ── Drill-through (Item 3) ───────────────────────────────────────────────────────────────────
+// every dashboard number links to the matching /patients board view; the destination list re-uses
+// the same board filters so it matches the clicked figure (consultant_id stays inside the D1 scope).
+const drillTo = (params) => router.visit('/patients', { data: params });
+const parseHref = (href) => {
+    const [path, qs] = href.split('?');
+    return qs ? { path, query: Object.fromEntries(new URLSearchParams(qs)) } : { path };
+};
+const goHref = (href) => {
+    const { path, query } = parseHref(href);
+    router.visit(path, query ? { data: query } : {});
+};
+const consultantIdByName = computed(() =>
+    Object.fromEntries((props.consultantBoard || []).map((c) => [c.name, c.id])));
+const drillToConsultant = (name) => {
+    const id = consultantIdByName.value[name];
+    if (id) drillTo({ consultant_id: id });
+};
+
+// ── KPI deltas (Item 2) ──────────────────────────────────────────────────────────────────────
+// {value, delta, direction, good_up} → an up/down chip coloured good (green) / bad (red) / neutral.
+const deltaChip = (d) => {
+    if (!d || d.delta === undefined || d.delta === null) return null;
+    const up = d.direction === 'up';
+    const isGood = d.good_up === true ? up : d.good_up === false ? !up : null;
+    const arrow = d.direction === 'flat' ? '■' : up ? '▲' : '▼';
+    return {
+        label: `${arrow} ${Math.abs(d.delta)}`,
+        cls: isGood === true ? 'bg-success-100 text-success-600'
+            : isGood === false ? 'bg-danger-100 text-danger-600'
+            : 'bg-ink-100 text-ink-500',
+    };
+};
+const chip = (c) => (c.deltaKey ? deltaChip(props.deltas?.[c.deltaKey]) : null);
+
+// ── Threshold alert strip (Item 4) ───────────────────────────────────────────────────────────
+// dismissible per-key via sessionStorage (tab-scoped) so a ward screen re-surfaces the alert on
+// reload, while a nurse who dismisses it during a shift isn't re-nagged in the same tab.
+const dismissed = ref(new Set(JSON.parse(sessionStorage.getItem('dmc-alerts-dismissed') || '[]')));
+const dismiss = (key) => {
+    dismissed.value.add(key);
+    dismissed.value = new Set(dismissed.value);
+    sessionStorage.setItem('dmc-alerts-dismissed', JSON.stringify([...dismissed.value]));
+};
+const visibleAlerts = computed(() => (props.alerts || []).filter((a) => !dismissed.value.has(a.key)));
+
+// ── 'My unit today' lens (Item 5) ────────────────────────────────────────────────────────────
+const isConsultant = computed(() => auth.value?.role === 3);
+const myToggle = ref(localStorage.getItem('dmc-my-unit') !== 'off');   // default ON for consultants
+const setMyToggle = (v) => { myToggle.value = v; localStorage.setItem('dmc-my-unit', v ? 'on' : 'off'); };
+const myUnitCards = computed(() => props.myUnit ? [
+    ['Active', props.myUnit.total, 'bg-brand-50', '/patients'],
+    ['Ward', props.myUnit.ward, 'bg-ink-50', '/patients?location=Ward'],
+    ['ICU', props.myUnit.icu, 'bg-danger-50', '/patients?location=ICU'],
+    ['Boarding', props.myUnit.boarding, 'bg-warning-50', '/patients?view=boarding'],
+    ['New (24h)', props.myUnit.new, 'bg-info-50', null],
+    ['Consults', props.myUnit.myConsults, 'bg-accent-300/20', '/consultations'],
+] : []);
+
+// ── Load-fairness bands (Item 6) ─────────────────────────────────────────────────────────────
+const barTone = (c) => {
+    const isHosp = c.specialty_id === 1;
+    const min = isHosp ? props.loadBands.minHosp : props.loadBands.minSubs;
+    const max = isHosp ? props.loadBands.maxHosp : props.loadBands.maxSubs;
+    if (c.c < min) return 'from-warning-400 to-warning-500';
+    if (c.c > max) return 'from-danger-400 to-danger-600';
+    return 'from-brand-400 to-brand-600';
+};
+const bandStyle = (c) => {
+    const isHosp = c.specialty_id === 1;
+    const min = isHosp ? props.loadBands.minHosp : props.loadBands.minSubs;
+    const max = isHosp ? props.loadBands.maxHosp : props.loadBands.maxSubs;
+    const ref = consultantMax.value;
+    return { left: `${Math.min(100, min / ref * 100)}%`, width: `${Math.max(0, (max - min) / ref * 100)}%` };
+};
+const overloaded = computed(() => (props.perConsultant || []).filter((c) =>
+    c.c > (c.specialty_id === 1 ? props.loadBands.maxHosp : props.loadBands.maxSubs)).length);
+const underloaded = computed(() => (props.perConsultant || []).filter((c) =>
+    c.c < (c.specialty_id === 1 ? props.loadBands.minHosp : props.loadBands.minSubs)).length);
+const canShuffle = computed(() => auth.value?.role !== 5 && (auth.value?.is_admin || auth.value?.can?.assign));
+
 const boardSections = computed(() => {
     const bucket = (c) => c.on_service && c.specialty_id === 1 ? 'hosp' : c.on_service ? 'subs' : 'off';
     return [
@@ -38,16 +128,18 @@ const boardSections = computed(() => {
 const C = { teal: '#009ca6', tealLight: '#38b4ba', navy: '#00565e', gold: '#d9a23c', pink: '#cf4b8f', red: '#e0413e', blue: '#2f7fe0', slate: '#5b6a6e' };
 
 const kpiCards = computed(() => [
-    { label: 'Active Census', value: props.kpis.census, sub: `${props.kpis.ward} ward · ${props.kpis.icu} ICU`, icon: 'bed', tone: 'brand' },
-    { label: 'Admissions Today', value: props.kpis.admissionsToday, sub: `${props.kpis.dischargesToday} discharged today`, icon: 'in', tone: 'blue' },
-    { label: 'Active Consultations', value: props.kpis.activeConsults, sub: 'awaiting sign-off', icon: 'chat', tone: 'gold' },
-    { label: 'Bed Occupancy', value: props.kpis.occupancy + '%', sub: `of ${props.kpis.wardBeds} ward beds`, icon: 'gauge', tone: 'teal' },
+    { label: 'Active Census', value: props.kpis.census, sub: `${props.kpis.ward} ward · ${props.kpis.icu} ICU`, icon: 'bed', tone: 'brand', href: '/patients' },
+    { label: 'Admissions Today', value: props.kpis.admissionsToday, sub: `${props.kpis.dischargesToday} discharged today · vs 7d avg`, icon: 'in', tone: 'blue', deltaKey: 'admissions' },
+    { label: 'Active Consultations', value: props.kpis.activeConsults, sub: 'awaiting sign-off', icon: 'chat', tone: 'gold', href: '/consultations' },
+    { label: 'Bed Occupancy', value: props.kpis.occupancy + '%', sub: `of ${props.kpis.wardBeds} ward beds · vs 1w ago`, icon: 'gauge', tone: 'teal', deltaKey: 'occupancy' },
     { label: 'Avg LOS (month)', value: props.kpis.avgLosMonth, sub: 'days · non-ICU discharges', icon: 'clock', tone: 'navy' },
-    { label: 'Mortality (Month)', value: props.kpis.deathsMonth, sub: 'this calendar month', icon: 'trendDown', tone: 'red' },
+    { label: 'Mortality (Month)', value: props.kpis.deathsMonth, sub: 'this calendar month · vs prior month', icon: 'trendDown', tone: 'red', deltaKey: 'deathsMonth' },
+    { label: 'Boarding', value: props.boardingCount, sub: 'medically cleared · bed still occupied', icon: 'boarding', tone: 'warning', href: '/patients?view=boarding' },
 ]);
 const toneClass = {
     brand: 'from-brand-500 to-brand-700', blue: 'from-info-500 to-blue-700', gold: 'from-accent-400 to-accent-600',
     teal: 'from-brand-400 to-brand-600', red: 'from-danger-500 to-danger-600', navy: 'from-navy-700 to-navy-900',
+    warning: 'from-warning-400 to-warning-500',
 };
 const kpiIcons = {
     bed: 'M3 7.5h13.5a3 3 0 0 1 3 3V18M3 7.5V18m0-10.5V6m18 12H3',
@@ -56,6 +148,7 @@ const kpiIcons = {
     gauge: 'M12 3a9 9 0 1 0 9 9M12 12l4.5-4.5M21 12h-2M5 12H3m9-7v2',
     clock: 'M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
     trendDown: 'M2.25 6 9 12.75l4.286-4.286a11.948 11.948 0 0 1 4.306 6.43l.776 2.898m0 0 3.182-5.511m-3.182 5.51-5.511-3.181',
+    boarding: 'M12 6v6l3.75 2.25M3.75 12a8.25 8.25 0 1 1 16.5 0 8.25 8.25 0 0 1-16.5 0Z',
 };
 
 // PNG-export-only toolbar (no zoom/pan clutter) — applied to every chart on this page
@@ -103,7 +196,14 @@ const consultsSeries = computed(() => [{ name: 'New', data: props.consults.new }
 const losSeries = computed(() => [{ name: 'Patients', data: props.los.data }]);
 
 const donutOptions = computed(() => ({
-    chart: { type: 'donut', toolbar: dlToolbar, fontFamily: 'inherit' },
+    chart: { type: 'donut', toolbar: dlToolbar, fontFamily: 'inherit', events: {
+        // drill-through (Item 3): the long-term slice → the long-term board view. Hospitalist /
+        // subspecialty slices map to a per-admission field the board can't filter coarsely yet, so
+        // only long-term drills for now (consistent with the donut's own definition).
+        dataPointSelection: (_e, _c, config) => {
+            if (['hospitalist', 'subspecialty', 'longterm'][config.dataPointIndex] === 'longterm') drillTo({ view: 'longterm' });
+        },
+    } },
     colors: [C.teal, C.gold, C.navy],
     labels: ['Hospitalist', 'Sub-specialty', 'Long-term'],
     legend: { position: 'bottom', fontWeight: 600 },
@@ -141,7 +241,7 @@ const ytdCards = computed(() => [
     ['Consultations', props.ytd.consultations], ['Sign-offs', props.ytd.signoffs],
 ]);
 
-const refresh = () => router.reload({ only: ['kpis', 'trend', 'consults', 'consultDonut', 'los', 'mix', 'donutTotal', 'donutTb', 'perConsultant', 'consultantBoard', 'activity24h', 'ytd', 'topDxWeek', 'topDxWeekNum', 'recent', 'generatedAt'] });
+const refresh = () => router.reload({ only: ['kpis', 'boardingCount', 'boardingWorklist', 'deltas', 'alerts', 'myUnit', 'loadBands', 'trend', 'consults', 'consultDonut', 'los', 'mix', 'donutTotal', 'donutTb', 'perConsultant', 'consultantBoard', 'activity24h', 'ytd', 'topDxWeek', 'topDxWeekNum', 'recent', 'generatedAt'] });
 const print = () => window.print();
 
 // 5-minute auto-refresh, visibility-gated: a dashboard left open on a ward screen stays
@@ -174,20 +274,89 @@ onUnmounted(() => clearInterval(autoRefresh));
             </div>
         </div>
 
+        <!-- Threshold alert strip (Item 4): dismissible, severity-coloured, atop the dashboard -->
+        <div v-for="alert in visibleAlerts" :key="alert.key"
+             class="no-print mb-4 flex items-start justify-between gap-3 rounded-2xl px-5 py-3 ring-1"
+             :class="alert.severity === 'danger'
+                 ? 'bg-danger-100/80 ring-danger-300/60 text-danger-700'
+                 : 'bg-warning-100/80 ring-warning-300/60 text-warning-600'">
+            <div class="flex items-center gap-3">
+                <svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.9" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
+                <span class="text-sm font-semibold">{{ alert.message }}</span>
+                <button v-if="alert.link" @click="goHref(alert.link)" class="ml-2 text-xs font-bold underline hover:no-underline">View →</button>
+            </div>
+            <button @click="dismiss(alert.key)" aria-label="Dismiss alert" class="shrink-0 text-inherit hover:opacity-60">✕</button>
+        </div>
+
+        <!-- 'My unit today' lens (Item 5): consultants only; default ON, toggle persisted per-browser -->
+        <div v-if="isConsultant && myUnit && myToggle" class="mb-5 rounded-2xl bg-card p-5 shadow-card-lg ring-1 ring-brand-200/60">
+            <div class="mb-3 flex items-center justify-between">
+                <h3 class="font-bold text-ink-800">My patients today</h3>
+                <button @click="setMyToggle(false)" class="text-xs text-ink-400 hover:text-ink-600">Hide</button>
+            </div>
+            <div class="grid grid-cols-3 gap-3 sm:grid-cols-6">
+                <button v-for="[label, value, tone, link] in myUnitCards" :key="label" type="button"
+                        class="rounded-xl p-3 text-left ring-1 ring-line transition" :class="[tone, link ? 'cursor-pointer hover:ring-brand-300' : 'cursor-default']"
+                        @click="link && goHref(link)">
+                    <p class="nums text-2xl font-extrabold text-ink-900">{{ value }}</p>
+                    <p class="text-xs text-ink-400">{{ label }}</p>
+                </button>
+            </div>
+            <Link v-if="myUnit.signPending" href="/handovers"
+                  class="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-700 ring-1 ring-brand-200 hover:bg-brand-100">
+                {{ myUnit.signPending }} pending handover {{ myUnit.signPending === 1 ? 'signature' : 'signatures' }} →
+            </Link>
+        </div>
+        <div v-else-if="isConsultant && myUnit && !myToggle" class="mb-5">
+            <button @click="setMyToggle(true)" class="text-xs font-semibold text-brand-600 hover:underline">Show my patients →</button>
+        </div>
+
         <!-- KPI hero row -->
-        <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
-            <div v-for="c in kpiCards" :key="c.label" class="relative overflow-hidden rounded-2xl bg-card p-5 shadow-card-lg ring-1 ring-brand-200/60">
+        <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-7">
+            <component :is="c.href ? 'button' : 'div'" v-for="c in kpiCards" :key="c.label" type="button"
+                @click="c.href && goHref(c.href)"
+                class="relative w-full overflow-hidden rounded-2xl bg-card p-5 text-left shadow-card-lg ring-1 transition"
+                :class="c.tone === 'warning' ? 'ring-warning-300/60' : 'ring-brand-200/60'"
+                :style="c.href ? '' : ''">
                 <div class="flex items-start justify-between">
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-wide text-ink-400">{{ c.label }}</p>
-                        <p class="font-display nums mt-2 text-3xl font-extrabold text-ink-900">{{ c.value }}</p>
+                        <p class="font-display nums mt-2 text-3xl font-extrabold" :class="c.tone === 'warning' ? 'text-warning-600' : 'text-ink-900'">{{ c.value }}</p>
                         <p class="mt-1 text-xs text-ink-400">{{ c.sub }}</p>
+                        <span v-if="chip(c)" class="mt-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold" :class="chip(c).cls">{{ chip(c).label }}</span>
                     </div>
                     <div class="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br text-white shadow-lg" :class="toneClass[c.tone]">
                         <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" :d="kpiIcons[c.icon]" /></svg>
                     </div>
                 </div>
                 <div class="pointer-events-none absolute -bottom-6 -right-4 h-20 w-20 rounded-full bg-gradient-to-br opacity-10" :class="toneClass[c.tone]"></div>
+                <span v-if="c.href" class="pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-transparent transition hover:ring-brand-400"></span>
+            </component>
+        </div>
+
+        <!-- Boarding worklist (Item 1): ranked longest-boarding first, links to the board view -->
+        <div v-if="boardingWorklist.length" class="mt-5 rounded-2xl bg-card p-5 shadow-card ring-1 ring-warning-300/60">
+            <div class="mb-3 flex items-center justify-between">
+                <h3 class="font-semibold text-ink-700">Boarding patients
+                    <span class="nums ml-2 rounded-full bg-warning-100 px-2 py-0.5 text-xs font-bold text-warning-600">{{ boardingCount }}</span>
+                </h3>
+                <button @click="goHref('/patients?view=boarding')" class="text-xs font-semibold text-brand-600 hover:underline">View board →</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
+                        <th scope="col" class="px-2 py-2">Name</th><th scope="col" class="px-2 py-2">MRN</th>
+                        <th scope="col" class="px-2 py-2">Consultant</th><th scope="col" class="px-2 py-2 text-right">Delay (days)</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-line">
+                        <tr v-for="r in boardingWorklist" :key="r.id" class="cursor-pointer hover:bg-warning-50/40" @click="goHref('/patients?view=boarding')">
+                            <td class="px-2 py-2 font-semibold text-ink-700">{{ r.name }}</td>
+                            <td class="nums px-2 py-2 text-ink-500">{{ r.mrn }}</td>
+                            <td class="px-2 py-2 text-ink-600">{{ r.consultant }}</td>
+                            <td class="nums px-2 py-2 text-right font-bold text-warning-600">{{ r.delay_days }}</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -246,18 +415,34 @@ onUnmounted(() => clearInterval(autoRefresh));
         </div>
 
         <div class="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
-            <!-- per consultant -->
+            <!-- per consultant — load-fairness bands (Item 6) + drill-through (Item 3) -->
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-                <h3 class="mb-4 font-semibold text-ink-700">Active Load by Consultant</h3>
+                <div class="mb-1 flex items-center justify-between">
+                    <h3 class="font-semibold text-ink-700">Active Load by Consultant</h3>
+                    <span class="text-[11px] text-ink-400">band = min–max census</span>
+                </div>
                 <div class="space-y-3">
-                    <div v-for="c in perConsultant" :key="c.name" class="flex items-center gap-3">
+                    <div v-for="c in perConsultant" :key="c.name"
+                         class="flex cursor-pointer items-center gap-3 rounded-lg px-1 py-0.5 hover:bg-brand-50/40"
+                         @click="drillTo({ consultant_id: c.id })">
                         <div class="w-40 shrink-0 truncate text-sm font-medium text-ink-600">{{ c.name }}</div>
-                        <div class="h-2.5 flex-1 overflow-hidden rounded-full bg-ink-50">
-                            <div class="h-full rounded-full bg-gradient-to-r from-brand-400 to-brand-600" :style="{ width: (c.c / consultantMax * 100) + '%' }"></div>
+                        <div class="relative h-2.5 flex-1 overflow-hidden rounded-full bg-ink-50">
+                            <!-- min–max reference band for this consultant's specialty -->
+                            <div class="absolute top-0 h-full rounded-full bg-brand-100/60" :style="bandStyle(c)"></div>
+                            <!-- actual load, coloured below-min / in-band / above-max -->
+                            <div class="relative h-full rounded-full bg-gradient-to-r" :class="barTone(c)" :style="{ width: (c.c / consultantMax * 100) + '%' }"></div>
                         </div>
                         <div class="nums w-8 text-right text-sm font-bold text-ink-800">{{ c.c }}</div>
                     </div>
                     <p v-if="!perConsultant.length" class="text-sm text-ink-400">No active patients assigned.</p>
+                </div>
+                <!-- load-spread summary + rebalance hint -->
+                <div v-if="overloaded || underloaded" class="mt-3 flex items-center gap-3 text-xs">
+                    <span v-if="overloaded" class="font-semibold text-danger-600">{{ overloaded }} over max</span>
+                    <span v-if="underloaded" class="font-semibold text-warning-600">{{ underloaded }} below min</span>
+                    <button v-if="canShuffle" @click="goHref('/patients')" class="ml-auto font-semibold text-brand-600 hover:underline">
+                        Rebalance (Shuffle / Reassign) →
+                    </button>
                 </div>
             </div>
             <!-- recent admissions -->
@@ -308,7 +493,7 @@ onUnmounted(() => clearInterval(autoRefresh));
                     <tbody class="divide-y divide-line">
                         <template v-for="sec in boardSections" :key="sec.key">
                             <tr class="bg-app/70"><td colspan="7" class="px-5 py-1.5 text-xs font-bold uppercase tracking-wide text-ink-500">{{ sec.label }}</td></tr>
-                            <tr v-for="c in sec.rows" :key="c.name" class="hover:bg-brand-50/40">
+                            <tr v-for="c in sec.rows" :key="c.name" class="cursor-pointer hover:bg-brand-50/40" @click="drillTo({ consultant_id: c.id })">
                                 <td class="px-5 py-2 font-semibold text-ink-700">Dr. {{ c.name }}</td>
                                 <td class="nums px-3 py-2 text-center text-ink-600">{{ c.old || '' }}</td>
                                 <td class="nums px-3 py-2 text-center text-info-500">{{ c.new || '' }}</td>

@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Admission;
 use App\Models\Setting;
+use App\Models\User;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -39,6 +42,26 @@ class DashboardController extends Controller
         $signed24h = (int) DB::table('consultations')->where('signoff_date', '>=', Carbon::yesterday()->toDateString())->count();
         $deathsMonth = (int) DB::table('admissions')->where('outcome', 'Dead')->whereBetween('discharge_date', [$monthStart, $today])->count();
 
+        // ── Boarding (Phase 1, Item 1) ─────────────────────────────────────────────────────────
+        // medically cleared but the bed is still occupied — the "Disch. still in" board badge
+        // (medical_discharge_date IS NOT NULL AND discharge_date IS NULL) promoted to a KPI.
+        // delay_days = DATEDIFF(today, medical_discharge_date) = days since clearance (NOT lengthOfStay,
+        // which measures from admit). LIVE tier — never cached, must reflect the last action.
+        $boardingCount = (int) DB::table('admissions')
+            ->whereNull('discharge_date')->whereNotNull('medical_discharge_date')->count();
+        $boardingWorklist = DB::table('admissions as a')
+            ->join('patients as p', 'p.id', '=', 'a.patient_id')
+            ->leftJoin('users as u', 'u.id', '=', 'a.consultant_id')
+            ->whereNull('a.discharge_date')->whereNotNull('a.medical_discharge_date')
+            ->selectRaw('a.id, p.name, p.mrn, a.medical_discharge_date,
+                         DATEDIFF(CURDATE(), a.medical_discharge_date) delay_days,
+                         COALESCE(u.full_name, u.name) consultant')
+            ->orderByDesc('delay_days')->orderBy('a.id')->limit(10)->get()
+            ->map(fn ($r) => [
+                'id' => (int) $r->id, 'name' => $r->name, 'mrn' => $r->mrn,
+                'delay_days' => (int) $r->delay_days, 'consultant' => $r->consultant ?: 'Unassigned',
+            ]);
+
         // current-month average LOS over non-ICU discharges — the Statistics avgLos formula family
         // (AVG(DATEDIFF) with the >= 0 guard), month-scoped like deathsMonth above; 2 decimals
         // like the legacy dashboard figure (J2-6)
@@ -52,11 +75,18 @@ class DashboardController extends Controller
         $occupancy = round($activeWard / $wardBeds * 100, 1);
         $occupancyGauge = min(100, $occupancy);
 
+        // ── Heavy aggregations (Phase 1, Item 7) ───────────────────────────────────────────────
+        // Chart data + historical aggregations that change slowly: cached for 5 min (= the Vue
+        // auto-refresh interval) and busted on every patient-flow mutation by PatientActionController.
+        // Live KPIs (census, today's counts, boarding, occupancy, recent, myUnit, alerts) stay OUTSIDE.
+        // $admBy/$disBy are returned out of the cache because the Item-2 delta block consumes them.
+        $nonIcu = $this->nonIcu;
+        $heavy = Cache::remember(\App\Support\DashboardCache::KEY, 300, function () use ($today, $monthStart, $yearStart, $nonIcu) {
         // 31-point admissions-vs-discharges trend: today-30 .. today INCLUSIVE, like the legacy
         // 31-day loop (dashboard/1.php) — non-ICU (J2-2)
         $start30 = Carbon::today()->subDays(30)->toDateString();
-        $admBy = DB::table('admissions')->selectRaw('admit_date d, COUNT(*) c')->whereBetween('admit_date', [$start30, $today])->whereRaw($this->nonIcu)->groupBy('admit_date')->pluck('c', 'd');
-        $disBy = DB::table('admissions')->selectRaw('discharge_date d, COUNT(*) c')->whereBetween('discharge_date', [$start30, $today])->whereRaw($this->nonIcu)->groupBy('discharge_date')->pluck('c', 'd');
+        $admBy = DB::table('admissions')->selectRaw('admit_date d, COUNT(*) c')->whereBetween('admit_date', [$start30, $today])->whereRaw($nonIcu)->groupBy('admit_date')->pluck('c', 'd');
+        $disBy = DB::table('admissions')->selectRaw('discharge_date d, COUNT(*) c')->whereBetween('discharge_date', [$start30, $today])->whereRaw($nonIcu)->groupBy('discharge_date')->pluck('c', 'd');
         $trend = ['labels' => [], 'admissions' => [], 'discharges' => []];
         for ($i = 30; $i >= 0; $i--) {
             $d = Carbon::today()->subDays($i)->toDateString();
@@ -90,7 +120,7 @@ class DashboardController extends Controller
         // LOS distribution (discharged this year, non-ICU)
         $losRows = DB::table('admissions')->selectRaw('DATEDIFF(discharge_date, admit_date) los')
             ->whereNotNull('discharge_date')->whereNotNull('admit_date')->whereBetween('discharge_date', [$yearStart, $today])
-            ->whereRaw($this->nonIcu)->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')->pluck('los');
+            ->whereRaw($nonIcu)->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')->pluck('los');
         $losBuckets = ['0–2' => 0, '3–5' => 0, '6–10' => 0, '11–20' => 0, '21+' => 0];
         foreach ($losRows as $l) {
             $l = (int) $l;
@@ -121,11 +151,15 @@ class DashboardController extends Controller
         // alias must NOT collide with a real column (users.name): MySQL resolves GROUP BY to the
         // column (only_full_group_by error), MariaDB can't match repeated raw expressions either.
         // A unique alias resolves identically on both engines. Re-keyed below to keep the UI shape.
+        // id + specialty_id added (Items 3 + 6): the load chart drill-through resolves a bar to a
+        // consultant_id, and the load-fairness band picks min/max by specialty. u.id is the PK so
+        // the GROUP BY stays well-formed on only_full_group_by (MySQL/MariaDB) when listed explicitly.
         $perConsultant = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
-            ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
+            ->selectRaw('u.id consultant_id, u.specialty_id, COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
             ->whereNull('a.discharge_date')->whereRaw('(a.current_location <> "ICU" OR a.current_location IS NULL)')
-            ->groupBy('consultant')->orderByDesc('c')->limit(8)->get()
-            ->map(fn ($r) => (object) ['name' => $r->consultant, 'c' => (int) $r->c]);
+            ->groupByRaw('u.id, u.specialty_id, consultant')->orderByDesc('c')->limit(8)->get()
+            ->map(fn ($r) => (object) ['id' => (int) $r->consultant_id, 'specialty_id' => (int) $r->specialty_id,
+                'name' => $r->consultant, 'c' => (int) $r->c]);
 
         // per-consultant breakdown of the active census (legacy "Patient count per consultant").
         // USERS-driven (left join) so an on-service consultant with ZERO patients still appears
@@ -141,7 +175,7 @@ class DashboardController extends Controller
                 ->where(fn ($w2) => $w2->where('u.on_service', 1)->where('u.role', \App\Models\User::ROLE_CONSULTANT))
                 ->orWhereExists(fn ($s) => $s->selectRaw('1')->from('admissions as ax')
                     ->whereColumn('ax.consultant_id', 'u.id')->whereNull('ax.discharge_date')))
-            ->selectRaw("COALESCE(u.full_name, u.name) consultant, u.on_service, u.specialty_id,
+            ->selectRaw("u.id, COALESCE(u.full_name, u.name) consultant, u.on_service, u.specialty_id,
                 SUM(CASE WHEN a.id IS NOT NULL AND a.assigned_at >= ? THEN 1 ELSE 0 END) new,
                 SUM(CASE WHEN a.id IS NOT NULL AND (a.assigned_at IS NULL OR a.assigned_at < ?) THEN 1 ELSE 0 END) old,
                 SUM(CASE WHEN a.current_location = 'ICU' THEN 1 ELSE 0 END) icu,
@@ -149,9 +183,10 @@ class DashboardController extends Controller
                 SUM(CASE WHEN a.id IS NOT NULL AND {$tbExists} THEN 1 ELSE 0 END) tb,
                 SUM(CASE WHEN a.id IS NOT NULL AND (a.current_location <> 'ICU' OR a.current_location IS NULL) AND a.medical_discharge_date IS NULL AND a.is_longterm = 0 AND NOT {$tbExists} THEN 1 ELSE 0 END) active,
                 COUNT(a.id) total", [$newCutoff, $newCutoff])
-            ->groupByRaw('consultant, u.on_service, u.specialty_id')
+            ->groupByRaw('u.id, consultant, u.on_service, u.specialty_id')
             ->orderByDesc('total')->get()
             ->map(fn ($r) => [
+                'id' => (int) $r->id,
                 'name' => $r->consultant, 'on_service' => (bool) $r->on_service, 'specialty_id' => (int) $r->specialty_id,
                 'new' => (int) $r->new, 'old' => (int) $r->old, 'icu' => (int) $r->icu, 'ward' => (int) $r->ward,
                 'tb' => (int) $r->tb, 'active' => (int) $r->active, 'total' => (int) $r->total,
@@ -164,11 +199,11 @@ class DashboardController extends Controller
         $since = Carbon::today()->subDay()->toDateString();
         $activeConsultant = fn ($q) => $q->where('u.role', \App\Models\User::ROLE_CONSULTANT)->where('u.active', 1);
         $adm24 = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
-            ->where('a.admit_date', '>=', $since)->whereRaw($this->nonIcu)->tap($activeConsultant)
+            ->where('a.admit_date', '>=', $since)->whereRaw($nonIcu)->tap($activeConsultant)
             ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
             ->groupBy('consultant')->pluck('c', 'consultant');
         $dis24 = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
-            ->where('a.discharge_date', '>=', $since)->whereRaw($this->nonIcu)->tap($activeConsultant)
+            ->where('a.discharge_date', '>=', $since)->whereRaw($nonIcu)->tap($activeConsultant)
             ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
             ->groupBy('consultant')->pluck('c', 'consultant');
         // every ON-SERVICE active consultant appears, zeros included — the legacy table was
@@ -185,16 +220,11 @@ class DashboardController extends Controller
 
         // year-to-date counter strip (non-ICU admissions/discharges, per docs/METRICS.md)
         $ytd = [
-            'admissions' => (int) DB::table('admissions')->whereBetween('admit_date', [$yearStart, $today])->whereRaw($this->nonIcu)->count(),
-            'discharges' => (int) DB::table('admissions')->whereBetween('discharge_date', [$yearStart, $today])->whereRaw($this->nonIcu)->count(),
+            'admissions' => (int) DB::table('admissions')->whereBetween('admit_date', [$yearStart, $today])->whereRaw($nonIcu)->count(),
+            'discharges' => (int) DB::table('admissions')->whereBetween('discharge_date', [$yearStart, $today])->whereRaw($nonIcu)->count(),
             'consultations' => (int) DB::table('consultations')->whereBetween('consultation_date', [$yearStart, $today])->count(),
             'signoffs' => (int) DB::table('consultations')->whereBetween('signoff_date', [$yearStart, $today])->count(),
         ];
-
-        $recent = DB::table('admissions as a')->join('patients as p', 'p.id', '=', 'a.patient_id')
-            ->leftJoin('users as u', 'u.id', '=', 'a.consultant_id')
-            ->selectRaw('p.name name, p.mrn mrn, a.admit_date admitted, a.current_location loc, COALESCE(u.full_name, u.name) consultant')
-            ->whereNull('a.discharge_date')->orderByDesc('a.id')->limit(8)->get();
 
         // top 5 diagnoses for THIS calendar week-number across ALL years — the legacy card
         // (dashboard/3.php: WEEK(ADMDATE) = WEEK(today)) is a seasonal "what does this week of
@@ -208,12 +238,146 @@ class DashboardController extends Controller
             ->groupBy('ad.icd10_code')->orderByDesc('c')->limit(5)->get()
             ->map(fn ($r) => ['name' => $r->name ?: $r->code, 'count' => (int) $r->c]);
 
+            return compact('trend', 'cons', 'losBuckets', 'mix', 'donutTotal', 'donutTb',
+                'perConsultant', 'consultantBoard', 'activity24h', 'ytd', 'topDxWeek', 'topDxWeekNum',
+                'admBy', 'disBy');
+        });   // end Cache::remember('dashboard.heavy')
+
+        // unpack the heavy tier
+        $trend = $heavy['trend']; $cons = $heavy['cons']; $losBuckets = $heavy['losBuckets'];
+        $mix = $heavy['mix']; $donutTotal = $heavy['donutTotal']; $donutTb = $heavy['donutTb'];
+        $perConsultant = $heavy['perConsultant']; $consultantBoard = $heavy['consultantBoard'];
+        $activity24h = $heavy['activity24h']; $ytd = $heavy['ytd'];
+        $topDxWeek = $heavy['topDxWeek']; $topDxWeekNum = $heavy['topDxWeekNum'];
+        $admBy = $heavy['admBy']; $disBy = $heavy['disBy'];
+
+        // ── Recent admissions (live tier) ──────────────────────────────────────────────────────
+        // a simple ORDER BY DESC LIMIT 8 — kept OUTSIDE the cache so the newest admission always shows.
+        $recent = DB::table('admissions as a')->join('patients as p', 'p.id', '=', 'a.patient_id')
+            ->leftJoin('users as u', 'u.id', '=', 'a.consultant_id')
+            ->selectRaw('p.name name, p.mrn mrn, a.admit_date admitted, a.current_location loc, COALESCE(u.full_name, u.name) consultant')
+            ->whereNull('a.discharge_date')->orderByDesc('a.id')->limit(8)->get();
+
+        // ── KPI period-over-period deltas (Phase 1, Item 2) ─────────────────────────────────────
+        // {value, delta, direction} for the volatile KPIs. admissions/discharges reuse the in-memory
+        // $admBy/$disBy maps (zero extra queries); deaths vs prior calendar month; occupancy vs the
+        // prior-week point-in-time ward census. good_up flags drive the chip color (good/bad/neutral).
+        $trailAdm = array_sum(array_map(
+            fn ($i) => (int) ($admBy[Carbon::today()->subDays($i)->toDateString()] ?? 0), range(1, 7))) / 7;
+        $trailDis = array_sum(array_map(
+            fn ($i) => (int) ($disBy[Carbon::today()->subDays($i)->toDateString()] ?? 0), range(1, 7))) / 7;
+
+        $priorMonthStart = Carbon::today()->subMonthNoOverflow()->startOfMonth()->toDateString();
+        $priorMonthEnd = Carbon::today()->subMonthNoOverflow()->endOfMonth()->toDateString();
+        $deathsPrior = (int) DB::table('admissions')->where('outcome', 'Dead')
+            ->whereBetween('discharge_date', [$priorMonthStart, $priorMonthEnd])->count();
+
+        // prior-week occupancy: point-in-time ward census exactly 7 days ago (single-query proxy for a
+        // true rolling mean — clinically adequate, keeps the page fast). Promotable in Item 7 if needed.
+        $priorWeekOccupancy = round((float) (DB::table('admissions')
+            ->whereRaw('admit_date <= DATE_SUB(CURDATE(), INTERVAL 7 DAY)')
+            ->whereRaw('(discharge_date IS NULL OR discharge_date > DATE_SUB(CURDATE(), INTERVAL 7 DAY))')
+            ->whereRaw($nonIcu)->count()) / $wardBeds * 100, 1);
+
+        $deltas = [
+            'admissions' => [
+                'value' => $admissionsToday, 'mean7' => round($trailAdm, 1),
+                'delta' => round($admissionsToday - $trailAdm, 1),
+                'direction' => $admissionsToday >= $trailAdm ? 'up' : 'down', 'good_up' => true,
+            ],
+            'discharges' => [
+                'value' => $dischargesToday, 'mean7' => round($trailDis, 1),
+                'delta' => round($dischargesToday - $trailDis, 1),
+                'direction' => $dischargesToday >= $trailDis ? 'up' : 'down', 'good_up' => true,
+            ],
+            'deathsMonth' => [
+                'value' => $deathsMonth, 'prior' => $deathsPrior, 'delta' => $deathsMonth - $deathsPrior,
+                'direction' => $deathsMonth > $deathsPrior ? 'up' : ($deathsMonth < $deathsPrior ? 'down' : 'flat'),
+                'good_up' => false,
+            ],
+            'occupancy' => [
+                'value' => $occupancy, 'prior7mean' => $priorWeekOccupancy,
+                'delta' => round($occupancy - $priorWeekOccupancy, 1),
+                'direction' => $occupancy > $priorWeekOccupancy ? 'up' : 'down', 'good_up' => null,
+            ],
+        ];
+
+        // ── Threshold alert strip (Phase 1, Item 4) ─────────────────────────────────────────────
+        // admin-tunable rules → a dismissible severity-coloured banner. Live tier (cheap COUNTs that
+        // reflect the last action). $deathsPrior (Item 2) and $boardingCount (Item 1) are reused.
+        $alerts = [];
+        if ($occupancy >= $settings->alert_overcensus_pct) {
+            $alerts[] = ['key' => 'overcensus', 'severity' => 'danger',
+                'message' => "Over-census: {$occupancy}% occupancy ({$activeWard} ward patients, {$wardBeds} beds).",
+                'link' => '/patients'];
+        }
+        if ($boardingCount > $settings->alert_boarding_max) {
+            $alerts[] = ['key' => 'boarding', 'severity' => 'warning',
+                'message' => "{$boardingCount} patients medically cleared but still boarding (threshold: {$settings->alert_boarding_max}).",
+                'link' => '/patients?view=boarding'];
+        }
+        if ($deathsPrior > 0) {
+            $deathsDeltaPct = (int) round(($deathsMonth - $deathsPrior) / $deathsPrior * 100);
+            if ($deathsDeltaPct >= $settings->alert_deaths_delta_pct) {
+                $alerts[] = ['key' => 'deaths_delta', 'severity' => 'danger',
+                    'message' => "Mortality this month ({$deathsMonth}) is {$deathsDeltaPct}% higher than last month ({$deathsPrior}).",
+                    'link' => null];
+            }
+        } elseif ($deathsMonth > 0 && $deathsPrior === 0) {
+            $alerts[] = ['key' => 'deaths_delta', 'severity' => 'warning',
+                'message' => "{$deathsMonth} death(s) this month vs 0 last month.", 'link' => null];
+        }
+        if ($ytd['admissions'] > 0) {
+            $readmitWindow = max(0, (int) ($settings->readmission_window_days ?? 3));
+            $readmitYtd = (int) DB::table('admissions as a')
+                ->join('admissions as prev', Admission::readmissionJoin($readmitWindow))
+                ->whereBetween('a.admit_date', [$yearStart, $today])
+                ->whereRaw('(a.current_location <> "ICU" OR a.current_location IS NULL)')
+                ->count();
+            $readmitRate = round($readmitYtd / $ytd['admissions'] * 100, 1);
+            if ($readmitRate >= $settings->alert_readmit_rate_pct) {
+                $alerts[] = ['key' => 'readmits', 'severity' => 'warning',
+                    'message' => "Readmission rate YTD: {$readmitRate}% ({$readmitYtd} of {$ytd['admissions']} non-ICU admissions).",
+                    'link' => '/registry'];
+            }
+        }
+
+        // ── 'My unit today' consultant lens (Phase 1, Item 5) ───────────────────────────────────
+        // null for every non-consultant role (the Vue strip then renders nothing without a role check).
+        // Boarding + sign-pending reuse the exact predicates from Item 1 and PatientsController — no drift.
+        $myUnit = null;
+        $viewer = auth()->user();
+        if ($viewer && (int) $viewer->role === User::ROLE_CONSULTANT) {
+            $myId = $viewer->id;
+            $myActive = fn () => DB::table('admissions')->whereNull('discharge_date')->where('consultant_id', $myId);
+            $myUnit = [
+                'total' => (int) $myActive()->count(),
+                'ward' => (int) $myActive()->whereRaw($nonIcu)->count(),
+                'icu' => (int) $myActive()->where('current_location', 'ICU')->count(),
+                'boarding' => (int) $myActive()->whereNotNull('medical_discharge_date')->count(),
+                'new' => (int) $myActive()->where('assigned_at', '>=', Carbon::today()->subDay())->count(),
+                'signPending' => (int) DB::table('handover_signatures as hs')
+                    ->where('hs.to_consultant_id', $myId)->whereNull('hs.signed_at')->whereNull('hs.voided_at')->count(),
+                'myConsults' => (int) DB::table('consultations')
+                    ->where('consultant_id', $myId)->whereNull('signoff_date')->count(),
+            ];
+        }
+
         return Inertia::render('Dashboard', [
             'kpis' => [
                 'census' => $active, 'ward' => $activeWard, 'icu' => $activeIcu,
                 'admissionsToday' => $admissionsToday, 'dischargesToday' => $dischargesToday,
                 'activeConsults' => $activeConsults, 'deathsMonth' => $deathsMonth, 'avgLosMonth' => $avgLosMonth,
                 'occupancy' => $occupancy, 'occupancyGauge' => $occupancyGauge, 'wardBeds' => $wardBeds,
+            ],
+            'boardingCount' => $boardingCount,
+            'boardingWorklist' => $boardingWorklist,
+            'deltas' => $deltas,
+            'alerts' => $alerts,
+            'myUnit' => $myUnit,
+            'loadBands' => [
+                'minHosp' => (int) $settings->min_hospitalist, 'maxHosp' => (int) $settings->max_hospitalist,
+                'minSubs' => (int) $settings->min_subs, 'maxSubs' => (int) $settings->max_subs,
             ],
             'trend' => $trend,
             'consults' => $cons,
