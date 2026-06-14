@@ -12,11 +12,11 @@ const flash = computed(() => usePage().props.flash);
 
 <template>
     <Head title="Sign in" />
-    <div class="flex min-h-screen bg-surface">
+    <div class="flex min-h-screen bg-app">
         <!-- Brand panel -->
         <div class="relative hidden w-1/2 overflow-hidden bg-gradient-to-br from-navy-800 via-navy-900 to-navy-950 lg:flex lg:flex-col lg:justify-between p-12 text-white">
             <div class="flex items-center gap-3">
-                <div class="grid h-11 w-11 place-items-center rounded-2xl bg-white p-1.5 shadow-lg"><EhcLogo class="h-8 w-8" /></div>
+                <div class="grid h-11 w-11 place-items-center rounded-2xl bg-card p-1.5 shadow-lg"><EhcLogo class="h-8 w-8" /></div>
                 <div>
                     <div class="text-lg font-bold tracking-wide">DMC <span class="text-brand-300">Internal Medicine</span></div>
                     <div class="text-[11px] uppercase tracking-[0.18em] text-navy-300">Patient-Flow Hub</div>
@@ -56,14 +56,14 @@ const flash = computed(() => usePage().props.flash);
                     <div>
                         <label class="mb-1.5 block text-sm font-semibold text-ink-700">Username</label>
                         <input v-model="form.username" type="text" autofocus autocomplete="username"
-                            class="w-full rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-ink-800 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                            class="w-full rounded-xl border border-ink-200 bg-card px-4 py-2.5 text-ink-800 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                             :class="{ 'border-danger-500': form.errors.username }" placeholder="e.g. e2e_admin" />
                         <p v-if="form.errors.username" class="mt-1 text-xs text-danger-600">{{ form.errors.username }}</p>
                     </div>
                     <div>
                         <label class="mb-1.5 block text-sm font-semibold text-ink-700">Password</label>
                         <input v-model="form.password" type="password" autocomplete="current-password"
-                            class="w-full rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-ink-800 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                            class="w-full rounded-xl border border-ink-200 bg-card px-4 py-2.5 text-ink-800 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                             :class="{ 'border-danger-500': form.errors.password }" placeholder="••••••••" />
                         <p v-if="form.errors.password" class="mt-1 text-xs text-danger-600">{{ form.errors.password }}</p>
                     </div>

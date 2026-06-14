@@ -39,35 +39,35 @@ const doImport = () => {
 };
 
 const example = 'MRN,Name,Age,Gender,Nationality,AdmitDate,DischargeDate,Outcome,Location,Diagnoses,Consultant,DischargedTo,ClinicalDischargeDate,AdmittedFrom,Bed,DelayReason,LongTerm\n3001234,Ahmed Ali,54,M,Saudi,2024-02-01,2024-02-09,Alive,Ward,J18.9|E11.9,Dr Mohammed Hassan,Home,2024-02-07,ER,W-12,Physical,1\n3005678,Sara N,33,F,Egypt,2024-03-10,,Alive,ICU\nABC,Bad Row,,,,,,,';
-const cell = 'w-full min-w-16 rounded-lg border border-ink-200 bg-white px-1.5 py-1 text-xs outline-none focus:border-brand-500';
+const cell = 'w-full min-w-16 rounded-lg border border-ink-200 bg-card px-1.5 py-1 text-xs outline-none focus:border-brand-500';
 </script>
 
 <template>
     <Head title="Bulk Import" />
     <AppLayout title="Bulk Import — historical admissions">
         <div class="mx-auto max-w-4xl space-y-5">
-            <section class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+            <section class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <h2 class="font-bold text-ink-800">Paste CSV rows</h2>
-                <p class="mt-1 text-sm text-ink-500">One admission per line; header row optional. MRN required (digits ≤11) and a valid admit date; blank discharge date = still active. Columns 10–18 are <strong>optional</strong>: Diagnoses = pipe-separated ICD-10 codes (e.g. <code class="rounded bg-surface px-1">J18.9|E11.9</code>); Consultant is matched by name/username (unmatched imports unassigned, with a warning); ClinicalDischargeDate = Y-m-d; LongTerm = <code class="rounded bg-surface px-1">1</code>/<code class="rounded bg-surface px-1">yes</code>; TransferType = <code class="rounded bg-surface px-1">transfer to other speciality</code> / <code class="rounded bg-surface px-1">other transfer</code> / <code class="rounded bg-surface px-1">Transfer from ICU</code> (needs a discharge date; overrides the location-derived discharge type). Columns, in order:</p>
+                <p class="mt-1 text-sm text-ink-500">One admission per line; header row optional. MRN required (digits ≤11) and a valid admit date; blank discharge date = still active. Columns 10–18 are <strong>optional</strong>: Diagnoses = pipe-separated ICD-10 codes (e.g. <code class="rounded bg-app px-1">J18.9|E11.9</code>); Consultant is matched by name/username (unmatched imports unassigned, with a warning); ClinicalDischargeDate = Y-m-d; LongTerm = <code class="rounded bg-app px-1">1</code>/<code class="rounded bg-app px-1">yes</code>; TransferType = <code class="rounded bg-app px-1">transfer to other speciality</code> / <code class="rounded bg-app px-1">other transfer</code> / <code class="rounded bg-app px-1">Transfer from ICU</code> (needs a discharge date; overrides the location-derived discharge type). Columns, in order:</p>
                 <div class="mt-3 flex flex-wrap gap-1.5">
                     <span v-for="(c, i) in columns" :key="c" class="rounded-full px-2.5 py-1 text-xs font-semibold" :class="i >= 9 ? 'bg-ink-50 text-ink-500' : 'bg-brand-50 text-brand-700'">{{ i + 1 }}. {{ c }}{{ i >= 9 ? ' (opt.)' : '' }}</span>
                 </div>
-                <pre class="mt-3 overflow-auto rounded-xl bg-surface p-3 text-xs text-ink-600">{{ example }}</pre>
+                <pre class="mt-3 overflow-auto rounded-xl bg-app p-3 text-xs text-ink-600">{{ example }}</pre>
             </section>
 
-            <section class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+            <section class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <textarea v-model="form.rows" rows="10" placeholder="Paste rows here…"
                     class="w-full rounded-xl border border-ink-200 p-3 font-mono text-xs outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                     :class="{ 'border-danger-500': form.errors.rows }"></textarea>
                 <p v-if="form.errors.rows" class="mt-1 text-xs text-danger-600">{{ form.errors.rows }}</p>
                 <div class="mt-4 flex items-center justify-end gap-3">
                     <span class="mr-auto text-xs text-ink-400">Preview validates every row first; nothing is written until you confirm.</span>
-                    <button @click="doPreview" :disabled="form.processing || !form.rows.trim()" class="rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-ink-700 shadow ring-1 ring-ink-200 transition hover:bg-ink-50 disabled:opacity-50">Preview</button>
+                    <button @click="doPreview" :disabled="form.processing || !form.rows.trim()" class="rounded-xl bg-card px-5 py-2.5 text-sm font-semibold text-ink-700 shadow ring-1 ring-ink-200 transition hover:bg-ink-50 disabled:opacity-50">Preview</button>
                 </div>
             </section>
 
             <!-- preview -->
-            <section v-if="preview" class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+            <section v-if="preview" class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <div class="mb-3 flex items-center justify-between">
                     <h2 class="font-bold text-ink-800">Preview</h2>
                     <div class="flex gap-2 text-sm font-semibold">
@@ -75,14 +75,14 @@ const cell = 'w-full min-w-16 rounded-lg border border-ink-200 bg-white px-1.5 p
                         <span v-if="preview.invalid" class="rounded-full bg-danger-100 px-3 py-1 text-danger-600">{{ preview.invalid }} invalid</span>
                     </div>
                 </div>
-                <div class="max-h-96 overflow-auto rounded-xl ring-1 ring-ink-100">
+                <div class="max-h-96 overflow-auto rounded-xl ring-1 ring-line">
                     <table class="w-full text-xs">
                         <thead class="sticky top-0 bg-ink-50 text-left font-semibold uppercase tracking-wide text-ink-400">
                             <tr><th scope="col" class="px-3 py-2">#</th><th scope="col" class="px-3 py-2">MRN</th><th scope="col" class="px-3 py-2">Name</th><th scope="col" class="px-3 py-2">Admit</th><th scope="col" class="px-3 py-2">Discharge</th><th scope="col" class="px-3 py-2">Outcome</th><th scope="col" class="px-3 py-2">Loc</th><th scope="col" class="px-3 py-2">Diagnoses</th><th scope="col" class="px-3 py-2">Consultant</th><th scope="col" class="px-3 py-2">Disch. to</th><th scope="col" class="px-3 py-2">Clin. disch.</th><th scope="col" class="px-3 py-2">From</th><th scope="col" class="px-3 py-2">Bed</th><th scope="col" class="px-3 py-2">Delay</th><th scope="col" class="px-3 py-2">LT</th><th scope="col" class="px-3 py-2">Transfer</th><th scope="col" class="px-3 py-2">Status</th></tr>
                         </thead>
                         <!-- editable preview (full previews): fix typos in place, then confirm — every
                              row is re-validated server-side on import -->
-                        <tbody v-if="editable" class="divide-y divide-ink-50">
+                        <tbody v-if="editable" class="divide-y divide-line">
                             <tr v-for="r in editRows" :key="r.line" :class="r.ok ? (r.warning ? 'bg-accent-300/15' : '') : 'bg-danger-100/40'">
                                 <td class="nums px-2 py-1 text-ink-400">{{ r.line }}</td>
                                 <td class="px-1 py-1"><input v-model="r.mrn" inputmode="numeric" aria-label="MRN" :class="cell" /></td>
@@ -108,7 +108,7 @@ const cell = 'w-full min-w-16 rounded-lg border border-ink-200 bg-white px-1.5 p
                             </tr>
                         </tbody>
                         <!-- read-only fallback for truncated (>200-row) previews -->
-                        <tbody v-else class="divide-y divide-ink-50">
+                        <tbody v-else class="divide-y divide-line">
                             <tr v-for="r in preview.sample" :key="r.line" :class="r.ok ? (r.warning ? 'bg-accent-300/15' : '') : 'bg-danger-100/40'">
                                 <td class="nums px-3 py-1.5 text-ink-400">{{ r.line }}</td>
                                 <td class="nums px-3 py-1.5">{{ r.mrn || '—' }}</td>

@@ -7,10 +7,22 @@
     <title inertia>{{ config('app.name', 'DMC Internal Medicine') }}</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="alternate icon" sizes="48x48 32x32 16x16" href="/favicon.ico">
+    {{-- No-flash theme bootstrap: set the .dark class on <html> from saved preference (or system)
+         BEFORE first paint, so a dark-mode user never sees a white flash. --}}
+    <script>
+        (function () {
+            try {
+                var t = localStorage.getItem('dmc-theme') || 'system';
+                var dark = t === 'dark' || (t === 'system' &&
+                    window.matchMedia('(prefers-color-scheme: dark)').matches);
+                if (dark) document.documentElement.classList.add('dark');
+            } catch (e) {}
+        })();
+    </script>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @inertiaHead
 </head>
-<body class="h-full font-sans antialiased bg-surface text-ink-700">
+<body class="h-full font-sans antialiased bg-app text-ink-700">
     @inertia
 </body>
 </html>

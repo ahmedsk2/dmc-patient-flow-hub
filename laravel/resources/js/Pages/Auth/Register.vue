@@ -17,14 +17,14 @@ const field = 'w-full rounded-xl border border-ink-200 px-4 py-2.5 text-sm outli
 
 <template>
     <Head title="Register" />
-    <div class="flex min-h-screen items-center justify-center bg-surface p-6">
+    <div class="flex min-h-screen items-center justify-center bg-app p-6">
         <div class="w-full max-w-md">
             <div class="mb-6 flex flex-col items-center text-center">
-                <div class="grid h-12 w-12 place-items-center rounded-2xl bg-white p-1.5 shadow"><EhcLogo class="h-8 w-8" /></div>
+                <div class="grid h-12 w-12 place-items-center rounded-2xl bg-card p-1.5 shadow"><EhcLogo class="h-8 w-8" /></div>
                 <h1 class="mt-4 text-xl font-bold text-ink-900">Create an account</h1>
                 <p class="mt-1 text-sm text-ink-500">An administrator will activate it before you can sign in.</p>
             </div>
-            <form @submit.prevent="submit" class="space-y-3 rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+            <form @submit.prevent="submit" class="space-y-3 rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <div class="grid grid-cols-2 gap-3">
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Username</label><input v-model="form.username" :class="[field, form.errors.username && 'border-danger-500']" /><p v-if="form.errors.username" class="mt-1 text-xs text-danger-600">{{ form.errors.username }}</p></div>
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Role</label><select v-model="form.role" :class="[field, form.errors.role && 'border-danger-500']"><option value="">Select…</option><option v-for="(label, id) in roles" :key="id" :value="Number(id)">{{ label }}</option></select><p v-if="form.errors.role" class="mt-1 text-xs text-danger-600">{{ form.errors.role }}</p></div>

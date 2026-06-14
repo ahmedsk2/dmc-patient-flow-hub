@@ -17,13 +17,13 @@ const field = 'w-full rounded-xl border border-ink-200 px-4 py-2.5 text-sm outli
 
 <template>
     <Head title="Set a new password" />
-    <div class="flex min-h-screen items-center justify-center bg-surface p-6">
+    <div class="flex min-h-screen items-center justify-center bg-app p-6">
         <div class="w-full max-w-sm">
             <div class="mb-6 flex flex-col items-center text-center">
-                <div class="grid h-12 w-12 place-items-center rounded-2xl bg-white p-1.5 shadow"><EhcLogo class="h-8 w-8" /></div>
+                <div class="grid h-12 w-12 place-items-center rounded-2xl bg-card p-1.5 shadow"><EhcLogo class="h-8 w-8" /></div>
                 <h1 class="mt-4 text-xl font-bold text-ink-900">Set a new password</h1>
             </div>
-            <form @submit.prevent="submit" class="space-y-3 rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+            <form @submit.prevent="submit" class="space-y-3 rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <div><label class="mb-1 block text-sm font-semibold text-ink-700">Email</label><input v-model="form.email" type="email" :class="[field, form.errors.email && 'border-danger-500']" /><p v-if="form.errors.email" class="mt-1 text-xs text-danger-600">{{ form.errors.email }}</p></div>
                 <div><label class="mb-1 block text-sm font-semibold text-ink-700">New password</label><input v-model="form.password" type="password" :class="[field, form.errors.password && 'border-danger-500']" /><PasswordMeter :password="form.password" @score="pwScore = $event" /><p v-if="form.errors.password" class="mt-1 text-xs text-danger-600">{{ form.errors.password }}</p></div>
                 <div><label class="mb-1 block text-sm font-semibold text-ink-700">Confirm password</label><input v-model="form.password_confirmation" type="password" :class="field" /></div>

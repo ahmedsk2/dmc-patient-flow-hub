@@ -9,7 +9,7 @@ const submit = () => form.post('/mfa/challenge', { onFinish: () => form.reset('c
 
 <template>
     <Head title="Two-factor verification" />
-    <div class="flex min-h-screen items-center justify-center bg-surface p-6">
+    <div class="flex min-h-screen items-center justify-center bg-app p-6">
         <div class="w-full max-w-sm">
             <div class="mb-6 flex flex-col items-center text-center">
                 <div class="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-lg">
@@ -19,7 +19,7 @@ const submit = () => form.post('/mfa/challenge', { onFinish: () => form.reset('c
                 <p class="mt-1 text-sm text-ink-500">{{ recovery ? 'Enter one of your recovery codes.' : 'Enter the 6-digit code from your authenticator app.' }}</p>
             </div>
 
-            <form @submit.prevent="submit" class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+            <form @submit.prevent="submit" class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <input v-model="form.code" :inputmode="recovery ? 'text' : 'numeric'" autofocus autocomplete="one-time-code"
                     :placeholder="recovery ? 'XXXX-XXXX' : '123456'"
                     class="w-full rounded-xl border border-ink-200 px-4 py-3 text-center text-2xl font-bold tracking-[0.3em] text-ink-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"

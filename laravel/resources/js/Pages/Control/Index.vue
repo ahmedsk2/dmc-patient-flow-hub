@@ -80,14 +80,14 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
 <template>
     <Head title="Control Panel" />
     <AppLayout title="Control Panel">
-        <div class="mb-5 flex gap-1 rounded-xl bg-white p-1 shadow-sm ring-1 ring-ink-100 w-fit">
+        <div class="mb-5 flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line w-fit">
             <button v-for="t in ['overview','settings','users','reference']" :key="t" @click="tab = t"
                 class="rounded-lg px-4 py-2 text-sm font-semibold capitalize transition" :class="tab === t ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ t }}</button>
         </div>
 
         <!-- Overview -->
         <div v-show="tab === 'overview'" class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            <div v-for="[label, key] in countCards" :key="key" class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
+            <div v-for="[label, key] in countCards" :key="key" class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-400">{{ label }}</div>
                 <div class="nums mt-1 text-3xl font-bold text-brand-700">{{ counts[key].toLocaleString() }}</div>
             </div>
@@ -95,7 +95,7 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
 
         <!-- Settings -->
         <div v-show="tab === 'settings'" class="max-w-2xl">
-        <div class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+        <div class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
             <h3 class="mb-1 font-bold text-ink-800">Operational thresholds</h3>
             <p class="mb-5 text-sm text-ink-400">Drive the shuffle/assignment balance and LOS bands across the app.</p>
             <div class="grid gap-4 sm:grid-cols-2">
@@ -123,10 +123,10 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
         </div>
 
         <!-- change history (append-only; tracks e.g. ward capacity over time) -->
-        <div class="mt-5 rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+        <div class="mt-5 rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
             <h3 class="mb-1 font-bold text-ink-800">Change history</h3>
             <p class="mb-4 text-sm text-ink-400">Every settings change is recorded — who changed what, from what, to what, and when.</p>
-            <div v-if="settingHistory.length" class="divide-y divide-ink-50">
+            <div v-if="settingHistory.length" class="divide-y divide-line">
                 <div v-for="(h, i) in settingHistory" :key="i" class="flex flex-wrap items-baseline gap-x-2 py-2 text-sm">
                     <span class="font-semibold text-ink-700">{{ fieldLabels[h.field] || h.field }}</span>
                     <span class="nums text-ink-400 line-through">{{ h.old_value ?? '—' }}</span>
@@ -142,9 +142,9 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
         <!-- Users -->
         <div v-show="tab === 'users'">
             <div class="mb-3"><input v-model="q" :class="[field, 'max-w-sm']" placeholder="Search users…" /></div>
-            <div class="overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-ink-100/60">
+            <div class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
                 <table class="w-full text-sm">
-                    <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
+                    <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
                         <th scope="col" class="px-5 py-3" :aria-sort="ariaSort('full_name')">
                             <button @click="toggleSort('full_name')" class="inline-flex items-center gap-1 uppercase tracking-wide hover:text-ink-600">Full name<span aria-hidden="true" class="text-[10px]">{{ sort.key === 'full_name' ? (sort.dir === 1 ? '▲' : '▼') : '↕' }}</span></button>
                         </th>
@@ -154,7 +154,7 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
                         </th>
                         <th scope="col" class="px-3 py-3">Status</th><th scope="col" class="px-5 py-3 text-right">Edit</th>
                     </tr></thead>
-                    <tbody class="divide-y divide-ink-50">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="u in sortedUsers" :key="u.id" class="hover:bg-brand-50/40">
                             <td class="px-5 py-3"><div class="font-semibold text-ink-800">{{ u.name }}</div><div class="text-xs text-ink-400">{{ u.username }} · {{ u.email || '—' }}</div></td>
                             <td class="px-3 py-3"><span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="roleTone(u.role)">{{ u.role_label }}</span></td>
@@ -173,29 +173,29 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
             </div>
             <div v-if="users.last_page > 1" class="mt-4 flex justify-end gap-1">
                 <component :is="l.url ? Link : 'span'" v-for="l in users.links" :key="l.label" :href="l.url || undefined" preserve-scroll
-                    class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold" :class="l.active ? 'bg-brand-600 text-white' : (l.url ? 'bg-white text-ink-600 ring-1 ring-ink-100 hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" />
+                    class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold" :class="l.active ? 'bg-brand-600 text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" />
             </div>
         </div>
 
         <!-- Reference data -->
         <div v-show="tab === 'reference'" class="grid gap-5 lg:grid-cols-2">
-            <div class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+            <div class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <h3 class="mb-3 font-bold text-ink-800">Specialties</h3>
-                <div class="mb-4 flex max-h-48 flex-wrap gap-2 overflow-auto"><span v-for="s in specialties" :key="s.id" class="rounded-full px-3 py-1 text-sm" :class="s.is_external ? 'bg-accent-300/30 text-accent-600' : 'bg-surface text-ink-600'">{{ s.name }}<span v-if="s.is_external" class="ml-1 text-[10px] font-semibold uppercase">ext</span></span></div>
+                <div class="mb-4 flex max-h-48 flex-wrap gap-2 overflow-auto"><span v-for="s in specialties" :key="s.id" class="rounded-full px-3 py-1 text-sm" :class="s.is_external ? 'bg-accent-300/30 text-accent-600' : 'bg-app text-ink-600'">{{ s.name }}<span v-if="s.is_external" class="ml-1 text-[10px] font-semibold uppercase">ext</span></span></div>
                 <form @submit.prevent="submitSpec" class="flex gap-2"><input v-model="specForm.name" :class="field" placeholder="New specialty" /><button :disabled="specForm.processing || !specForm.name" class="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Add</button></form>
                 <label class="mt-2 flex items-center gap-2 text-xs text-ink-500"><input type="checkbox" v-model="specForm.is_subspecialty" class="rounded text-brand-600" /> Subspecialty (uncheck for hospitalist)</label>
                 <label class="mt-1 flex items-center gap-2 text-xs text-ink-500"><input type="checkbox" v-model="specForm.is_external" class="rounded text-brand-600" /> External / allied service (transfer-out target only — not an internal specialty)</label>
             </div>
-            <div class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+            <div class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <h3 class="mb-3 font-bold text-ink-800">Consultation indications</h3>
-                <div class="mb-4 flex max-h-48 flex-wrap gap-2 overflow-auto"><span v-for="r in reasons" :key="r.id" class="rounded-full bg-surface px-3 py-1 text-sm text-ink-600">{{ r.name }}</span></div>
+                <div class="mb-4 flex max-h-48 flex-wrap gap-2 overflow-auto"><span v-for="r in reasons" :key="r.id" class="rounded-full bg-app px-3 py-1 text-sm text-ink-600">{{ r.name }}</span></div>
                 <form @submit.prevent="submitReason" class="flex gap-2"><input v-model="reasonForm.name" :class="field" placeholder="New indication" /><button :disabled="reasonForm.processing || !reasonForm.name" class="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Add</button></form>
             </div>
         </div>
 
         <!-- edit user modal -->
         <div v-if="editing" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="editing = null">
-            <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div class="w-full max-w-md rounded-2xl bg-card p-6 shadow-2xl">
                 <h3 class="text-lg font-bold text-ink-900">{{ editing.name }}</h3>
                 <p class="mb-4 text-sm text-ink-400">{{ editing.username }}</p>
                 <div class="space-y-4">

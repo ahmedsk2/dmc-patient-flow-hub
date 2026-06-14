@@ -1,28 +1,28 @@
 {
-  "_AppLayout-Brw1eJUo.js": {
-    "file": "assets/AppLayout-Brw1eJUo.js",
+  "_AppLayout-J_O8XAsR.js": {
+    "file": "assets/AppLayout-J_O8XAsR.js",
     "name": "AppLayout",
     "imports": [
       "resources/js/app.js",
-      "_EhcLogo-C_iv2LFN.js"
+      "_EhcLogo-Dj0GGv1o.js"
     ]
   },
-  "_EhcLogo-C_iv2LFN.js": {
-    "file": "assets/EhcLogo-C_iv2LFN.js",
+  "_EhcLogo-Dj0GGv1o.js": {
+    "file": "assets/EhcLogo-Dj0GGv1o.js",
     "name": "EhcLogo",
     "imports": [
       "resources/js/app.js"
     ]
   },
-  "_IcdTypeahead-DRcUcIWh.js": {
-    "file": "assets/IcdTypeahead-DRcUcIWh.js",
+  "_IcdTypeahead-Cn9QteUq.js": {
+    "file": "assets/IcdTypeahead-Cn9QteUq.js",
     "name": "IcdTypeahead",
     "imports": [
       "resources/js/app.js"
     ]
   },
-  "_PasswordMeter-BTCoFyfb.js": {
-    "file": "assets/PasswordMeter-BTCoFyfb.js",
+  "_PasswordMeter-DqeDxNPl.js": {
+    "file": "assets/PasswordMeter-DqeDxNPl.js",
     "name": "PasswordMeter",
     "imports": [
       "_chunk-Bh1tDfsg.js",
@@ -40,69 +40,172 @@
     "file": "assets/fonts-CfI9zRTh.css",
     "src": "_fonts-CfI9zRTh.css"
   },
-  "_instrument-sans-400-normal-D1W7dsQl.woff": {
+  "_useChartTheme-C624EgyZ.js": {
+    "file": "assets/useChartTheme-C624EgyZ.js",
+    "name": "useChartTheme",
+    "imports": [
+      "resources/js/app.js"
+    ]
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-cyrillic-ext-600-normal.woff": {
+    "file": "assets/hanken-grotesk-cyrillic-ext-600-normal-CZKgvMB-.woff",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-cyrillic-ext-600-normal.woff"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-cyrillic-ext-600-normal.woff2": {
+    "file": "assets/hanken-grotesk-cyrillic-ext-600-normal-gC6IfhiA.woff2",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-cyrillic-ext-600-normal.woff2"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-cyrillic-ext-700-normal.woff": {
+    "file": "assets/hanken-grotesk-cyrillic-ext-700-normal-CANZoffZ.woff",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-cyrillic-ext-700-normal.woff"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-cyrillic-ext-700-normal.woff2": {
+    "file": "assets/hanken-grotesk-cyrillic-ext-700-normal-t5HJuhUd.woff2",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-cyrillic-ext-700-normal.woff2"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-cyrillic-ext-800-normal.woff": {
+    "file": "assets/hanken-grotesk-cyrillic-ext-800-normal-B-DARoqs.woff",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-cyrillic-ext-800-normal.woff"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-cyrillic-ext-800-normal.woff2": {
+    "file": "assets/hanken-grotesk-cyrillic-ext-800-normal-Dh-A818z.woff2",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-cyrillic-ext-800-normal.woff2"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-600-normal.woff": {
+    "file": "assets/hanken-grotesk-latin-600-normal-NEn2C4Q3.woff",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-600-normal.woff"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-600-normal.woff2": {
+    "file": "assets/hanken-grotesk-latin-600-normal-CIXX6EOa.woff2",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-600-normal.woff2"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-700-normal.woff": {
+    "file": "assets/hanken-grotesk-latin-700-normal-6IGCzoPh.woff",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-700-normal.woff"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-700-normal.woff2": {
+    "file": "assets/hanken-grotesk-latin-700-normal-CeQ8H3UY.woff2",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-700-normal.woff2"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-800-normal.woff": {
+    "file": "assets/hanken-grotesk-latin-800-normal-BTy3IUcF.woff",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-800-normal.woff"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-800-normal.woff2": {
+    "file": "assets/hanken-grotesk-latin-800-normal-KQ5tvtTT.woff2",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-800-normal.woff2"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-ext-600-normal.woff": {
+    "file": "assets/hanken-grotesk-latin-ext-600-normal-DHIm05DD.woff",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-ext-600-normal.woff"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-ext-600-normal.woff2": {
+    "file": "assets/hanken-grotesk-latin-ext-600-normal-FY8kSObK.woff2",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-ext-600-normal.woff2"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-ext-700-normal.woff": {
+    "file": "assets/hanken-grotesk-latin-ext-700-normal-BXHnjv6S.woff",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-ext-700-normal.woff"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-ext-700-normal.woff2": {
+    "file": "assets/hanken-grotesk-latin-ext-700-normal-CK2OfQqO.woff2",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-ext-700-normal.woff2"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-ext-800-normal.woff": {
+    "file": "assets/hanken-grotesk-latin-ext-800-normal-Cj41HOW_.woff",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-ext-800-normal.woff"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-ext-800-normal.woff2": {
+    "file": "assets/hanken-grotesk-latin-ext-800-normal-BUyj4f7g.woff2",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-latin-ext-800-normal.woff2"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-vietnamese-600-normal.woff": {
+    "file": "assets/hanken-grotesk-vietnamese-600-normal-DHaFH8q1.woff",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-vietnamese-600-normal.woff"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-vietnamese-600-normal.woff2": {
+    "file": "assets/hanken-grotesk-vietnamese-600-normal-Cp8QQjQf.woff2",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-vietnamese-600-normal.woff2"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-vietnamese-700-normal.woff": {
+    "file": "assets/hanken-grotesk-vietnamese-700-normal-CslVg6dq.woff",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-vietnamese-700-normal.woff"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-vietnamese-700-normal.woff2": {
+    "file": "assets/hanken-grotesk-vietnamese-700-normal-C4RNfQp6.woff2",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-vietnamese-700-normal.woff2"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-vietnamese-800-normal.woff": {
+    "file": "assets/hanken-grotesk-vietnamese-800-normal-Botv5QzP.woff",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-vietnamese-800-normal.woff"
+  },
+  "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-vietnamese-800-normal.woff2": {
+    "file": "assets/hanken-grotesk-vietnamese-800-normal-rhXM_bnk.woff2",
+    "src": "node_modules/@fontsource/hanken-grotesk/files/hanken-grotesk-vietnamese-800-normal.woff2"
+  },
+  "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-400-normal.woff": {
     "file": "assets/instrument-sans-400-normal-D1W7dsQl.woff",
-    "src": "_instrument-sans-400-normal-D1W7dsQl.woff"
+    "src": "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-400-normal.woff"
   },
-  "_instrument-sans-400-normal-DRC__1Mx.woff2": {
+  "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-400-normal.woff2": {
     "file": "assets/instrument-sans-400-normal-DRC__1Mx.woff2",
-    "src": "_instrument-sans-400-normal-DRC__1Mx.woff2"
+    "src": "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-400-normal.woff2"
   },
-  "_instrument-sans-400-normal-Q_nF8v4l.woff2": {
-    "file": "assets/instrument-sans-400-normal-Q_nF8v4l.woff2",
-    "src": "_instrument-sans-400-normal-Q_nF8v4l.woff2"
-  },
-  "_instrument-sans-400-normal-r32jotim.woff": {
-    "file": "assets/instrument-sans-400-normal-r32jotim.woff",
-    "src": "_instrument-sans-400-normal-r32jotim.woff"
-  },
-  "_instrument-sans-500-normal-CAxz3nsc.woff": {
-    "file": "assets/instrument-sans-500-normal-CAxz3nsc.woff",
-    "src": "_instrument-sans-500-normal-CAxz3nsc.woff"
-  },
-  "_instrument-sans-500-normal-CTEe1bJa.woff2": {
-    "file": "assets/instrument-sans-500-normal-CTEe1bJa.woff2",
-    "src": "_instrument-sans-500-normal-CTEe1bJa.woff2"
-  },
-  "_instrument-sans-500-normal-Dk9ku72i.woff2": {
-    "file": "assets/instrument-sans-500-normal-Dk9ku72i.woff2",
-    "src": "_instrument-sans-500-normal-Dk9ku72i.woff2"
-  },
-  "_instrument-sans-500-normal-Z6ESRlEs.woff": {
+  "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-500-normal.woff": {
     "file": "assets/instrument-sans-500-normal-Z6ESRlEs.woff",
-    "src": "_instrument-sans-500-normal-Z6ESRlEs.woff"
+    "src": "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-500-normal.woff"
   },
-  "_instrument-sans-600-normal-B7fBEWYG.woff2": {
-    "file": "assets/instrument-sans-600-normal-B7fBEWYG.woff2",
-    "src": "_instrument-sans-600-normal-B7fBEWYG.woff2"
+  "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-500-normal.woff2": {
+    "file": "assets/instrument-sans-500-normal-Dk9ku72i.woff2",
+    "src": "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-500-normal.woff2"
   },
-  "_instrument-sans-600-normal-B9e8oLYv.woff": {
+  "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-600-normal.woff": {
     "file": "assets/instrument-sans-600-normal-B9e8oLYv.woff",
-    "src": "_instrument-sans-600-normal-B9e8oLYv.woff"
+    "src": "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-600-normal.woff"
   },
-  "_instrument-sans-600-normal-BsaQcF38.woff2": {
-    "file": "assets/instrument-sans-600-normal-BsaQcF38.woff2",
-    "src": "_instrument-sans-600-normal-BsaQcF38.woff2"
+  "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-600-normal.woff2": {
+    "file": "assets/instrument-sans-600-normal-B7fBEWYG.woff2",
+    "src": "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-600-normal.woff2"
   },
-  "_instrument-sans-600-normal-DMks36a2.woff": {
-    "file": "assets/instrument-sans-600-normal-DMks36a2.woff",
-    "src": "_instrument-sans-600-normal-DMks36a2.woff"
-  },
-  "_instrument-sans-700-normal-BQc-7cTM.woff": {
-    "file": "assets/instrument-sans-700-normal-BQc-7cTM.woff",
-    "src": "_instrument-sans-700-normal-BQc-7cTM.woff"
-  },
-  "_instrument-sans-700-normal-CYfAanHo.woff2": {
-    "file": "assets/instrument-sans-700-normal-CYfAanHo.woff2",
-    "src": "_instrument-sans-700-normal-CYfAanHo.woff2"
-  },
-  "_instrument-sans-700-normal-ClYbKGw-.woff2": {
-    "file": "assets/instrument-sans-700-normal-ClYbKGw-.woff2",
-    "src": "_instrument-sans-700-normal-ClYbKGw-.woff2"
-  },
-  "_instrument-sans-700-normal-DfAjL1vF.woff": {
+  "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-700-normal.woff": {
     "file": "assets/instrument-sans-700-normal-DfAjL1vF.woff",
-    "src": "_instrument-sans-700-normal-DfAjL1vF.woff"
+    "src": "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-700-normal.woff"
+  },
+  "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-700-normal.woff2": {
+    "file": "assets/instrument-sans-700-normal-CYfAanHo.woff2",
+    "src": "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-700-normal.woff2"
+  },
+  "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-ext-400-normal.woff": {
+    "file": "assets/instrument-sans-400-normal-r32jotim.woff",
+    "src": "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-ext-400-normal.woff"
+  },
+  "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-ext-400-normal.woff2": {
+    "file": "assets/instrument-sans-400-normal-Q_nF8v4l.woff2",
+    "src": "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-ext-400-normal.woff2"
+  },
+  "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-ext-500-normal.woff": {
+    "file": "assets/instrument-sans-500-normal-CAxz3nsc.woff",
+    "src": "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-ext-500-normal.woff"
+  },
+  "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-ext-500-normal.woff2": {
+    "file": "assets/instrument-sans-500-normal-CTEe1bJa.woff2",
+    "src": "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-ext-500-normal.woff2"
+  },
+  "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-ext-600-normal.woff": {
+    "file": "assets/instrument-sans-600-normal-DMks36a2.woff",
+    "src": "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-ext-600-normal.woff"
+  },
+  "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-ext-600-normal.woff2": {
+    "file": "assets/instrument-sans-600-normal-BsaQcF38.woff2",
+    "src": "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-ext-600-normal.woff2"
+  },
+  "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-ext-700-normal.woff": {
+    "file": "assets/instrument-sans-700-normal-BQc-7cTM.woff",
+    "src": "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-ext-700-normal.woff"
+  },
+  "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-ext-700-normal.woff2": {
+    "file": "assets/instrument-sans-700-normal-ClYbKGw-.woff2",
+    "src": "node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-ext-700-normal.woff2"
   },
   "node_modules/vue3-apexcharts/dist/apexcharts.ssr.esm-fe46cd2d.js": {
     "file": "assets/apexcharts.ssr.esm-fe46cd2d-BuUM2w9C.js",
@@ -120,7 +223,7 @@
     ]
   },
   "resources/css/app.css": {
-    "file": "assets/app-DHDObajK.css",
+    "file": "assets/app-Dx2l9tbE.css",
     "name": "app",
     "names": [
       "app.css"
@@ -129,62 +232,62 @@
     "isEntry": true
   },
   "resources/js/Pages/ActiveList.vue": {
-    "file": "assets/ActiveList-CNbpABXA.js",
+    "file": "assets/ActiveList-nADDqoPV.js",
     "name": "ActiveList",
     "src": "resources/js/Pages/ActiveList.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-Brw1eJUo.js"
+      "_AppLayout-J_O8XAsR.js"
     ],
     "css": [
       "assets/ActiveList-CH8_LjEW.css"
     ]
   },
   "resources/js/Pages/Admissions/Create.vue": {
-    "file": "assets/Create-CjSw5RiE.js",
+    "file": "assets/Create-BxmSmkUz.js",
     "name": "Create",
     "src": "resources/js/Pages/Admissions/Create.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_IcdTypeahead-DRcUcIWh.js",
-      "_AppLayout-Brw1eJUo.js"
+      "_IcdTypeahead-Cn9QteUq.js",
+      "_AppLayout-J_O8XAsR.js"
     ]
   },
   "resources/js/Pages/Admissions/Index.vue": {
-    "file": "assets/Index-DNVtBeFg.js",
+    "file": "assets/Index-CdsLNVZ3.js",
     "name": "Index",
     "src": "resources/js/Pages/Admissions/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_IcdTypeahead-DRcUcIWh.js",
-      "_AppLayout-Brw1eJUo.js"
+      "_IcdTypeahead-Cn9QteUq.js",
+      "_AppLayout-J_O8XAsR.js"
     ]
   },
   "resources/js/Pages/Auth/ForgotPassword.vue": {
-    "file": "assets/ForgotPassword-BDIY62OT.js",
+    "file": "assets/ForgotPassword-D7dhQmIg.js",
     "name": "ForgotPassword",
     "src": "resources/js/Pages/Auth/ForgotPassword.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_EhcLogo-C_iv2LFN.js"
+      "_EhcLogo-Dj0GGv1o.js"
     ]
   },
   "resources/js/Pages/Auth/Login.vue": {
-    "file": "assets/Login-9yQGAwhV.js",
+    "file": "assets/Login-CrMYJUM5.js",
     "name": "Login",
     "src": "resources/js/Pages/Auth/Login.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_EhcLogo-C_iv2LFN.js"
+      "_EhcLogo-Dj0GGv1o.js"
     ]
   },
   "resources/js/Pages/Auth/MfaChallenge.vue": {
-    "file": "assets/MfaChallenge-DEyX4-Hy.js",
+    "file": "assets/MfaChallenge-DBCtdOZB.js",
     "name": "MfaChallenge",
     "src": "resources/js/Pages/Auth/MfaChallenge.vue",
     "isDynamicEntry": true,
@@ -193,169 +296,171 @@
     ]
   },
   "resources/js/Pages/Auth/Register.vue": {
-    "file": "assets/Register-5t5eyJ2b.js",
+    "file": "assets/Register-B1Inj9Qk.js",
     "name": "Register",
     "src": "resources/js/Pages/Auth/Register.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_EhcLogo-C_iv2LFN.js",
-      "_PasswordMeter-BTCoFyfb.js"
+      "_EhcLogo-Dj0GGv1o.js",
+      "_PasswordMeter-DqeDxNPl.js"
     ]
   },
   "resources/js/Pages/Auth/ResetPassword.vue": {
-    "file": "assets/ResetPassword-B-4G_x0c.js",
+    "file": "assets/ResetPassword-DFM2fXpA.js",
     "name": "ResetPassword",
     "src": "resources/js/Pages/Auth/ResetPassword.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_EhcLogo-C_iv2LFN.js",
-      "_PasswordMeter-BTCoFyfb.js"
+      "_EhcLogo-Dj0GGv1o.js",
+      "_PasswordMeter-DqeDxNPl.js"
     ]
   },
   "resources/js/Pages/Consultations/Index.vue": {
-    "file": "assets/Index-CL2GU1_F.js",
+    "file": "assets/Index-CmC5L0VN.js",
     "name": "Index",
     "src": "resources/js/Pages/Consultations/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-Brw1eJUo.js"
+      "_AppLayout-J_O8XAsR.js"
     ]
   },
   "resources/js/Pages/Control/Index.vue": {
-    "file": "assets/Index-DroVrqsL.js",
+    "file": "assets/Index-JQER1GYJ.js",
     "name": "Index",
     "src": "resources/js/Pages/Control/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-Brw1eJUo.js"
+      "_AppLayout-J_O8XAsR.js"
     ]
   },
   "resources/js/Pages/Dashboard.vue": {
-    "file": "assets/Dashboard-D_aMn84O.js",
+    "file": "assets/Dashboard-yTZgNNCy.js",
     "name": "Dashboard",
     "src": "resources/js/Pages/Dashboard.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-Brw1eJUo.js"
+      "_AppLayout-J_O8XAsR.js",
+      "_useChartTheme-C624EgyZ.js"
     ]
   },
   "resources/js/Pages/Handovers/Index.vue": {
-    "file": "assets/Index-acePJn-R.js",
+    "file": "assets/Index-BP1gRZwh.js",
     "name": "Index",
     "src": "resources/js/Pages/Handovers/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-Brw1eJUo.js"
+      "_AppLayout-J_O8XAsR.js"
     ]
   },
   "resources/js/Pages/Import/Index.vue": {
-    "file": "assets/Index-j_8-lXzQ.js",
+    "file": "assets/Index-4JrNriGJ.js",
     "name": "Index",
     "src": "resources/js/Pages/Import/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-Brw1eJUo.js"
+      "_AppLayout-J_O8XAsR.js"
     ]
   },
   "resources/js/Pages/Mfa/Setup.vue": {
-    "file": "assets/Setup-B87YGXCa.js",
+    "file": "assets/Setup-DBgYAKLz.js",
     "name": "Setup",
     "src": "resources/js/Pages/Mfa/Setup.vue",
     "isDynamicEntry": true,
     "imports": [
       "_chunk-Bh1tDfsg.js",
       "resources/js/app.js",
-      "_AppLayout-Brw1eJUo.js"
+      "_AppLayout-J_O8XAsR.js"
     ]
   },
   "resources/js/Pages/Patients/Index.vue": {
-    "file": "assets/Index-0r-Vis_w.js",
+    "file": "assets/Index-mYPnr4kL.js",
     "name": "Index",
     "src": "resources/js/Pages/Patients/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_IcdTypeahead-DRcUcIWh.js",
-      "_AppLayout-Brw1eJUo.js"
+      "_IcdTypeahead-Cn9QteUq.js",
+      "_AppLayout-J_O8XAsR.js"
     ]
   },
   "resources/js/Pages/Profile/Edit.vue": {
-    "file": "assets/Edit-DjHiX_3t.js",
+    "file": "assets/Edit-D_rTbNmS.js",
     "name": "Edit",
     "src": "resources/js/Pages/Profile/Edit.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_PasswordMeter-BTCoFyfb.js",
-      "_AppLayout-Brw1eJUo.js"
+      "_PasswordMeter-DqeDxNPl.js",
+      "_AppLayout-J_O8XAsR.js"
     ]
   },
   "resources/js/Pages/Recent/Index.vue": {
-    "file": "assets/Index-Bprdr8YE.js",
+    "file": "assets/Index-CdAX_gC_.js",
     "name": "Index",
     "src": "resources/js/Pages/Recent/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-Brw1eJUo.js"
+      "_AppLayout-J_O8XAsR.js"
     ]
   },
   "resources/js/Pages/Registry/Index.vue": {
-    "file": "assets/Index-CMwgDTIE.js",
+    "file": "assets/Index-BbpU7z0Q.js",
     "name": "Index",
     "src": "resources/js/Pages/Registry/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_IcdTypeahead-DRcUcIWh.js",
-      "_AppLayout-Brw1eJUo.js"
+      "_IcdTypeahead-Cn9QteUq.js",
+      "_AppLayout-J_O8XAsR.js"
     ]
   },
   "resources/js/Pages/Reports/Index.vue": {
-    "file": "assets/Index-BTYA0j8V.js",
+    "file": "assets/Index-BMdasWvO.js",
     "name": "Index",
     "src": "resources/js/Pages/Reports/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-Brw1eJUo.js"
+      "_AppLayout-J_O8XAsR.js"
     ],
     "css": [
       "assets/Monthly-DKBQY3fT.css"
     ]
   },
   "resources/js/Pages/Reports/Monthly.vue": {
-    "file": "assets/Monthly-DhiUQFqB.js",
+    "file": "assets/Monthly-Bu5Cu4Vt.js",
     "name": "Monthly",
     "src": "resources/js/Pages/Reports/Monthly.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-Brw1eJUo.js"
+      "_AppLayout-J_O8XAsR.js"
     ],
     "css": [
       "assets/Monthly-DKBQY3fT.css"
     ]
   },
   "resources/js/Pages/Statistics/Index.vue": {
-    "file": "assets/Index-DG4-gu7q.js",
+    "file": "assets/Index-CPrSRfWP.js",
     "name": "Index",
     "src": "resources/js/Pages/Statistics/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-Brw1eJUo.js"
+      "_AppLayout-J_O8XAsR.js",
+      "_useChartTheme-C624EgyZ.js"
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-Bp2MXjfJ.js",
+    "file": "assets/app-qZAIbtzb.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
@@ -382,6 +487,51 @@
       "resources/js/Pages/Reports/Index.vue",
       "resources/js/Pages/Reports/Monthly.vue",
       "resources/js/Pages/Statistics/Index.vue"
+    ],
+    "css": [
+      "assets/app-BYnOx1pH.css"
+    ],
+    "assets": [
+      "assets/instrument-sans-400-normal-Q_nF8v4l.woff2",
+      "assets/instrument-sans-400-normal-r32jotim.woff",
+      "assets/instrument-sans-400-normal-DRC__1Mx.woff2",
+      "assets/instrument-sans-400-normal-D1W7dsQl.woff",
+      "assets/instrument-sans-500-normal-CTEe1bJa.woff2",
+      "assets/instrument-sans-500-normal-CAxz3nsc.woff",
+      "assets/instrument-sans-500-normal-Dk9ku72i.woff2",
+      "assets/instrument-sans-500-normal-Z6ESRlEs.woff",
+      "assets/instrument-sans-600-normal-BsaQcF38.woff2",
+      "assets/instrument-sans-600-normal-DMks36a2.woff",
+      "assets/instrument-sans-600-normal-B7fBEWYG.woff2",
+      "assets/instrument-sans-600-normal-B9e8oLYv.woff",
+      "assets/instrument-sans-700-normal-ClYbKGw-.woff2",
+      "assets/instrument-sans-700-normal-BQc-7cTM.woff",
+      "assets/instrument-sans-700-normal-CYfAanHo.woff2",
+      "assets/instrument-sans-700-normal-DfAjL1vF.woff",
+      "assets/hanken-grotesk-cyrillic-ext-600-normal-gC6IfhiA.woff2",
+      "assets/hanken-grotesk-cyrillic-ext-600-normal-CZKgvMB-.woff",
+      "assets/hanken-grotesk-vietnamese-600-normal-Cp8QQjQf.woff2",
+      "assets/hanken-grotesk-vietnamese-600-normal-DHaFH8q1.woff",
+      "assets/hanken-grotesk-latin-ext-600-normal-FY8kSObK.woff2",
+      "assets/hanken-grotesk-latin-ext-600-normal-DHIm05DD.woff",
+      "assets/hanken-grotesk-latin-600-normal-CIXX6EOa.woff2",
+      "assets/hanken-grotesk-latin-600-normal-NEn2C4Q3.woff",
+      "assets/hanken-grotesk-cyrillic-ext-700-normal-t5HJuhUd.woff2",
+      "assets/hanken-grotesk-cyrillic-ext-700-normal-CANZoffZ.woff",
+      "assets/hanken-grotesk-vietnamese-700-normal-C4RNfQp6.woff2",
+      "assets/hanken-grotesk-vietnamese-700-normal-CslVg6dq.woff",
+      "assets/hanken-grotesk-latin-ext-700-normal-CK2OfQqO.woff2",
+      "assets/hanken-grotesk-latin-ext-700-normal-BXHnjv6S.woff",
+      "assets/hanken-grotesk-latin-700-normal-CeQ8H3UY.woff2",
+      "assets/hanken-grotesk-latin-700-normal-6IGCzoPh.woff",
+      "assets/hanken-grotesk-cyrillic-ext-800-normal-Dh-A818z.woff2",
+      "assets/hanken-grotesk-cyrillic-ext-800-normal-B-DARoqs.woff",
+      "assets/hanken-grotesk-vietnamese-800-normal-rhXM_bnk.woff2",
+      "assets/hanken-grotesk-vietnamese-800-normal-Botv5QzP.woff",
+      "assets/hanken-grotesk-latin-ext-800-normal-BUyj4f7g.woff2",
+      "assets/hanken-grotesk-latin-ext-800-normal-Cj41HOW_.woff",
+      "assets/hanken-grotesk-latin-800-normal-KQ5tvtTT.woff2",
+      "assets/hanken-grotesk-latin-800-normal-BTy3IUcF.woff"
     ]
   }
 }

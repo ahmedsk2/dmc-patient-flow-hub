@@ -2,6 +2,10 @@
 import { ref, computed, watch } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { useChartTheme } from '@/composables/useChartTheme';
+
+// theme-aware grid/axis colors (legible in light + dark)
+const { gridColor, axisColor } = useChartTheme();
 
 const props = defineProps({ range: Object, kpis: Object, monthly: Object, los: Object, topDx: Array, reasons: Object, perConsultant: Array, sourceMix: Array, kpiGrid: Array, interval: String, truncated: Boolean, destinations: Object, destByConsultant: Array, readmitWindow: Number, consultants: Array, physician: Object });
 
@@ -53,10 +57,10 @@ const dlToolbar = { show: true, tools: { download: true, selection: false, zoom:
 //
 // day interval: Fri/Sat ticks (Saudi weekend — D4) tinted amber from the raw bucket keys
 const tickColors = computed(() => props.interval !== 'day'
-    ? '#94a3b8'
+    ? axisColor.value
     : (props.monthly.keys || []).map((k) => {
         const dow = new Date(`${k}T00:00:00Z`).getUTCDay();   // 5 = Fri, 6 = Sat
-        return dow === 5 || dow === 6 ? '#d9a23c' : '#94a3b8';
+        return dow === 5 || dow === 6 ? '#d9a23c' : axisColor.value;
     }));
 const monthlyChart = computed(() => ({
     chart: { type: 'area', toolbar: dlToolbar, fontFamily: 'inherit' },
@@ -64,7 +68,7 @@ const monthlyChart = computed(() => ({
     fill: { type: 'gradient', gradient: { opacityFrom: 0.25, opacityTo: 0.02 } },
     dataLabels: { enabled: false }, legend: { position: 'top', horizontalAlign: 'right' },
     xaxis: { categories: props.monthly.labels, labels: { style: { colors: tickColors.value } } },
-    yaxis: { labels: { style: { colors: '#94a3b8' } } }, grid: { borderColor: '#eef2f6' },
+    yaxis: { labels: { style: { colors: axisColor.value } } }, grid: { borderColor: gridColor.value },
 }));
 const monthlySeries = computed(() => [
     { name: 'Admissions', data: props.monthly.admissions },
@@ -138,16 +142,16 @@ const physSeriesOptions = computed(() => ({
     colors: activityDefs.map((d) => d[2]),
     plotOptions: { bar: { borderRadius: 2, columnWidth: '60%' } },
     dataLabels: { enabled: false }, legend: { position: 'top', horizontalAlign: 'right' },
-    xaxis: { categories: props.physician?.series?.labels ?? [], labels: { style: { colors: '#94a3b8' } } },
-    yaxis: { labels: { style: { colors: '#94a3b8' } } }, grid: { borderColor: '#eef2f6' },
+    xaxis: { categories: props.physician?.series?.labels ?? [], labels: { style: { colors: axisColor.value } } },
+    yaxis: { labels: { style: { colors: axisColor.value } } }, grid: { borderColor: gridColor.value },
 }));
 const physHasActivity = computed(() => physSeries.value.some((s) => s.data.some((v) => v > 0)));
 
 const barChart = (cats, color, horizontal = false) => ({
     chart: { type: 'bar', toolbar: dlToolbar, fontFamily: 'inherit' },
     colors: [color], plotOptions: { bar: { horizontal, borderRadius: 6, columnWidth: '55%', barHeight: '65%' } },
-    dataLabels: { enabled: false }, xaxis: { categories: cats, labels: { style: { colors: '#94a3b8' } } },
-    yaxis: { labels: { style: { colors: '#94a3b8' }, maxWidth: 200 } }, grid: { borderColor: '#eef2f6' },
+    dataLabels: { enabled: false }, xaxis: { categories: cats, labels: { style: { colors: axisColor.value } } },
+    yaxis: { labels: { style: { colors: axisColor.value }, maxWidth: 200 } }, grid: { borderColor: gridColor.value },
 });
 const donut = (labels) => ({
     chart: { type: 'donut', toolbar: dlToolbar, fontFamily: 'inherit' }, labels,
@@ -161,7 +165,7 @@ const donut = (labels) => ({
     <Head title="Statistics" />
     <AppLayout title="Statistics">
         <!-- range -->
-        <div class="mb-5 flex flex-wrap items-end gap-3 rounded-2xl bg-white p-4 shadow-card ring-1 ring-ink-100/60">
+        <div class="mb-5 flex flex-wrap items-end gap-3 rounded-2xl bg-card p-4 shadow-card ring-1 ring-line">
             <div>
                 <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-400">From</label>
                 <input v-model="from" type="date" class="rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" />
@@ -172,7 +176,7 @@ const donut = (labels) => ({
             </div>
             <button @click="apply" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-700">Apply</button>
             <div class="flex items-end gap-1">
-                <div class="flex gap-1 rounded-xl bg-surface p-1 ring-1 ring-ink-100">
+                <div class="flex gap-1 rounded-xl bg-app p-1 ring-1 ring-line">
                     <button v-for="iv in [['day','Daily'],['month','Monthly'],['quarter','Quarterly']]" :key="iv[0]" @click="setInterval2(iv[0])" class="rounded-lg px-3 py-1.5 text-sm font-semibold transition" :class="interval === iv[0] ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ iv[1] }}</button>
                 </div>
             </div>
@@ -187,7 +191,7 @@ const donut = (labels) => ({
 
         <!-- KPIs -->
         <div class="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4 xl:grid-cols-8">
-            <div v-for="k in kpiCards" :key="k.label" class="rounded-2xl bg-white p-4 shadow-card ring-1 ring-ink-100/60">
+            <div v-for="k in kpiCards" :key="k.label" class="rounded-2xl bg-card p-4 shadow-card ring-1 ring-line">
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-400">{{ k.label }}</div>
                 <div class="mt-1 flex items-baseline gap-1">
                     <span class="nums text-2xl font-bold" :class="toneClass(k.tone)">{{ k.value }}</span>
@@ -198,20 +202,20 @@ const donut = (labels) => ({
 
         <!-- charts -->
         <div class="grid gap-5 lg:grid-cols-2">
-            <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60 lg:col-span-2">
+            <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line lg:col-span-2">
                 <h3 class="mb-3 font-bold text-ink-800">{{ interval === 'day' ? 'Daily' : interval === 'quarter' ? 'Quarterly' : 'Monthly' }} admissions, discharges, mortality & consultations <span v-if="interval === 'day'" class="text-xs font-normal text-accent-600">(Fri/Sat ticks in amber)</span></h3>
                 <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="area" height="300" :options="monthlyChart" :series="monthlySeries" />
             </div>
 
-            <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
+            <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h3 class="mb-3 font-bold text-ink-800">Length of stay distribution</h3>
                 <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="bar" height="280" :options="barChart(los.labels, C.teal)" :series="[{ name: 'Discharges', data: los.data }]" />
             </div>
-            <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
+            <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h3 class="mb-3 font-bold text-ink-800">Admission source</h3>
                 <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="donut" height="280" :options="donut(sourceMix.map(s => s.src))" :series="sourceMix.map(s => s.c)" />
             </div>
-            <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
+            <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <div class="mb-3 flex items-center justify-between gap-2">
                     <h3 class="font-bold text-ink-800">Discharge destinations</h3>
                     <select v-model="destChoice" class="max-w-[55%] truncate rounded-lg border border-ink-200 px-2 py-1 text-xs outline-none focus:border-brand-500">
@@ -223,19 +227,19 @@ const donut = (labels) => ({
                 <p v-else class="py-10 text-center text-sm text-ink-300">{{ destChoice ? 'No discharges for this consultant in range.' : 'No discharges in range.' }}</p>
             </div>
 
-            <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
+            <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h3 class="mb-3 font-bold text-ink-800">Top diagnoses</h3>
                 <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="bar" height="320" :options="barChart(topDx.map(d => d.label), C.navy, true)" :series="[{ name: 'Admissions', data: topDx.map(d => d.value) }]" />
             </div>
-            <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60">
+            <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h3 class="mb-3 font-bold text-ink-800">Consultation indications</h3>
                 <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="bar" height="320" :options="barChart(reasons.labels, C.gold, true)" :series="[{ name: 'Consultations', data: reasons.data }]" />
             </div>
 
-            <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60 lg:col-span-2">
+            <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line lg:col-span-2">
                 <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
                     <h3 class="font-bold text-ink-800">By consultant</h3>
-                    <div class="flex gap-1 rounded-xl bg-surface p-1 ring-1 ring-ink-100">
+                    <div class="flex gap-1 rounded-xl bg-app p-1 ring-1 ring-line">
                         <button v-for="m in consModes" :key="m[0]" @click="consMode = m[0]" class="rounded-lg px-3 py-1.5 text-xs font-semibold transition" :class="consMode === m[0] ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ m[1] }}</button>
                     </div>
                 </div>
@@ -243,7 +247,7 @@ const donut = (labels) => ({
             </div>
 
             <!-- per-physician drill-down -->
-            <div class="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60 lg:col-span-2">
+            <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line lg:col-span-2">
                 <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
                     <h3 class="font-bold text-ink-800">Physician drill-down</h3>
                     <select v-model="physChoice" @change="apply" aria-label="Drill-down consultant" class="max-w-[55%] truncate rounded-lg border border-ink-200 px-2 py-1.5 text-sm outline-none focus:border-brand-500">
@@ -253,7 +257,7 @@ const donut = (labels) => ({
                 </div>
                 <div v-if="physician" class="space-y-4">
                     <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                        <div v-for="n in physNumbers" :key="n[0]" class="rounded-xl bg-surface p-3 ring-1 ring-ink-100/60">
+                        <div v-for="n in physNumbers" :key="n[0]" class="rounded-xl bg-app p-3 ring-1 ring-line">
                             <div class="text-[11px] font-semibold uppercase tracking-wide text-ink-400">{{ n[0] }}</div>
                             <div class="nums mt-0.5 text-xl font-bold text-ink-800">{{ n[1] }}</div>
                         </div>
@@ -274,7 +278,7 @@ const donut = (labels) => ({
                         <div>
                             <h4 class="mb-2 text-sm font-semibold text-ink-600">Top diagnoses</h4>
                             <ol v-if="physician.topDx.length" class="space-y-1.5">
-                                <li v-for="(d, i) in physician.topDx" :key="d.label" class="flex items-center justify-between gap-2 rounded-lg bg-surface px-3 py-2 text-sm ring-1 ring-ink-100/60">
+                                <li v-for="(d, i) in physician.topDx" :key="d.label" class="flex items-center justify-between gap-2 rounded-lg bg-app px-3 py-2 text-sm ring-1 ring-line">
                                     <span class="text-ink-700"><span class="nums mr-2 font-bold text-brand-700">{{ i + 1 }}.</span>{{ d.label }}</span>
                                     <span class="nums font-semibold text-ink-500">{{ d.value }}</span>
                                 </li>
@@ -291,14 +295,14 @@ const donut = (labels) => ({
                 <p v-else class="py-8 text-center text-sm text-ink-300">Pick a consultant to see their destinations, top diagnoses and KPIs for this range.</p>
             </div>
 
-            <div class="overflow-hidden rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100/60 lg:col-span-2">
+            <div class="overflow-hidden rounded-2xl bg-card p-5 shadow-card ring-1 ring-line lg:col-span-2">
                 <h3 class="mb-3 font-bold text-ink-800">{{ gridTitle }} <span class="nums text-sm font-normal text-ink-400">({{ range.from }} – {{ range.to }})</span></h3>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
-                        <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
+                        <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
                             <th scope="col" class="px-3 py-2">Period</th><th scope="col" class="px-3 py-2 text-right">Adm</th><th scope="col" class="px-3 py-2 text-right">Disch</th><th scope="col" class="px-3 py-2 text-right">ICU adm</th><th scope="col" class="px-3 py-2 text-right">→ICU</th><th scope="col" class="px-3 py-2 text-right">ICU mort</th><th scope="col" class="px-3 py-2 text-right">Ward mort</th><th scope="col" class="px-3 py-2 text-right">Readm</th><th scope="col" class="px-3 py-2 text-right">Consults</th><th scope="col" class="px-3 py-2 text-right">Sign-offs</th><th scope="col" class="px-3 py-2 text-right">Avg LOS</th>
                         </tr></thead>
-                        <tbody class="divide-y divide-ink-50">
+                        <tbody class="divide-y divide-line">
                             <tr v-for="r in kpiGrid" :key="r.label" class="hover:bg-brand-50/40">
                                 <td class="px-3 py-1.5 font-medium text-ink-700">{{ r.label }}</td>
                                 <td class="nums px-3 py-1.5 text-right">{{ r.admissions }}</td>

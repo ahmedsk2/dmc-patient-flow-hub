@@ -46,7 +46,7 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
     <Head title="Handovers" />
     <AppLayout title="Handovers">
         <div class="mb-5 flex flex-wrap items-center gap-3">
-            <div class="flex gap-1 rounded-xl bg-white p-1 shadow-sm ring-1 ring-ink-100 w-fit">
+            <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line w-fit">
                 <button @click="tab = 'awaiting'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="tab === 'awaiting' ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">Awaiting my signature ({{ awaiting.length }})</button>
                 <button @click="tab = 'outgoing'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="tab === 'outgoing' ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">My outgoing ({{ outgoing.length }})</button>
             </div>
@@ -55,12 +55,12 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
         </div>
 
         <!-- awaiting my signature -->
-        <div v-show="tab === 'awaiting'" class="overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-ink-100/60">
+        <div v-show="tab === 'awaiting'" class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
             <table class="w-full text-sm">
-                <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
+                <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
                     <th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Bed</th><th scope="col" class="px-3 py-3">From</th><th scope="col" class="px-3 py-3">Required</th><th scope="col" class="px-5 py-3 text-right">Sign</th>
                 </tr></thead>
-                <tbody class="divide-y divide-ink-50">
+                <tbody class="divide-y divide-line">
                     <template v-for="s in awaiting" :key="s.id">
                         <tr class="cursor-pointer transition hover:bg-brand-50/40" @click="toggle(s.id)" :aria-expanded="open === s.id">
                             <td class="px-5 py-3">
@@ -73,7 +73,7 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
                             <td class="nums px-3 py-3 text-ink-500" :title="fmt(s.required_at)">{{ relTime(s.required_at) }}</td>
                             <td class="px-5 py-3 text-right"><button @click.stop="sign(s)" class="rounded-lg bg-success-100 px-3 py-1.5 text-sm font-semibold text-success-600 hover:bg-success-200">Sign</button></td>
                         </tr>
-                        <tr v-if="open === s.id" class="bg-surface/60">
+                        <tr v-if="open === s.id" class="bg-app/60">
                             <td colspan="5" class="px-6 py-4">
                                 <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-400">Handover<span v-if="s.body_updated_at" class="ml-2 normal-case font-normal">last updated {{ fmt(s.body_updated_at) }}</span></p>
                                 <p class="whitespace-pre-wrap text-sm leading-relaxed text-ink-700">{{ s.body || 'No handover text recorded.' }}</p>
@@ -86,12 +86,12 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
         </div>
 
         <!-- my outgoing -->
-        <div v-show="tab === 'outgoing'" class="overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-ink-100/60">
+        <div v-show="tab === 'outgoing'" class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
             <table class="w-full text-sm">
-                <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
+                <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
                     <th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">To</th><th scope="col" class="px-3 py-3">Handed over</th><th scope="col" class="px-3 py-3">Status</th><th scope="col" class="px-5 py-3">Handover text</th>
                 </tr></thead>
-                <tbody class="divide-y divide-ink-50">
+                <tbody class="divide-y divide-line">
                     <tr v-for="s in outgoing" :key="s.id" class="align-top hover:bg-brand-50/40">
                         <td class="px-5 py-3"><div class="font-semibold text-ink-800">{{ s.patient }}</div><div class="nums text-xs text-ink-400">MRN {{ s.mrn }}</div></td>
                         <td class="px-3 py-3 text-ink-600">Dr. {{ s.to }}</td>

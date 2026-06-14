@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dmc-laravel",
+      "runtimeExecutable": "C:/wamp64/bin/php/php8.3.28/php.exe",
+      "runtimeArgs": ["artisan", "serve", "--host=127.0.0.1", "--port=8123"],
+      "port": 8123
+    }
+  ]
+}

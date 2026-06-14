@@ -27,7 +27,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm out
     <AppLayout title="My Profile">
         <div class="mx-auto grid max-w-3xl gap-6">
             <!-- identity -->
-            <section class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+            <section class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <div class="flex items-center gap-4">
                     <div class="grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-2xl font-bold text-white">{{ (profile.name||'?').slice(0,2).toUpperCase() }}</div>
                     <div>
@@ -39,7 +39,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm out
             </section>
 
             <!-- profile -->
-            <section class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+            <section class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <h3 class="mb-4 font-bold text-ink-800">Profile details</h3>
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Full name</label><input v-model="pForm.full_name" :class="[field, pForm.errors.full_name && 'border-danger-500']" /><p v-if="pForm.errors.full_name" class="mt-1 text-xs text-danger-600">{{ pForm.errors.full_name }}</p></div>
@@ -57,7 +57,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm out
             </section>
 
             <!-- password -->
-            <section class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+            <section class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <h3 class="mb-1 font-bold text-ink-800">Change password</h3>
                 <p class="mb-4 text-sm text-ink-400">At least 8 characters, with letters and numbers.</p>
                 <div class="grid gap-4 sm:grid-cols-3">
@@ -72,7 +72,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm out
             </section>
 
             <!-- two-factor -->
-            <section class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+            <section class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <div class="flex items-start justify-between gap-4">
                     <div>
                         <h3 class="flex items-center gap-2 font-bold text-ink-800">
@@ -84,7 +84,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm out
                     </div>
                     <Link v-if="!profile.mfa_enabled" href="/mfa/setup" class="shrink-0 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-brand-700">Enable</Link>
                 </div>
-                <p v-if="profile.mfa_enabled" class="mt-4 border-t border-ink-100 pt-4 text-sm text-ink-400">
+                <p v-if="profile.mfa_enabled" class="mt-4 border-t border-line pt-4 text-sm text-ink-400">
                     Two-factor can only be reset by an administrator — contact one if you lose your authenticator.
                 </p>
             </section>

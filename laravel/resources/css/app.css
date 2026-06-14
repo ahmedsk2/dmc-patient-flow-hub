@@ -4,6 +4,9 @@
 @source '../../storage/framework/views/*.php';
 @source './**/*.vue';
 
+/* Class-based dark mode: `.dark` on <html> flips the variant (Tailwind v4 custom variant). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Accessibility: honor a user's "reduce motion" OS setting — neutralize animations,
  * transitions, and smooth-scroll (covers the dashboard auto-refresh + chart animations). */
 @media (prefers-reduced-motion: reduce) {
@@ -24,6 +27,9 @@
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif,
         'Apple Color Emoji', 'Segoe UI Emoji';
+    /* Display — Hanken Grotesk: a warm, legible humanist grotesque for the brand wordmark
+     * + big KPI numerals (kept tabular-nums via .nums). */
+    --font-display: 'Hanken Grotesk', 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
 
     /* Brand — EHC teal (500 = primary #009CA6, 800 = deep #00565E, 200 = light aqua #A9DED8) */
     --color-brand-50: #f0fafa;
@@ -50,17 +56,19 @@
     --color-navy-900: #003339;
     --color-navy-950: #00252a;
 
-    /* Ink — EHC neutrals (900 = ink #1E2A2E, 500 = slate #5B6A6E) */
-    --color-ink-50: #f1f6f6;
-    --color-ink-100: #e3eaea;
-    --color-ink-200: #cdd6d6;
-    --color-ink-300: #a6b3b3;
-    --color-ink-400: #7c8a8d;
-    --color-ink-500: #5b6a6e;
-    --color-ink-600: #46555a;
-    --color-ink-700: #344145;
-    --color-ink-800: #283538;
-    --color-ink-900: #1e2a2e;
+    /* Ink — EHC neutrals (900 = ink #1E2A2E, 500 = slate #5B6A6E).
+     * These resolve to CSS variables so the .dark block below can invert the scale
+     * (light text tokens become near-white, muted greys lift to mid-grey on dark). */
+    --color-ink-50: var(--ink-50);
+    --color-ink-100: var(--ink-100);
+    --color-ink-200: var(--ink-200);
+    --color-ink-300: var(--ink-300);
+    --color-ink-400: var(--ink-400);
+    --color-ink-500: var(--ink-500);
+    --color-ink-600: var(--ink-600);
+    --color-ink-700: var(--ink-700);
+    --color-ink-800: var(--ink-800);
+    --color-ink-900: var(--ink-900);
 
     /* Accent — restrained warm gold (secondary highlight only) */
     --color-accent-300: #f3d9a0;
@@ -80,16 +88,102 @@
     --color-info-100: #d7e9fb;
     --color-info-500: #2f7fe0;
 
-    /* App surface — EHC #F1F6F6 */
-    --color-surface: #f1f6f6;
+    /* Semantic surfaces (theme-aware; .dark block remaps the raw vars below).
+     *   app  = page background      card = elevated panel/sheet      line = hairline border */
+    --color-app: var(--surface-app);
+    --color-card: var(--surface-card);
+    --color-line: var(--surface-line);
+
+    /* Legacy alias — `bg-surface` historically meant the page background. */
+    --color-surface: var(--surface-app);
+
+    /* Focus ring — a token that flips per theme so the ring stays visible on light + dark. */
+    --color-focus: var(--focus-ring);
 
     --shadow-card: 0 1px 2px rgb(30 42 46 / 0.05), 0 6px 20px -8px rgb(30 42 46 / 0.14);
     --radius-xl2: 1.1rem;
 }
 
+/* ----- LIGHT theme raw values (the defaults the @theme vars above point at) ----- */
+:root {
+    --ink-50: #f1f6f6;
+    --ink-100: #e3eaea;
+    --ink-200: #cdd6d6;
+    --ink-300: #a6b3b3;
+    --ink-400: #7c8a8d;
+    --ink-500: #5b6a6e;
+    --ink-600: #46555a;
+    --ink-700: #344145;
+    --ink-800: #283538;
+    --ink-900: #1e2a2e;
+
+    --surface-app: #f1f6f6;   /* EHC #F1F6F6 */
+    --surface-card: #ffffff;
+    --surface-line: #e3eaea;  /* == ink-100 */
+
+    --focus-ring: #009ca6;    /* brand-500 */
+
+    /* Chart theming — read by ApexCharts options (see useChartTheme.js) */
+    --chart-grid: #eef2f6;
+    --chart-axis: #94a3b5;
+    --chart-stroke: #ffffff;  /* donut slice gaps / card-matched separators */
+}
+
+/* ----- DARK theme overrides ----- */
+.dark {
+    /* Inverted ink scale: 900 (was darkest) → near-white text; 400 stays mid-grey for muted. */
+    --ink-50: #1a2628;
+    --ink-100: #243234;
+    --ink-200: #33474a;
+    --ink-300: #5b7175;
+    --ink-400: #8aa0a3;
+    --ink-500: #a7bbbd;
+    --ink-600: #c2d2d3;
+    --ink-700: #d8e3e3;
+    --ink-800: #e9f0f0;
+    --ink-900: #f4f8f8;
+
+    --surface-app: #0c1416;   /* page bg */
+    --surface-card: #13201f;  /* elevated card */
+    --surface-line: rgb(255 255 255 / 0.08);
+
+    --focus-ring: #38b4ba;    /* brand-400 — brighter on dark */
+
+    --chart-grid: rgb(255 255 255 / 0.08);
+    --chart-axis: #8aa0a3;
+    --chart-stroke: #13201f;  /* matches card so donut gaps disappear into the panel */
+
+    /* Card shadow reads as a darker, softer pool on a dark page. */
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -10px rgb(0 0 0 / 0.6);
+}
+
+/* Brand text legibility: on dark, brand-700 (the common link/heading teal) is too deep —
+ * lift the readable brand text tokens toward brand-300. */
+.dark {
+    --color-brand-600: #5cc3c4;
+    --color-brand-700: #7accc9;
+    --color-brand-800: #a9ded8;
+}
+
 @layer base {
     body {
-        background-color: var(--color-surface);
+        background-color: var(--color-app);
+        color: var(--color-ink-700);
+        /* Atmosphere: a very subtle wash so the page reads with depth, not dead-flat.
+         * Light: a faint cool top glow. Dark: a deep teal-tinted radial near the top. */
+        background-image:
+            radial-gradient(120% 80% at 50% -10%, rgb(0 156 166 / 0.06), transparent 60%);
+        background-attachment: fixed;
+    }
+    .dark body {
+        background-image:
+            radial-gradient(120% 70% at 50% -10%, rgb(0 156 166 / 0.10), transparent 55%),
+            radial-gradient(100% 60% at 100% 0%, rgb(0 86 94 / 0.18), transparent 60%);
+    }
+
+    /* Display family for the big numerals + wordmark (apply via .font-display). */
+    .font-display {
+        font-family: var(--font-display);
     }
     /* tabular numerals for KPI figures */
     .nums {
@@ -100,5 +194,39 @@
     * {
         scrollbar-width: thin;
         scrollbar-color: var(--color-ink-300) transparent;
+    }
+
+    /* Focus-visible: a clear 2px brand ring + offset on every interactive element, in BOTH
+     * themes (the ring color flips via --color-focus). Suppress the browser default only when
+     * focus is NOT keyboard-driven, so mouse clicks stay quiet but tab/keyboard stays obvious. */
+    a, button, [role='button'], input, select, textarea, summary {
+        &:focus-visible {
+            outline: 2px solid var(--color-focus);
+            outline-offset: 2px;
+            border-radius: 0.375rem;
+        }
+        &:focus:not(:focus-visible) {
+            outline: none;
+        }
+    }
+}
+
+/* Semantic surface utilities backed by the theme-aware tokens (mechanical migration targets).
+ * bg-card / bg-app / ring-line / border-line / divide-line. */
+@utility bg-card {
+    background-color: var(--color-card);
+}
+@utility bg-app {
+    background-color: var(--color-app);
+}
+@utility ring-line {
+    --tw-ring-color: var(--color-line);
+}
+@utility border-line {
+    border-color: var(--color-line);
+}
+@utility divide-line {
+    & > :not([hidden]) ~ :not([hidden]) {
+        border-color: var(--color-line);
     }
 }

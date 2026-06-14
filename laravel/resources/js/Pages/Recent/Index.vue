@@ -31,7 +31,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
     <Head title="Recent Activity" />
     <AppLayout title="Recent Activity">
         <div class="mb-5 flex items-center gap-3">
-            <div class="flex gap-1 rounded-xl bg-white p-1 shadow-sm ring-1 ring-ink-100 w-fit">
+            <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line w-fit">
                 <button @click="tab = 'discharges'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="tab === 'discharges' ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">Discharges ({{ discharges.length }})</button>
                 <button @click="tab = 'signoffs'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="tab === 'signoffs' ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">Sign-offs ({{ signoffs.length }})</button>
             </div>
@@ -40,16 +40,16 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
 
         <!-- discharges: one section per consultant (legacy "Dr X Patient List") -->
         <div v-show="tab === 'discharges'">
-            <div v-for="g in dischargeGroups" :key="g.name" class="mb-4 overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-ink-100/60">
-                <div class="border-b border-ink-100 px-5 py-3">
+            <div v-for="g in dischargeGroups" :key="g.name" class="mb-4 overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
+                <div class="border-b border-line px-5 py-3">
                     <h3 class="font-bold text-ink-800">{{ g.name === 'Unassigned' ? 'Unassigned' : `Dr. ${g.name}` }} Patient List <span class="ml-1 text-sm font-normal text-ink-400">· {{ g.rows.length }} discharge(s)</span></h3>
                 </div>
                 <div class="overflow-x-auto">
                 <table class="w-full text-sm">
-                    <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
+                    <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
                         <th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Admitted</th><th scope="col" class="px-3 py-3">Discharged</th><th scope="col" class="px-3 py-3 text-center">LOS</th><th scope="col" class="px-3 py-3">Diagnoses</th><th scope="col" class="px-3 py-3">From</th><th scope="col" class="px-3 py-3">To</th><th scope="col" class="px-3 py-3">Outcome</th><th scope="col" class="px-3 py-3">Admitted by</th><th scope="col" class="px-3 py-3">By</th><th scope="col" class="px-5 py-3 text-right">Undo</th>
                     </tr></thead>
-                    <tbody class="divide-y divide-ink-50">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="d in g.rows" :key="d.id" class="hover:bg-brand-50/40">
                             <td class="px-5 py-3"><div class="font-semibold text-ink-800">{{ d.name }}</div><div class="nums text-xs text-ink-400">MRN {{ d.mrn }}</div></td>
                             <td class="nums px-3 py-3 text-ink-500">{{ d.admit_date || '—' }}</td>
@@ -70,17 +70,17 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                 </table>
                 </div>
             </div>
-            <div v-if="!discharges.length" class="rounded-2xl bg-white px-5 py-10 text-center text-ink-400 shadow-card ring-1 ring-ink-100/60">No discharges yesterday or today.</div>
+            <div v-if="!discharges.length" class="rounded-2xl bg-card px-5 py-10 text-center text-ink-400 shadow-card ring-1 ring-line">No discharges yesterday or today.</div>
         </div>
 
         <!-- signoffs (legacy 48consultation columns: age, indications, dates, consulted/entered by) -->
-        <div v-show="tab === 'signoffs'" class="overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-ink-100/60">
+        <div v-show="tab === 'signoffs'" class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
             <div class="overflow-x-auto">
             <table class="w-full text-sm">
-                <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
+                <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
                     <th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3 text-center">Age</th><th scope="col" class="px-3 py-3">Indications</th><th scope="col" class="px-3 py-3">Consultation</th><th scope="col" class="px-3 py-3">Consulted by</th><th scope="col" class="px-3 py-3">Signed off</th><th scope="col" class="px-3 py-3">Service</th><th scope="col" class="px-3 py-3">Consultant</th><th scope="col" class="px-3 py-3">Entered by</th><th scope="col" class="px-5 py-3 text-right">Undo</th>
                 </tr></thead>
-                <tbody class="divide-y divide-ink-50">
+                <tbody class="divide-y divide-line">
                     <tr v-for="s in signoffs" :key="s.id" class="hover:bg-brand-50/40">
                         <td class="px-5 py-3"><div class="font-semibold text-ink-800">{{ s.name }}</div><div class="nums text-xs text-ink-400">MRN {{ s.mrn }}</div></td>
                         <td class="nums px-3 py-3 text-center text-ink-600">{{ s.age ?? '—' }}</td>

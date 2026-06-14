@@ -1,9 +1,35 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import EhcLogo from '@/Components/EhcLogo.vue';
 
 const logout = () => router.post('/logout');
+
+// ---- theme toggle (light / dark / system) -----------------------------------------------------
+// Persisted to localStorage('dmc-theme'); the no-flash bootstrap in app.blade.php applies the
+// initial .dark class before paint. Charts listen for the `dmc-theme-change` event to re-read
+// their CSS-var-driven colors (useChartTheme.js).
+const themePref = ref('system');
+const mql = typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+const isDark = computed(() =>
+    themePref.value === 'dark' || (themePref.value === 'system' && (mql?.matches ?? false))
+);
+const applyTheme = () => {
+    document.documentElement.classList.toggle('dark', isDark.value);
+    document.dispatchEvent(new CustomEvent('dmc-theme-change'));
+};
+// Cycle light → dark → system → light. (system follows the OS preference.)
+const cycleTheme = () => {
+    themePref.value = { light: 'dark', dark: 'system', system: 'light' }[themePref.value] || 'light';
+    localStorage.setItem('dmc-theme', themePref.value);
+    applyTheme();
+};
+onMounted(() => {
+    themePref.value = localStorage.getItem('dmc-theme') || 'system';
+    applyTheme();
+    // when on "system", track OS changes live
+    mql?.addEventListener('change', () => { if (themePref.value === 'system') applyTheme(); });
+});
 
 defineProps({ title: { type: String, default: '' } });
 
@@ -109,9 +135,9 @@ const relTime = (iso) => {
             :class="{ 'translate-x-0': sidebarOpen }"
         >
             <div class="flex h-16 items-center gap-3 px-5 border-b border-white/5">
-                <div class="grid h-9 w-9 place-items-center rounded-xl bg-white p-1 shadow-lg shadow-brand-950/40"><EhcLogo class="h-7 w-7" /></div>
+                <div class="grid h-9 w-9 place-items-center rounded-xl bg-card p-1 shadow-lg shadow-brand-950/40"><EhcLogo class="h-7 w-7" /></div>
                 <div class="leading-tight">
-                    <div class="text-sm font-bold text-white tracking-wide">DMC <span class="text-brand-300">IM</span></div>
+                    <div class="font-display text-sm font-bold text-white tracking-wide">DMC <span class="text-brand-300">IM</span></div>
                     <div class="text-[10px] uppercase tracking-[0.18em] text-navy-400">Patient Flow</div>
                 </div>
             </div>
@@ -154,7 +180,7 @@ const relTime = (iso) => {
 
         <!-- Main -->
         <div class="lg:pl-64">
-            <header class="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-ink-100 bg-white/80 px-5 backdrop-blur">
+            <header class="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-line bg-card/80 px-5 backdrop-blur">
                 <button class="lg:hidden text-ink-500" @click="sidebarOpen = true" aria-label="Open navigation menu">
                     <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" /></svg>
                 </button>
@@ -166,6 +192,18 @@ const relTime = (iso) => {
                         <span class="relative flex h-2 w-2"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-success-500 opacity-60"></span><span class="relative inline-flex h-2 w-2 rounded-full bg-success-500"></span></span>
                         Live
                     </div>
+                    <!-- theme toggle (light / dark / system) -->
+                    <button @click="cycleTheme"
+                        :aria-label="`Theme: ${themePref}. Switch theme.`"
+                        :title="`Theme: ${themePref} (click to change)`"
+                        class="relative grid h-9 w-9 place-items-center rounded-full text-ink-400 transition hover:bg-ink-50 hover:text-ink-700">
+                        <!-- sun (light/system-light) -->
+                        <svg v-if="!isDark" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>
+                        <!-- moon (dark) -->
+                        <svg v-else class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" /></svg>
+                        <!-- tiny "system" indicator dot when following OS -->
+                        <span v-if="themePref === 'system'" class="absolute -bottom-0.5 right-1.5 h-1.5 w-1.5 rounded-full bg-brand-400"></span>
+                    </button>
                     <!-- notification bell -->
                     <div class="relative">
                         <button @click="toggleBell" aria-label="Notifications" title="Notifications" class="relative grid h-9 w-9 place-items-center rounded-full text-ink-400 transition hover:bg-ink-50 hover:text-ink-700">
@@ -173,13 +211,13 @@ const relTime = (iso) => {
                             <span v-if="unread > 0" class="nums absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-danger-600 px-1 text-[10px] font-bold leading-none text-white">{{ unread > 9 ? '9+' : unread }}</span>
                         </button>
                         <div v-if="bellOpen" class="fixed inset-0 z-40" @click="bellOpen = false"></div>
-                        <div v-if="bellOpen" class="absolute right-0 top-11 z-50 w-80 overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-ink-100">
-                            <div class="flex items-center justify-between border-b border-ink-100 px-4 py-2.5">
+                        <div v-if="bellOpen" class="absolute right-0 top-11 z-50 w-80 overflow-hidden rounded-2xl bg-card shadow-2xl ring-1 ring-line">
+                            <div class="flex items-center justify-between border-b border-line px-4 py-2.5">
                                 <span class="text-sm font-bold text-ink-800">Notifications</span>
                                 <button @click="goInbox" class="text-xs font-semibold text-brand-600 hover:underline">Handover inbox →</button>
                             </div>
                             <div v-if="bellLoading" class="px-4 py-6 text-center text-sm text-ink-400">Loading…</div>
-                            <ul v-else-if="notifications.length" class="max-h-80 divide-y divide-ink-50 overflow-auto">
+                            <ul v-else-if="notifications.length" class="max-h-80 divide-y divide-line overflow-auto">
                                 <li v-for="n in notifications" :key="n.id">
                                     <button @click="goInbox" class="w-full px-4 py-3 text-left transition hover:bg-brand-50/40" :class="{ 'bg-brand-50/30': !n.read_at }">
                                         <p class="text-sm leading-snug text-ink-700">{{ notifText(n) }}</p>
@@ -190,7 +228,7 @@ const relTime = (iso) => {
                             <div v-else class="px-4 py-6 text-center text-sm text-ink-400">No notifications yet.</div>
                         </div>
                     </div>
-                    <div class="flex items-center gap-3 border-l border-ink-100 pl-3">
+                    <div class="flex items-center gap-3 border-l border-line pl-3">
                         <Link href="/profile" class="flex items-center gap-3 rounded-xl px-1 py-1 transition hover:bg-ink-50">
                             <div class="grid h-9 w-9 place-items-center rounded-full bg-brand-600 text-sm font-semibold text-white">
                                 {{ (page.props.auth?.user?.name || 'DMC').slice(0, 2).toUpperCase() }}

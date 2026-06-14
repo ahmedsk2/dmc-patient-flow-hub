@@ -24,7 +24,7 @@ const removeDx = (code) => {
 };
 
 const submit = () => form.post('/admissions');
-const field = 'w-full rounded-xl border border-ink-200 bg-white px-3.5 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20';
+const field = 'w-full rounded-xl border border-ink-200 bg-card px-3.5 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20';
 </script>
 
 <template>
@@ -32,7 +32,7 @@ const field = 'w-full rounded-xl border border-ink-200 bg-white px-3.5 py-2.5 te
     <AppLayout title="New Admission">
         <form @submit.prevent="submit" class="mx-auto max-w-4xl space-y-6">
             <!-- Patient -->
-            <section class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+            <section class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <h2 class="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-brand-700">
                     <span class="grid h-6 w-6 place-items-center rounded-lg bg-brand-100 text-brand-700">1</span> Patient
                 </h2>
@@ -71,7 +71,7 @@ const field = 'w-full rounded-xl border border-ink-200 bg-white px-3.5 py-2.5 te
             </section>
 
             <!-- Admission -->
-            <section class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+            <section class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <h2 class="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-brand-700">
                     <span class="grid h-6 w-6 place-items-center rounded-lg bg-brand-100 text-brand-700">2</span> Admission
                 </h2>
@@ -105,7 +105,7 @@ const field = 'w-full rounded-xl border border-ink-200 bg-white px-3.5 py-2.5 te
             </section>
 
             <!-- Diagnoses -->
-            <section class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+            <section class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <h2 class="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-brand-700">
                     <span class="grid h-6 w-6 place-items-center rounded-lg bg-brand-100 text-brand-700">3</span> Admission diagnosis (ICD-10) <span class="text-danger-500">*</span>
                 </h2>

@@ -9,14 +9,14 @@ const submit = () => form.post('/forgot-password');
 
 <template>
     <Head title="Forgot password" />
-    <div class="flex min-h-screen items-center justify-center bg-surface p-6">
+    <div class="flex min-h-screen items-center justify-center bg-app p-6">
         <div class="w-full max-w-sm">
             <div class="mb-6 flex flex-col items-center text-center">
-                <div class="grid h-12 w-12 place-items-center rounded-2xl bg-white p-1.5 shadow"><EhcLogo class="h-8 w-8" /></div>
+                <div class="grid h-12 w-12 place-items-center rounded-2xl bg-card p-1.5 shadow"><EhcLogo class="h-8 w-8" /></div>
                 <h1 class="mt-4 text-xl font-bold text-ink-900">Reset your password</h1>
                 <p class="mt-1 text-sm text-ink-500">Enter your username or email and we'll send a reset link.</p>
             </div>
-            <form @submit.prevent="submit" class="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100/60">
+            <form @submit.prevent="submit" class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <p v-if="status" class="mb-3 rounded-lg bg-success-100 px-3 py-2 text-sm font-medium text-success-600">{{ status }}</p>
                 <label class="mb-1 block text-sm font-semibold text-ink-700">Username or email</label>
                 <input v-model="form.email" type="text" autocomplete="username" autofocus class="w-full rounded-xl border border-ink-200 px-4 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" :class="{ 'border-danger-500': form.errors.email }" />

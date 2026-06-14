@@ -89,12 +89,12 @@ const toggleExpand = (id) => {
 <template>
     <Head title="Registry" />
     <AppLayout title="Registry Search">
-        <div class="mb-4 flex gap-1 rounded-xl bg-white p-1 shadow-sm ring-1 ring-ink-100 w-fit">
+        <div class="mb-4 flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line w-fit">
             <button v-for="m in modes" :key="m[0]" @click="setMode(m[0])" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="mode === m[0] ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ m[1] }}</button>
         </div>
 
         <!-- filters -->
-        <div class="mb-4 rounded-2xl bg-white p-4 shadow-card ring-1 ring-ink-100/60">
+        <div class="mb-4 rounded-2xl bg-card p-4 shadow-card ring-1 ring-line">
             <!-- ADMISSIONS -->
             <div v-if="mode === 'admissions'" class="space-y-3">
                 <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -169,10 +169,10 @@ const toggleExpand = (id) => {
         <div class="mb-2 text-sm text-ink-400"><span class="nums font-semibold text-ink-600">{{ results.total }}</span> result(s)</div>
 
         <!-- results -->
-        <div class="overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-ink-100/60">
+        <div class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
             <table v-if="mode === 'consultations'" class="w-full text-sm">
-                <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400"><th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Location</th><th scope="col" class="px-3 py-3">From → To</th><th scope="col" class="px-3 py-3">Indication</th><th scope="col" class="px-3 py-3">Consultant</th><th scope="col" class="px-3 py-3">Date</th><th scope="col" class="px-5 py-3">Status</th></tr></thead>
-                <tbody class="divide-y divide-ink-50">
+                <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400"><th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Location</th><th scope="col" class="px-3 py-3">From → To</th><th scope="col" class="px-3 py-3">Indication</th><th scope="col" class="px-3 py-3">Consultant</th><th scope="col" class="px-3 py-3">Date</th><th scope="col" class="px-5 py-3">Status</th></tr></thead>
+                <tbody class="divide-y divide-line">
                     <tr v-for="c in results.data" :key="c.id" class="hover:bg-brand-50/40">
                         <td class="px-5 py-3"><div class="font-semibold text-ink-800">{{ c.name }}</div><div class="nums text-xs text-ink-400">MRN {{ c.mrn }} · {{ c.age ?? '—' }}y</div></td>
                         <td class="px-3 py-3 text-ink-600">{{ c.location || '—' }}</td>
@@ -186,12 +186,12 @@ const toggleExpand = (id) => {
                 </tbody>
             </table>
             <table v-else class="w-full text-sm">
-                <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400"><th v-if="mode === 'admissions'" scope="col" class="w-10 px-2 py-3"><span class="sr-only">Details</span></th><th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Age/Sex</th><th scope="col" class="px-3 py-3">Location</th><th scope="col" class="px-3 py-3">Consultant</th><th scope="col" class="px-3 py-3">Admitted</th><th scope="col" class="px-3 py-3">Discharged</th><th scope="col" class="px-3 py-3">LOS</th><th scope="col" class="px-3 py-3">Outcome</th><th scope="col" class="px-5 py-3 text-right">Edit</th></tr></thead>
-                <tbody class="divide-y divide-ink-50">
+                <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400"><th v-if="mode === 'admissions'" scope="col" class="w-10 px-2 py-3"><span class="sr-only">Details</span></th><th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Age/Sex</th><th scope="col" class="px-3 py-3">Location</th><th scope="col" class="px-3 py-3">Consultant</th><th scope="col" class="px-3 py-3">Admitted</th><th scope="col" class="px-3 py-3">Discharged</th><th scope="col" class="px-3 py-3">LOS</th><th scope="col" class="px-3 py-3">Outcome</th><th scope="col" class="px-5 py-3 text-right">Edit</th></tr></thead>
+                <tbody class="divide-y divide-line">
                     <template v-for="r in results.data" :key="r.id">
                         <tr class="hover:bg-brand-50/40">
                             <td v-if="mode === 'admissions'" class="px-2 py-3">
-                                <button @click="toggleExpand(r.id)" :aria-expanded="expanded.has(r.id) ? 'true' : 'false'" :aria-label="`Toggle details for ${r.name}`" class="grid h-7 w-7 place-items-center rounded-lg text-ink-400 ring-1 ring-ink-100 transition hover:bg-brand-50 hover:text-brand-700">
+                                <button @click="toggleExpand(r.id)" :aria-expanded="expanded.has(r.id) ? 'true' : 'false'" :aria-label="`Toggle details for ${r.name}`" class="grid h-7 w-7 place-items-center rounded-lg text-ink-400 ring-1 ring-line transition hover:bg-brand-50 hover:text-brand-700">
                                     <svg class="h-4 w-4 transition-transform" :class="expanded.has(r.id) && 'rotate-90'" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
                                 </button>
                             </td>
@@ -206,7 +206,7 @@ const toggleExpand = (id) => {
                             <td class="px-5 py-3 text-right"><button v-if="canModify" @click="openEdit(r.id)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50">Edit</button></td>
                         </tr>
                         <!-- expandable detail panel (admissions mode) -->
-                        <tr v-if="mode === 'admissions' && expanded.has(r.id)" class="bg-surface/60">
+                        <tr v-if="mode === 'admissions' && expanded.has(r.id)" class="bg-app/60">
                             <td></td>
                             <td colspan="9" class="px-5 py-4">
                                 <div v-if="r.is_tb || r.is_readmission || r.is_longterm || r.disch_still_in" class="mb-3 flex flex-wrap gap-1.5">
@@ -246,12 +246,12 @@ const toggleExpand = (id) => {
 
         <div v-if="results.last_page > 1" class="mt-4 flex items-center justify-between text-sm text-ink-500">
             <span class="nums">Showing {{ results.from }}–{{ results.to }} of {{ results.total }}</span>
-            <div class="flex gap-1"><component :is="l.url ? Link : 'span'" v-for="l in results.links" :key="l.label" :href="l.url || undefined" preserve-scroll class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold transition" :class="l.active ? 'bg-brand-600 text-white' : (l.url ? 'bg-white text-ink-600 ring-1 ring-ink-100 hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" /></div>
+            <div class="flex gap-1"><component :is="l.url ? Link : 'span'" v-for="l in results.links" :key="l.label" :href="l.url || undefined" preserve-scroll class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold transition" :class="l.active ? 'bg-brand-600 text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" /></div>
         </div>
 
         <!-- edit modal -->
         <div v-if="editing" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="editing = null">
-            <div class="max-h-[90vh] w-full max-w-lg overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
+            <div class="max-h-[90vh] w-full max-w-lg overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
                 <div class="mb-4 flex items-center justify-between"><h3 class="text-lg font-bold text-ink-900">Modify patient</h3><button @click="editing = null" class="text-ink-400 hover:text-ink-700">✕</button></div>
                 <form @submit.prevent="submitEdit" class="space-y-3">
                     <div class="grid grid-cols-2 gap-3">

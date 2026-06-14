@@ -15,18 +15,18 @@ const print = () => window.print();
     <Head :title="`Monthly Report — ${monthName} ${year}`" />
     <AppLayout title="Monthly Report">
         <div class="no-print mb-5 flex flex-wrap items-center gap-3">
-            <select v-model="month" @change="change" class="rounded-xl border border-ink-200 bg-white px-4 py-2 text-sm font-semibold outline-none focus:border-brand-500">
+            <select v-model="month" @change="change" class="rounded-xl border border-ink-200 bg-card px-4 py-2 text-sm font-semibold outline-none focus:border-brand-500">
                 <option v-for="(n, i) in monthNames" :key="i" :value="i + 1">{{ n }}</option>
             </select>
-            <select v-model="year" @change="change" class="rounded-xl border border-ink-200 bg-white px-4 py-2 text-sm font-semibold outline-none focus:border-brand-500">
+            <select v-model="year" @change="change" class="rounded-xl border border-ink-200 bg-card px-4 py-2 text-sm font-semibold outline-none focus:border-brand-500">
                 <option v-for="y in availableYears" :key="y" :value="y">{{ y }}</option>
             </select>
             <a :href="`/reports/monthly/pdf?year=${year}&month=${month}`" class="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-700">Download PDF</a>
-            <button @click="print" class="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-ink-600 shadow ring-1 ring-ink-200 transition hover:bg-ink-50">Print</button>
+            <button @click="print" class="inline-flex items-center gap-2 rounded-xl bg-card px-4 py-2 text-sm font-semibold text-ink-600 shadow ring-1 ring-ink-200 transition hover:bg-ink-50">Print</button>
             <Link href="/reports" class="ml-auto inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-brand-700 ring-1 ring-brand-200 transition hover:bg-brand-50">← Annual report</Link>
         </div>
 
-        <div class="report mx-auto max-w-[820px] rounded-2xl bg-white p-10 shadow-card ring-1 ring-ink-100/60 print:rounded-none print:shadow-none print:ring-0">
+        <div class="report mx-auto max-w-[820px] rounded-2xl bg-card p-10 shadow-card ring-1 ring-line print:rounded-none print:shadow-none print:ring-0">
             <header class="mb-6 flex items-start justify-between border-b-2 border-brand-600 pb-4">
                 <div>
                     <h1 class="text-2xl font-extrabold text-navy-900">DMC <span class="text-brand-600">Internal Medicine</span></h1>
@@ -38,7 +38,7 @@ const print = () => window.print();
             </header>
 
             <div class="mb-6 grid grid-cols-4 gap-3">
-                <div v-for="kpi in [['Admissions', totals.admissions],['Discharges', totals.discharges],['ICU', totals.icu],['Mortality', totals.deaths]]" :key="kpi[0]" class="rounded-xl bg-surface p-3 text-center print:bg-white print:ring-1 print:ring-ink-200">
+                <div v-for="kpi in [['Admissions', totals.admissions],['Discharges', totals.discharges],['ICU', totals.icu],['Mortality', totals.deaths]]" :key="kpi[0]" class="rounded-xl bg-app p-3 text-center print:bg-card print:ring-1 print:ring-ink-200">
                     <div class="text-[10px] font-semibold uppercase tracking-wide text-ink-400">{{ kpi[0] }}</div>
                     <div class="nums text-xl font-bold text-brand-700">{{ kpi[1] }}</div>
                 </div>
@@ -50,12 +50,12 @@ const print = () => window.print();
                 </tr></thead>
                 <tbody>
                     <!-- weekend = Friday/Saturday (D4 — Saudi work week), matching the report weekend-discharge metric -->
-                    <tr v-for="(d, i) in days" :key="d.day" :class="['Fri','Sat'].includes(d.weekday) ? 'bg-accent-300/15' : (i % 2 ? 'bg-surface/60 print:bg-white' : '')">
-                        <td class="border-b border-ink-100 px-3 py-1 font-medium text-ink-700">{{ d.weekday }} {{ d.day }}</td>
-                        <td class="nums border-b border-ink-100 px-3 py-1 text-right">{{ d.admissions }}</td>
-                        <td class="nums border-b border-ink-100 px-3 py-1 text-right">{{ d.discharges }}</td>
-                        <td class="nums border-b border-ink-100 px-3 py-1 text-right">{{ d.icu }}</td>
-                        <td class="nums border-b border-ink-100 px-3 py-1 text-right">{{ d.deaths }}</td>
+                    <tr v-for="(d, i) in days" :key="d.day" :class="['Fri','Sat'].includes(d.weekday) ? 'bg-accent-300/15' : (i % 2 ? 'bg-app/60 print:bg-card' : '')">
+                        <td class="border-b border-line px-3 py-1 font-medium text-ink-700">{{ d.weekday }} {{ d.day }}</td>
+                        <td class="nums border-b border-line px-3 py-1 text-right">{{ d.admissions }}</td>
+                        <td class="nums border-b border-line px-3 py-1 text-right">{{ d.discharges }}</td>
+                        <td class="nums border-b border-line px-3 py-1 text-right">{{ d.icu }}</td>
+                        <td class="nums border-b border-line px-3 py-1 text-right">{{ d.deaths }}</td>
                     </tr>
                     <tr class="bg-brand-50 font-bold text-brand-800">
                         <td class="px-3 py-2">Total</td>
@@ -67,7 +67,7 @@ const print = () => window.print();
                 </tbody>
             </table>
 
-            <footer class="mt-8 border-t border-ink-100 pt-3 text-center text-[11px] text-ink-400">DMC Internal Medicine · Patient-Flow Hub · Confidential</footer>
+            <footer class="mt-8 border-t border-line pt-3 text-center text-[11px] text-ink-400">DMC Internal Medicine · Patient-Flow Hub · Confidential</footer>
         </div>
     </AppLayout>
 </template>

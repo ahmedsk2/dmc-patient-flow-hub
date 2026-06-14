@@ -94,15 +94,15 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
     <AppLayout title="New Admissions">
         <!-- toolbar -->
         <div class="mb-5 flex flex-wrap items-center gap-3">
-            <span class="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-ink-100">
+            <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">
                 Awaiting assignment <span class="nums ml-1 text-accent-600">{{ queue.length }}</span>
             </span>
             <div class="ml-auto flex gap-2">
-                <button v-if="canAssign && queue.length" @click="shuffle" class="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-ink-600 shadow ring-1 ring-ink-200 transition hover:bg-ink-50">
+                <button v-if="canAssign && queue.length" @click="shuffle" class="inline-flex items-center gap-1.5 rounded-xl bg-card px-4 py-2 text-sm font-semibold text-ink-600 shadow ring-1 ring-ink-200 transition hover:bg-ink-50">
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" /></svg>
                     Shuffle / auto-assign
                 </button>
-                <button v-if="canAdd && icuPatients.length" @click="showIcu = true" class="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-ink-600 shadow ring-1 ring-ink-200 transition hover:bg-ink-50">
+                <button v-if="canAdd && icuPatients.length" @click="showIcu = true" class="inline-flex items-center gap-1.5 rounded-xl bg-card px-4 py-2 text-sm font-semibold text-ink-600 shadow ring-1 ring-ink-200 transition hover:bg-ink-50">
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m12.75 15 3-3m0 0-3-3m3 3h-7.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
                     Admission from ICU <span class="nums text-danger-600">{{ icuPatients.length }}</span>
                 </button>
@@ -114,7 +114,7 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
         </div>
 
         <!-- empty -->
-        <div v-if="!queue.length" class="rounded-2xl bg-white p-12 text-center shadow-card ring-1 ring-ink-100/60">
+        <div v-if="!queue.length" class="rounded-2xl bg-card p-12 text-center shadow-card ring-1 ring-line">
             <div class="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-success-100 text-success-600">
                 <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
             </div>
@@ -126,7 +126,7 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
         <div v-for="[date, patients] in byDate" :key="date" class="mb-5">
             <h3 class="mb-2 text-sm font-semibold text-ink-500">{{ dayName(date) }} <span class="text-ink-400">— {{ date }}</span> <span class="text-ink-300">({{ patients.length }})</span></h3>
             <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                <div v-for="p in patients" :key="p.id" class="rounded-2xl bg-white p-4 shadow-card ring-1 ring-ink-100/60">
+                <div v-for="p in patients" :key="p.id" class="rounded-2xl bg-card p-4 shadow-card ring-1 ring-line">
                     <div class="flex items-start justify-between">
                         <div>
                             <div class="font-semibold text-ink-800">{{ p.name }}</div>
@@ -143,14 +143,14 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
                             class="rounded-full px-2 py-0.5 font-semibold transition"
                             :class="dxOpen === p.id ? 'bg-brand-100 text-brand-700' : 'bg-ink-50 hover:bg-ink-100'">{{ p.dx_count }} dx</button>
                     </div>
-                    <ul v-if="dxOpen === p.id && p.diagnoses?.length" class="mt-1.5 space-y-0.5 rounded-lg bg-surface/70 px-2 py-1.5 text-[11px] leading-snug text-ink-600">
+                    <ul v-if="dxOpen === p.id && p.diagnoses?.length" class="mt-1.5 space-y-0.5 rounded-lg bg-app/70 px-2 py-1.5 text-[11px] leading-snug text-ink-600">
                         <li v-for="d in p.diagnoses" :key="d.code"><span class="nums font-semibold text-brand-700">{{ d.code }}</span> {{ d.name }}</li>
                     </ul>
                     <div class="mt-3 flex items-center gap-2 border-t border-ink-50 pt-3">
                         <button v-if="canModify" @click="openModify(p)" title="Edit details" class="grid h-7 w-8 shrink-0 place-items-center rounded-lg text-ink-500 ring-1 ring-ink-200 hover:bg-ink-50"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" /></svg></button>
                         <button v-if="me.is_admin" @click="destroyAdmission(p)" title="Delete admission" aria-label="Delete admission" class="grid h-7 w-8 shrink-0 place-items-center rounded-lg text-ink-500 ring-1 ring-ink-200 hover:bg-danger-100 hover:text-danger-600"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg></button>
                         <button v-if="canAssign" @click="openAssign(p)" class="flex-1 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">Assign to primary</button>
-                        <button v-if="canSelfAssign" @click="assignToMe(p)" class="flex-1 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 ring-1 ring-brand-200 hover:bg-brand-50">Assign to me</button>
+                        <button v-if="canSelfAssign" @click="assignToMe(p)" class="flex-1 rounded-lg bg-card px-3 py-1.5 text-xs font-semibold text-brand-700 ring-1 ring-brand-200 hover:bg-brand-50">Assign to me</button>
                         <span v-if="!canAssign && !canSelfAssign && !canModify" class="text-xs text-ink-300">awaiting assignment</span>
                     </div>
                 </div>
@@ -159,7 +159,7 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
 
         <!-- assign modal -->
         <div v-if="assigning" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="assigning = null">
-            <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div class="w-full max-w-md rounded-2xl bg-card p-6 shadow-2xl">
                 <h3 class="text-lg font-bold text-ink-900">Assign to primary</h3>
                 <p class="mb-4 text-sm text-ink-400">{{ assigning.name }} · MRN {{ assigning.mrn }}</p>
                 <form @submit.prevent="submitAssign" class="space-y-4">
@@ -178,12 +178,12 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
 
         <!-- admission-from-ICU modal -->
         <div v-if="showIcu" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="showIcu = false">
-            <div class="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
+            <div class="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
                 <div class="mb-4 flex items-center justify-between"><h3 class="text-lg font-bold text-ink-900">Admit from ICU</h3><button @click="showIcu = false" class="text-ink-400 hover:text-ink-700">✕</button></div>
                 <p class="mb-3 text-sm text-ink-400">Pull a current ICU patient onto the ward — they enter the assignment queue for a (new) consultant.</p>
                 <table class="w-full text-sm">
-                    <thead><tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400"><th scope="col" class="px-3 py-2">MRN</th><th scope="col" class="px-3 py-2">Patient</th><th scope="col" class="px-3 py-2">Bed</th><th scope="col" class="px-3 py-2">Consultant</th><th scope="col" class="px-3 py-2"></th></tr></thead>
-                    <tbody class="divide-y divide-ink-50">
+                    <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400"><th scope="col" class="px-3 py-2">MRN</th><th scope="col" class="px-3 py-2">Patient</th><th scope="col" class="px-3 py-2">Bed</th><th scope="col" class="px-3 py-2">Consultant</th><th scope="col" class="px-3 py-2"></th></tr></thead>
+                    <tbody class="divide-y divide-line">
                         <tr v-for="p in icuPatients" :key="p.id" class="hover:bg-brand-50/40">
                             <td class="nums px-3 py-2 text-ink-500">{{ p.mrn }}</td>
                             <td class="px-3 py-2 font-semibold text-ink-800">{{ p.name }}</td>
@@ -199,7 +199,7 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
 
         <!-- modify queued patient modal -->
         <div v-if="editing" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="editing = null">
-            <div class="max-h-[90vh] w-full max-w-lg overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
+            <div class="max-h-[90vh] w-full max-w-lg overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
                 <div class="mb-4 flex items-center justify-between"><h3 class="text-lg font-bold text-ink-900">Edit patient</h3><button @click="editing = null" class="text-ink-400 hover:text-ink-700">✕</button></div>
                 <form @submit.prevent="submitModify" class="space-y-3">
                     <div class="grid grid-cols-2 gap-3">

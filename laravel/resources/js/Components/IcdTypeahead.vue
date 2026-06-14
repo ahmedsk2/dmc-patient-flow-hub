@@ -41,7 +41,7 @@ const onKeydown = (e) => {
     <div class="relative">
         <input v-model="query" :class="inputClass" :placeholder="placeholder" role="combobox"
             :aria-expanded="results.length > 0" aria-autocomplete="list" @keydown="onKeydown" @blur="close" />
-        <ul v-if="results.length" role="listbox" class="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-ink-100 bg-white py-1 shadow-lg">
+        <ul v-if="results.length" role="listbox" class="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-line bg-card py-1 shadow-lg">
             <li v-for="(d, i) in results" :key="d.code" role="option" :aria-selected="i === hi"
                 @mousedown.prevent="choose(d)" @mouseenter="hi = i"
                 class="cursor-pointer px-3 py-1.5 text-sm" :class="i === hi ? 'bg-brand-50' : ''">

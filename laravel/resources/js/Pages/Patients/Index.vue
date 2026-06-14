@@ -242,9 +242,9 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
     <AppLayout title="Active Patients">
         <!-- toolbar -->
         <div class="mb-4 flex flex-wrap items-center gap-2">
-            <span class="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-ink-100">Census <span class="nums ml-1 text-brand-700">{{ stats.total }}</span></span>
-            <span class="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-ink-100">Ward (non-ICU) <span class="nums ml-1 text-brand-700">{{ stats.ward }}</span></span>
-            <span class="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-ink-100">ICU <span class="nums ml-1 text-danger-600">{{ stats.icu }}</span></span>
+            <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Census <span class="nums ml-1 text-brand-700">{{ stats.total }}</span></span>
+            <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Ward (non-ICU) <span class="nums ml-1 text-brand-700">{{ stats.ward }}</span></span>
+            <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">ICU <span class="nums ml-1 text-danger-600">{{ stats.icu }}</span></span>
             <!-- observers don't get the queue link — the page behind it is clinical-role only (J2-12) -->
             <Link v-if="stats.unassigned && !isObserver" href="/admissions" class="inline-flex items-center gap-1.5 rounded-xl bg-accent-300/30 px-3 py-2 text-sm font-semibold text-accent-600 ring-1 ring-accent-300/50 transition hover:bg-accent-300/50">
                 {{ stats.unassigned }} awaiting assignment →
@@ -252,35 +252,35 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
 
             <div class="relative ml-auto">
                 <svg class="pointer-events-none absolute left-3 top-2.5 h-5 w-5 text-ink-400" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" /></svg>
-                <input v-model="search" placeholder="Search name or MRN…" class="w-56 rounded-xl border border-ink-200 bg-white py-2 pl-10 pr-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+                <input v-model="search" placeholder="Search name or MRN…" class="w-56 rounded-xl border border-ink-200 bg-card py-2 pl-10 pr-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
             </div>
-            <div class="flex gap-1 rounded-xl bg-white p-1 shadow-sm ring-1 ring-ink-100">
+            <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line">
                 <button v-for="l in ['Ward','ICU','ER']" :key="l" @click="setLocation(l)" class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="location === l ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ l }}</button>
                 <button v-for="v in [['longterm','Long-term'],['tb','TB']]" :key="v[0]" @click="setView(v[0])" class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="view === v[0] ? 'bg-accent-500 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ v[1] }}</button>
             </div>
-            <a href="/active-list" target="_blank" title="Print board" aria-label="Print board (opens in a new tab)" class="grid h-9 w-9 place-items-center rounded-xl bg-white text-ink-500 shadow-sm ring-1 ring-ink-100 transition hover:bg-ink-50">
+            <a href="/active-list" target="_blank" title="Print board" aria-label="Print board (opens in a new tab)" class="grid h-9 w-9 place-items-center rounded-xl bg-card text-ink-500 shadow-sm ring-1 ring-line transition hover:bg-ink-50">
                 <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.4 42.4 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.32 0H6.34m11.32 0 .55-6.171M6.34 18l-.55-6.171m0 0a42.4 42.4 0 0 1 12.42 0M5.79 11.829V6.75A2.25 2.25 0 0 1 8.04 4.5h7.92a2.25 2.25 0 0 1 2.25 2.25v5.079" /></svg>
             </a>
-            <button v-if="canAssign" @click="shuffle" title="Auto-assign unassigned" aria-label="Auto-assign unassigned" class="grid h-9 w-9 place-items-center rounded-xl bg-white text-ink-500 shadow-sm ring-1 ring-ink-100 transition hover:bg-ink-50">
+            <button v-if="canAssign" @click="shuffle" title="Auto-assign unassigned" aria-label="Auto-assign unassigned" class="grid h-9 w-9 place-items-center rounded-xl bg-card text-ink-500 shadow-sm ring-1 ring-line transition hover:bg-ink-50">
                 <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" /></svg>
             </button>
-            <button v-if="canReassign && !isObserver" @click="openReassign()" title="Bulk reassign" aria-label="Bulk reassign" class="grid h-9 w-9 place-items-center rounded-xl bg-white text-ink-500 shadow-sm ring-1 ring-ink-100 transition hover:bg-ink-50">
+            <button v-if="canReassign && !isObserver" @click="openReassign()" title="Bulk reassign" aria-label="Bulk reassign" class="grid h-9 w-9 place-items-center rounded-xl bg-card text-ink-500 shadow-sm ring-1 ring-line transition hover:bg-ink-50">
                 <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" /></svg>
             </button>
         </div>
 
         <!-- summary: patients per consultant -->
-        <div class="mb-5 overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-ink-100/60">
+        <div class="mb-5 overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
             <table class="w-full text-sm">
                 <thead>
-                    <tr class="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
+                    <tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
                         <th scope="col" class="px-5 py-2.5">Consultant</th><th scope="col" class="px-3 py-2.5 text-center">Old</th><th scope="col" class="px-3 py-2.5 text-center">New</th><th scope="col" class="px-3 py-2.5 text-center">Active</th>
                         <th scope="col" class="px-3 py-2.5 text-center">Ward</th><th scope="col" class="px-3 py-2.5 text-center">ICU</th><th scope="col" class="px-3 py-2.5 text-center">TB</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-ink-50">
+                <tbody class="divide-y divide-line">
                     <template v-for="sec in sections" :key="sec.key">
-                        <tr v-if="sec.rows.length" class="bg-surface/70"><td colspan="7" class="px-5 py-1.5 text-xs font-bold uppercase tracking-wide text-ink-500">{{ sec.label }}</td></tr>
+                        <tr v-if="sec.rows.length" class="bg-app/70"><td colspan="7" class="px-5 py-1.5 text-xs font-bold uppercase tracking-wide text-ink-500">{{ sec.label }}</td></tr>
                         <tr v-for="g in sec.rows" :key="g.id" class="cursor-pointer transition hover:bg-brand-50/40" @click="toggle(g.id)">
                             <td class="px-5 py-2 font-semibold text-ink-700">
                                 <svg class="mr-1.5 inline h-4 w-4 text-ink-300" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" :d="open.has(g.id) ? 'm4.5 15.75 7.5-7.5 7.5 7.5' : 'm19.5 8.25-7.5 7.5-7.5-7.5'" /></svg> Dr. {{ g.name }}
@@ -304,8 +304,8 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
         </div>
 
         <!-- per-consultant patient cards -->
-        <div v-for="g in groups" :key="g.id" v-show="open.has(g.id)" class="mb-4 overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-ink-100/60">
-            <div class="flex items-center justify-between border-b border-ink-100 px-5 py-3">
+        <div v-for="g in groups" :key="g.id" v-show="open.has(g.id)" class="mb-4 overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
+            <div class="flex items-center justify-between border-b border-line px-5 py-3">
                 <h3 class="font-bold text-ink-800">Dr. {{ g.name }} <span class="ml-1 text-sm font-normal text-ink-400">· {{ g.counts.total }} patient(s)</span></h3>
                 <span class="flex items-center gap-2">
                     <!-- opens the bulk-reassign modal pre-filled with from=this consultant (J2-11) -->
@@ -316,12 +316,12 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
             </div>
             <p v-if="!g.patients.length" class="px-5 py-4 text-sm text-ink-400">No patients on this list yet.</p>
             <div v-else class="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                <div v-for="p in g.patients" :key="p.id" class="rounded-xl ring-1 ring-ink-100">
-                    <div class="flex items-center justify-between rounded-t-xl bg-surface/60 px-3 py-2">
+                <div v-for="p in g.patients" :key="p.id" class="rounded-xl ring-1 ring-line">
+                    <div class="flex items-center justify-between rounded-t-xl bg-app/60 px-3 py-2">
                         <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="locTone(p.location)">
                             {{ p.location || '—' }} ·
                             <input v-if="bedEdit && bedEdit.id === p.id" v-model="bedEdit.value" v-focus maxlength="64"
-                                aria-label="Bed" class="w-14 rounded border border-ink-200 bg-white px-1 py-0 text-[11px] font-semibold text-ink-700 outline-none focus:border-brand-500"
+                                aria-label="Bed" class="w-14 rounded border border-ink-200 bg-card px-1 py-0 text-[11px] font-semibold text-ink-700 outline-none focus:border-brand-500"
                                 @blur="saveBed(p)" @keydown.enter.prevent="$event.target.blur()" @keydown.esc.prevent="cancelBed" />
                             <button v-else-if="!isObserver && !p.discharged" type="button" @click="startBed(p)" title="Edit bed" aria-label="Edit bed"
                                 class="rounded underline decoration-dotted underline-offset-2 hover:opacity-75">{{ p.bed || '—' }}</button>
@@ -355,7 +355,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                                 class="rounded-full px-1.5 py-0.5 text-[10px] font-semibold transition"
                                 :class="dxOpen === p.id ? 'bg-brand-100 text-brand-700' : 'bg-ink-50 text-ink-500 hover:bg-ink-100'">{{ p.dx_count }} dx</button>
                         </div>
-                        <ul v-if="dxOpen === p.id && p.diagnoses?.length" class="mt-1.5 space-y-0.5 rounded-lg bg-surface/70 px-2 py-1.5 text-[11px] leading-snug text-ink-600">
+                        <ul v-if="dxOpen === p.id && p.diagnoses?.length" class="mt-1.5 space-y-0.5 rounded-lg bg-app/70 px-2 py-1.5 text-[11px] leading-snug text-ink-600">
                             <li v-for="d in p.diagnoses" :key="d.code"><span class="nums font-semibold text-brand-700">{{ d.code }}</span> {{ d.name }}</li>
                         </ul>
                     </div>
@@ -380,7 +380,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
 
         <!-- action modal (assign / discharge / transfer) -->
         <div v-if="modal" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="closeModal">
-            <div class="max-h-[90vh] w-full max-w-md overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
+            <div class="max-h-[90vh] w-full max-w-md overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
                 <div class="mb-4 flex items-start justify-between">
                     <div><h3 class="text-lg font-bold text-ink-900">{{ ({ assign: 'Reassign consultant', medical: 'Discharge', complete: 'Complete discharge', icu: 'ICU discharge', transfer: 'Transfer' })[modal.mode] }}</h3><p class="text-sm text-ink-400">{{ modal.row.name }} · MRN {{ modal.row.mrn }}</p></div>
                     <button @click="closeModal" class="text-ink-400 hover:text-ink-700">✕</button>
@@ -391,7 +391,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                     <!-- handover gate: write today's handover here, save, retry the assign -->
                     <div v-if="aForm.errors.handover" class="rounded-xl bg-warning-100/60 p-3 ring-1 ring-warning-500/30">
                         <p class="text-xs font-semibold text-warning-500">{{ aForm.errors.handover }}</p>
-                        <textarea v-model="gateBody" rows="3" maxlength="5000" placeholder="Write today's handover for this patient…" aria-label="Handover text" class="mt-2 w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
+                        <textarea v-model="gateBody" rows="3" maxlength="5000" placeholder="Write today's handover for this patient…" aria-label="Handover text" class="mt-2 w-full rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
                         <div class="mt-2 flex justify-end"><button type="button" @click="saveGateThen(submitAssign)" :disabled="gateBusy || !gateBody.trim()" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save handover & assign</button></div>
                     </div>
                     <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="aForm.processing || !aForm.consultant_id" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Assign</button></div>
@@ -399,7 +399,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                 <form v-else-if="modal.mode === 'medical'" @submit.prevent="submitMedical" class="space-y-4">
                     <!-- record-review step (J1-15c): legacy discharge embedded the admission record
                          above the discharge fields — read-only summary here; edits go via Modify -->
-                    <div class="rounded-xl bg-surface/70 p-3 ring-1 ring-ink-100">
+                    <div class="rounded-xl bg-app/70 p-3 ring-1 ring-line">
                         <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-warning-500">Kindly review admission details</p>
                         <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                             <div><dt class="font-semibold text-ink-400">Name</dt><dd class="text-ink-700">{{ modal.row.name }}</dd></div>
@@ -409,7 +409,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                             <div><dt class="font-semibold text-ink-400">Admitted from</dt><dd class="text-ink-700">{{ modal.row.admitted_from || '—' }}</dd></div>
                             <div><dt class="font-semibold text-ink-400">Admit date</dt><dd class="nums text-ink-700">{{ modal.row.admit_date || '—' }}</dd></div>
                         </dl>
-                        <ul v-if="modal.row.diagnoses?.length" class="mt-2 space-y-0.5 border-t border-ink-100 pt-2 text-[11px] leading-snug text-ink-600">
+                        <ul v-if="modal.row.diagnoses?.length" class="mt-2 space-y-0.5 border-t border-line pt-2 text-[11px] leading-snug text-ink-600">
                             <li v-for="d in modal.row.diagnoses" :key="d.code"><span class="nums font-semibold text-brand-700">{{ d.code }}</span> {{ d.name }}</li>
                         </ul>
                     </div>
@@ -455,7 +455,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                 <form v-else-if="modal.mode === 'icu'" @submit.prevent="submitIcu" class="space-y-4">
                     <!-- record-review step (K1-11): same read-only summary as the medical-discharge
                          modal — review the admission record before closing the ICU file -->
-                    <div class="rounded-xl bg-surface/70 p-3 ring-1 ring-ink-100">
+                    <div class="rounded-xl bg-app/70 p-3 ring-1 ring-line">
                         <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-warning-500">Kindly review admission details</p>
                         <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                             <div><dt class="font-semibold text-ink-400">Name</dt><dd class="text-ink-700">{{ modal.row.name }}</dd></div>
@@ -465,7 +465,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                             <div><dt class="font-semibold text-ink-400">Admitted from</dt><dd class="text-ink-700">{{ modal.row.admitted_from || '—' }}</dd></div>
                             <div><dt class="font-semibold text-ink-400">Admit date</dt><dd class="nums text-ink-700">{{ modal.row.admit_date || '—' }}</dd></div>
                         </dl>
-                        <ul v-if="modal.row.diagnoses?.length" class="mt-2 space-y-0.5 border-t border-ink-100 pt-2 text-[11px] leading-snug text-ink-600">
+                        <ul v-if="modal.row.diagnoses?.length" class="mt-2 space-y-0.5 border-t border-line pt-2 text-[11px] leading-snug text-ink-600">
                             <li v-for="d in modal.row.diagnoses" :key="d.code"><span class="nums font-semibold text-brand-700">{{ d.code }}</span> {{ d.name }}</li>
                         </ul>
                     </div>
@@ -478,9 +478,9 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                     <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="icuForm.processing" class="rounded-xl bg-success-600 px-5 py-2 text-sm font-semibold text-white hover:bg-success-700 disabled:opacity-50">ICU discharge</button></div>
                 </form>
                 <form v-else @submit.prevent="submitTransfer" class="space-y-4">
-                    <div class="flex gap-1 rounded-xl bg-surface p-1 text-sm font-semibold">
+                    <div class="flex gap-1 rounded-xl bg-app p-1 text-sm font-semibold">
                         <button v-for="m in [['location','Ward / ICU'],['specialty','Internal specialty'],['external','External service']]" :key="m[0]" type="button" @click="tForm.mode = m[0]"
-                            class="flex-1 rounded-lg px-2 py-1.5 transition" :class="tForm.mode === m[0] ? 'bg-white text-brand-700 shadow-sm ring-1 ring-ink-100' : 'text-ink-500 hover:text-ink-700'">{{ m[1] }}</button>
+                            class="flex-1 rounded-lg px-2 py-1.5 transition" :class="tForm.mode === m[0] ? 'bg-card text-brand-700 shadow-sm ring-1 ring-line' : 'text-ink-500 hover:text-ink-700'">{{ m[1] }}</button>
                     </div>
                     <template v-if="tForm.mode === 'location'">
                         <p class="text-sm text-ink-600">Currently in <span class="font-semibold">{{ modal.row.location || '—' }}</span>. Transfer to:</p>
@@ -499,7 +499,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                         <!-- handover gate: write today's handover here, save, retry the transfer -->
                         <div v-if="tForm.errors.handover" class="rounded-xl bg-warning-100/60 p-3 ring-1 ring-warning-500/30">
                             <p class="text-xs font-semibold text-warning-500">{{ tForm.errors.handover }}</p>
-                            <textarea v-model="gateBody" rows="3" maxlength="5000" placeholder="Write today's handover for this patient…" aria-label="Handover text" class="mt-2 w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
+                            <textarea v-model="gateBody" rows="3" maxlength="5000" placeholder="Write today's handover for this patient…" aria-label="Handover text" class="mt-2 w-full rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
                             <div class="mt-2 flex justify-end"><button type="button" @click="saveGateThen(submitTransfer)" :disabled="gateBusy || !gateBody.trim()" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save handover & transfer</button></div>
                         </div>
                     </template>
@@ -516,7 +516,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
 
         <!-- bulk reassign modal -->
         <div v-if="reassign" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="reassign = false">
-            <div class="max-h-[90vh] w-full max-w-md overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
+            <div class="max-h-[90vh] w-full max-w-md overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
                 <h3 class="text-lg font-bold text-ink-900">Reassign a consultant's patients</h3>
                 <p class="mb-4 text-sm text-ink-400">Moves the selected active patients from one consultant to another.</p>
                 <form @submit.prevent="submitReassign" class="space-y-4">
@@ -526,7 +526,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
 
                     <!-- preflight: pick WHO moves (all checked by default); every SELECTED patient
                          needs a handover updated TODAY before the move unlocks -->
-                    <div v-if="preflight" class="rounded-xl bg-surface/70 p-3 ring-1 ring-ink-100">
+                    <div v-if="preflight" class="rounded-xl bg-app/70 p-3 ring-1 ring-line">
                         <p v-if="preflight.loading" class="text-sm text-ink-400">Checking handovers…</p>
                         <template v-else-if="preflight.rows.length">
                             <p class="text-xs font-semibold text-ink-600">{{ selectedIds.size }} of {{ preflight.rows.length }} patient(s) selected to move — uncheck to leave someone behind.</p>
@@ -545,7 +545,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                                 <p class="mt-3 text-xs font-semibold text-warning-500">{{ staleRows.length }} selected patient(s) need today's handover before the move:</p>
                                 <div v-for="r in staleRows" :key="'h' + r.id" class="mt-2">
                                     <p class="text-xs font-semibold text-ink-700">{{ r.name }} <span class="nums font-normal text-ink-400">MRN {{ r.mrn }}</span></p>
-                                    <textarea v-model="preflightBodies[r.id]" rows="2" maxlength="5000" :aria-label="`Handover for ${r.name}`" placeholder="Write today's handover…" class="mt-1 w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
+                                    <textarea v-model="preflightBodies[r.id]" rows="2" maxlength="5000" :aria-label="`Handover for ${r.name}`" placeholder="Write today's handover…" class="mt-1 w-full rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
                                 </div>
                                 <div class="mt-2 flex justify-end"><button type="button" @click="saveAllStale" :disabled="savingAll || !allStaleFilled" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50">{{ savingAll ? 'Saving…' : 'Save all handovers' }}</button></div>
                             </template>
@@ -567,7 +567,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
 
         <!-- handover modal (read for all roles; edit for canManage) -->
         <div v-if="hModal" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="hModal = null">
-            <div class="max-h-[90vh] w-full max-w-lg overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
+            <div class="max-h-[90vh] w-full max-w-lg overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
                 <div class="mb-4 flex items-start justify-between">
                     <div><h3 class="text-lg font-bold text-ink-900">Handover</h3><p class="text-sm text-ink-400">{{ hModal.row.name }} · MRN {{ hModal.row.mrn }}</p></div>
                     <button @click="hModal = null" aria-label="Close" class="text-ink-400 hover:text-ink-700">✕</button>
@@ -587,15 +587,15 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                         </div>
                     </template>
                     <template v-else>
-                        <p class="whitespace-pre-wrap rounded-xl bg-surface/70 px-3 py-2.5 text-sm leading-relaxed text-ink-700">{{ hModal.data.body || 'No handover text recorded.' }}</p>
+                        <p class="whitespace-pre-wrap rounded-xl bg-app/70 px-3 py-2.5 text-sm leading-relaxed text-ink-700">{{ hModal.data.body || 'No handover text recorded.' }}</p>
                         <div class="mt-3 flex items-center justify-between">
                             <button v-if="hModal.data.revisions?.length" type="button" @click="histOpen = !histOpen" :aria-expanded="histOpen" class="text-xs font-semibold text-brand-600 hover:underline">{{ histOpen ? 'Hide history' : `History (${hModal.data.revisions.length})` }}</button>
                             <span v-else class="text-xs text-ink-400">No history yet.</span>
                             <button v-if="canManage(hModal.row) && !isObserver" type="button" @click="hEditing = true" class="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Edit</button>
                         </div>
                         <ul v-if="histOpen" class="mt-3 max-h-56 space-y-2 overflow-auto">
-                            <li v-for="(r, i) in hModal.data.revisions" :key="i" class="rounded-xl ring-1 ring-ink-100">
-                                <p class="rounded-t-xl bg-surface/60 px-3 py-1.5 text-[11px] font-semibold text-ink-500">{{ r.author || '—' }} · {{ fmtAt(r.at) }}</p>
+                            <li v-for="(r, i) in hModal.data.revisions" :key="i" class="rounded-xl ring-1 ring-line">
+                                <p class="rounded-t-xl bg-app/60 px-3 py-1.5 text-[11px] font-semibold text-ink-500">{{ r.author || '—' }} · {{ fmtAt(r.at) }}</p>
                                 <p class="whitespace-pre-wrap px-3 py-2 text-xs leading-relaxed text-ink-600">{{ r.body }}</p>
                             </li>
                         </ul>
@@ -606,7 +606,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
 
         <!-- modify modal -->
         <div v-if="editing" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="editing = null">
-            <div class="max-h-[90vh] w-full max-w-lg overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
+            <div class="max-h-[90vh] w-full max-w-lg overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
                 <div class="mb-4 flex items-center justify-between"><h3 class="text-lg font-bold text-ink-900">Modify patient</h3><button @click="editing = null" class="text-ink-400 hover:text-ink-700">✕</button></div>
                 <form @submit.prevent="submitModify" class="space-y-3">
                     <div class="grid grid-cols-2 gap-3">

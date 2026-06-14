@@ -35,7 +35,7 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
         </div>
 
         <!-- printable document -->
-        <div class="report mx-auto max-w-[1000px] rounded-2xl bg-white p-8 shadow-card ring-1 ring-ink-100/60 print:rounded-none print:shadow-none print:ring-0">
+        <div class="report mx-auto max-w-[1000px] rounded-2xl bg-card p-8 shadow-card ring-1 ring-line print:rounded-none print:shadow-none print:ring-0">
             <header class="mb-5 flex items-start justify-between border-b-2 border-brand-600 pb-3">
                 <div>
                     <h1 class="text-2xl font-extrabold text-navy-900">DMC <span class="text-brand-600">Internal Medicine</span></h1>
@@ -49,10 +49,10 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
 
             <!-- legacy "Patient Count per Consultant" summary (active-list.php), incl. OFF-service -->
             <section v-if="groups.length" class="group-block mb-6">
-                <h2 class="mb-1.5 border-b border-ink-100 pb-1 text-sm font-bold uppercase tracking-wide text-navy-800">Patient count per consultant</h2>
+                <h2 class="mb-1.5 border-b border-line pb-1 text-sm font-bold uppercase tracking-wide text-navy-800">Patient count per consultant</h2>
                 <table class="w-full border-collapse text-xs">
                     <thead>
-                        <tr class="bg-surface/80 text-left font-semibold uppercase tracking-wide text-ink-500 print:bg-ink-100">
+                        <tr class="bg-app/80 text-left font-semibold uppercase tracking-wide text-ink-500 print:bg-ink-100">
                             <th scope="col" class="px-2 py-1.5">Consultant</th><th scope="col" class="px-2 py-1.5 text-center">Old</th><th scope="col" class="px-2 py-1.5 text-center">New</th>
                             <th scope="col" class="px-2 py-1.5 text-center">Active</th><th scope="col" class="px-2 py-1.5 text-center">Ward</th>
                             <th scope="col" class="px-2 py-1.5 text-center">ICU</th><th scope="col" class="px-2 py-1.5 text-center">TB</th>
@@ -76,13 +76,13 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
             </section>
 
             <section v-for="g in groups" :key="g.id" class="group-block mb-5">
-                <div class="mb-1.5 flex items-baseline justify-between border-b border-ink-100 pb-1">
+                <div class="mb-1.5 flex items-baseline justify-between border-b border-line pb-1">
                     <h2 class="text-sm font-bold uppercase tracking-wide text-navy-800">Dr. {{ g.name }}</h2>
                     <span class="nums text-xs text-ink-400">{{ g.counts.total }} patient(s) · Ward {{ g.counts.ward }} · ICU {{ g.counts.icu }}<template v-if="g.counts.tb"> · TB {{ g.counts.tb }}</template></span>
                 </div>
                 <table class="w-full border-collapse text-xs">
                     <thead>
-                        <tr class="bg-surface/80 text-left font-semibold uppercase tracking-wide text-ink-500 print:bg-ink-100">
+                        <tr class="bg-app/80 text-left font-semibold uppercase tracking-wide text-ink-500 print:bg-ink-100">
                             <th scope="col" class="px-2 py-1.5">Bed</th><th scope="col" class="px-2 py-1.5">MRN</th><th scope="col" class="px-2 py-1.5">Patient</th>
                             <th scope="col" class="px-2 py-1.5">Age/Sex</th><th scope="col" class="px-2 py-1.5">Loc</th><th scope="col" class="px-2 py-1.5">Admitted</th>
                             <th scope="col" class="px-2 py-1.5 text-right">LOS</th><th scope="col" class="px-2 py-1.5">Diagnoses</th><th scope="col" class="px-2 py-1.5">Flags</th>
@@ -117,7 +117,7 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
             </section>
             <p v-if="!groups.length" class="py-10 text-center text-sm text-ink-400">No assigned active patients.</p>
 
-            <footer class="mt-6 border-t border-ink-100 pt-3 text-center text-[11px] text-ink-400">
+            <footer class="mt-6 border-t border-line pt-3 text-center text-[11px] text-ink-400">
                 DMC Internal Medicine · Patient-Flow Hub · Confidential — contains patient-identifiable data
             </footer>
         </div>
