@@ -23,6 +23,13 @@ watch(search, () => { clearTimeout(timer); timer = setTimeout(apply, 300); });
 const setLocation = (l) => { location.value = location.value === l ? '' : l; apply(); };
 const setView = (v) => { view.value = view.value === v ? '' : v; apply(); };
 
+// board density — Comfortable/Compact, persisted per-browser (night-shift census fits more
+// per screen). Pure presentation: a class on the board container, no data/request change.
+const density = ref('comfortable');
+onMounted(() => { const d = localStorage.getItem('dmc-density'); if (d === 'compact' || d === 'comfortable') density.value = d; });
+const setDensity = (d) => { density.value = d; localStorage.setItem('dmc-density', d); };
+const compact = computed(() => density.value === 'compact');
+
 // collapsible consultant sections — expanded when a filter is active, else collapsed
 const filtering = computed(() => !!(props.filters.search || props.filters.view || props.filters.location));
 const open = ref(new Set(filtering.value ? props.groups.map((g) => g.id) : []));
@@ -258,6 +265,12 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                 <button v-for="l in ['Ward','ICU','ER']" :key="l" @click="setLocation(l)" class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="location === l ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ l }}</button>
                 <button v-for="v in [['longterm','Long-term'],['tb','TB']]" :key="v[0]" @click="setView(v[0])" class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="view === v[0] ? 'bg-accent-500 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ v[1] }}</button>
             </div>
+            <!-- density: Comfortable/Compact (localStorage 'dmc-density'); compact tightens card padding + gaps -->
+            <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line" role="group" aria-label="Board density">
+                <button v-for="d in [['comfortable','Comfortable'],['compact','Compact']]" :key="d[0]" @click="setDensity(d[0])"
+                    :aria-pressed="density === d[0]" :title="`${d[1]} board density`"
+                    class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="density === d[0] ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ d[1] }}</button>
+            </div>
             <a href="/active-list" target="_blank" title="Print board" aria-label="Print board (opens in a new tab)" class="grid h-9 w-9 place-items-center rounded-xl bg-card text-ink-500 shadow-sm ring-1 ring-line transition hover:bg-ink-50">
                 <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.4 42.4 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.32 0H6.34m11.32 0 .55-6.171M6.34 18l-.55-6.171m0 0a42.4 42.4 0 0 1 12.42 0M5.79 11.829V6.75A2.25 2.25 0 0 1 8.04 4.5h7.92a2.25 2.25 0 0 1 2.25 2.25v5.079" /></svg>
             </a>
@@ -304,7 +317,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
         </div>
 
         <!-- per-consultant patient cards -->
-        <div v-for="g in groups" :key="g.id" v-show="open.has(g.id)" class="mb-4 overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
+        <div v-for="g in groups" :key="g.id" v-show="open.has(g.id)" class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line" :class="compact ? 'mb-2.5' : 'mb-4'">
             <div class="flex items-center justify-between border-b border-line px-5 py-3">
                 <h3 class="font-bold text-ink-800">Dr. {{ g.name }} <span class="ml-1 text-sm font-normal text-ink-400">· {{ g.counts.total }} patient(s)</span></h3>
                 <span class="flex items-center gap-2">
@@ -315,9 +328,9 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                 </span>
             </div>
             <p v-if="!g.patients.length" class="px-5 py-4 text-sm text-ink-400">No patients on this list yet.</p>
-            <div v-else class="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div v-else class="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" :class="compact ? 'gap-2 p-2.5' : 'gap-3 p-4'">
                 <div v-for="p in g.patients" :key="p.id" class="rounded-xl ring-1 ring-line">
-                    <div class="flex items-center justify-between rounded-t-xl bg-app/60 px-3 py-2">
+                    <div class="flex items-center justify-between rounded-t-xl bg-app/60" :class="compact ? 'px-2.5 py-1' : 'px-3 py-2'">
                         <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="locTone(p.location)">
                             {{ p.location || '—' }} ·
                             <input v-if="bedEdit && bedEdit.id === p.id" v-model="bedEdit.value" v-focus maxlength="64"
@@ -335,20 +348,22 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                             <span v-if="p.los !== null" class="nums rounded-full px-2 py-0.5 text-[11px] font-bold" :class="losTone(p.los_band)">{{ p.los }}d</span>
                         </span>
                     </div>
-                    <div class="px-3 py-2">
+                    <div :class="compact ? 'px-2.5 py-1.5' : 'px-3 py-2'">
                         <div class="font-semibold text-ink-800">{{ p.name }}</div>
                         <div class="nums text-xs text-ink-400">MRN {{ p.mrn }} · {{ p.age ?? '—' }}y · {{ (p.gender||'—').slice(0,1) }}</div>
                         <div class="nums text-xs text-ink-400">Admitted {{ p.admit_date || '—' }}</div>
-                        <!-- legacy badge palette (owner decision, J2-10): New=red, Readmit=orange,
-                             Long-term=brown, TB=bright green, Disch-still-in=gold -->
+                        <!-- refined badge set (owner-approved, supersedes the loud legacy hex; J2-10):
+                             token-based so the .dark remap covers both themes. Semantics kept:
+                             New=info(blue), Readmit=warning(amber), Long-term=accent(gold subtle),
+                             TB=danger(red infection alert — NOT success-green), Disch-still-in=neutral "in progress". -->
                         <div class="mt-1.5 flex flex-wrap gap-1">
-                            <span v-if="p.is_new" class="rounded-full bg-[#fde8e8] px-1.5 py-0.5 text-[10px] font-semibold text-[#d12b1f]">New</span>
-                            <span v-if="p.is_readmission" class="rounded-full bg-[#fff1dd] px-1.5 py-0.5 text-[10px] font-semibold text-[#cf6a00]">Readmit ≤{{ readmitWindow ?? 3 }}d</span>
-                            <span v-if="p.is_longterm" class="rounded-full bg-[#f1e7da] px-1.5 py-0.5 text-[10px] font-semibold text-[#8a5a2b]">Long-term</span>
-                            <span v-if="p.is_tb" class="rounded-full bg-[#01ff70] px-1.5 py-0.5 text-[10px] font-semibold text-[#0a3622]">TB</span>
+                            <span v-if="p.is_new" class="rounded-full bg-info-100 px-1.5 py-0.5 text-[10px] font-semibold text-info-500">New</span>
+                            <span v-if="p.is_readmission" class="rounded-full bg-warning-100 px-1.5 py-0.5 text-[10px] font-semibold text-warning-500">Readmit ≤{{ readmitWindow ?? 3 }}d</span>
+                            <span v-if="p.is_longterm" class="rounded-full bg-accent-300/40 px-1.5 py-0.5 text-[10px] font-semibold text-accent-600">Long-term</span>
+                            <span v-if="p.is_tb" class="rounded-full bg-danger-100 px-1.5 py-0.5 text-[10px] font-semibold text-danger-600">TB</span>
                             <!-- long-term view lists closed episodes too — read-only card with a Discharged chip -->
                             <span v-if="p.discharged" class="rounded-full bg-ink-100 px-1.5 py-0.5 text-[10px] font-semibold text-ink-500">Discharged {{ p.discharge_date }}</span>
-                            <span v-else-if="p.medically_discharged" class="rounded-full bg-[#fdf3d0] px-1.5 py-0.5 text-[10px] font-semibold text-[#a8740a]">Disch. still in</span>
+                            <span v-else-if="p.medically_discharged" class="rounded-full bg-warning-100 px-1.5 py-0.5 text-[10px] font-semibold text-warning-500">Disch. still in</span>
                             <Link v-if="p.sign_pending" href="/handovers" title="Handover awaiting your signature" class="rounded-full bg-brand-100 px-1.5 py-0.5 text-[10px] font-semibold text-brand-700 hover:bg-brand-200">Sign pending</Link>
                             <button v-if="p.dx_count" type="button" @click="toggleDx(p.id)" :aria-expanded="dxOpen === p.id"
                                 :aria-label="`${p.dx_count} diagnoses — ${dxOpen === p.id ? 'hide' : 'show'} names`"
@@ -359,7 +374,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                             <li v-for="d in p.diagnoses" :key="d.code"><span class="nums font-semibold text-brand-700">{{ d.code }}</span> {{ d.name }}</li>
                         </ul>
                     </div>
-                    <div v-if="!isObserver && !p.discharged" class="flex gap-1 border-t border-ink-50 px-2 py-1.5">
+                    <div v-if="!isObserver && !p.discharged" class="flex gap-1 border-t border-ink-50 px-2" :class="compact ? 'py-1' : 'py-1.5'">
                         <button v-if="canAssign" @click="openModal('assign', p)" title="Reassign consultant" aria-label="Reassign consultant" class="grid h-7 w-7 place-items-center rounded-lg text-ink-400 hover:bg-info-100 hover:text-info-500"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18 7.5v6m3-3h-6m-3.75-1.875a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" /></svg></button>
                         <button v-if="canModify" @click="openModify(p)" title="Modify details" aria-label="Modify details" class="grid h-7 w-7 place-items-center rounded-lg text-ink-400 hover:bg-brand-100 hover:text-brand-700"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" /></svg></button>
                         <button @click="longterm(p)" :title="p.is_longterm ? 'Remove long-term' : 'Mark long-term'" :aria-label="p.is_longterm ? 'Remove long-term' : 'Mark long-term'" class="grid h-7 w-7 place-items-center rounded-lg hover:bg-accent-300/40" :class="p.is_longterm ? 'text-accent-600' : 'text-ink-400 hover:text-accent-600'"><svg class="h-4 w-4" :fill="p.is_longterm ? 'currentColor' : 'none'" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5m-9-6h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm0 2.25h.008v.008H12v-.008ZM9.75 15h.008v.008H9.75V15Zm0 2.25h.008v.008H9.75v-.008ZM7.5 15h.008v.008H7.5V15Zm0 2.25h.008v.008H7.5v-.008Zm6.75-4.5h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V15Zm0 2.25h.008v.008h-.008v-.008Zm2.25-4.5h.008v.008H16.5v-.008Zm0 2.25h.008v.008H16.5V15Z" /></svg></button>

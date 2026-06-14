@@ -171,7 +171,7 @@ onUnmounted(() => clearInterval(autoRefresh));
 
         <!-- KPI hero row -->
         <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
-            <div v-for="c in kpiCards" :key="c.label" class="relative overflow-hidden rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
+            <div v-for="c in kpiCards" :key="c.label" class="relative overflow-hidden rounded-2xl bg-card p-5 shadow-card-lg ring-1 ring-brand-200/60">
                 <div class="flex items-start justify-between">
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-wide text-ink-400">{{ c.label }}</p>
@@ -202,13 +202,13 @@ onUnmounted(() => clearInterval(autoRefresh));
             <!-- trend (2/3) -->
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line lg:col-span-2">
                 <div class="mb-2 flex items-center justify-between">
-                    <h3 class="font-bold text-ink-800">Admissions vs Discharges</h3>
+                    <h3 class="font-semibold text-ink-700">Admissions vs Discharges</h3>
                     <span class="rounded-full bg-ink-50 px-3 py-1 text-xs font-semibold text-ink-500">Last 30 days</span>
                 </div>
                 <apexchart type="area" height="300" :options="areaOptions" :series="areaSeries" role="img" aria-label="Area chart: admissions versus discharges over the last 30 days" />
             </div>
-            <!-- occupancy gauge -->
-            <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
+            <!-- occupancy gauge — PRIMARY tier (hero), matches the KPI tiles' elevation + brand hairline -->
+            <div class="rounded-2xl bg-card p-5 shadow-card-lg ring-1 ring-brand-200/60">
                 <h3 class="mb-2 font-bold text-ink-800">Bed Occupancy</h3>
                 <apexchart type="radialBar" height="260" :options="gaugeOptions" :series="[kpis.occupancyGauge]" role="img" :aria-label="`Gauge: bed occupancy ${kpis.occupancy}% (${kpis.ward} ward patients of ${kpis.wardBeds} beds)`" />
                 <div class="mt-1 grid grid-cols-2 gap-3 text-center">
@@ -220,22 +220,22 @@ onUnmounted(() => clearInterval(autoRefresh));
 
         <div class="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2 xl:grid-cols-4">
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-                <h3 class="mb-2 font-bold text-ink-800">Consultations</h3>
+                <h3 class="mb-2 font-semibold text-ink-700">Consultations</h3>
                 <apexchart type="bar" height="260" :options="colOptions(consults.labels, [C.teal, C.gold])" :series="consultsSeries" role="img" aria-label="Bar chart: consultations received and signed off" />
             </div>
             <!-- legacy dashboard/1.php consultation donut: signed off in the last 24h vs active (J2-5) -->
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-                <h3 class="mb-2 font-bold text-ink-800">Consultations <span class="font-normal text-ink-400">(24h sign-offs vs active)</span></h3>
+                <h3 class="mb-2 font-semibold text-ink-700">Consultations <span class="font-normal text-ink-400">(24h sign-offs vs active)</span></h3>
                 <apexchart type="donut" height="260" :options="consultDonutOptions" :series="consultDonutSeries" role="img" :aria-label="`Donut chart: ${consultDonut.signed24h} consultations signed off in the last 24 hours, ${consultDonut.active} active`" />
             </div>
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-                <h3 class="mb-2 font-bold text-ink-800">Length of Stay <span class="font-normal text-ink-400">(this year)</span></h3>
+                <h3 class="mb-2 font-semibold text-ink-700">Length of Stay <span class="font-normal text-ink-400">(this year)</span></h3>
                 <apexchart type="bar" height="260" :options="colOptions(los.labels, [C.navy])" :series="losSeries" role="img" aria-label="Bar chart: length-of-stay distribution this year" />
             </div>
             <!-- legacy census donut title carries the headline + TB count over the DONUT'S OWN
                  population (assigned non-ICU — dashboard/1.php:151-154), not the all-active KPI (M1/5) -->
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-                <h3 class="mb-2 font-bold text-ink-800">Current patients: <span class="nums">{{ donutTotal }}</span> <span class="font-normal text-ink-400">(incl. {{ donutTb }} TB)</span></h3>
+                <h3 class="mb-2 font-semibold text-ink-700">Current patients: <span class="nums">{{ donutTotal }}</span> <span class="font-normal text-ink-400">(incl. {{ donutTb }} TB)</span></h3>
                 <apexchart type="donut" height="260" :options="donutOptions" :series="donutSeries" role="img" :aria-label="`Donut chart: assigned non-ICU census by service — ${donutTotal} patients including ${donutTb} TB`" />
             </div>
         </div>
@@ -243,7 +243,7 @@ onUnmounted(() => clearInterval(autoRefresh));
         <div class="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
             <!-- per consultant -->
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-                <h3 class="mb-4 font-bold text-ink-800">Active Load by Consultant</h3>
+                <h3 class="mb-4 font-semibold text-ink-700">Active Load by Consultant</h3>
                 <div class="space-y-3">
                     <div v-for="c in perConsultant" :key="c.name" class="flex items-center gap-3">
                         <div class="w-40 shrink-0 truncate text-sm font-medium text-ink-600">{{ c.name }}</div>
@@ -257,7 +257,7 @@ onUnmounted(() => clearInterval(autoRefresh));
             </div>
             <!-- recent admissions -->
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-                <h3 class="mb-4 font-bold text-ink-800">Recent Admissions</h3>
+                <h3 class="mb-4 font-semibold text-ink-700">Recent Admissions</h3>
                 <div class="divide-y divide-line">
                     <div v-for="r in recent" :key="r.mrn + r.admitted" class="flex items-center gap-3 py-2.5">
                         <div class="grid h-9 w-9 place-items-center rounded-full bg-ink-50 text-xs font-bold text-ink-500">{{ (r.name || '?').slice(0,2).toUpperCase() }}</div>
@@ -275,7 +275,7 @@ onUnmounted(() => clearInterval(autoRefresh));
 
         <!-- top diagnoses: this calendar week-number across ALL years (legacy seasonal view) -->
         <div class="mt-5 rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-            <h3 class="mb-4 font-bold text-ink-800">Top diagnoses <span class="font-normal text-ink-400">(week {{ topDxWeekNum }}, all years)</span></h3>
+            <h3 class="mb-4 font-semibold text-ink-700">Top diagnoses <span class="font-normal text-ink-400">(week {{ topDxWeekNum }}, all years)</span></h3>
             <div class="grid gap-x-8 gap-y-2 sm:grid-cols-2">
                 <div v-for="(d, i) in topDxWeek" :key="i" class="flex items-center gap-3">
                     <div class="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">{{ i + 1 }}</div>
@@ -288,13 +288,13 @@ onUnmounted(() => clearInterval(autoRefresh));
 
         <!-- per-consultant 24h activity -->
         <div v-if="activity24h.length" class="mt-5 rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-            <h3 class="mb-2 font-bold text-ink-800">Admissions / Discharges per consultant <span class="font-normal text-ink-400">(since yesterday)</span></h3>
+            <h3 class="mb-2 font-semibold text-ink-700">Admissions / Discharges per consultant <span class="font-normal text-ink-400">(since yesterday)</span></h3>
             <apexchart type="bar" height="280" :options="act24Options" :series="act24Series" role="img" aria-label="Grouped bar chart: admissions and discharges per consultant since yesterday" />
         </div>
 
         <!-- per-consultant breakdown table -->
         <div class="mt-5 overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
-            <div class="border-b border-line px-5 py-3"><h3 class="font-bold text-ink-800">Patient count per consultant</h3></div>
+            <div class="border-b border-line px-5 py-3"><h3 class="font-semibold text-ink-700">Patient count per consultant</h3></div>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">

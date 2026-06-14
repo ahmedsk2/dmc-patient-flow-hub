@@ -194,7 +194,7 @@ const donut = (labels) => ({
             <div v-for="k in kpiCards" :key="k.label" class="rounded-2xl bg-card p-4 shadow-card ring-1 ring-line">
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-400">{{ k.label }}</div>
                 <div class="mt-1 flex items-baseline gap-1">
-                    <span class="nums text-2xl font-bold" :class="toneClass(k.tone)">{{ k.value }}</span>
+                    <span class="font-display nums text-2xl font-bold" :class="toneClass(k.tone)">{{ k.value }}</span>
                     <span v-if="k.sub" class="text-xs text-ink-400">{{ k.sub }}</span>
                 </div>
             </div>

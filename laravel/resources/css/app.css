@@ -101,6 +101,9 @@
     --color-focus: var(--focus-ring);
 
     --shadow-card: 0 1px 2px rgb(30 42 46 / 0.05), 0 6px 20px -8px rgb(30 42 46 / 0.14);
+    /* Elevated — one tier above shadow-card, for PRIMARY surfaces (dashboard hero KPIs +
+     * occupancy gauge). Reads as a slightly deeper lift so the eye lands there first. */
+    --shadow-card-lg: 0 2px 4px rgb(30 42 46 / 0.06), 0 14px 34px -12px rgb(30 42 46 / 0.22);
     --radius-xl2: 1.1rem;
 }
 
@@ -155,6 +158,7 @@
 
     /* Card shadow reads as a darker, softer pool on a dark page. */
     --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -10px rgb(0 0 0 / 0.6);
+    --shadow-card-lg: 0 2px 6px rgb(0 0 0 / 0.5), 0 18px 40px -14px rgb(0 0 0 / 0.75);
 }
 
 /* Brand text legibility: on dark, brand-700 (the common link/heading teal) is too deep —
