@@ -1,13 +1,16 @@
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from 'vue';
-import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Link, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import AdminBandCard from '@/Components/AdminBandCard.vue';
 import { useChartTheme } from '@/composables/useChartTheme';
 
 // theme-aware chart colors (grid/axis read CSS tokens; donut gaps match the card)
 const { gridColor, axisColor, strokeColor, inkColor } = useChartTheme();
 
 const props = defineProps({
+    // Wave 1, Item 7 — admin landing band counts; null for non-admins (band then renders nothing).
+    adminBand: { type: Object, default: null },
     kpis: Object,
     boardingCount: Number,
     boardingWorklist: Array,
@@ -34,6 +37,23 @@ const props = defineProps({
 
 const page = usePage();
 const auth = computed(() => page.props.auth.user);
+
+// ── Admin landing band (Wave 1, Item 7) ────────────────────────────────────────────────────────
+// is_admin only. Each card deep-links into a regrouped admin section; counts come from the
+// `adminBand` prop (DashboardController, reusing the digest/Security/soft-delete/handover sources).
+// Inline-SVG icon paths follow the app's icon convention (same outline set as the sidebar).
+const bandIcons = {
+    quality: 'M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 0-6.23-.693L5 14.5m14.8.8 1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0 1 12 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5',
+    security: 'M12 9v3.75m0-10.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.572-.598-3.751h-.152c-3.196 0-6.1-1.249-8.25-3.285Zm0 13.036h.008v.008H12v-.008Z',
+    trash: 'M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0',
+    handover: 'M8.25 21v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 13.125l8.69-8.69a1.5 1.5 0 0 1 2.12 0L21 11.25M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75',
+};
+const adminBandCards = computed(() => props.adminBand ? [
+    { label: 'Data Quality Issues', count: props.adminBand.dqIssues ?? 0, href: '/data-quality', iconPath: bandIcons.quality, urgent: true },
+    { label: 'Security Anomalies', count: props.adminBand.securityAnomalies ?? 0, href: '/security', iconPath: bandIcons.security, urgent: true },
+    { label: 'Recently Deleted', count: props.adminBand.recentlyDeleted ?? 0, href: '/trashed', iconPath: bandIcons.trash, urgent: false },
+    { label: 'Pending Handovers', count: props.adminBand.pendingHandovers ?? 0, href: '/handovers', iconPath: bandIcons.handover, urgent: false },
+] : []);
 
 // ── Drill-through (Item 3) ───────────────────────────────────────────────────────────────────
 // every dashboard number links to the matching /patients board view; the destination list re-uses
@@ -254,7 +274,6 @@ onUnmounted(() => clearInterval(autoRefresh));
 </script>
 
 <template>
-    <Head title="Dashboard" />
     <AppLayout title="Command Center">
         <!-- sub header -->
         <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
@@ -273,6 +292,16 @@ onUnmounted(() => clearInterval(autoRefresh));
                 </button>
             </div>
         </div>
+
+        <!-- Admin landing band (Wave 1, Item 7): operational-health cards deep-linking into the
+             regrouped admin sections — admins only; clinical roles never see it. -->
+        <section v-if="auth.is_admin && adminBand" aria-label="Administrative overview" class="no-print mb-6">
+            <h2 class="font-display mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-400">Administrative</h2>
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <AdminBandCard v-for="card in adminBandCards" :key="card.href"
+                    :label="card.label" :count="card.count" :href="card.href" :icon-path="card.iconPath" :urgent="card.urgent" />
+            </div>
+        </section>
 
         <!-- Threshold alert strip (Item 4): dismissible, severity-coloured, atop the dashboard -->
         <div v-for="alert in visibleAlerts" :key="alert.key"

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { useConfirm } from '@/composables/useConfirm';
 
@@ -46,7 +46,6 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
 </script>
 
 <template>
-    <Head title="Handovers" />
     <AppLayout title="Handovers">
         <!-- live region: announces the pending-signature count to screen readers as it changes -->
         <span class="sr-only" aria-live="polite" aria-atomic="true">

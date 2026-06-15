@@ -1,6 +1,6 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
-import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
+import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
 import ActivityPanel from '@/Components/ActivityPanel.vue';
@@ -113,8 +113,11 @@ const toggleExpand = (id) => {
 </script>
 
 <template>
-    <Head title="Registry" />
-    <AppLayout title="Registry Search">
+    <AppLayout title="Registry Search" :breadcrumbs="[
+        { label: 'Administration' },
+        { label: 'Analytics & Reports' },
+        { label: 'Registry' },
+    ]">
         <div class="mb-4 flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line w-fit">
             <button v-for="m in modes" :key="m[0]" @click="setMode(m[0])" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="mode === m[0] ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ m[1] }}</button>
         </div>

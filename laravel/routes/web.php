@@ -110,6 +110,13 @@ Route::middleware(['auth', 'session.timeout', 'mfa.enroll', 'pwd'])->group(funct
     Route::put('/consultations/{consultation}', [ConsultationsController::class, 'update'])->name('consultations.update');
     Route::delete('/consultations/{consultation}', [ConsultationsController::class, 'destroy'])->name('consultations.destroy');
 
+    // Wave 1 (usability), Item 3: the Recent-Activity VIEW is read-only and open to every clinical
+    // role (incl. Observer) — nurses/registrars use it to see what happened during a shift. The
+    // same-day UNDO actions stay ADMIN-ONLY, enforced server-side inside the reverse-discharge /
+    // reverse-signoff controllers (admissions.reverse + consultations.reverseSignoff above), NOT by
+    // this route's middleware. Nav visibility is cosmetic; those controllers are the real gate.
+    Route::get('/recent', [RecentController::class, 'index'])->name('recent.index');
+
     Route::get('/admissions', [AdmissionsController::class, 'index'])->name('admissions.index');
     Route::get('/admissions/create', [AdmissionsController::class, 'create'])->name('admissions.create');
     Route::post('/admissions', [AdmissionsController::class, 'store'])->name('admissions.store');
@@ -148,7 +155,6 @@ Route::middleware(['auth', 'session.timeout', 'mfa.enroll', 'pwd'])->group(funct
         Route::get('/reports/governance', [ReportsController::class, 'governance'])->name('reports.governance');
         Route::get('/reports/governance/pdf', [ReportsController::class, 'governancePdf'])->name('reports.governance.pdf');
 
-        Route::get('/recent', [RecentController::class, 'index'])->name('recent.index');
         Route::get('/import', [ImportController::class, 'index'])->name('import.index');
         Route::post('/import/preview', [ImportController::class, 'preview'])->name('import.preview');
         Route::post('/import', [ImportController::class, 'store'])->name('import.store');

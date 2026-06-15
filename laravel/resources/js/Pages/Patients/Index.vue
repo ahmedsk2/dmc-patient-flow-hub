@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
-import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
+import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
 import ActivityPanel from '@/Components/ActivityPanel.vue';
@@ -292,7 +292,6 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
 </script>
 
 <template>
-    <Head title="Active Patients" />
     <AppLayout title="Active Patients">
         <!-- result-count announcement for screen readers (filters change the visible groups) -->
         <span class="sr-only" aria-live="polite" aria-atomic="true">

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
 const props = defineProps({ year: Number, month: Number, monthName: String, days: Array, totals: Object, generatedAt: String, availableYears: Array });
@@ -18,8 +18,7 @@ const generateAsync = () => router.get('/reports/monthly/pdf', { year: year.valu
 </script>
 
 <template>
-    <Head :title="`Monthly Report — ${monthName} ${year}`" />
-    <AppLayout title="Monthly Report">
+    <AppLayout :title="`Monthly Report — ${monthName} ${year}`">
         <div class="no-print mb-5 flex flex-wrap items-center gap-3">
             <select v-model="month" @change="change" class="rounded-xl border border-ink-200 bg-card px-4 py-2 text-sm font-semibold outline-none focus:border-brand-500">
                 <option v-for="(n, i) in monthNames" :key="i" :value="i + 1">{{ n }}</option>

@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
 /**
@@ -31,8 +31,11 @@ const badge = (n) => `nums rounded-full px-2 py-0.5 text-xs font-bold ${n > 0 ? 
 </script>
 
 <template>
-    <Head title="Data Quality" />
-    <AppLayout title="Data Quality">
+    <AppLayout title="Data Quality" :breadcrumbs="[
+        { label: 'Administration' },
+        { label: 'Data Management' },
+        { label: 'Data Quality' },
+    ]">
         <p class="mb-5 max-w-2xl text-sm text-ink-400">
             A daily data-hygiene checklist. Stale episodes are active non-long-term patients with a length of
             stay over <span class="nums font-semibold text-ink-700">{{ longLos }} × {{ multiplier }} = {{ longLos * multiplier }}</span> days

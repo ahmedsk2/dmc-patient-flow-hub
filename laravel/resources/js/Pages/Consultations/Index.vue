@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
-import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
+import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { useModalA11y } from '@/composables/useModalA11y';
@@ -98,7 +98,6 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
 </script>
 
 <template>
-    <Head title="Consultations" />
     <AppLayout title="Consultations">
         <div class="mb-5 flex flex-wrap items-center gap-3">
             <div class="flex gap-2">

@@ -43,8 +43,11 @@ const cell = 'w-full min-w-16 rounded-lg border border-ink-200 bg-card px-1.5 py
 </script>
 
 <template>
-    <Head title="Bulk Import" />
-    <AppLayout title="Bulk Import — historical admissions">
+    <AppLayout title="Bulk Import — historical admissions" :breadcrumbs="[
+        { label: 'Administration' },
+        { label: 'Data Management' },
+        { label: 'Bulk Import' },
+    ]">
         <div class="mx-auto max-w-4xl space-y-5">
             <section class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <h2 class="font-bold text-ink-800">Paste CSV rows</h2>

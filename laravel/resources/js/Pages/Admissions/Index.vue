@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
+import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
 import { useConfirm } from '@/composables/useConfirm';
@@ -112,7 +112,6 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
 </script>
 
 <template>
-    <Head title="New Admissions" />
     <AppLayout title="New Admissions">
         <!-- toolbar -->
         <div class="mb-5 flex flex-wrap items-center gap-3">

@@ -1,5 +1,5 @@
 <script setup>
-import { Head, router } from '@inertiajs/vue3';
+import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { useConfirm } from '@/composables/useConfirm';
 
@@ -32,8 +32,11 @@ const btn = 'rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-whit
 </script>
 
 <template>
-    <Head title="Recently Deleted" />
-    <AppLayout title="Recently Deleted">
+    <AppLayout title="Recently Deleted" :breadcrumbs="[
+        { label: 'Administration' },
+        { label: 'Governance & Safety' },
+        { label: 'Recently Deleted' },
+    ]">
         <p class="mb-5 max-w-2xl text-sm text-ink-400">
             Soft-deleted records are hidden from the app but kept in the database. Restore a record to bring it
             back. There is no automatic purge — deleted data is retained until a retention policy is set.

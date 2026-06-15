@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue';
-import { Head, useForm } from '@inertiajs/vue3';
+import { useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
 
@@ -28,7 +28,6 @@ const field = 'w-full rounded-xl border border-ink-200 bg-card px-3.5 py-2.5 tex
 </script>
 
 <template>
-    <Head title="New Admission" />
     <AppLayout title="New Admission">
         <form @submit.prevent="submit" class="mx-auto max-w-4xl space-y-6">
             <!-- Patient -->

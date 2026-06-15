@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Link, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PasswordMeter from '@/Components/PasswordMeter.vue';
 
@@ -23,7 +23,6 @@ const field = 'w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm out
 </script>
 
 <template>
-    <Head title="My Profile" />
     <AppLayout title="My Profile">
         <div class="mx-auto grid max-w-3xl gap-6">
             <!-- identity -->

@@ -1,5 +1,4 @@
 <script setup>
-import { Head } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
 /**
@@ -16,7 +15,6 @@ const td = 'px-5 py-3 text-sm text-ink-700';
 </script>
 
 <template>
-    <Head title="Orphan Diagnosis Codes" />
     <AppLayout title="Orphan Diagnosis Codes">
         <p class="mb-5 max-w-2xl text-sm text-ink-400">
             These diagnosis codes are recorded against admissions but have no matching ICD-10 reference row.

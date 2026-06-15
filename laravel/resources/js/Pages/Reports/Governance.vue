@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
 const props = defineProps({ availableYears: Array });
@@ -21,8 +21,12 @@ const fld = 'rounded-xl border border-ink-200 bg-card px-4 py-2 text-sm font-sem
 </script>
 
 <template>
-    <Head title="Governance / M&M Pack" />
-    <AppLayout title="Governance / M&M Pack">
+    <AppLayout title="Governance / M&M Pack" :breadcrumbs="[
+        { label: 'Administration' },
+        { label: 'Analytics & Reports' },
+        { label: 'Reports', href: '/reports' },
+        { label: 'M&M Pack' },
+    ]">
         <div class="mx-auto max-w-2xl rounded-2xl bg-card p-8 shadow-card ring-1 ring-line">
             <h1 class="text-xl font-bold text-ink-900">Morbidity &amp; Mortality Pack</h1>
             <p class="mt-1 text-sm text-ink-500">A de-identified governance review for a chosen month or quarter — headline safety KPIs, a period trend, and line lists of every death and every readmission. MRN is included as the clinical identifier; patient names are never shown.</p>

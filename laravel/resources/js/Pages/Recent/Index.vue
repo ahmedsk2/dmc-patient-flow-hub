@@ -1,12 +1,17 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Head, router } from '@inertiajs/vue3';
+import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { useConfirm } from '@/composables/useConfirm';
 
 const { ask } = useConfirm();
 
 const props = defineProps({ discharges: Array, signoffs: Array, since: String });
+
+// Wave 1, Item 3: the VIEW is read-only for all clinical roles; the same-day UNDO controls show
+// only to admins. The server-side reverse-discharge / reverse-signoff endpoints enforce isAdmin()
+// regardless — this just hides the dead button for everyone else (cosmetic, never the gate).
+const isAdmin = computed(() => !!usePage().props.auth?.user?.is_admin);
 
 const tab = ref('discharges');
 const undoDischarge = async (d) => { if (await ask('Reverse discharge', `Reverse the discharge for ${d.name} (MRN ${d.mrn}) — the patient returns to the active board.`, 'danger')) router.post(`/admissions/${d.id}/reverse-discharge`, {}, { preserveScroll: true }); };
@@ -31,7 +36,6 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
 </script>
 
 <template>
-    <Head title="Recent Activity" />
     <AppLayout title="Recent Activity">
         <div class="mb-5 flex items-center gap-3">
             <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line w-fit">
@@ -65,8 +69,8 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                             <td class="px-3 py-3 text-ink-600">{{ d.admitter || '—' }}</td>
                             <td class="px-3 py-3 text-ink-600">{{ d.actor || '—' }}</td>
                             <td class="px-5 py-3 text-right">
-                                <button v-if="d.reversible" @click="undoDischarge(d)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-danger-600 hover:bg-danger-100">Undo</button>
-                                <span v-else class="text-xs text-ink-300" title="Undo is same-day only">—</span>
+                                <button v-if="isAdmin && d.reversible" @click="undoDischarge(d)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-danger-600 hover:bg-danger-100">Undo</button>
+                                <span v-else class="text-xs text-ink-300" :title="isAdmin ? 'Undo is same-day only' : 'Undo is admin-only'">—</span>
                             </td>
                         </tr>
                     </tbody>
@@ -95,8 +99,8 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                         <td class="px-3 py-3 text-ink-600">{{ s.consultant || '—' }}</td>
                         <td class="px-3 py-3 text-ink-600">{{ s.entered_by || '—' }}</td>
                         <td class="px-5 py-3 text-right">
-                            <button v-if="s.reversible" @click="undoSignoff(s)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-danger-600 hover:bg-danger-100">Undo</button>
-                            <span v-else class="text-xs text-ink-300" title="Undo is same-day only">—</span>
+                            <button v-if="isAdmin && s.reversible" @click="undoSignoff(s)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-danger-600 hover:bg-danger-100">Undo</button>
+                            <span v-else class="text-xs text-ink-300" :title="isAdmin ? 'Undo is same-day only' : 'Undo is admin-only'">—</span>
                         </td>
                     </tr>
                     <tr v-if="!signoffs.length"><td colspan="10" class="px-5 py-10 text-center text-ink-400">No sign-offs yesterday or today.</td></tr>

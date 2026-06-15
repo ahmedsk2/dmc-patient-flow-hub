@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue';
-import { Head, router } from '@inertiajs/vue3';
+import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
 const props = defineProps({ year: Number, availableYears: Array, months: Array, totals: Object, avgLos: Number, icuLos: Number, topDx: Array, perConsultant: Array, destinations: Array, perConsultantLos: Array, generatedAt: String });
@@ -10,8 +10,11 @@ const print = () => window.print();
 </script>
 
 <template>
-    <Head title="Annual Report" />
-    <AppLayout title="Annual Report">
+    <AppLayout title="Annual Report" :breadcrumbs="[
+        { label: 'Administration' },
+        { label: 'Analytics & Reports' },
+        { label: 'Reports' },
+    ]">
         <!-- toolbar (screen only) -->
         <div class="no-print mb-5 flex flex-wrap items-center gap-3">
             <select v-model="year" @change="changeYear" class="rounded-xl border border-ink-200 bg-card px-4 py-2 text-sm font-semibold outline-none focus:border-brand-500">
@@ -25,7 +28,12 @@ const print = () => window.print();
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.4 42.4 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.32 0H6.34m11.32 0 .55-6.171M6.34 18l-.55-6.171m0 0a42.4 42.4 0 0 1 12.42 0M5.79 11.829V6.75A2.25 2.25 0 0 1 8.04 4.5h7.92a2.25 2.25 0 0 1 2.25 2.25v5.079" /></svg>
                 Print
             </button>
-            <a :href="`/reports/monthly?year=${year}`" class="ml-auto inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-brand-700 ring-1 ring-brand-200 transition hover:bg-brand-50">Monthly breakdown →</a>
+            <!-- Wave 1, Item 2: governance cross-link into the M&M pack (mirrors the monthly link) -->
+            <a href="/reports/governance" class="ml-auto inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-warning-600 ring-1 ring-warning-300 transition hover:bg-warning-50">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" /></svg>
+                M&amp;M / Governance Pack →
+            </a>
+            <a :href="`/reports/monthly?year=${year}`" class="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-brand-700 ring-1 ring-brand-200 transition hover:bg-brand-50">Monthly breakdown →</a>
         </div>
 
         <!-- A4 document -->

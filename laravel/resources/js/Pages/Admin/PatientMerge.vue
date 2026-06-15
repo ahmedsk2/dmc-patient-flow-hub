@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Head, useForm, router } from '@inertiajs/vue3';
+import { useForm, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
 /**
@@ -106,8 +106,11 @@ const btn = 'rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opac
 </script>
 
 <template>
-    <Head title="Patient Merge" />
-    <AppLayout title="Patient Merge / MRN Dedup">
+    <AppLayout title="Patient Merge / MRN Dedup" :breadcrumbs="[
+        { label: 'Administration' },
+        { label: 'Data Management' },
+        { label: 'Patient Merge' },
+    ]">
         <p class="mb-5 max-w-3xl text-sm text-ink-400">
             Merge a duplicate patient record into a canonical one. All of the <strong>source</strong> patient's
             admissions and consultations are re-pointed onto the <strong>target</strong> in a single transaction,

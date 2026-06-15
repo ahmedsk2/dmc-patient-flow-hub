@@ -1,5 +1,4 @@
 <script setup>
-import { Head } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
 // Printable read-only census board — UNSCOPED (every consultant, for every role: the legacy
@@ -23,7 +22,6 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
 </script>
 
 <template>
-    <Head title="Active List — Print" />
     <AppLayout title="Active List">
         <!-- toolbar (screen only) -->
         <div class="no-print mb-5 flex flex-wrap items-center gap-3">

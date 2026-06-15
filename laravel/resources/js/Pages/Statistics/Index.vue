@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
-import { Head, router } from '@inertiajs/vue3';
+import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { useChartTheme } from '@/composables/useChartTheme';
 
@@ -203,8 +203,11 @@ const donut = (labels) => ({
 </script>
 
 <template>
-    <Head title="Statistics" />
-    <AppLayout title="Statistics">
+    <AppLayout title="Statistics" :breadcrumbs="[
+        { label: 'Administration' },
+        { label: 'Analytics & Reports' },
+        { label: 'Statistics' },
+    ]">
         <!-- range -->
         <div class="no-print mb-5 flex flex-wrap items-end gap-3 rounded-2xl bg-card p-4 shadow-card ring-1 ring-line">
             <div>

@@ -6,6 +6,7 @@ import { shallowMount } from '@vue/test-utils';
 // returns a controllable props object and router is inert.
 let pageProps;
 vi.mock('@inertiajs/vue3', () => ({
+    Head: { name: 'Head', template: '<head><slot /></head>' },
     Link: { name: 'Link', template: '<a><slot /></a>' },
     router: { post: vi.fn(), visit: vi.fn(), reload: vi.fn(), on: vi.fn() },
     usePage: () => ({ props: pageProps, get url() { return '/'; } }),

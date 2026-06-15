@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
-import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { Link, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { useConfirm } from '@/composables/useConfirm';
 
@@ -99,8 +99,11 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
 </script>
 
 <template>
-    <Head title="Control Panel" />
-    <AppLayout title="Control Panel">
+    <AppLayout title="Control Panel" :breadcrumbs="[
+        { label: 'Administration' },
+        { label: 'Settings' },
+        { label: 'Control Panel' },
+    ]">
         <div class="mb-5 flex flex-wrap items-center gap-3">
             <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line w-fit">
                 <button v-for="t in ['overview','settings','users','reference']" :key="t" @click="tab = t"

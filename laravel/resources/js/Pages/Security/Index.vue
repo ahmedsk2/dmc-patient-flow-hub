@@ -1,5 +1,4 @@
 <script setup>
-import { Head } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
 /**
@@ -24,8 +23,11 @@ const td = 'px-5 py-3 text-sm text-ink-700';
 </script>
 
 <template>
-    <Head title="Security" />
-    <AppLayout title="Security">
+    <AppLayout title="Security" :breadcrumbs="[
+        { label: 'Administration' },
+        { label: 'Governance & Safety' },
+        { label: 'Security' },
+    ]">
         <p class="mb-5 max-w-2xl text-sm text-ink-400">
             Login-anomaly surfacing from the audit log. This panel is read-only — to lock an account, set it
             inactive in the Control Panel. Failed-login alerts notify admins at

@@ -1,8 +1,10 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
-import { Link, router, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import EhcLogo from '@/Components/EhcLogo.vue';
 import ConfirmDialog from '@/Components/ConfirmDialog.vue';
+import NavLink from '@/Components/NavLink.vue';
+import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 
 const logout = () => router.post('/logout');
 
@@ -34,9 +36,20 @@ onMounted(() => {
     lgMql?.addEventListener('change', (e) => { mobileViewport.value = e.matches; });
 });
 
-defineProps({ title: { type: String, default: '' } });
+const props = defineProps({
+    title: { type: String, default: '' },
+    // Wave 1, Item 5 — optional breadcrumb trail rendered near the page <h1>. Each crumb:
+    // { label, href? }; the final crumb (no href) is the current page. Pages that omit it see none.
+    breadcrumbs: { type: Array, default: () => [] },
+});
 
 const page = usePage();
+
+// ---- Wave 1, Item 6: single source of truth for the document <title> --------------------------
+// AppLayout owns the <Head> so deep pages no longer duplicate it. `appName` is shared by
+// HandleInertiaRequests (config('app.name')); fall back to a constant if the prop is absent.
+const APP_NAME = computed(() => page.props.appName || 'DMC Internal Medicine');
+const documentTitle = computed(() => (props.title ? `${props.title} — ${APP_NAME.value}` : APP_NAME.value));
 const sidebarOpen = ref(false);
 
 // ---- mobile drawer focus management (a11y) ----------------------------------------------------
@@ -72,37 +85,73 @@ watch(() => page.props.flash, (f) => {
     if (f && f.message) { toast.value = f; clearTimeout(toastTimer); toastTimer = setTimeout(() => (toast.value = null), 4500); }
 }, { immediate: true, deep: true });
 
-const nav = [
-    { label: 'Dashboard', href: '/', icon: 'grid' },
-    { label: 'New Admissions', href: '/admissions', icon: 'plus' },
-    { label: 'Patients', href: '/patients', icon: 'bed' },
-    { label: 'Handovers', href: '/handovers', icon: 'clipboard' },
-    { label: 'Consultations', href: '/consultations', icon: 'chat' },
-];
-// Observers (role 5) are read-only: the admissions queue + consultations workspace are
-// clinical-role pages (403 server-side) — drop their nav entries entirely (J2-12)
-const navItems = computed(() => {
-    const observer = page.props.auth?.user?.role === 5;
-    return observer ? nav.filter((i) => !['/admissions', '/consultations'].includes(i.href)) : nav;
+// ---- Wave 1, Items 3+4: clinical nav (role/capability-aware) -----------------------------------
+// Each item carries an optional `can` boolean (default true). Items whose `can` is false are
+// filtered out — purely COSMETIC: server-side authz is unchanged and remains the real gate
+// (HandleInertiaRequests exposes is_admin + can.{add,assign,manage,modify}).
+//   • New Admissions is hidden without can_add (Item 4).
+//   • Recent Activity moved here from Administration (Item 3): the VIEW is read-only and visible to
+//     all clinical roles incl. Observer; the same-day UNDO actions stay admin-only server-side.
+//   • Observers (role 5) are read-only: the admissions queue + consultations workspace are
+//     clinical-role pages (403 server-side) — drop their entries (J2-12).
+const clinicalNavItems = computed(() => {
+    const user = page.props.auth?.user;
+    const observer = user?.role === 5;
+    const can = user?.can || {};
+    return [
+        { label: 'Dashboard', href: '/', icon: 'grid', can: true },
+        { label: 'New Admissions', href: '/admissions', icon: 'plus', can: !!can.add && !observer },
+        { label: 'Patients', href: '/patients', icon: 'bed', can: true },
+        { label: 'Handovers', href: '/handovers', icon: 'clipboard', can: true },
+        { label: 'Consultations', href: '/consultations', icon: 'chat', can: !observer },
+        { label: 'Recent Activity', href: '/recent', icon: 'clock', can: true },
+    ].filter((i) => i.can);
 });
+
+// ---- Wave 1, Items 1+2: Administration grouped into labelled sub-sections ----------------------
 // Admin-only — Registry/Statistics/Reports + exports are restricted (PHI exposure control);
-// non-admins' only analytics is the Dashboard.
-const admin = [
-    { label: 'Registry', href: '/registry', icon: 'search' },
-    { label: 'Statistics', href: '/statistics', icon: 'chart' },
-    { label: 'Reports', href: '/reports', icon: 'doc' },
-    { label: 'M&M Pack', href: '/reports/governance', icon: 'doc' },
-    { label: 'Recent Activity', href: '/recent', icon: 'clock' },
-    { label: 'Audit Log', href: '/audit', icon: 'shield' },
-    { label: 'Security', href: '/security', icon: 'lock' },
-    { label: 'Data Quality', href: '/data-quality', icon: 'sparkles' },
-    { label: 'Patient Merge', href: '/admin/patient-merge', icon: 'merge' },
-    { label: 'Bulk Import', href: '/import', icon: 'upload' },
-    { label: 'Recently Deleted', href: '/trashed', icon: 'trash' },
-    { label: 'Control Panel', href: '/control', icon: 'cog' },
+// non-admins' only analytics is the Dashboard. The whole block is gated by is_admin in the
+// template, so per-item `can` filtering is unnecessary here. M&M Pack nests UNDER Reports
+// (Item 2) via a `children` array rather than appearing as a standalone top-level row.
+const adminNavSections = [
+    {
+        section: 'Analytics & Reports',
+        items: [
+            { label: 'Statistics', href: '/statistics', icon: 'chart' },
+            {
+                label: 'Reports', href: '/reports', icon: 'doc',
+                children: [{ label: 'M&M Pack', href: '/reports/governance', icon: 'scale' }],
+            },
+            { label: 'Registry', href: '/registry', icon: 'search' },
+        ],
+    },
+    {
+        section: 'Governance & Safety',
+        items: [
+            { label: 'Audit Log', href: '/audit', icon: 'clipboard' },
+            { label: 'Security', href: '/security', icon: 'lock' },
+            { label: 'Recently Deleted', href: '/trashed', icon: 'trash' },
+        ],
+    },
+    {
+        section: 'Data Management',
+        items: [
+            { label: 'Data Quality', href: '/data-quality', icon: 'sparkles' },
+            { label: 'Patient Merge', href: '/admin/patient-merge', icon: 'merge' },
+            { label: 'Bulk Import', href: '/import', icon: 'upload' },
+        ],
+    },
+    {
+        section: 'Settings',
+        items: [
+            { label: 'Control Panel', href: '/control', icon: 'cog' },
+        ],
+    },
 ];
 
 const url = computed(() => page.url);
+// active = exact match for the root, prefix match otherwise (so /reports/governance highlights both
+// Reports and the nested M&M child; the deeper /reports/governance prefix highlights only M&M).
 const isActive = (href) => href === '/' ? url.value === '/' : url.value.startsWith(href);
 
 // Heroicons-style outline paths (24x24, stroke).
@@ -123,7 +172,13 @@ const icons = {
     lock: 'M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z',
     sparkles: 'M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z',
     merge: 'M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5M16.5 3 21 7.5m0 0L16.5 12M21 7.5H7.5',
+    // balance scales — distinct icon for the M&M / Governance pack (Item 2), so it reads as a
+    // child of Reports without sharing the document icon.
+    scale: 'M12 3v17.25m0 0c-1.472 0-2.882.265-4.185.75M12 20.25c1.472 0 2.882.265 4.185.75M18.75 4.97A48.416 48.416 0 0 0 12 4.5c-2.291 0-4.545.16-6.75.47m13.5 0c1.01.143 2.01.317 3 .52m-3-.52 2.62 10.726c.122.499-.106 1.028-.589 1.202a5.988 5.988 0 0 1-2.031.352 5.988 5.988 0 0 1-2.031-.352c-.483-.174-.711-.703-.59-1.202L18.75 4.971Zm-16.5.52c.99-.203 1.99-.377 3-.52m0 0 2.62 10.726c.122.499-.106 1.028-.589 1.202a5.989 5.989 0 0 1-2.031.352 5.989 5.989 0 0 1-2.031-.352c-.483-.174-.711-.703-.59-1.202L5.25 4.971Z',
 };
+
+// resolve a nav item's icon key to its SVG path for <NavLink :icon-path>; tolerant of an unknown key.
+const iconPath = (key) => icons[key] || icons.doc;
 
 // ---- notification bell (handover transfers) ---------------------------------------------------
 // Badge count comes from the shared `unreadNotifications` prop (refreshed by every Inertia visit —
@@ -227,6 +282,8 @@ onUnmounted(() => {
 </script>
 
 <template>
+    <!-- Wave 1, Item 6: the layout owns the document <title> ({Page} — DMC Internal Medicine) -->
+    <Head :title="documentTitle" />
     <div class="min-h-full">
         <!-- Skip to content (keyboard users) — visually hidden until focused -->
         <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:rounded-xl focus:bg-brand-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white">
@@ -251,26 +308,18 @@ onUnmounted(() => {
 
             <nav class="px-3 py-5 space-y-1">
                 <p class="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-navy-400">Clinical</p>
-                <Link v-for="item in navItems" :key="item.label" :href="item.href"
-                    class="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition"
-                    :class="isActive(item.href) ? 'bg-white/10 text-white shadow-inner' : 'text-navy-200 hover:bg-white/5 hover:text-white'">
-                    <svg class="h-5 w-5 shrink-0" :class="isActive(item.href) ? 'text-brand-300' : 'text-navy-400 group-hover:text-brand-300'" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" :d="icons[item.icon]" />
-                    </svg>
-                    {{ item.label }}
-                    <span v-if="isActive(item.href)" class="ml-auto h-1.5 w-1.5 rounded-full bg-brand-400"></span>
-                </Link>
+                <NavLink v-for="item in clinicalNavItems" :key="item.href"
+                    :href="item.href" :icon-path="iconPath(item.icon)" :label="item.label" :active="isActive(item.href)" />
 
                 <template v-if="page.props.auth?.user?.is_admin">
-                    <p class="px-3 pt-5 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-navy-400">Administration</p>
-                    <Link v-for="item in admin" :key="item.label" :href="item.href"
-                        class="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition"
-                        :class="isActive(item.href) ? 'bg-white/10 text-white shadow-inner' : 'text-navy-200 hover:bg-white/5 hover:text-white'">
-                        <svg class="h-5 w-5 shrink-0" :class="isActive(item.href) ? 'text-brand-300' : 'text-navy-400 group-hover:text-brand-300'" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" :d="icons[item.icon]" />
-                        </svg>
-                        {{ item.label }}
-                    </Link>
+                    <template v-for="section in adminNavSections" :key="section.section">
+                        <p class="px-3 pt-5 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-navy-400">{{ section.section }}</p>
+                        <template v-for="item in section.items" :key="item.href">
+                            <NavLink :href="item.href" :icon-path="iconPath(item.icon)" :label="item.label" :active="isActive(item.href)" />
+                            <NavLink v-for="child in (item.children || [])" :key="child.href"
+                                :href="child.href" :icon-path="iconPath(child.icon)" :label="child.label" :active="isActive(child.href)" :indent="true" />
+                        </template>
+                    </template>
                 </template>
             </nav>
 
@@ -293,6 +342,8 @@ onUnmounted(() => {
                 </button>
                 <div class="min-w-0">
                     <h1 class="truncate text-lg font-bold text-ink-900">{{ title }}</h1>
+                    <!-- Wave 1, Item 5: optional breadcrumb trail (renders only with 2+ crumbs) -->
+                    <Breadcrumbs :crumbs="breadcrumbs" />
                 </div>
                 <div class="ml-auto flex items-center gap-3">
                     <div class="hidden items-center gap-2 rounded-full bg-success-100 px-3 py-1 text-xs font-semibold text-success-600 sm:flex">

@@ -366,7 +366,47 @@ class DashboardController extends Controller
             ];
         }
 
+        // ── Admin landing band (Wave 1 usability, Item 7) ───────────────────────────────────────
+        // A compact operational-health row shown ONLY to admins on the Dashboard, deep-linking into
+        // the regrouped admin sections. Reuses the SAME count sources as the existing surfaces (the
+        // data-quality digest, the Security panel, Recently Deleted, the handover queue) so the band
+        // can never drift from the pages it links to. null for non-admins → the Vue band renders
+        // nothing (additive; no behavior change for clinical roles).
+        $adminBand = null;
+        if ($viewer && $viewer->isAdmin()) {
+            // dqIssues == the digest total: the 5 data-quality canaries summed (DataQualityController
+            // ::checks() is the single source the daily digest also consumes).
+            $dq = app(DataQualityController::class)->checks();
+            $dqIssues = array_sum(array_map(fn ($c) => $c->count(), $dq));
+
+            // securityAnomalies mirrors the three Security-panel sections: 24h failed-login clusters,
+            // first-seen IPs, and (while enforcement is on) MFA-noncompliant active users.
+            $failedClusters = (int) DB::table('audit_log')->where('action', 'login.failed')
+                ->where('created_at', '>=', DB::raw('NOW() - INTERVAL 24 HOUR'))
+                ->distinct()->count(DB::raw('CONCAT(COALESCE(actor_name, ""), "|", COALESCE(ip, ""))'));
+            $mfaLevel = (int) $settings->mfa_enforcement;
+            $mfaNonCompliant = $mfaLevel > 0
+                ? (int) User::where('active', 1)->whereNull('mfa_enrolled_at')
+                    ->when($mfaLevel === 1, fn ($q) => $q->where('role', User::ROLE_ADMIN))->count()
+                : 0;
+            $securityAnomalies = $failedClusters + $mfaNonCompliant;
+
+            $recentlyDeleted = (int) Admission::onlyTrashed()->count()
+                + (int) \App\Models\Consultation::onlyTrashed()->count()
+                + (int) User::onlyTrashed()->count();
+
+            $pendingHandovers = (int) \App\Models\HandoverSignature::pending()->count();
+
+            $adminBand = [
+                'dqIssues' => (int) $dqIssues,
+                'securityAnomalies' => $securityAnomalies,
+                'recentlyDeleted' => $recentlyDeleted,
+                'pendingHandovers' => $pendingHandovers,
+            ];
+        }
+
         return Inertia::render('Dashboard', [
+            'adminBand' => $adminBand,
             'kpis' => [
                 'census' => $active, 'ward' => $activeWard, 'icu' => $activeIcu,
                 'admissionsToday' => $admissionsToday, 'dischargesToday' => $dischargesToday,

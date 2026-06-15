@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue';
-import { Head, useForm } from '@inertiajs/vue3';
+import { useForm } from '@inertiajs/vue3';
 import QRCode from 'qrcode';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
@@ -16,7 +16,6 @@ const copyCodes = () => navigator.clipboard?.writeText(props.recoveryCodes.join(
 </script>
 
 <template>
-    <Head title="Enable two-factor" />
     <AppLayout title="Enable two-factor authentication">
         <div class="mx-auto max-w-3xl space-y-6">
             <div class="grid gap-6 md:grid-cols-2">
