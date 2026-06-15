@@ -1,23 +1,24 @@
 <script setup>
 import { ref, watch, computed, onMounted, nextTick } from 'vue';
-import { Link, router, useForm, usePage } from '@inertiajs/vue3';
+import { Link, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import IcdTypeahead from '@/Components/IcdTypeahead.vue';
 import ActivityPanel from '@/Components/ActivityPanel.vue';
 import PatientFlags from '@/Components/PatientFlags.vue';
 import BaseModal from '@/Components/BaseModal.vue';
 import PatientForm from '@/Components/PatientForm.vue';
-import AdmissionSummary from '@/Components/Patients/AdmissionSummary.vue';
+import ActionModal from '@/Components/Patients/ActionModal.vue';
+import ReassignModal from '@/Components/Patients/ReassignModal.vue';
+import HandoverModal from '@/Components/Patients/HandoverModal.vue';
 import { useConfirm } from '@/composables/useConfirm';
-import { useHandover } from '@/composables/useHandover';
 import { usePatientEdit } from '@/composables/usePatientEdit';
-import { localToday, vFocus, locTone, consultantOptions, DISCHARGE_DESTINATIONS, OUTCOME_STATUSES } from '@/lib/ui.js';
+import { localToday, vFocus, locTone } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
-// single home for the three handover fetch paths (modal write, inline gate, bulk preflight) — Item 6
-const { saveHandover, fetchHandover, preflight: preflightHandover } = useHandover();
 
-// All modals are BaseModal now — each owns its own focus-trap (useModalA11y) + Esc + return-focus.
+// The board's stateful modals (per-patient action / bulk reassign / handover) live in focused
+// child components now (Wave 3, Item 4). Index keeps the board + per-row buttons that OPEN them and
+// reloads/flashes on each child's `saved` emit. Each child owns its own useForm(s) + a11y via
+// BaseModal. The Modify modal still uses the canonical PatientForm + usePatientEdit here.
 
 const props = defineProps({ groups: Array, filters: Object, stats: Object, consultants: Array, specialties: Array, externalServices: Array, readmitWindow: Number, countries: Array, fallback: { type: Object, default: null } });
 
@@ -130,151 +131,45 @@ const saveBed = (p) => {
     router.post(`/admissions/${p.id}/bed`, { bed: value || null }, { preserveScroll: true });
 };
 
-// shuffle + reassign + action modal
+// ---- Index-level (non-modal) actions ----------------------------------------------------------
 // Wave 2, Item 4: no confirm — shuffle is low-stakes + reversible (re-shuffle / manual reassign);
 // the server's flash ("Shuffle assigned N patients…" / "No unassigned patients") is the feedback.
 const shuffle = () => router.post('/admissions/shuffle', {}, { preserveScroll: true });
-const reassign = ref(false);
-const rForm = useForm({ from_consultant_id: '', to_consultant_id: '', mark_new: true, admission_ids: [] });
-// group-header 'Change consultant' opens the bulk-reassign modal PRE-FILLED with from=this
-// consultant (J2-11); the toolbar button opens it blank
-const openReassign = (fromId = '') => { rForm.from_consultant_id = fromId; rForm.to_consultant_id = ''; reassign.value = true; };
-const closeReassign = () => { reassign.value = false; };
-const submitReassign = () => {
-    rForm.admission_ids = [...selectedIds.value];   // SUBSET move: only the checked patients travel
-    rForm.post('/admissions/reassign', { preserveScroll: true, onSuccess: () => { closeReassign(); rForm.reset(); selectedIds.value = new Set(); } });
-};
 
-// ---- handover: board icon + modal + transfer-gate editors -------------------------------------
+// board handover icon — tone/title come from the per-row `handover` summary the server ships with
+// each card; clicking opens the HandoverModal child (which does the fetch + edit + save).
 const fmtAt = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
 const handoverTone = (p) => !p.handover ? 'text-ink-300 hover:text-ink-500' : p.handover.today ? 'text-brand-600 hover:text-brand-700' : 'text-warning-500 hover:text-warning-600';
 const handoverTitle = (p) => p.handover ? `Handover — last updated ${p.handover.updated_by || '—'} ${fmtAt(p.handover.updated_at)}` : 'No handover yet';
 
-// handover modal — read-only body + meta for all roles; Edit+Save for canManage; History collapsible
-const hModal = ref(null);   // { row, data|null }
-const hForm = useForm({ body: '' });
-const hEditing = ref(false);
-const histOpen = ref(false);
-const closeHandover = () => { hModal.value = null; };
-const openHandover = async (p) => {
-    hModal.value = { row: p, data: null };
-    hEditing.value = false; histOpen.value = false;
-    hForm.reset(); hForm.clearErrors();
-    const d = await fetchHandover(p.id);
-    if (hModal.value && hModal.value.row.id === p.id) { hModal.value.data = d; hForm.body = d.body || ''; }
-};
-const submitHandover = () => hForm.post(`/admissions/${hModal.value.row.id}/handover`, {
-    preserveScroll: true, preserveState: true, onSuccess: closeHandover,
-});
-
-// inline gate editor (assign + specialty-transfer modals): when the server rejects with the
-// handover error, write today's handover right there, save, then retry the original submit
-const gateBody = ref('');
-const gateBusy = ref(false);
-// thin alias kept so the gate + bulk callers read naturally; the fetch lives in useHandover (Item 6)
-const saveHandoverInline = (admissionId, body) => saveHandover(admissionId, body);
-const saveGateThen = async (retry) => {
-    const body = gateBody.value.trim();
-    if (!body || !modal.value) return;
-    gateBusy.value = true;
-    try { if (await saveHandoverInline(modal.value.row.id, body)) { gateBody.value = ''; retry(); } } finally { gateBusy.value = false; }
-};
-
-// bulk-reassign preflight: lists the consultant's patients with per-patient CHECKBOXES (all
-// checked by default — uncheck to leave someone behind). Only SELECTED stale handovers need
-// today's text; Confirm unlocks once every selected handover is current and ≥1 is selected.
-const preflight = ref(null);   // null | { loading, rows: [{id,name,mrn,handover_today,body}] }
-const preflightBodies = ref({});
-const selectedIds = ref(new Set());
-const toggleSelected = (id) => { selectedIds.value.has(id) ? selectedIds.value.delete(id) : selectedIds.value.add(id); selectedIds.value = new Set(selectedIds.value); };
-const loadPreflight = async (id) => {
-    preflight.value = { loading: true, rows: [] };
-    const rows = await preflightHandover(id);
-    preflightBodies.value = Object.fromEntries(rows.filter((r) => !r.handover_today).map((r) => [r.id, r.body || '']));
-    selectedIds.value = new Set(rows.map((r) => r.id));   // all checked by default (legacy move-everything)
-    preflight.value = { loading: false, rows };
-    // Wave 2, Item 9: jump straight to the first handover that needs today's note (no scrolling).
-    nextTick(() => document.querySelector('[data-stale-textarea]')?.focus());
-};
-// Wave 2, Item 9: exclude all stale rows from the move set — the user accepts those patients won't
-// be reassigned in this batch (valid when partial reassignment is intended). With no stale rows left
-// among the selected, preflightReady unlocks and the move proceeds on the non-stale subset.
-const uncheckAllStale = () => {
-    const staleIds = new Set(staleRows.value.map((r) => r.id));
-    selectedIds.value = new Set([...selectedIds.value].filter((id) => !staleIds.has(id)));
-};
-watch(() => rForm.from_consultant_id, (id) => { preflight.value = null; selectedIds.value = new Set(); if (id) loadPreflight(id); });
-const staleRows = computed(() => (preflight.value?.rows || []).filter((r) => !r.handover_today && selectedIds.value.has(r.id)));
-const preflightReady = computed(() => !!preflight.value && !preflight.value.loading && selectedIds.value.size > 0 && staleRows.value.length === 0);
-const allStaleFilled = computed(() => staleRows.value.every((r) => (preflightBodies.value[r.id] || '').trim().length > 0));
-const savingAll = ref(false);
-const saveAllStale = async () => {
-    if (!allStaleFilled.value) return;
-    savingAll.value = true;
-    try {
-        const keep = new Set(selectedIds.value);
-        for (const r of staleRows.value) await saveHandoverInline(r.id, preflightBodies.value[r.id].trim());
-        await loadPreflight(rForm.from_consultant_id);   // re-check — flips handover_today, unlocks Confirm
-        selectedIds.value = keep;                        // reload defaults to all — restore the user's picks
-    } finally { savingAll.value = false; }
-};
-
-const modal = ref(null);
+// ---- modal orchestration: Index OPENS the child modals + reloads/flashes on their `saved` --------
 const today = localToday();
-const aForm = useForm({ consultant_id: '', mark_new: true });
-const mdForm = useForm({ outcome: 'Alive', medical_discharge_date: today, discharge_to: '', delay_reason: '', complete: false });
-const cdForm = useForm({ discharge_date: today, outcome: '', discharge_to: '' });
-const icuForm = useForm({ outcome: 'Alive', discharge_date: today, discharge_to: '' });
-const tForm = useForm({ mode: 'location', target: 'ICU', specialty_id: '', consultant_id: '', service: '' });
-const openModal = (mode, row) => {
-    modal.value = { mode, row };
-    gateBody.value = '';   // fresh inline-handover editor per patient
-    if (mode === 'assign') { aForm.consultant_id = row.consultant_id || ''; aForm.mark_new = true; aForm.clearErrors(); }
-    if (mode === 'medical') mdForm.reset();   // never carry a previous patient's type/destination over
-    if (mode === 'complete') { cdForm.reset(); cdForm.outcome = row.outcome || ''; cdForm.discharge_to = row.discharge_to || ''; }   // prefill the optional override from phase-1
-    if (mode === 'icu') icuForm.reset();
-    if (mode === 'transfer') { tForm.reset(); tForm.target = row.location === 'ICU' ? 'Ward' : 'ICU'; }
-    // BaseModal owns focus (field-first) + Esc + return-focus now — no manual a11y call needed.
-};
-// controlled destination vocabulary (legacy "Discharged to" list); a death locks to Mortuary.
-// Status (outcome) is strictly Alive/Dead — LAMA/Absconded are DESTINATIONS, not outcomes.
-const destinations = DISCHARGE_DESTINATIONS;
-const statuses = OUTCOME_STATUSES;
-watch(() => mdForm.outcome, (o) => { if (o === 'Dead') mdForm.discharge_to = 'Mortuary'; else if (mdForm.discharge_to === 'Mortuary') mdForm.discharge_to = ''; });
-watch(() => cdForm.outcome, (o) => { if (o === 'Dead') cdForm.discharge_to = 'Mortuary'; else if (cdForm.discharge_to === 'Mortuary') cdForm.discharge_to = ''; });
-watch(() => icuForm.outcome, (o) => { if (o === 'Dead') icuForm.discharge_to = 'Mortuary'; else if (icuForm.discharge_to === 'Mortuary') icuForm.discharge_to = ''; });
-// a closed file has no "still-in" delay; medical-only locks the status to Alive (legacy phase-1 —
-// the status + destination are asked at the COMPLETE step instead)
-watch(() => mdForm.complete, (c) => { if (c) { mdForm.delay_reason = ''; } else { mdForm.outcome = 'Alive'; mdForm.discharge_to = ''; } });
-// internal-specialty handover: consultants offered are the ON-SERVICE ones of the chosen specialty
-const specConsultants = computed(() => consultantOptions(props.consultants, { specialtyId: tForm.specialty_id }));
-// bulk reassign: the RECEIVING consultant must be on service ('from' stays unfiltered — patients
-// may be moved away from someone who just went off service)
-const onServiceConsultants = computed(() => consultantOptions(props.consultants, { onServiceOnly: true }));
-// single-assign modal: on-service only too, but keep the CURRENT assignee selectable even when
-// they just went off service (so the prefilled selection isn't silently dropped) — J1-15a
-const assignConsultants = computed(() => consultantOptions(props.consultants, { keepId: modal.value?.row.consultant_id }));
-watch(() => tForm.specialty_id, () => (tForm.consultant_id = ''));
-const transferReady = computed(() =>
-    tForm.mode === 'location' ? !!tForm.target
-    : tForm.mode === 'specialty' ? !!(tForm.specialty_id && tForm.consultant_id)
-    : !!tForm.service);
+
+// per-patient ActionModal (assign / medical / complete / icu / transfer) — holds { mode, row }.
+const modal = ref(null);
+const openModal = (mode, row) => { modal.value = { mode, row }; };
 const closeModal = () => { modal.value = null; };
-// Wave 2, Item 5: one title map so "assign" always reads "Assign consultant" — matching the queue's
-// assign modal (Admissions/Index) and the standardized verb table (Item 8: "Assign" / "Reassign").
-const modalTitle = computed(() => ({
-    assign: 'Assign consultant',
-    medical: 'Discharge',
-    complete: 'Complete discharge',
-    icu: 'ICU discharge',
-    transfer: 'Transfer',
-}[modal.value?.mode] ?? ''));
-const opts = { preserveScroll: true, onSuccess: closeModal };
-const submitAssign = () => aForm.post(`/admissions/${modal.value.row.id}/assign`, opts);
-const submitMedical = () => mdForm.post(`/admissions/${modal.value.row.id}/medical-discharge`, opts);
-const submitComplete = () => cdForm.post(`/admissions/${modal.value.row.id}/complete-discharge`, opts);
-const submitIcu = () => icuForm.post(`/admissions/${modal.value.row.id}/icu-discharge`, opts);
-const submitTransfer = () => tForm.post(`/admissions/${modal.value.row.id}/transfer`, opts);
+const actionMode = computed(() => modal.value?.mode ?? '');
+const actionPatient = computed(() => modal.value?.row ?? null);
+
+// bulk ReassignModal — Index holds a template ref so the group-header / toolbar buttons can open it
+// PRE-FILLED with from=this consultant (J2-11) / blank; the child owns the preflight + submit.
+const reassign = ref(false);
+const reassignModal = ref(null);
+const openReassign = (fromId = '') => { reassign.value = true; nextTick(() => reassignModal.value?.openModal(fromId)); };
+const closeReassign = () => { reassign.value = false; };
+
+// per-patient HandoverModal — Index just toggles open + which patient; the child fetches on open.
+const handoverOpen = ref(false);
+const handoverPatient = ref(null);
+const openHandover = (p) => { handoverPatient.value = p; handoverOpen.value = true; };
+const closeHandover = () => { handoverOpen.value = false; };
+
+// a child `saved` emit means the server already re-rendered the board (Inertia) — close + done.
+const onActionSaved = () => closeModal();
+const onReassignSaved = () => closeReassign();
+const onHandoverSaved = () => closeHandover();
+
 const longterm = (row) => router.post(`/admissions/${row.id}/longterm`, {}, { preserveScroll: true });
 // the board shows active patients only, so the undo here is the phase-1 (medical) one;
 // reversing a COMPLETED discharge lives on the admin Recent registry.
@@ -499,198 +394,20 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
             </div>
         </div>
 
-        <!-- action modal (assign / discharge / transfer) -->
-        <BaseModal :open="!!modal" :title="modalTitle" :subtitle="modal ? `${modal.row.name} · MRN ${modal.row.mrn}` : ''" size="md" tall field-first @close="closeModal">
-            <template v-if="modal">
-                <form v-if="modal.mode === 'assign'" @submit.prevent="submitAssign" class="space-y-4">
-                    <select v-model="aForm.consultant_id" title="On-service consultants only" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select consultant…</option><option v-for="c in assignConsultants" :key="c.id" :value="c.id">{{ c.name }}{{ !c.on_service ? ' (off service)' : '' }}</option></select>
-                    <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="aForm.mark_new" class="rounded text-brand-600" /> Mark as new patient <span class="text-xs text-ink-400">(uncheck for a quiet administrative move — no “New” badge)</span></label>
-                    <!-- handover gate: write today's handover here, save, retry the assign -->
-                    <div v-if="aForm.errors.handover" class="rounded-xl bg-warning-100/60 p-3 ring-1 ring-warning-500/30">
-                        <p class="text-xs font-semibold text-warning-500">{{ aForm.errors.handover }}</p>
-                        <textarea v-model="gateBody" rows="3" maxlength="5000" placeholder="Write today's handover for this patient…" aria-label="Handover text" class="mt-2 w-full rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
-                        <div class="mt-2 flex justify-end"><button type="button" @click="saveGateThen(submitAssign)" :disabled="gateBusy || !gateBody.trim()" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save handover & assign</button></div>
-                    </div>
-                    <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="aForm.processing || !aForm.consultant_id" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Assign</button></div>
-                </form>
-                <form v-else-if="modal.mode === 'medical'" @submit.prevent="submitMedical" class="space-y-4">
-                    <!-- record-review step (J1-15c): legacy discharge embedded the admission record
-                         above the discharge fields — read-only summary here; edits go via Modify -->
-                    <AdmissionSummary :patient="modal.row" />
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge type</label>
-                        <div class="flex gap-2">
-                            <label v-for="t in [[false, 'Medical only (still in bed)'], [true, 'Complete (leaving now)']]" :key="String(t[0])" class="flex-1 cursor-pointer rounded-xl border-2 px-3 py-2.5 text-center text-sm font-semibold transition" :class="mdForm.complete === t[0] ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'"><input type="radio" v-model="mdForm.complete" :value="t[0]" class="hidden" /> {{ t[1] }}</label>
-                        </div>
-                    </div>
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Medical discharge date</label><input v-model="mdForm.medical_discharge_date" type="date" :max="today" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" /><p v-if="mdForm.errors.medical_discharge_date" class="mt-1 text-xs text-danger-600">{{ mdForm.errors.medical_discharge_date }}</p></div>
-                    <!-- one-step close asks Status + Destination; medical-only locks Alive (asked at completion) -->
-                    <div v-if="mdForm.complete" class="grid grid-cols-2 gap-3">
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Status</label>
-                            <select v-model="mdForm.outcome" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option v-for="s in statuses" :key="s">{{ s }}</option></select>
-                            <p v-if="mdForm.errors.outcome" class="mt-1 text-xs text-danger-600">{{ mdForm.errors.outcome }}</p></div>
-                        <!-- destination is REQUIRED on a close unless Dead (auto-Mortuary) — N1-4 -->
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge to <span v-if="mdForm.outcome !== 'Dead'" class="text-danger-600">*</span></label>
-                            <select v-model="mdForm.discharge_to" :disabled="mdForm.outcome === 'Dead'" :required="mdForm.outcome !== 'Dead'" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">—</option><option v-for="d in destinations" :key="d">{{ d }}</option></select>
-                            <p v-if="mdForm.errors.discharge_to" class="mt-1 text-xs text-danger-600">{{ mdForm.errors.discharge_to }}</p></div>
-                    </div>
-                    <!-- still-in delay reason is REQUIRED on a medical-only discharge — N1-4 -->
-                    <div v-else><label class="mb-1 block text-sm font-semibold text-ink-700">Delay reason <span class="text-danger-600">*</span></label>
-                        <select v-model="mdForm.delay_reason" required class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">—</option><option value="Physical">Physical bed availability</option><option value="System">System</option></select>
-                        <p v-if="mdForm.errors.delay_reason" class="mt-1 text-xs text-danger-600">{{ mdForm.errors.delay_reason }}</p></div>
-                    <p class="text-xs text-ink-400">{{ mdForm.complete ? 'Closes the file and frees the bed in one step.' : 'Marks the patient clinically discharged but still in a bed. Status and destination are recorded at Complete discharge, when they physically leave.' }}</p>
-                    <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mdForm.processing" class="rounded-xl px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50" :class="mdForm.complete ? 'bg-success-600 hover:bg-success-700' : 'bg-warning-500'">{{ mdForm.complete ? 'Discharge & close file' : 'Medical discharge' }}</button></div>
-                </form>
-                <form v-else-if="modal.mode === 'complete'" @submit.prevent="submitComplete" class="space-y-4">
-                    <p class="text-sm text-ink-600">Close the file and free the bed.</p>
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge date</label><input v-model="cdForm.discharge_date" type="date" :max="today" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" /><p v-if="cdForm.errors.discharge_date" class="mt-1 text-xs text-danger-600">{{ cdForm.errors.discharge_date }}</p></div>
-                    <!-- optional override of the phase-1 outcome/destination (prefilled with the current values) -->
-                    <div class="grid grid-cols-2 gap-3">
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Status</label>
-                            <select v-model="cdForm.outcome" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">—</option><option v-for="s in statuses" :key="s">{{ s }}</option></select>
-                            <p v-if="cdForm.errors.outcome" class="mt-1 text-xs text-danger-600">{{ cdForm.errors.outcome }}</p></div>
-                        <!-- destination is REQUIRED on the close unless Dead (auto-Mortuary) — N1-4 -->
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Destination <span v-if="cdForm.outcome !== 'Dead'" class="text-danger-600">*</span></label>
-                            <select v-model="cdForm.discharge_to" :disabled="cdForm.outcome === 'Dead'" :required="cdForm.outcome !== 'Dead'" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">—</option><option v-for="d in destinations" :key="d">{{ d }}</option></select>
-                            <p v-if="cdForm.errors.discharge_to" class="mt-1 text-xs text-danger-600">{{ cdForm.errors.discharge_to }}</p></div>
-                    </div>
-                    <p class="text-xs text-ink-400">Status and destination carry over from the medical discharge — change them here only if the situation changed before the bed exit.</p>
-                    <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="cdForm.processing" class="rounded-xl bg-success-600 px-5 py-2 text-sm font-semibold text-white hover:bg-success-700 disabled:opacity-50">Complete discharge</button></div>
-                </form>
-                <form v-else-if="modal.mode === 'icu'" @submit.prevent="submitIcu" class="space-y-4">
-                    <!-- record-review step (K1-11): same read-only summary as the medical-discharge
-                         modal — review the admission record before closing the ICU file -->
-                    <AdmissionSummary :patient="modal.row" />
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Status</label><select v-model="icuForm.outcome" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option v-for="s in statuses" :key="s">{{ s }}</option></select></div>
-                    <!-- destination is REQUIRED on the ICU close unless Dead (auto-Mortuary) — N1-4 -->
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge to <span v-if="icuForm.outcome !== 'Dead'" class="text-danger-600">*</span></label>
-                        <select v-model="icuForm.discharge_to" :disabled="icuForm.outcome === 'Dead'" :required="icuForm.outcome !== 'Dead'" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">—</option><option v-for="d in destinations" :key="d">{{ d }}</option></select>
-                        <p v-if="icuForm.errors.discharge_to" class="mt-1 text-xs text-danger-600">{{ icuForm.errors.discharge_to }}</p></div>
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge date</label><input v-model="icuForm.discharge_date" type="date" :max="today" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" /><p v-if="icuForm.errors.discharge_date" class="mt-1 text-xs text-danger-600">{{ icuForm.errors.discharge_date }}</p></div>
-                    <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="icuForm.processing" class="rounded-xl bg-success-600 px-5 py-2 text-sm font-semibold text-white hover:bg-success-700 disabled:opacity-50">ICU discharge</button></div>
-                </form>
-                <form v-else @submit.prevent="submitTransfer" class="space-y-4">
-                    <div class="flex gap-1 rounded-xl bg-app p-1 text-sm font-semibold">
-                        <button v-for="m in [['location','Ward / ICU'],['specialty','Internal specialty'],['external','External service']]" :key="m[0]" type="button" @click="tForm.mode = m[0]"
-                            class="flex-1 rounded-lg px-2 py-1.5 transition" :class="tForm.mode === m[0] ? 'bg-card text-brand-700 shadow-sm ring-1 ring-line' : 'text-ink-500 hover:text-ink-700'">{{ m[1] }}</button>
-                    </div>
-                    <template v-if="tForm.mode === 'location'">
-                        <p class="text-sm text-ink-600">Currently in <span class="font-semibold">{{ modal.row.location || '—' }}</span>. Transfer to:</p>
-                        <div class="flex gap-2"><label v-for="loc in ['Ward','ICU']" :key="loc" class="flex-1 cursor-pointer rounded-xl border-2 px-4 py-3 text-center text-sm font-semibold transition" :class="tForm.target === loc ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'"><input type="radio" v-model="tForm.target" :value="loc" class="hidden" /> {{ loc }}</label></div>
-                        <p class="text-xs text-ink-400">Keeps the same consultant; opens a new episode in the receiving location.</p>
-                    </template>
-                    <template v-else-if="tForm.mode === 'specialty'">
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Receiving specialty</label>
-                            <select v-model="tForm.specialty_id" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select specialty…</option><option v-for="s in specialties" :key="s.id" :value="s.id">{{ s.name }}</option></select>
-                            <p v-if="tForm.errors.specialty_id" class="mt-1 text-xs text-danger-600">{{ tForm.errors.specialty_id }}</p></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Receiving consultant <span class="font-normal text-ink-400">(on-service only)</span></label>
-                            <select v-model="tForm.consultant_id" :disabled="!tForm.specialty_id" title="On-service consultants only" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">Select consultant…</option><option v-for="c in specConsultants" :key="c.id" :value="c.id">{{ c.name }}</option></select>
-                            <p v-if="tForm.specialty_id && !specConsultants.length" class="mt-1 text-xs text-warning-500">No on-service consultants under this specialty.</p>
-                            <p v-if="tForm.errors.consultant_id" class="mt-1 text-xs text-danger-600">{{ tForm.errors.consultant_id }}</p></div>
-                        <p class="text-xs text-ink-400">Closes this episode as a specialty handover and opens a new one under the chosen consultant.</p>
-                        <!-- handover gate: write today's handover here, save, retry the transfer -->
-                        <div v-if="tForm.errors.handover" class="rounded-xl bg-warning-100/60 p-3 ring-1 ring-warning-500/30">
-                            <p class="text-xs font-semibold text-warning-500">{{ tForm.errors.handover }}</p>
-                            <textarea v-model="gateBody" rows="3" maxlength="5000" placeholder="Write today's handover for this patient…" aria-label="Handover text" class="mt-2 w-full rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
-                            <div class="mt-2 flex justify-end"><button type="button" @click="saveGateThen(submitTransfer)" :disabled="gateBusy || !gateBody.trim()" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save handover & transfer</button></div>
-                        </div>
-                    </template>
-                    <template v-else>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">External / allied service</label>
-                            <select v-model="tForm.service" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select service…</option><option v-for="s in externalServices" :key="s" :value="s">{{ s }}</option></select>
-                            <p v-if="tForm.errors.service" class="mt-1 text-xs text-danger-600">{{ tForm.errors.service }}</p></div>
-                        <p class="text-xs text-ink-400">Closes this episode — the patient leaves the department (no new episode).</p>
-                    </template>
-                    <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="tForm.processing || !transferReady" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Transfer</button></div>
-                </form>
-            </template>
-        </BaseModal>
+        <!-- per-patient action modal (assign / discharge / complete / icu / transfer) — owns its own
+             useForms + the handover gate-then-retry; Index just opens it + reloads on `saved`. -->
+        <ActionModal :open="!!modal" :mode="actionMode" :patient="actionPatient"
+            :consultants="consultants" :specialties="specialties" :external-services="externalServices"
+            :today="today" @saved="onActionSaved" @close="closeModal" />
 
-        <!-- bulk reassign modal -->
-        <BaseModal :open="reassign" title="Reassign a consultant's patients" subtitle="Moves the selected active patients from one consultant to another." size="md" tall field-first :closable="false" @close="closeReassign">
-                <form @submit.prevent="submitReassign" class="space-y-4">
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">From</label><select v-model="rForm.from_consultant_id" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select…</option><option v-for="c in consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">To <span class="font-normal text-ink-400">(on-service only)</span></label><select v-model="rForm.to_consultant_id" title="On-service consultants only" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select…</option><option v-for="c in onServiceConsultants" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
-                    <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="rForm.mark_new" class="rounded text-brand-600" /> Mark as new patients <span class="text-xs text-ink-400">(uncheck to keep their current “New” status)</span></label>
+        <!-- bulk reassign modal — owns the preflight gate + per-stale handover editors + subset submit -->
+        <ReassignModal ref="reassignModal" :open="reassign" :consultants="consultants"
+            @saved="onReassignSaved" @close="closeReassign" />
 
-                    <!-- preflight: pick WHO moves (all checked by default); every SELECTED patient
-                         needs a handover updated TODAY before the move unlocks -->
-                    <div v-if="preflight" class="rounded-xl bg-app/70 p-3 ring-1 ring-line">
-                        <p v-if="preflight.loading" class="text-sm text-ink-400">Checking handovers…</p>
-                        <template v-else-if="preflight.rows.length">
-                            <p class="text-xs font-semibold text-ink-600">{{ selectedIds.size }} of {{ preflight.rows.length }} patient(s) selected to move — uncheck to leave someone behind.</p>
-                            <ul class="mt-2 max-h-44 space-y-1 overflow-auto">
-                                <li v-for="r in preflight.rows" :key="r.id">
-                                    <label class="flex items-center gap-2 text-sm text-ink-700">
-                                        <input type="checkbox" :checked="selectedIds.has(r.id)" @change="toggleSelected(r.id)" class="rounded text-brand-600" />
-                                        <span class="font-semibold">{{ r.name }}</span>
-                                        <span class="nums text-xs text-ink-400">MRN {{ r.mrn }}</span>
-                                        <span v-if="!r.handover_today" class="ml-auto rounded-full bg-warning-100 px-2 py-0.5 text-[10px] font-semibold text-warning-500">handover stale</span>
-                                        <span v-else class="ml-auto rounded-full bg-success-100 px-2 py-0.5 text-[10px] font-semibold text-success-600">today ✓</span>
-                                    </label>
-                                </li>
-                            </ul>
-                            <template v-if="staleRows.length">
-                                <!-- Item 9: at-a-glance counter so the user sees how many still block the move -->
-                                <p class="mt-3 text-sm font-semibold text-warning-600">{{ staleRows.length }} of {{ preflight.rows.length }} patient(s) still need today's handover note.</p>
-                                <div v-for="(r, i) in staleRows" :key="'h' + r.id" class="mt-2">
-                                    <p class="text-xs font-semibold text-ink-700">{{ r.name }} <span class="nums font-normal text-ink-400">MRN {{ r.mrn }}</span></p>
-                                    <textarea v-model="preflightBodies[r.id]" :data-stale-textarea="i === 0 ? '' : undefined" rows="2" maxlength="5000" :aria-label="`Handover for ${r.name}`" placeholder="Write today's handover…" class="mt-1 w-full rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
-                                </div>
-                                <div class="mt-2 flex justify-end gap-2">
-                                    <!-- Item 9: skip note-writing for stale rows by dropping them from the move set -->
-                                    <button type="button" @click="uncheckAllStale" class="rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-50">Uncheck all stale ({{ staleRows.length }})</button>
-                                    <button type="button" @click="saveAllStale" :disabled="savingAll || !allStaleFilled" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50">{{ savingAll ? 'Saving…' : 'Save all handovers' }}</button>
-                                </div>
-                            </template>
-                            <p v-else-if="selectedIds.size" class="mt-2 flex items-center gap-1.5 text-xs font-semibold text-success-600">
-                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-                                All {{ selectedIds.size }} selected handover(s) updated today — ready to move.
-                            </p>
-                            <p v-else class="mt-2 text-xs font-semibold text-warning-500">Select at least one patient to move.</p>
-                        </template>
-                        <p v-else class="text-xs text-ink-400">No active patients under this consultant.</p>
-                    </div>
-                    <p v-if="rForm.errors.handover" class="text-xs font-semibold text-danger-600">{{ rForm.errors.handover }}</p>
-                    <p v-if="rForm.errors.admission_ids" class="text-xs font-semibold text-danger-600">{{ rForm.errors.admission_ids }}</p>
-
-                    <div class="flex justify-end gap-2"><button type="button" @click="closeReassign" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="rForm.processing || !rForm.from_consultant_id || !rForm.to_consultant_id || !preflightReady" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Reassign {{ selectedIds.size || '' }} selected</button></div>
-                </form>
-        </BaseModal>
-
-        <!-- handover modal (read for all roles; edit for canManage) -->
-        <BaseModal :open="!!hModal" title="Handover" :subtitle="hModal ? `${hModal.row.name} · MRN ${hModal.row.mrn}` : ''" size="lg" tall @close="closeHandover">
-            <template v-if="hModal">
-                <p v-if="!hModal.data" class="py-6 text-center text-sm text-ink-400">Loading…</p>
-                <template v-else>
-                    <p class="mb-2 text-xs text-ink-400">
-                        {{ hModal.data.updated_at ? `Last updated by ${hModal.data.updated_by_name || '—'} · ${fmtAt(hModal.data.updated_at)}` : 'No handover yet.' }}
-                        <span v-if="hModal.data.updated_at" class="ml-1 rounded-full px-2 py-0.5 text-[10px] font-semibold" :class="hModal.data.today ? 'bg-brand-100 text-brand-700' : 'bg-warning-100 text-warning-500'">{{ hModal.data.today ? 'Updated today' : 'Stale' }}</span>
-                    </p>
-                    <template v-if="hEditing">
-                        <textarea v-model="hForm.body" rows="6" maxlength="5000" aria-label="Handover text" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
-                        <p v-if="hForm.errors.body" class="mt-1 text-xs text-danger-600">{{ hForm.errors.body }}</p>
-                        <div class="mt-3 flex justify-end gap-2">
-                            <button type="button" @click="hEditing = false" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
-                            <button type="button" @click="submitHandover" :disabled="hForm.processing || !hForm.body.trim()" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save</button>
-                        </div>
-                    </template>
-                    <template v-else>
-                        <p class="whitespace-pre-wrap rounded-xl bg-app/70 px-3 py-2.5 text-sm leading-relaxed text-ink-700">{{ hModal.data.body || 'No handover text recorded.' }}</p>
-                        <div class="mt-3 flex items-center justify-between">
-                            <button v-if="hModal.data.revisions?.length" type="button" @click="histOpen = !histOpen" :aria-expanded="histOpen" class="text-xs font-semibold text-brand-600 hover:underline">{{ histOpen ? 'Hide history' : `History (${hModal.data.revisions.length})` }}</button>
-                            <span v-else class="text-xs text-ink-400">No history yet.</span>
-                            <button v-if="canManage(hModal.row) && !isObserver" type="button" @click="hEditing = true" class="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Edit</button>
-                        </div>
-                        <ul v-if="histOpen" class="mt-3 max-h-56 space-y-2 overflow-auto">
-                            <li v-for="(r, i) in hModal.data.revisions" :key="i" class="rounded-xl ring-1 ring-line">
-                                <p class="rounded-t-xl bg-app/60 px-3 py-1.5 text-[11px] font-semibold text-ink-500">{{ r.author || '—' }} · {{ fmtAt(r.at) }}</p>
-                                <p class="whitespace-pre-wrap px-3 py-2 text-xs leading-relaxed text-ink-600">{{ r.body }}</p>
-                            </li>
-                        </ul>
-                    </template>
-                </template>
-            </template>
-        </BaseModal>
+        <!-- per-patient handover editor (read for all roles; edit for canManage non-Observer) -->
+        <HandoverModal :open="handoverOpen" :patient="handoverPatient"
+            :can-manage="!!handoverPatient && canManage(handoverPatient)" :is-observer="isObserver"
+            @saved="onHandoverSaved" @close="closeHandover" />
 
         <!-- modify modal (canonical PatientForm inside BaseModal) -->
         <BaseModal :open="!!editing" title="Modify patient" size="lg" tall @close="closeModify">

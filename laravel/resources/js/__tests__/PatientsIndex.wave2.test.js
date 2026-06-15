@@ -62,18 +62,12 @@ describe('Item 4 — confirmation-fatigue trim (shuffle / undoMedical fire immed
     });
 });
 
-describe('Item 5 — modal title map', () => {
-    it('assign mode reads "Assign consultant"', () => {
-        const vm = mountWith(consultant({ can: { assign: true, manage: true, modify: true } })).vm;
-        vm.openModal('assign', { id: 1, consultant_id: 5, name: 'A', mrn: '1', location: 'Ward' });
-        expect(vm.modalTitle).toBe('Assign consultant');
-    });
-    it('other modes keep their labels', () => {
-        const vm = mountWith(consultant()).vm;
-        vm.openModal('complete', { id: 1, name: 'A', mrn: '1', location: 'Ward', outcome: '', discharge_to: '' });
-        expect(vm.modalTitle).toBe('Complete discharge');
-    });
-});
+// Item 5 — modal title map: RELOCATED to Components/Patients/__tests__/ActionModal.spec.js. The
+// modal state (modal/openModal/modalTitle/aForm/…) moved off the Index instance into ActionModal
+// (Wave 3, Item 4 split). The relocated specs assert the assign title is "Assign consultant", the
+// other modes keep their labels, the board-assign mark_new default, and the per-mode submit URLs.
+// Index now only OPENS the modal (openModal sets { mode, row } → passed as props); the title lives
+// in the child. See ActionModal.spec.js "title map (relocated from PatientsIndex.wave2 Item 5)".
 
 describe('Item 7 — persist expand/collapse + my-group-only', () => {
     it('toggle(id) persists the open Set to localStorage', () => {
@@ -101,21 +95,13 @@ describe('Item 7 — persist expand/collapse + my-group-only', () => {
     });
 });
 
-describe('Item 9 — uncheckAllStale', () => {
-    it('removes stale ids from selectedIds so preflightReady can unlock', () => {
-        const vm = mountWith(consultant()).vm;
-        vm.preflight = { loading: false, rows: [
-            { id: 1, name: 'A', mrn: '1', handover_today: false },
-            { id: 2, name: 'B', mrn: '2', handover_today: true },
-        ] };
-        vm.selectedIds = new Set([1, 2]);
-        expect(vm.staleRows.map((r) => r.id)).toEqual([1]);   // id 1 is stale + selected
-        vm.uncheckAllStale();
-        expect([...vm.selectedIds]).toEqual([2]);             // stale id dropped
-        expect(vm.staleRows.length).toBe(0);
-        expect(vm.preflightReady).toBe(true);                 // ≥1 selected + no stale → unlocked
-    });
-});
+// Item 9 — uncheckAllStale + the bulk preflight gate: RELOCATED to
+// Components/Patients/__tests__/ReassignModal.spec.js. The whole bulk-reassign flow (rForm,
+// selectedIds, preflight, staleRows, preflightReady, uncheckAllStale, saveAllStale, submitReassign)
+// moved off the Index instance into ReassignModal (Wave 3, Item 4 split). The relocated specs assert
+// the same thing this one did — uncheckAllStale drops stale ids so preflightReady unlocks — plus the
+// preflight load, the locked-while-stale gate, saveAllStale, and the subset submit. See
+// ReassignModal.spec.js "uncheckAllStale (relocated Item 9)".
 
 describe('Item 1 — fallback prop + zero-state affordance', () => {
     it('accepts a fallback object and exposes it', () => {

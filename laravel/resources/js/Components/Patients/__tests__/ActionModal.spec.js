@@ -1,0 +1,165 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mount } from '@vue/test-utils';
+import { reactive } from 'vue';
+
+// ActionModal owns the per-patient flow forms (assign / medical / complete / icu / transfer) that
+// used to live on Patients/Index. These assertions are RELOCATED from PatientsIndex.wave2.test.js
+// (Item 5 modal-title map) plus the handover gate-then-retry safety control that was inline in
+// Index. The Inertia mock returns a REACTIVE form (real useForm is a reactive proxy) so the
+// component's outcome→destination + transferReady watchers fire the same way they do in the app.
+
+const { posts } = vi.hoisted(() => ({ posts: [] }));
+vi.mock('@inertiajs/vue3', () => ({
+    useForm: (obj) => {
+        const f = reactive({
+            ...obj,
+            errors: {},
+            processing: false,
+            post: vi.fn((url, opts) => { posts.push({ url, form: f }); if (opts?.onSuccess) opts.onSuccess(); }),
+            reset: vi.fn(),
+            clearErrors: vi.fn(),
+        });
+        return f;
+    },
+}));
+// gate-then-retry calls useHandover().saveHandover — make it a controllable spy.
+const { saveHandover } = vi.hoisted(() => ({ saveHandover: vi.fn(() => Promise.resolve(true)) }));
+vi.mock('@/composables/useHandover', () => ({ useHandover: () => ({ saveHandover, fetchHandover: vi.fn(), preflight: vi.fn() }) }));
+// BaseModal: render the slot unconditionally so sub-forms are inspectable regardless of `open`.
+vi.mock('@/Components/BaseModal.vue', () => ({
+    default: { props: ['open', 'title', 'subtitle', 'size', 'tall', 'fieldFirst', 'closable'], template: '<div><slot /></div>' },
+}));
+vi.mock('@/Components/Patients/AdmissionSummary.vue', () => ({ default: { template: '<div class="admission-summary" />' } }));
+
+import ActionModal from '@/Components/Patients/ActionModal.vue';
+
+const patient = { id: 7, name: 'Ali', mrn: '111', consultant_id: 5, location: 'Ward', outcome: '', discharge_to: '' };
+const consultants = [
+    { id: 5, name: 'Dr Five', on_service: true, specialty_id: 1 },
+    { id: 6, name: 'Dr Six', on_service: true, specialty_id: 2 },
+    { id: 9, name: 'Dr Nine (off)', on_service: false, specialty_id: 1 },
+];
+
+const mountWith = (mode, p = patient, over = {}) => mount(ActionModal, {
+    props: {
+        open: true, mode, patient: p, consultants, specialties: [{ id: 1, name: 'Cardio' }],
+        externalServices: ['Surgery'], today: '2026-06-14', ...over,
+    },
+});
+
+beforeEach(() => { posts.length = 0; saveHandover.mockClear(); saveHandover.mockResolvedValue(true); });
+
+describe('ActionModal — title map (relocated from PatientsIndex.wave2 Item 5)', () => {
+    it('assign mode title is "Assign consultant"', () => {
+        expect(mountWith('assign').vm.modalTitle).toBe('Assign consultant');
+    });
+    it('other modes keep their labels', () => {
+        expect(mountWith('medical').vm.modalTitle).toBe('Discharge');
+        expect(mountWith('complete').vm.modalTitle).toBe('Complete discharge');
+        expect(mountWith('icu').vm.modalTitle).toBe('ICU discharge');
+        expect(mountWith('transfer').vm.modalTitle).toBe('Transfer');
+    });
+});
+
+describe('ActionModal — board assign sub-form', () => {
+    it('prefills consultant_id from the patient and defaults mark_new=true (board vs queue differ)', () => {
+        const vm = mountWith('assign').vm;
+        expect(vm.aForm.consultant_id).toBe(5);
+        // BOARD assign defaults mark_new TRUE (the queue/Admissions assign defaults false — they differ)
+        expect(vm.aForm.mark_new).toBe(true);
+    });
+    it('keeps the current (off-service) assignee selectable in the dropdown', () => {
+        const off = { ...patient, consultant_id: 9 };
+        const vm = mountWith('assign', off).vm;
+        expect(vm.assignConsultants.map((c) => c.id)).toContain(9);   // J1-15a keepId
+    });
+    it('submitAssign posts to /admissions/{id}/assign and emits saved on success', async () => {
+        const w = mountWith('assign');
+        w.vm.submitAssign();
+        expect(posts[0].url).toBe('/admissions/7/assign');
+        expect(w.emitted('saved')).toBeTruthy();
+    });
+});
+
+describe('ActionModal — submit endpoints per mode', () => {
+    it('medical → /medical-discharge, complete → /complete-discharge, icu → /icu-discharge, transfer → /transfer', () => {
+        mountWith('medical').vm.submitMedical();
+        expect(posts.pop().url).toBe('/admissions/7/medical-discharge');
+        mountWith('complete').vm.submitComplete();
+        expect(posts.pop().url).toBe('/admissions/7/complete-discharge');
+        mountWith('icu').vm.submitIcu();
+        expect(posts.pop().url).toBe('/admissions/7/icu-discharge');
+        mountWith('transfer').vm.submitTransfer();
+        expect(posts.pop().url).toBe('/admissions/7/transfer');
+    });
+});
+
+describe('ActionModal — outcome→destination locking (Dead ⇒ Mortuary)', () => {
+    it('medical: Dead forces Mortuary; un-Dead clears it', async () => {
+        const w = mountWith('medical');
+        w.vm.mdForm.outcome = 'Dead';
+        await w.vm.$nextTick();
+        expect(w.vm.mdForm.discharge_to).toBe('Mortuary');
+        w.vm.mdForm.outcome = 'Alive';
+        await w.vm.$nextTick();
+        expect(w.vm.mdForm.discharge_to).toBe('');
+    });
+});
+
+describe('ActionModal — transferReady gate', () => {
+    it('location mode ready when target set', () => {
+        const vm = mountWith('transfer').vm;
+        vm.tForm.mode = 'location'; vm.tForm.target = 'ICU';
+        expect(vm.transferReady).toBe(true);
+    });
+    it('specialty mode needs both specialty + consultant', async () => {
+        const w = mountWith('transfer');
+        w.vm.tForm.mode = 'specialty'; w.vm.tForm.specialty_id = 1; w.vm.tForm.consultant_id = '';
+        await w.vm.$nextTick();
+        expect(w.vm.transferReady).toBe(false);
+        w.vm.tForm.consultant_id = 6;
+        await w.vm.$nextTick();
+        expect(w.vm.transferReady).toBe(true);
+    });
+    it('external mode needs service', () => {
+        const vm = mountWith('transfer').vm;
+        vm.tForm.mode = 'external'; vm.tForm.service = 'Surgery';
+        expect(vm.transferReady).toBe(true);
+    });
+});
+
+describe('ActionModal — HANDOVER GATE-THEN-RETRY (clinical safety control)', () => {
+    it('saveGateThen writes today\'s handover then re-fires the original submit', async () => {
+        const w = mountWith('assign');
+        w.vm.gateBody = 'on insulin, watch K+';
+        const retry = vi.fn();
+        await w.vm.saveGateThen(retry);
+        expect(saveHandover).toHaveBeenCalledWith(7, 'on insulin, watch K+');
+        expect(retry).toHaveBeenCalled();   // gate cleared → original action retried
+        expect(w.vm.gateBody).toBe('');     // editor cleared after a successful save
+    });
+    it('does NOT retry when the handover save fails', async () => {
+        saveHandover.mockResolvedValueOnce(false);
+        const w = mountWith('assign');
+        w.vm.gateBody = 'note';
+        const retry = vi.fn();
+        await w.vm.saveGateThen(retry);
+        expect(retry).not.toHaveBeenCalled();
+    });
+    it('does NOT save with an empty body', async () => {
+        const w = mountWith('assign');
+        w.vm.gateBody = '   ';
+        const retry = vi.fn();
+        await w.vm.saveGateThen(retry);
+        expect(saveHandover).not.toHaveBeenCalled();
+        expect(retry).not.toHaveBeenCalled();
+    });
+});
+
+describe('ActionModal — close', () => {
+    it('emits close on the Cancel path', () => {
+        const w = mountWith('assign');
+        w.vm.$emit('close');
+        expect(w.emitted('close')).toBeTruthy();
+    });
+});
