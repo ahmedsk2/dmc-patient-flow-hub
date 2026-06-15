@@ -1,16 +1,14 @@
 <script setup>
-import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import BaseModal from '@/Components/BaseModal.vue';
 import { useConfirm } from '@/composables/useConfirm';
-import { useModalA11y } from '@/composables/useModalA11y';
 import { localToday, vFocus } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
 
-// one focus-trap instance per modal slot (new / edit)
-const a11yAdd = useModalA11y();
-const a11yEdit = useModalA11y();
+// modals now use BaseModal (focus-trap + Esc owned per-instance inside BaseModal).
 
 const props = defineProps({ consultations: Object, filters: Object, stats: Object, reasons: Array, consultants: Array, specialties: Array });
 const page = usePage();
@@ -37,18 +35,17 @@ const cForm = useForm({
     mrn: '', patient_name: '', age: '', bed: '', current_location: 'Ward', consultation_date: today,
     consultation_from: '', to_service: '', consultant_id: '', indication: [], other_indication: '',
 });
-const openAdd = () => { showAdd.value = true; a11yAdd.onOpen(undefined, { fieldFirst: true }); };
-const closeAdd = () => { showAdd.value = false; a11yAdd.onClose(); };
+const openAdd = () => { showAdd.value = true; };
+const closeAdd = () => { showAdd.value = false; };
 const submitAdd = () => cForm.post('/consultations', { preserveScroll: true, onSuccess: () => { closeAdd(); cForm.reset(); } });
 
 // edit + delete
 const canEdit = (c) => me.value.is_admin || me.value.can.manage || c.consultant_id === me.value.id;
 const editing = ref(null);
 const eForm = useForm({ mrn: '', patient_name: '', age: '', bed: '', current_location: 'Ward', consultation_date: today, consultation_from: '', to_service: '', consultant_id: '', indication: [], other_indication: '' });
-const closeEdit = () => { editing.value = null; a11yEdit.onClose(); };
+const closeEdit = () => { editing.value = null; };
 const openEdit = (c) => {
     editing.value = c;
-    a11yEdit.onOpen();
     eForm.mrn = c.mrn || ''; eForm.patient_name = c.name || ''; eForm.age = c.age ?? ''; eForm.bed = c.bed || '';
     eForm.current_location = c.location || 'Ward'; eForm.consultation_date = c.date || today; eForm.consultation_from = c.from || '';
     eForm.to_service = c.to || ''; eForm.consultant_id = c.consultant_id || ''; eForm.indication = [...(c.indication_ids || [])]; eForm.other_indication = c.other || '';
@@ -79,15 +76,6 @@ const eInternal = computed(() => isInternalService(eForm.to_service));
 watch(cInternal, (v) => { if (!v) cForm.consultant_id = ''; });
 watch(eInternal, (v) => { if (!v) eForm.consultant_id = ''; });
 const deleteConsult = async (c) => { if (await ask('Delete consultation', `Permanently delete the consultation for ${c.name} (MRN ${c.mrn}). This cannot be undone.`, 'danger')) router.delete(`/consultations/${c.id}`, { preserveScroll: true }); };
-
-// Esc closes whichever modal is open (via helpers so focus returns to the opener)
-const onEsc = (e) => {
-    if (e.key !== 'Escape') return;
-    if (showAdd.value) closeAdd();
-    if (editing.value) closeEdit();
-};
-onMounted(() => window.addEventListener('keydown', onEsc));
-onUnmounted(() => window.removeEventListener('keydown', onEsc));
 
 // sign off — Wave 2, Item 4: no confirm. A single sign-off is reversible (the reverse-signoff
 // button, already instant) and low-stakes; the server flash is the feedback. deleteConsult keeps
@@ -177,9 +165,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
             </div>
         </div>
         <!-- edit consultation modal -->
-        <div v-if="editing" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="closeEdit">
-            <div :ref="(el) => (a11yEdit.trapRef.value = el)" role="dialog" aria-modal="true" aria-labelledby="modal-title-cons-edit" @keydown="a11yEdit.onKeydown" class="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
-                <div class="mb-4 flex items-center justify-between"><h3 id="modal-title-cons-edit" class="text-lg font-bold text-ink-900">Edit consultation</h3><button @click="closeEdit" aria-label="Close" class="text-ink-400 hover:text-ink-700">✕</button></div>
+        <BaseModal :open="!!editing" title="Edit consultation" size="2xl" tall @close="closeEdit">
                 <form @submit.prevent="submitEdit" class="space-y-4">
                     <div class="grid gap-3 sm:grid-cols-2">
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">MRN</label><input v-model="eForm.mrn" :class="[field, eForm.errors.mrn && 'border-danger-500']" /></div>
@@ -204,16 +190,10 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                     </div>
                     <div class="flex justify-end gap-2"><button type="button" @click="closeEdit" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="eForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Update consultation</button></div>
                 </form>
-            </div>
-        </div>
+        </BaseModal>
 
         <!-- new consultation modal -->
-        <div v-if="showAdd" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="closeAdd">
-            <div :ref="(el) => (a11yAdd.trapRef.value = el)" role="dialog" aria-modal="true" aria-labelledby="modal-title-cons-new" @keydown="a11yAdd.onKeydown" class="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
-                <div class="mb-4 flex items-center justify-between">
-                    <h3 id="modal-title-cons-new" class="text-lg font-bold text-ink-900">New consultation</h3>
-                    <button @click="closeAdd" aria-label="Close" class="text-ink-400 hover:text-ink-700">✕</button>
-                </div>
+        <BaseModal :open="showAdd" title="New consultation" size="2xl" tall field-first @close="closeAdd">
                 <form @submit.prevent="submitAdd" class="space-y-4">
                     <div class="grid gap-3 sm:grid-cols-2">
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">MRN <span class="text-danger-500">*</span></label><input v-model="cForm.mrn" :class="[field, cForm.errors.mrn && 'border-danger-500']" /><p v-if="cForm.errors.mrn" class="mt-1 text-xs text-danger-600">{{ cForm.errors.mrn }}</p></div>
@@ -248,7 +228,6 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                         <button type="submit" :disabled="cForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Create consultation</button>
                     </div>
                 </form>
-            </div>
-        </div>
+        </BaseModal>
     </AppLayout>
 </template>

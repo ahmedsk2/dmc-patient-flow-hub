@@ -1,5 +1,7 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
+import PatientFlags from '@/Components/PatientFlags.vue';
+import { locTone } from '@/lib/ui.js';
 
 // Printable read-only census board — UNSCOPED (every consultant, for every role: the legacy
 // active-list.php whole-ward census), every group expanded, diagnosis names listed, no action
@@ -18,7 +20,6 @@ const sections = [
 ].filter((s) => s.rows.length);
 
 const print = () => window.print();
-const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER' ? 'bg-warning-100 text-warning-500' : 'bg-brand-100 text-brand-700';
 </script>
 
 <template>
@@ -103,11 +104,7 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
                                 <span v-else class="text-ink-300">—</span>
                             </td>
                             <td class="px-2 py-1.5">
-                                <span v-if="p.is_new" class="mr-1 font-semibold text-info-500">New</span>
-                                <span v-if="p.is_readmission" class="mr-1 font-semibold text-warning-500">Readmit ≤{{ readmitWindow ?? 3 }}d</span>
-                                <span v-if="p.is_longterm" class="mr-1 font-semibold text-accent-600">Long-term</span>
-                                <span v-if="p.is_tb" class="mr-1 font-semibold text-danger-600">TB</span>
-                                <span v-if="p.medically_discharged" class="font-semibold text-warning-500">Disch. still in</span>
+                                <PatientFlags :patient="p" :readmit-window="readmitWindow" variant="plain" />
                             </td>
                         </tr>
                     </tbody>

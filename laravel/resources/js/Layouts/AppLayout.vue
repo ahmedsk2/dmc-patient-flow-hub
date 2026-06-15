@@ -7,6 +7,7 @@ import NavLink from '@/Components/NavLink.vue';
 import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import QuickJump from '@/Components/QuickJump.vue';
 import { useTour } from '@/composables/useTour';
+import { xsrf } from '@/lib/ui.js';
 
 const logout = () => router.post('/logout');
 
@@ -201,7 +202,6 @@ const readOverride = ref(false);   // optimistic zero after read-all, until the 
 const unread = computed(() => (readOverride.value ? 0 : (page.props.unreadNotifications || 0)));
 watch(() => page.props.unreadNotifications, () => (readOverride.value = false));
 
-const xsrf = () => decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/) || [])[1] || '');
 const toggleBell = async () => {
     bellOpen.value = !bellOpen.value;
     if (!bellOpen.value) return;

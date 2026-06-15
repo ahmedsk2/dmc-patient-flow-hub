@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { localToday, vFocus } from '@/lib/ui.js';
+import {
+    localToday, vFocus, xsrf, locTone, consultantOptions, FIELD,
+    ADMIT_FROM_OPTIONS, DISCHARGE_DESTINATIONS, OUTCOME_STATUSES,
+} from '@/lib/ui.js';
 
 afterEach(() => { vi.useRealTimers(); });
 
@@ -30,5 +33,62 @@ describe('vFocus directive', () => {
         const el = { focus: vi.fn() };
         vFocus.mounted(el);
         expect(el.focus).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('xsrf()', () => {
+    afterEach(() => { document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT'; });
+    it('returns the decoded XSRF-TOKEN cookie value', () => {
+        document.cookie = 'XSRF-TOKEN=' + encodeURIComponent('abc%def==');
+        expect(xsrf()).toBe('abc%def==');
+    });
+    it('returns an empty string when the cookie is absent', () => {
+        document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        expect(xsrf()).toBe('');
+    });
+});
+
+describe('locTone()', () => {
+    it('maps ICU → danger, ER → warning, else → brand', () => {
+        expect(locTone('ICU')).toContain('text-danger-600');
+        expect(locTone('ER')).toContain('text-warning-500');
+        expect(locTone('Ward')).toContain('text-brand-700');
+        expect(locTone(null)).toContain('text-brand-700');
+    });
+});
+
+describe('FIELD + domain constants', () => {
+    it('FIELD is the canonical input class string', () => {
+        expect(FIELD).toContain('rounded-xl');
+        expect(FIELD).toContain('border-ink-200');
+        expect(FIELD).toContain('focus:border-brand-500');
+    });
+    it('exposes the domain vocabularies', () => {
+        expect(ADMIT_FROM_OPTIONS).toContain('ER');
+        expect(DISCHARGE_DESTINATIONS).toContain('Mortuary');
+        expect(OUTCOME_STATUSES).toEqual(['Alive', 'Dead']);
+    });
+});
+
+describe('consultantOptions()', () => {
+    const list = [
+        { id: 1, name: 'A', on_service: true, specialty_id: 1 },
+        { id: 2, name: 'B', on_service: false, specialty_id: 1 },
+        { id: 3, name: 'C', on_service: true, specialty_id: 2 },
+    ];
+    it('returns on-service consultants by default, preserving source order', () => {
+        expect(consultantOptions(list).map((c) => c.id)).toEqual([1, 3]);
+    });
+    it('keepId includes an off-service consultant', () => {
+        expect(consultantOptions(list, { keepId: 2 }).map((c) => c.id)).toEqual([1, 2, 3]);
+    });
+    it('specialtyId narrows to on-service members of that specialty', () => {
+        expect(consultantOptions(list, { specialtyId: 1 }).map((c) => c.id)).toEqual([1]);
+    });
+    it('onServiceOnly excludes off-service even when keepId is given', () => {
+        expect(consultantOptions(list, { keepId: 2, onServiceOnly: true }).map((c) => c.id)).toEqual([1, 3]);
+    });
+    it('tolerates a null/undefined list', () => {
+        expect(consultantOptions(undefined)).toEqual([]);
     });
 });

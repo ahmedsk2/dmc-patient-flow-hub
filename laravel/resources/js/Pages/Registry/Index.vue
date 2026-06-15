@@ -1,10 +1,13 @@
 <script setup>
-import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
-import { Link, router, useForm, usePage } from '@inertiajs/vue3';
+import { ref, reactive, computed, watch } from 'vue';
+import { Link, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
 import ActivityPanel from '@/Components/ActivityPanel.vue';
 import { useConfirm } from '@/composables/useConfirm';
+import BaseModal from '@/Components/BaseModal.vue';
+import PatientForm from '@/Components/PatientForm.vue';
+import { usePatientEdit } from '@/composables/usePatientEdit';
 import { localToday, vFocus } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
@@ -61,42 +64,13 @@ const addDx = (d) => { if (!selectedDx.value.find((x) => x.code === d.code)) { s
 const removeDx = (code) => { selectedDx.value = selectedDx.value.filter((x) => x.code !== code); f.dx = f.dx.filter((c) => c !== code); };
 const toggleInd = (id) => { f.indication.includes(id) ? (f.indication = f.indication.filter((x) => x !== id)) : f.indication.push(id); };
 
-// edit-from-registry (reuse Modify) — the payload must carry admit_date + current_location
-// (ModifyAdmissionRequest requires them; without them every save silently 422'd)
+// edit-from-registry (reuse the canonical Modify form) — the payload carries admit_date +
+// current_location (ModifyAdmissionRequest requires them). The Registry's old free-text nationality
+// drift is resolved here: PatientForm renders the canonical select-with-legacy-option (Item 3).
 const today = localToday();
-const admitFromOptions = ['ER', 'Clinic', 'OPD', 'OR', 'ICU', 'Referral', 'Transfer', 'Direct', 'Other service'];
-const editing = ref(null);
-const mActivity = ref([]);   // per-patient audit trail (Phase 2 — Item 2)
-const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '', bed: '', admit_date: '', admitted_from: '', current_location: 'Ward', consultant_id: '', diagnoses: [] });
-const mDx = ref([]);
-const openEdit = async (id) => {
-    const d = await (await fetch(`/admissions/${id}/edit`, { headers: { Accept: 'application/json' } })).json();
-    mActivity.value = d.activity || [];
-    // keep the LOADED identity so a changed MRN/name is confirmed before posting (K1-3)
-    editing.value = { id, mrn: d.mrn || '', name: d.name || '' }; mForm.clearErrors();
-    mForm.mrn = d.mrn || ''; mForm.name = d.name || ''; mForm.age = d.age ?? ''; mForm.gender = d.gender || '';
-    mForm.nationality = d.nationality || ''; mForm.bed = d.bed || '';
-    mForm.admit_date = d.admit_date || ''; mForm.admitted_from = d.admitted_from || ''; mForm.current_location = d.current_location || 'Ward';
-    mForm.consultant_id = d.consultant_id || '';   // QUIET reassignment, legacy Modify semantics (J2-13)
-    mDx.value = d.diagnoses || []; mForm.diagnoses = mDx.value.map((x) => x.code);
-};
-// on-service consultants for the edit select; the current (possibly historical) assignee stays selectable
-const modifyConsultants = computed(() => props.options.consultants.filter((c) => c.on_service || c.id === mForm.consultant_id));
-const mAdd = (d) => { if (!mDx.value.find((x) => x.code === d.code)) { mDx.value.push(d); mForm.diagnoses.push(d.code); } };
-const mRemove = (code) => { mDx.value = mDx.value.filter((x) => x.code !== code); mForm.diagnoses = mForm.diagnoses.filter((c) => c !== code); };
-// identity confirm (K1-3): an MRN/name edit re-points or renames the patient — make it deliberate
-const submitEdit = async () => {
-    const loaded = editing.value;
-    if ((String(mForm.mrn) !== String(loaded.mrn) || String(mForm.name) !== String(loaded.name))
-        && !(await ask('Change patient identity',
-            `Change patient identity from ${loaded.name} (MRN ${loaded.mrn}) to ${mForm.name} (MRN ${mForm.mrn})?`, 'danger'))) return;   // declined — no post
-    mForm.post(`/admissions/${loaded.id}/modify`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
-};
-
-// Esc closes the edit modal (the ICD typeahead swallows the first Esc while its dropdown is open)
-const onEsc = (e) => { if (e.key === 'Escape') editing.value = null; };
-onMounted(() => window.addEventListener('keydown', onEsc));
-onUnmounted(() => window.removeEventListener('keydown', onEsc));
+const { form: mForm, editing, selectedDx: mDx, activity: mActivity, open: openEditForm, addDx: mAdd, removeDx: mRemove, submit: submitEdit } =
+    usePatientEdit({ ask, onSuccess: () => (editing.value = null) });
+const openEdit = (id) => openEditForm({ id });
 
 const fld = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20';
 const outcomeTone = (o) => o === 'Dead' ? 'bg-danger-100 text-danger-600' : o === 'Alive' ? 'bg-success-100 text-success-600' : 'bg-ink-100 text-ink-500';
@@ -288,33 +262,10 @@ const toggleExpand = (id) => {
             <div class="flex gap-1"><component :is="l.url ? Link : 'span'" v-for="l in results.links" :key="l.label" :href="l.url || undefined" preserve-scroll class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold transition" :class="l.active ? 'bg-brand-600 text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" /></div>
         </div>
 
-        <!-- edit modal -->
-        <div v-if="editing" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="editing = null">
-            <div class="max-h-[90vh] w-full max-w-lg overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
-                <div class="mb-4 flex items-center justify-between"><h3 class="text-lg font-bold text-ink-900">Modify patient</h3><button @click="editing = null" class="text-ink-400 hover:text-ink-700">✕</button></div>
+        <!-- edit modal (canonical PatientForm — resolves the old free-text-nationality drift) -->
+        <BaseModal :open="!!editing" title="Modify patient" size="lg" tall @close="editing = null">
                 <form @submit.prevent="submitEdit" class="space-y-3">
-                    <div class="grid grid-cols-2 gap-3">
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">MRN</label><input v-model="mForm.mrn" :class="[fld, mForm.errors.mrn && 'border-danger-500']" /><p v-if="mForm.errors.mrn" class="mt-1 text-xs text-danger-600">{{ mForm.errors.mrn }}</p></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Bed</label><input v-model="mForm.bed" :class="fld" /><p v-if="mForm.errors.bed" class="mt-1 text-xs text-danger-600">{{ mForm.errors.bed }}</p></div>
-                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Name</label><input v-model="mForm.name" :class="[fld, mForm.errors.name && 'border-danger-500']" /><p v-if="mForm.errors.name" class="mt-1 text-xs text-danger-600">{{ mForm.errors.name }}</p></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Age</label><input v-model="mForm.age" inputmode="numeric" :class="fld" /><p v-if="mForm.errors.age" class="mt-1 text-xs text-danger-600">{{ mForm.errors.age }}</p></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Gender</label><select v-model="mForm.gender" :class="fld"><option value="">—</option><option>Male</option><option>Female</option></select><p v-if="mForm.errors.gender" class="mt-1 text-xs text-danger-600">{{ mForm.errors.gender }}</p></div>
-                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Nationality</label><input v-model="mForm.nationality" :class="fld" /><p v-if="mForm.errors.nationality" class="mt-1 text-xs text-danger-600">{{ mForm.errors.nationality }}</p></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Admit date</label><input v-model="mForm.admit_date" type="date" :max="today" :class="[fld, mForm.errors.admit_date && 'border-danger-500']" /><p v-if="mForm.errors.admit_date" class="mt-1 text-xs text-danger-600">{{ mForm.errors.admit_date }}</p></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Location</label><select v-model="mForm.current_location" :class="fld"><option>ER</option><option>Ward</option><option>ICU</option></select><p v-if="mForm.errors.current_location" class="mt-1 text-xs text-danger-600">{{ mForm.errors.current_location }}</p></div>
-                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Admitted from</label><input v-model="mForm.admitted_from" list="reg-admit-from-options" placeholder="ER, Clinic, Referral…" :class="fld" /><datalist id="reg-admit-from-options"><option v-for="o in admitFromOptions" :key="o" :value="o" /></datalist><p v-if="mForm.errors.admitted_from" class="mt-1 text-xs text-danger-600">{{ mForm.errors.admitted_from }}</p></div>
-                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Consultant <span class="font-normal text-ink-400">(quiet change — no “New” badge)</span></label>
-                            <select v-model="mForm.consultant_id" title="On-service consultants only" :class="fld">
-                                <option value="">— no change —</option>
-                                <option v-for="c in modifyConsultants" :key="c.id" :value="c.id">{{ c.name }}{{ !c.on_service ? ' (off service)' : '' }}</option>
-                            </select>
-                            <p v-if="mForm.errors.consultant_id" class="mt-1 text-xs text-danger-600">{{ mForm.errors.consultant_id }}</p></div>
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-sm font-semibold text-ink-700">Diagnoses</label>
-                        <IcdTypeahead :input-class="fld" placeholder="Search ICD-10…" @select="mAdd" />
-                        <div v-if="mDx.length" class="mt-2 flex flex-wrap gap-1.5"><span v-for="d in mDx" :key="d.code" class="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700"><span class="nums">{{ d.code }}</span> {{ d.name }} <button type="button" @click="mRemove(d.code)" class="text-brand-500 hover:text-danger-600">✕</button></span></div>
-                    </div>
+                    <PatientForm :form="mForm" :selected-dx="mDx" :countries="options.countries" :consultants="options.consultants" :today="today" :field-class="fld" @add-dx="mAdd" @remove-dx="mRemove" />
                     <!-- per-patient activity trail (Phase 2 — Item 2) -->
                     <details class="rounded-xl ring-1 ring-line">
                         <summary class="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-ink-700">Activity <span class="nums font-normal text-ink-400">({{ mActivity.length }})</span></summary>
@@ -322,7 +273,6 @@ const toggleExpand = (id) => {
                     </details>
                     <div class="flex justify-end gap-2 pt-1"><button type="button" @click="editing = null" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save changes</button></div>
                 </form>
-            </div>
-        </div>
+        </BaseModal>
     </AppLayout>
 </template>

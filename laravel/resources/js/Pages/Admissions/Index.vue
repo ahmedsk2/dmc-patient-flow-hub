@@ -1,18 +1,16 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed } from 'vue';
 import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import IcdTypeahead from '@/Components/IcdTypeahead.vue';
+import BaseModal from '@/Components/BaseModal.vue';
+import PatientForm from '@/Components/PatientForm.vue';
 import { useConfirm } from '@/composables/useConfirm';
-import { useModalA11y } from '@/composables/useModalA11y';
-import { localToday } from '@/lib/ui.js';
+import { usePatientEdit } from '@/composables/usePatientEdit';
+import { localToday, locTone, consultantOptions, FIELD } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
 
-// one focus-trap instance per modal slot (assign / ICU / modify)
-const a11yAssign = useModalA11y();
-const a11yIcu = useModalA11y();
-const a11yModify = useModalA11y();
+// modals now use BaseModal, which owns ONE useModalA11y() instance each (focus-trap + Esc).
 
 const props = defineProps({ queue: Array, icuPatients: Array, consultants: Array, countries: Array });
 
@@ -39,7 +37,7 @@ const shuffle = async () => { if (await ask('Auto-assign unassigned patients', '
 
 // queue patients are unassigned — the assign-to-primary list offers ON-SERVICE consultants only
 // (J1-15a; no current assignee to preserve here, unlike the board's reassign modal)
-const onServiceConsultants = computed(() => props.consultants.filter((c) => c.on_service));
+const onServiceConsultants = computed(() => consultantOptions(props.consultants, { onServiceOnly: true }));
 
 // diagnosis list expand — clicking the "N dx" badge reveals the names (like the board cards)
 const dxOpen = ref(null);
@@ -51,60 +49,25 @@ const toggleDx = (id) => (dxOpen.value = dxOpen.value === id ? null : id);
 // (wording, modal title, assign-to-me toast) is applied. Check the box to show the "New" badge.
 const assigning = ref(null);
 const aForm = useForm({ consultant_id: '', mark_new: false });
-const closeAssign = () => { assigning.value = null; a11yAssign.onClose(); };
-const openAssign = (p) => { assigning.value = p; aForm.consultant_id = ''; aForm.mark_new = false; a11yAssign.onOpen(undefined, { fieldFirst: true }); };
+const closeAssign = () => { assigning.value = null; };
+const openAssign = (p) => { assigning.value = p; aForm.consultant_id = ''; aForm.mark_new = false; };
 const submitAssign = () => aForm.post(`/admissions/${assigning.value.id}/assign`, { preserveScroll: true, onSuccess: closeAssign });
 const assignToMe = (p) => router.post(`/admissions/${p.id}/assign-to-me`, {}, { preserveScroll: true });
 
 // admission from ICU — dedicated icu-pull endpoint (Add capability; new episode is unassigned)
 const showIcu = ref(false);
-const openIcu = () => { showIcu.value = true; a11yIcu.onOpen(); };
-const closeIcu = () => { showIcu.value = false; a11yIcu.onClose(); };
+const openIcu = () => { showIcu.value = true; };
+const closeIcu = () => { showIcu.value = false; };
 // Wave 2, Item 4: no confirm — the ICU-pull creates a new unassigned queue entry (reversible via
 // discharge); the server flashes 'Patient admitted from ICU — now in the assignment queue.'
 const fromIcu = (p) => router.post(`/admissions/${p.id}/icu-pull`, {}, { preserveScroll: true, onSuccess: () => (showIcu.value = false) });
 
-// modify a queued (unassigned) patient — reuses /admissions/{id}/edit + /modify
+// modify a queued (unassigned) patient — reuses the canonical PatientForm + usePatientEdit
 const today = localToday();
-const admitFromOptions = ['ER', 'Clinic', 'OPD', 'OR', 'ICU', 'Referral', 'Transfer', 'Direct', 'Other service'];
-const editing = ref(null);
-const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '', bed: '', admit_date: '', admitted_from: '', current_location: 'Ward', consultant_id: '', diagnoses: [] });
-const mDx = ref([]);
-const closeModify = () => { editing.value = null; a11yModify.onClose(); };
-const openModify = async (p) => {
-    const d = await (await fetch(`/admissions/${p.id}/edit`, { headers: { Accept: 'application/json' } })).json();
-    // keep the LOADED identity so a changed MRN/name is confirmed before posting (K1-3)
-    editing.value = { id: p.id, mrn: d.mrn || '', name: d.name || '' };
-    a11yModify.onOpen();
-    mForm.mrn = d.mrn || ''; mForm.name = d.name || ''; mForm.age = d.age ?? ''; mForm.gender = d.gender || '';
-    mForm.nationality = d.nationality || ''; mForm.bed = d.bed || '';
-    mForm.admit_date = d.admit_date || ''; mForm.admitted_from = d.admitted_from || ''; mForm.current_location = d.current_location || 'Ward';
-    mForm.consultant_id = d.consultant_id || '';   // QUIET reassignment, legacy Modify semantics (J2-13)
-    mDx.value = d.diagnoses || []; mForm.diagnoses = mDx.value.map((x) => x.code);
-};
-// on-service consultants for the Modify select; the current assignee stays selectable
-const modifyConsultants = computed(() => props.consultants.filter((c) => c.on_service || c.id === mForm.consultant_id));
-const mAdd = (d) => { if (!mDx.value.find((x) => x.code === d.code)) { mDx.value.push(d); mForm.diagnoses.push(d.code); } };
-const mRemove = (code) => { mDx.value = mDx.value.filter((x) => x.code !== code); mForm.diagnoses = mForm.diagnoses.filter((c) => c !== code); };
-// identity confirm (K1-3): an MRN/name edit re-points or renames the patient — make it deliberate
-const submitModify = async () => {
-    const loaded = editing.value;
-    if ((String(mForm.mrn) !== String(loaded.mrn) || String(mForm.name) !== String(loaded.name))
-        && !(await ask('Change patient identity',
-            `Change patient identity from ${loaded.name} (MRN ${loaded.mrn}) to ${mForm.name} (MRN ${mForm.mrn})?`, 'danger'))) return;   // declined — no post
-    mForm.post(`/admissions/${loaded.id}/modify`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
-};
-const fld = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500';
-
-// Esc closes whichever modal is open (via helpers so focus returns to the opener)
-const onEsc = (e) => {
-    if (e.key !== 'Escape') return;
-    if (assigning.value) closeAssign();
-    if (showIcu.value) closeIcu();
-    if (editing.value) closeModify();
-};
-onMounted(() => window.addEventListener('keydown', onEsc));
-onUnmounted(() => window.removeEventListener('keydown', onEsc));
+const { form: mForm, editing, selectedDx: mDx, open: openModify, addDx: mAdd, removeDx: mRemove, submit: submitModify } =
+    usePatientEdit({ ask, onSuccess: () => (editing.value = null) });
+const closeModify = () => { editing.value = null; };
+const fld = FIELD;
 
 // hard delete (admin only — server re-checks)
 const destroyAdmission = async (p) => {
@@ -113,7 +76,6 @@ const destroyAdmission = async (p) => {
         router.delete(`/admissions/${p.id}`, { preserveScroll: true });
 };
 
-const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER' ? 'bg-warning-100 text-warning-500' : 'bg-brand-100 text-brand-700';
 </script>
 
 <template>
@@ -184,82 +146,44 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
         </div>
 
         <!-- assign modal -->
-        <div v-if="assigning" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="closeAssign">
-            <div :ref="(el) => (a11yAssign.trapRef.value = el)" role="dialog" aria-modal="true" aria-labelledby="modal-title-assign" @keydown="a11yAssign.onKeydown" class="w-full max-w-md rounded-2xl bg-card p-6 shadow-2xl">
-                <h3 id="modal-title-assign" class="text-lg font-bold text-ink-900">Assign consultant</h3>
-                <p class="mb-4 text-sm text-ink-400">{{ assigning.name }} · MRN {{ assigning.mrn }}</p>
-                <form @submit.prevent="submitAssign" class="space-y-4">
-                    <select v-model="aForm.consultant_id" title="On-service consultants only" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500">
-                        <option value="">Select consultant…</option>
-                        <option v-for="c in onServiceConsultants" :key="c.id" :value="c.id">{{ c.name }}</option>
-                    </select>
-                    <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="aForm.mark_new" class="rounded text-brand-600" /> Mark as new patient <span class="text-xs text-ink-400">(check to show the “New” badge)</span></label>
-                    <div class="flex justify-end gap-2">
-                        <button type="button" @click="closeAssign" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
-                        <button type="submit" :disabled="aForm.processing || !aForm.consultant_id" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Assign</button>
-                    </div>
-                </form>
-            </div>
-        </div>
+        <BaseModal :open="!!assigning" :title="'Assign consultant'" :subtitle="assigning ? `${assigning.name} · MRN ${assigning.mrn}` : ''" size="md" field-first :closable="false" @close="closeAssign">
+            <form @submit.prevent="submitAssign" class="space-y-4">
+                <select v-model="aForm.consultant_id" title="On-service consultants only" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500">
+                    <option value="">Select consultant…</option>
+                    <option v-for="c in onServiceConsultants" :key="c.id" :value="c.id">{{ c.name }}</option>
+                </select>
+                <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="aForm.mark_new" class="rounded text-brand-600" /> Mark as new patient <span class="text-xs text-ink-400">(check to show the “New” badge)</span></label>
+                <div class="flex justify-end gap-2">
+                    <button type="button" @click="closeAssign" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
+                    <button type="submit" :disabled="aForm.processing || !aForm.consultant_id" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Assign</button>
+                </div>
+            </form>
+        </BaseModal>
 
         <!-- admission-from-ICU modal -->
-        <div v-if="showIcu" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="closeIcu">
-            <div :ref="(el) => (a11yIcu.trapRef.value = el)" role="dialog" aria-modal="true" aria-labelledby="modal-title-icu" @keydown="a11yIcu.onKeydown" class="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
-                <div class="mb-4 flex items-center justify-between"><h3 id="modal-title-icu" class="text-lg font-bold text-ink-900">Admit from ICU</h3><button @click="closeIcu" aria-label="Close" class="text-ink-400 hover:text-ink-700">✕</button></div>
-                <p class="mb-3 text-sm text-ink-400">Pull a current ICU patient onto the ward — they enter the assignment queue for a (new) consultant.</p>
-                <table class="w-full text-sm">
-                    <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400"><th scope="col" class="px-3 py-2">MRN</th><th scope="col" class="px-3 py-2">Patient</th><th scope="col" class="px-3 py-2">Bed</th><th scope="col" class="px-3 py-2">Consultant</th><th scope="col" class="px-3 py-2"></th></tr></thead>
-                    <tbody class="divide-y divide-line">
-                        <tr v-for="p in icuPatients" :key="p.id" class="hover:bg-brand-50/40">
-                            <td class="nums px-3 py-2 text-ink-500">{{ p.mrn }}</td>
-                            <td class="px-3 py-2 font-semibold text-ink-800">{{ p.name }}</td>
-                            <td class="px-3 py-2 text-ink-600">{{ p.bed || '—' }}</td>
-                            <td class="px-3 py-2 text-ink-600">{{ p.consultant }}</td>
-                            <td class="px-3 py-2 text-right"><button @click="fromIcu(p)" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">To ward</button></td>
-                        </tr>
-                        <tr v-if="!icuPatients.length"><td colspan="5" class="px-3 py-6 text-center text-ink-400">No ICU patients.</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+        <BaseModal :open="showIcu" title="Admit from ICU" size="2xl" tall @close="closeIcu">
+            <p class="mb-3 text-sm text-ink-400">Pull a current ICU patient onto the ward — they enter the assignment queue for a (new) consultant.</p>
+            <table class="w-full text-sm">
+                <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400"><th scope="col" class="px-3 py-2">MRN</th><th scope="col" class="px-3 py-2">Patient</th><th scope="col" class="px-3 py-2">Bed</th><th scope="col" class="px-3 py-2">Consultant</th><th scope="col" class="px-3 py-2"></th></tr></thead>
+                <tbody class="divide-y divide-line">
+                    <tr v-for="p in icuPatients" :key="p.id" class="hover:bg-brand-50/40">
+                        <td class="nums px-3 py-2 text-ink-500">{{ p.mrn }}</td>
+                        <td class="px-3 py-2 font-semibold text-ink-800">{{ p.name }}</td>
+                        <td class="px-3 py-2 text-ink-600">{{ p.bed || '—' }}</td>
+                        <td class="px-3 py-2 text-ink-600">{{ p.consultant }}</td>
+                        <td class="px-3 py-2 text-right"><button @click="fromIcu(p)" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">To ward</button></td>
+                    </tr>
+                    <tr v-if="!icuPatients.length"><td colspan="5" class="px-3 py-6 text-center text-ink-400">No ICU patients.</td></tr>
+                </tbody>
+            </table>
+        </BaseModal>
 
         <!-- modify queued patient modal -->
-        <div v-if="editing" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="closeModify">
-            <div :ref="(el) => (a11yModify.trapRef.value = el)" role="dialog" aria-modal="true" aria-labelledby="modal-title-q-modify" @keydown="a11yModify.onKeydown" class="max-h-[90vh] w-full max-w-lg overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
-                <div class="mb-4 flex items-center justify-between"><h3 id="modal-title-q-modify" class="text-lg font-bold text-ink-900">Edit patient</h3><button @click="closeModify" aria-label="Close" class="text-ink-400 hover:text-ink-700">✕</button></div>
+        <BaseModal :open="!!editing" title="Edit patient" size="lg" tall @close="closeModify">
                 <form @submit.prevent="submitModify" class="space-y-3">
-                    <div class="grid grid-cols-2 gap-3">
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">MRN</label><input v-model="mForm.mrn" inputmode="numeric" :class="[fld, mForm.errors.mrn && 'border-danger-500']" /><p v-if="mForm.errors.mrn" class="mt-1 text-xs text-danger-600">{{ mForm.errors.mrn }}</p></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Bed</label><input v-model="mForm.bed" :class="fld" /></div>
-                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Name</label><input v-model="mForm.name" :class="fld" /></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Age</label><input v-model="mForm.age" inputmode="numeric" :class="fld" /></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Gender</label><select v-model="mForm.gender" :class="fld"><option value="">—</option><option>Male</option><option>Female</option></select></div>
-                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Nationality</label>
-                            <select v-model="mForm.nationality" :class="fld">
-                                <option value="">—</option>
-                                <!-- keep a dirty legacy value selectable (validate-only-on-change) -->
-                                <option v-if="mForm.nationality && !countries.includes(mForm.nationality)" :value="mForm.nationality">{{ mForm.nationality }} (legacy)</option>
-                                <option v-for="c in countries" :key="c">{{ c }}</option>
-                            </select>
-                            <p v-if="mForm.errors.nationality" class="mt-1 text-xs text-danger-600">{{ mForm.errors.nationality }}</p></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Admit date</label><input v-model="mForm.admit_date" type="date" :max="today" :class="[fld, mForm.errors.admit_date && 'border-danger-500']" /><p v-if="mForm.errors.admit_date" class="mt-1 text-xs text-danger-600">{{ mForm.errors.admit_date }}</p></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Location</label><select v-model="mForm.current_location" :class="fld"><option>ER</option><option>Ward</option><option>ICU</option></select></div>
-                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Admitted from</label><input v-model="mForm.admitted_from" list="admit-from-options-q" placeholder="ER, Clinic, Referral…" :class="fld" /><datalist id="admit-from-options-q"><option v-for="o in admitFromOptions" :key="o" :value="o" /></datalist></div>
-                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Consultant <span class="font-normal text-ink-400">(quiet assignment — no “New” badge)</span></label>
-                            <select v-model="mForm.consultant_id" title="On-service consultants only" :class="fld">
-                                <option value="">— no change —</option>
-                                <option v-for="c in modifyConsultants" :key="c.id" :value="c.id">{{ c.name }}{{ !c.on_service ? ' (off service)' : '' }}</option>
-                            </select>
-                            <p v-if="mForm.errors.consultant_id" class="mt-1 text-xs text-danger-600">{{ mForm.errors.consultant_id }}</p></div>
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-sm font-semibold text-ink-700">Diagnoses</label>
-                        <IcdTypeahead :input-class="fld" @select="mAdd" />
-                        <div v-if="mDx.length" class="mt-2 flex flex-wrap gap-1.5"><span v-for="d in mDx" :key="d.code" class="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700"><span class="nums">{{ d.code }}</span> {{ d.name }} <button type="button" @click="mRemove(d.code)" class="text-brand-500 hover:text-danger-600">✕</button></span></div>
-                    </div>
+                    <PatientForm :form="mForm" :selected-dx="mDx" :countries="countries" :consultants="consultants" :today="today" :field-class="fld" @add-dx="mAdd" @remove-dx="mRemove" />
                     <div class="flex justify-end gap-2 pt-1"><button type="button" @click="closeModify" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save changes</button></div>
                 </form>
-            </div>
-        </div>
+        </BaseModal>
     </AppLayout>
 </template>

@@ -239,6 +239,13 @@
     }
 }
 
+/* Canonical form-input utility — the SAME string as the FIELD constant in resources/js/lib/ui.js.
+ * Vue components import FIELD (avoids Tailwind purge concerns with dynamic class assembly); this
+ * `.field` class is for server-rendered or non-component HTML. Keep the two in sync. */
+@utility field {
+    @apply w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500;
+}
+
 /* ----- Print layer ---------------------------------------------------------------------------
  * Extends ActiveList.vue's per-page @media print so Dashboard + Statistics (and any AppLayout
  * page with a `.no-print` Print button) print cleanly: hide the sidebar/header chrome, drop the

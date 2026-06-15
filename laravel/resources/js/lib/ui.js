@@ -1,5 +1,6 @@
 // Shared UI helpers. Wave 2 (Item 3) seeds this file; Wave 3's lib pass extends it (xsrf, locTone,
-// FIELD, domain-constant arrays). Import from HERE rather than creating a parallel module.
+// FIELD, domain-constant arrays, consultantOptions). Import from HERE rather than creating a
+// parallel module — these were previously redeclared inline across 10+ pages.
 
 /**
  * Returns today's date as YYYY-MM-DD in the browser's LOCAL timezone.
@@ -23,3 +24,63 @@ export function localToday() {
  * exported here so Patients / Consultations / Registry share ONE definition.
  */
 export const vFocus = { mounted: (el) => el.focus() };
+
+/**
+ * XSRF token read from Laravel's `XSRF-TOKEN` cookie (the value the app already sends as the
+ * `X-XSRF-TOKEN` header on raw fetch() writes). Replaces the three identical inline copies in
+ * Patients/Index, AppLayout, and Admin/PatientMerge. Note: this is the COOKIE-based token, not a
+ * meta-tag — every existing fetch() in this codebase uses the cookie, so this preserves behavior.
+ */
+export function xsrf() {
+    return decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/) || [])[1] || '');
+}
+
+/**
+ * Domain-constant arrays. These mirror the inline copies that several modals re-declared. Where a
+ * page receives the list as a SERVER PROP (e.g. Admissions/Create's `admitFrom`), that prop stays
+ * the source of truth — these constants are the fallback for inline modals that had no prop.
+ */
+// "Admitted from" datalist options (board/queue/registry Modify modals).
+export const ADMIT_FROM_OPTIONS = ['ER', 'Clinic', 'OPD', 'OR', 'ICU', 'Referral', 'Transfer', 'Direct', 'Other service'];
+// Controlled "Discharged to" destination vocabulary (legacy list); a death locks to Mortuary.
+export const DISCHARGE_DESTINATIONS = ['Home', 'Other Facility', 'LAMA', 'Absconded', 'Mortuary'];
+// Outcome (status) vocabulary — strictly Alive/Dead; LAMA/Absconded are DESTINATIONS, not outcomes.
+export const OUTCOME_STATUSES = ['Alive', 'Dead'];
+
+/**
+ * Maps a patient's current_location to its pill token classes. Single source of truth for the four
+ * inlined copies (Patients/Index, Admissions/Index, ActiveList, Dashboard). ICU=danger, ER=warning,
+ * everything else (Ward/—)=brand.
+ */
+export function locTone(loc) {
+    return loc === 'ICU' ? 'bg-danger-100 text-danger-600'
+        : loc === 'ER' ? 'bg-warning-100 text-warning-500'
+        : 'bg-brand-100 text-brand-700';
+}
+
+/**
+ * Canonical form-input class string. Matches IcdTypeahead's default inputClass and the Admissions
+ * `fld` const. Components import this constant (avoids Tailwind purge concerns with dynamic class
+ * assembly); the equivalent `.field` utility in app.css is the same string for non-component HTML.
+ */
+export const FIELD = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500';
+
+/**
+ * Returns a filtered consultant list for a dropdown — names the "on-service, plus keep the current
+ * assignee even when off-service, optionally narrow by specialty" rule that was re-expressed across
+ * Patients / Admissions / Registry. PRESERVES the existing (unsorted) order of the source list so
+ * the rendered <option> order is unchanged.
+ *
+ * @param {Array}  consultants            full list from page props ({id, name, on_service, specialty_id})
+ * @param {Object} [opts]
+ * @param {number|string|null} opts.keepId         always include this id even if off-service
+ * @param {number|null}        opts.specialtyId    if set, narrow to this specialty (on-service members)
+ * @param {boolean}            opts.onServiceOnly  if true, exclude off-service (and never keep keepId)
+ */
+export function consultantOptions(consultants, { keepId = null, specialtyId = null, onServiceOnly = false } = {}) {
+    return (consultants || []).filter((c) => {
+        if (onServiceOnly) return c.on_service;
+        if (specialtyId != null) return c.specialty_id === specialtyId && c.on_service;
+        return c.on_service || c.id === keepId;
+    });
+}

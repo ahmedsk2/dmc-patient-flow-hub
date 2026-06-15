@@ -1,20 +1,23 @@
 <script setup>
-import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, watch, computed, onMounted, nextTick } from 'vue';
 import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
 import ActivityPanel from '@/Components/ActivityPanel.vue';
+import PatientFlags from '@/Components/PatientFlags.vue';
+import BaseModal from '@/Components/BaseModal.vue';
+import PatientForm from '@/Components/PatientForm.vue';
+import AdmissionSummary from '@/Components/Patients/AdmissionSummary.vue';
 import { useConfirm } from '@/composables/useConfirm';
-import { useModalA11y } from '@/composables/useModalA11y';
-import { localToday, vFocus } from '@/lib/ui.js';
+import { useHandover } from '@/composables/useHandover';
+import { usePatientEdit } from '@/composables/usePatientEdit';
+import { localToday, vFocus, locTone, consultantOptions, DISCHARGE_DESTINATIONS, OUTCOME_STATUSES } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
+// single home for the three handover fetch paths (modal write, inline gate, bulk preflight) — Item 6
+const { saveHandover, fetchHandover, preflight: preflightHandover } = useHandover();
 
-// one focus-trap instance per modal slot (action / reassign / handover / modify)
-const a11yAction = useModalA11y();
-const a11yReassign = useModalA11y();
-const a11yHandover = useModalA11y();
-const a11yModify = useModalA11y();
+// All modals are BaseModal now — each owns its own focus-trap (useModalA11y) + Esc + return-focus.
 
 const props = defineProps({ groups: Array, filters: Object, stats: Object, consultants: Array, specialties: Array, externalServices: Array, readmitWindow: Number, countries: Array, fallback: { type: Object, default: null } });
 
@@ -135,8 +138,8 @@ const reassign = ref(false);
 const rForm = useForm({ from_consultant_id: '', to_consultant_id: '', mark_new: true, admission_ids: [] });
 // group-header 'Change consultant' opens the bulk-reassign modal PRE-FILLED with from=this
 // consultant (J2-11); the toolbar button opens it blank
-const openReassign = (fromId = '') => { rForm.from_consultant_id = fromId; rForm.to_consultant_id = ''; reassign.value = true; a11yReassign.onOpen(undefined, { fieldFirst: true }); };
-const closeReassign = () => { reassign.value = false; a11yReassign.onClose(); };
+const openReassign = (fromId = '') => { rForm.from_consultant_id = fromId; rForm.to_consultant_id = ''; reassign.value = true; };
+const closeReassign = () => { reassign.value = false; };
 const submitReassign = () => {
     rForm.admission_ids = [...selectedIds.value];   // SUBSET move: only the checked patients travel
     rForm.post('/admissions/reassign', { preserveScroll: true, onSuccess: () => { closeReassign(); rForm.reset(); selectedIds.value = new Set(); } });
@@ -152,13 +155,12 @@ const hModal = ref(null);   // { row, data|null }
 const hForm = useForm({ body: '' });
 const hEditing = ref(false);
 const histOpen = ref(false);
-const closeHandover = () => { hModal.value = null; a11yHandover.onClose(); };
+const closeHandover = () => { hModal.value = null; };
 const openHandover = async (p) => {
     hModal.value = { row: p, data: null };
     hEditing.value = false; histOpen.value = false;
     hForm.reset(); hForm.clearErrors();
-    a11yHandover.onOpen();
-    const d = await (await fetch(`/admissions/${p.id}/handover`, { headers: { Accept: 'application/json' } })).json();
+    const d = await fetchHandover(p.id);
     if (hModal.value && hModal.value.row.id === p.id) { hModal.value.data = d; hForm.body = d.body || ''; }
 };
 const submitHandover = () => hForm.post(`/admissions/${hModal.value.row.id}/handover`, {
@@ -169,15 +171,8 @@ const submitHandover = () => hForm.post(`/admissions/${hModal.value.row.id}/hand
 // handover error, write today's handover right there, save, then retry the original submit
 const gateBody = ref('');
 const gateBusy = ref(false);
-const xsrf = () => decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/) || [])[1] || '');
-const saveHandoverInline = async (admissionId, body) => {
-    const res = await fetch(`/admissions/${admissionId}/handover`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-XSRF-TOKEN': xsrf() },
-        body: JSON.stringify({ body }),
-    });
-    return res.ok;
-};
+// thin alias kept so the gate + bulk callers read naturally; the fetch lives in useHandover (Item 6)
+const saveHandoverInline = (admissionId, body) => saveHandover(admissionId, body);
 const saveGateThen = async (retry) => {
     const body = gateBody.value.trim();
     if (!body || !modal.value) return;
@@ -194,7 +189,7 @@ const selectedIds = ref(new Set());
 const toggleSelected = (id) => { selectedIds.value.has(id) ? selectedIds.value.delete(id) : selectedIds.value.add(id); selectedIds.value = new Set(selectedIds.value); };
 const loadPreflight = async (id) => {
     preflight.value = { loading: true, rows: [] };
-    const rows = await (await fetch(`/handovers/preflight?from_consultant_id=${id}`, { headers: { Accept: 'application/json' } })).json();
+    const rows = await preflightHandover(id);
     preflightBodies.value = Object.fromEntries(rows.filter((r) => !r.handover_today).map((r) => [r.id, r.body || '']));
     selectedIds.value = new Set(rows.map((r) => r.id));   // all checked by default (legacy move-everything)
     preflight.value = { loading: false, rows };
@@ -239,12 +234,12 @@ const openModal = (mode, row) => {
     if (mode === 'complete') { cdForm.reset(); cdForm.outcome = row.outcome || ''; cdForm.discharge_to = row.discharge_to || ''; }   // prefill the optional override from phase-1
     if (mode === 'icu') icuForm.reset();
     if (mode === 'transfer') { tForm.reset(); tForm.target = row.location === 'ICU' ? 'Ward' : 'ICU'; }
-    a11yAction.onOpen(undefined, { fieldFirst: true });   // capture opener + focus the first FIELD (not a button) — Item 6
+    // BaseModal owns focus (field-first) + Esc + return-focus now — no manual a11y call needed.
 };
 // controlled destination vocabulary (legacy "Discharged to" list); a death locks to Mortuary.
 // Status (outcome) is strictly Alive/Dead — LAMA/Absconded are DESTINATIONS, not outcomes.
-const destinations = ['Home', 'Other Facility', 'LAMA', 'Absconded', 'Mortuary'];
-const statuses = ['Alive', 'Dead'];
+const destinations = DISCHARGE_DESTINATIONS;
+const statuses = OUTCOME_STATUSES;
 watch(() => mdForm.outcome, (o) => { if (o === 'Dead') mdForm.discharge_to = 'Mortuary'; else if (mdForm.discharge_to === 'Mortuary') mdForm.discharge_to = ''; });
 watch(() => cdForm.outcome, (o) => { if (o === 'Dead') cdForm.discharge_to = 'Mortuary'; else if (cdForm.discharge_to === 'Mortuary') cdForm.discharge_to = ''; });
 watch(() => icuForm.outcome, (o) => { if (o === 'Dead') icuForm.discharge_to = 'Mortuary'; else if (icuForm.discharge_to === 'Mortuary') icuForm.discharge_to = ''; });
@@ -252,20 +247,19 @@ watch(() => icuForm.outcome, (o) => { if (o === 'Dead') icuForm.discharge_to = '
 // the status + destination are asked at the COMPLETE step instead)
 watch(() => mdForm.complete, (c) => { if (c) { mdForm.delay_reason = ''; } else { mdForm.outcome = 'Alive'; mdForm.discharge_to = ''; } });
 // internal-specialty handover: consultants offered are the ON-SERVICE ones of the chosen specialty
-const specConsultants = computed(() => props.consultants.filter((c) => c.specialty_id === tForm.specialty_id && c.on_service));
+const specConsultants = computed(() => consultantOptions(props.consultants, { specialtyId: tForm.specialty_id }));
 // bulk reassign: the RECEIVING consultant must be on service ('from' stays unfiltered — patients
 // may be moved away from someone who just went off service)
-const onServiceConsultants = computed(() => props.consultants.filter((c) => c.on_service));
+const onServiceConsultants = computed(() => consultantOptions(props.consultants, { onServiceOnly: true }));
 // single-assign modal: on-service only too, but keep the CURRENT assignee selectable even when
 // they just went off service (so the prefilled selection isn't silently dropped) — J1-15a
-const assignConsultants = computed(() => props.consultants.filter((c) =>
-    c.on_service || (modal.value && c.id === modal.value.row.consultant_id)));
+const assignConsultants = computed(() => consultantOptions(props.consultants, { keepId: modal.value?.row.consultant_id }));
 watch(() => tForm.specialty_id, () => (tForm.consultant_id = ''));
 const transferReady = computed(() =>
     tForm.mode === 'location' ? !!tForm.target
     : tForm.mode === 'specialty' ? !!(tForm.specialty_id && tForm.consultant_id)
     : !!tForm.service);
-const closeModal = () => { modal.value = null; a11yAction.onClose(); };
+const closeModal = () => { modal.value = null; };
 // Wave 2, Item 5: one title map so "assign" always reads "Assign consultant" — matching the queue's
 // assign modal (Admissions/Index) and the standardized verb table (Item 8: "Assign" / "Reassign").
 const modalTitle = computed(() => ({
@@ -288,54 +282,15 @@ const longterm = (row) => router.post(`/admissions/${row.id}/longterm`, {}, { pr
 // server flashes 'Medical discharge undone.'
 const undoMedical = (row) => router.post(`/admissions/${row.id}/undo-medical-discharge`, {}, { preserveScroll: true });
 
-// modify (full edit) — fetches detail, then edits demographics + admission facts + diagnoses
+// modify (full edit) — canonical PatientForm + usePatientEdit (fetch-on-open + identity-confirm).
+// The Modify modal is a BaseModal (owns its own focus-trap + Esc), so a11yModify is gone.
 const canModify = computed(() => me.value.is_admin || me.value.can.modify);
-const admitFromOptions = ['ER', 'Clinic', 'OPD', 'OR', 'ICU', 'Referral', 'Transfer', 'Direct', 'Other service'];
-const editing = ref(null);
-const mActivity = ref([]);   // per-patient audit trail (Phase 2 — Item 2)
-const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '', bed: '', admit_date: '', admitted_from: '', current_location: 'Ward', consultant_id: '', diagnoses: [] });
-const selectedDx = ref([]);
-const closeModify = () => { editing.value = null; a11yModify.onClose(); };
-const openModify = async (p) => {
-    const d = await (await fetch(`/admissions/${p.id}/edit`, { headers: { Accept: 'application/json' } })).json();
-    mActivity.value = d.activity || [];
-    // keep the LOADED identity so a changed MRN/name is confirmed before posting (K1-3)
-    editing.value = { id: p.id, mrn: d.mrn || '', name: d.name || '' };
-    a11yModify.onOpen();
-    mForm.mrn = d.mrn || ''; mForm.name = d.name || ''; mForm.age = d.age ?? ''; mForm.gender = d.gender || '';
-    mForm.nationality = d.nationality || ''; mForm.bed = d.bed || '';
-    mForm.admit_date = d.admit_date || ''; mForm.admitted_from = d.admitted_from || ''; mForm.current_location = d.current_location || 'Ward';
-    mForm.consultant_id = d.consultant_id || '';   // QUIET reassignment, legacy Modify semantics (J2-13)
-    selectedDx.value = d.diagnoses || [];
-    mForm.diagnoses = selectedDx.value.map((x) => x.code);
-};
-// on-service consultants for the Modify select; the current assignee stays selectable
-const modifyConsultants = computed(() => props.consultants.filter((c) => c.on_service || c.id === mForm.consultant_id));
-const addDx = (d) => { if (!selectedDx.value.find((x) => x.code === d.code)) { selectedDx.value.push(d); mForm.diagnoses.push(d.code); } };
-const removeDx = (code) => { selectedDx.value = selectedDx.value.filter((x) => x.code !== code); mForm.diagnoses = mForm.diagnoses.filter((c) => c !== code); };
-// identity confirm (K1-3): an MRN/name edit re-points or renames the patient — make it deliberate
-const identityUnchanged = (loaded, mrn, name) =>
-    String(mrn) === String(loaded.mrn) && String(name) === String(loaded.name);
-const submitModify = async () => {
-    const loaded = editing.value;
-    if (!identityUnchanged(loaded, mForm.mrn, mForm.name)
-        && !(await ask('Change patient identity',
-            `Change patient identity from ${loaded.name} (MRN ${loaded.mrn}) to ${mForm.name} (MRN ${mForm.mrn})?`, 'danger'))) return;   // declined — no post
-    mForm.post(`/admissions/${loaded.id}/modify`, { preserveScroll: true, onSuccess: closeModify });
-};
+const { form: mForm, editing, selectedDx, activity: mActivity, open: openModify, addDx, removeDx, submit: submitModify } =
+    usePatientEdit({ ask, onSuccess: () => (editing.value = null) });
+const closeModify = () => { editing.value = null; };
 
-// Esc closes whichever modal is open (the ICD typeahead swallows the first Esc while its
-// dropdown is showing, so a second press closes the modal). Close via the helpers so focus
-// returns to the opener.
-const onEsc = (e) => {
-    if (e.key !== 'Escape') return;
-    if (modal.value) closeModal();
-    if (reassign.value) closeReassign();
-    if (hModal.value) closeHandover();
-    if (editing.value) closeModify();
-};
-onMounted(() => window.addEventListener('keydown', onEsc));
-onUnmounted(() => window.removeEventListener('keydown', onEsc));
+// Esc handling now lives in BaseModal (each modal owns a window-level Escape listener, matching the
+// old page dispatcher's scope — so the IcdTypeahead's first-Esc dropdown swallow still works).
 
 // hard delete (admin only — server re-checks)
 const destroyAdmission = async (row) => {
@@ -344,7 +299,6 @@ const destroyAdmission = async (row) => {
         router.delete(`/admissions/${row.id}`, { preserveScroll: true });
 };
 
-const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER' ? 'bg-warning-100 text-warning-500' : 'bg-brand-100 text-brand-700';
 const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b === 'long' ? 'bg-danger-100 text-danger-600' : 'bg-warning-100 text-warning-500';
 </script>
 
@@ -498,13 +452,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                              New=info(blue), Readmit=warning(amber), Long-term=accent(gold subtle),
                              TB=danger(red infection alert — NOT success-green), Disch-still-in=neutral "in progress". -->
                         <div class="mt-1.5 flex flex-wrap gap-1">
-                            <span v-if="p.is_new" class="rounded-full bg-info-100 px-1.5 py-0.5 text-[10px] font-semibold text-info-500">New</span>
-                            <span v-if="p.is_readmission" class="rounded-full bg-warning-100 px-1.5 py-0.5 text-[10px] font-semibold text-warning-500">Readmit ≤{{ readmitWindow ?? 3 }}d</span>
-                            <span v-if="p.is_longterm" class="rounded-full bg-accent-300/40 px-1.5 py-0.5 text-[10px] font-semibold text-accent-600">Long-term</span>
-                            <span v-if="p.is_tb" class="rounded-full bg-danger-100 px-1.5 py-0.5 text-[10px] font-semibold text-danger-600">TB</span>
-                            <!-- long-term view lists closed episodes too — read-only card with a Discharged chip -->
-                            <span v-if="p.discharged" class="rounded-full bg-ink-100 px-1.5 py-0.5 text-[10px] font-semibold text-ink-500">Discharged {{ p.discharge_date }}</span>
-                            <span v-else-if="p.medically_discharged" class="rounded-full bg-warning-100 px-1.5 py-0.5 text-[10px] font-semibold text-warning-500">Disch. still in</span>
+                            <PatientFlags :patient="p" :readmit-window="readmitWindow" variant="badge" />
                             <Link v-if="p.sign_pending" href="/handovers" title="Handover awaiting your signature" class="rounded-full bg-brand-100 px-1.5 py-0.5 text-[10px] font-semibold text-brand-700 hover:bg-brand-200">Sign pending</Link>
                             <button v-if="p.dx_count" type="button" @click="toggleDx(p.id)" :aria-expanded="dxOpen === p.id"
                                 :aria-label="`${p.dx_count} diagnoses — ${dxOpen === p.id ? 'hide' : 'show'} names`"
@@ -552,12 +500,8 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
         </div>
 
         <!-- action modal (assign / discharge / transfer) -->
-        <div v-if="modal" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="closeModal">
-            <div :ref="(el) => (a11yAction.trapRef.value = el)" role="dialog" aria-modal="true" aria-labelledby="modal-title-action" @keydown="a11yAction.onKeydown" class="max-h-[90vh] w-full max-w-md overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
-                <div class="mb-4 flex items-start justify-between">
-                    <div><h3 id="modal-title-action" class="text-lg font-bold text-ink-900">{{ modalTitle }}</h3><p class="text-sm text-ink-400">{{ modal.row.name }} · MRN {{ modal.row.mrn }}</p></div>
-                    <button @click="closeModal" aria-label="Close" class="text-ink-400 hover:text-ink-700">✕</button>
-                </div>
+        <BaseModal :open="!!modal" :title="modalTitle" :subtitle="modal ? `${modal.row.name} · MRN ${modal.row.mrn}` : ''" size="md" tall field-first @close="closeModal">
+            <template v-if="modal">
                 <form v-if="modal.mode === 'assign'" @submit.prevent="submitAssign" class="space-y-4">
                     <select v-model="aForm.consultant_id" title="On-service consultants only" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select consultant…</option><option v-for="c in assignConsultants" :key="c.id" :value="c.id">{{ c.name }}{{ !c.on_service ? ' (off service)' : '' }}</option></select>
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="aForm.mark_new" class="rounded text-brand-600" /> Mark as new patient <span class="text-xs text-ink-400">(uncheck for a quiet administrative move — no “New” badge)</span></label>
@@ -572,20 +516,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                 <form v-else-if="modal.mode === 'medical'" @submit.prevent="submitMedical" class="space-y-4">
                     <!-- record-review step (J1-15c): legacy discharge embedded the admission record
                          above the discharge fields — read-only summary here; edits go via Modify -->
-                    <div class="rounded-xl bg-app/70 p-3 ring-1 ring-line">
-                        <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-warning-500">Kindly review admission details</p>
-                        <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                            <div><dt class="font-semibold text-ink-400">Name</dt><dd class="text-ink-700">{{ modal.row.name }}</dd></div>
-                            <div><dt class="font-semibold text-ink-400">MRN</dt><dd class="nums text-ink-700">{{ modal.row.mrn || '—' }}</dd></div>
-                            <div><dt class="font-semibold text-ink-400">Age / Gender</dt><dd class="nums text-ink-700">{{ modal.row.age ?? '—' }}y · {{ modal.row.gender || '—' }}</dd></div>
-                            <div><dt class="font-semibold text-ink-400">Bed</dt><dd class="nums text-ink-700">{{ modal.row.bed || '—' }}</dd></div>
-                            <div><dt class="font-semibold text-ink-400">Admitted from</dt><dd class="text-ink-700">{{ modal.row.admitted_from || '—' }}</dd></div>
-                            <div><dt class="font-semibold text-ink-400">Admit date</dt><dd class="nums text-ink-700">{{ modal.row.admit_date || '—' }}</dd></div>
-                        </dl>
-                        <ul v-if="modal.row.diagnoses?.length" class="mt-2 space-y-0.5 border-t border-line pt-2 text-[11px] leading-snug text-ink-600">
-                            <li v-for="d in modal.row.diagnoses" :key="d.code"><span class="nums font-semibold text-brand-700">{{ d.code }}</span> {{ d.name }}</li>
-                        </ul>
-                    </div>
+                    <AdmissionSummary :patient="modal.row" />
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge type</label>
                         <div class="flex gap-2">
                             <label v-for="t in [[false, 'Medical only (still in bed)'], [true, 'Complete (leaving now)']]" :key="String(t[0])" class="flex-1 cursor-pointer rounded-xl border-2 px-3 py-2.5 text-center text-sm font-semibold transition" :class="mdForm.complete === t[0] ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'"><input type="radio" v-model="mdForm.complete" :value="t[0]" class="hidden" /> {{ t[1] }}</label>
@@ -628,20 +559,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                 <form v-else-if="modal.mode === 'icu'" @submit.prevent="submitIcu" class="space-y-4">
                     <!-- record-review step (K1-11): same read-only summary as the medical-discharge
                          modal — review the admission record before closing the ICU file -->
-                    <div class="rounded-xl bg-app/70 p-3 ring-1 ring-line">
-                        <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-warning-500">Kindly review admission details</p>
-                        <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                            <div><dt class="font-semibold text-ink-400">Name</dt><dd class="text-ink-700">{{ modal.row.name }}</dd></div>
-                            <div><dt class="font-semibold text-ink-400">MRN</dt><dd class="nums text-ink-700">{{ modal.row.mrn || '—' }}</dd></div>
-                            <div><dt class="font-semibold text-ink-400">Age / Gender</dt><dd class="nums text-ink-700">{{ modal.row.age ?? '—' }}y · {{ modal.row.gender || '—' }}</dd></div>
-                            <div><dt class="font-semibold text-ink-400">Bed</dt><dd class="nums text-ink-700">{{ modal.row.bed || '—' }}</dd></div>
-                            <div><dt class="font-semibold text-ink-400">Admitted from</dt><dd class="text-ink-700">{{ modal.row.admitted_from || '—' }}</dd></div>
-                            <div><dt class="font-semibold text-ink-400">Admit date</dt><dd class="nums text-ink-700">{{ modal.row.admit_date || '—' }}</dd></div>
-                        </dl>
-                        <ul v-if="modal.row.diagnoses?.length" class="mt-2 space-y-0.5 border-t border-line pt-2 text-[11px] leading-snug text-ink-600">
-                            <li v-for="d in modal.row.diagnoses" :key="d.code"><span class="nums font-semibold text-brand-700">{{ d.code }}</span> {{ d.name }}</li>
-                        </ul>
-                    </div>
+                    <AdmissionSummary :patient="modal.row" />
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Status</label><select v-model="icuForm.outcome" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option v-for="s in statuses" :key="s">{{ s }}</option></select></div>
                     <!-- destination is REQUIRED on the ICU close unless Dead (auto-Mortuary) — N1-4 -->
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge to <span v-if="icuForm.outcome !== 'Dead'" class="text-danger-600">*</span></label>
@@ -684,14 +602,11 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                     </template>
                     <div class="flex justify-end gap-2"><button type="button" @click="closeModal" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="tForm.processing || !transferReady" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Transfer</button></div>
                 </form>
-            </div>
-        </div>
+            </template>
+        </BaseModal>
 
         <!-- bulk reassign modal -->
-        <div v-if="reassign" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="closeReassign">
-            <div :ref="(el) => (a11yReassign.trapRef.value = el)" role="dialog" aria-modal="true" aria-labelledby="modal-title-reassign" @keydown="a11yReassign.onKeydown" class="max-h-[90vh] w-full max-w-md overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
-                <h3 id="modal-title-reassign" class="text-lg font-bold text-ink-900">Reassign a consultant's patients</h3>
-                <p class="mb-4 text-sm text-ink-400">Moves the selected active patients from one consultant to another.</p>
+        <BaseModal :open="reassign" title="Reassign a consultant's patients" subtitle="Moves the selected active patients from one consultant to another." size="md" tall field-first :closable="false" @close="closeReassign">
                 <form @submit.prevent="submitReassign" class="space-y-4">
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">From</label><select v-model="rForm.from_consultant_id" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select…</option><option v-for="c in consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">To <span class="font-normal text-ink-400">(on-service only)</span></label><select v-model="rForm.to_consultant_id" title="On-service consultants only" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select…</option><option v-for="c in onServiceConsultants" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
@@ -740,16 +655,11 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
 
                     <div class="flex justify-end gap-2"><button type="button" @click="closeReassign" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="rForm.processing || !rForm.from_consultant_id || !rForm.to_consultant_id || !preflightReady" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Reassign {{ selectedIds.size || '' }} selected</button></div>
                 </form>
-            </div>
-        </div>
+        </BaseModal>
 
         <!-- handover modal (read for all roles; edit for canManage) -->
-        <div v-if="hModal" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="closeHandover">
-            <div :ref="(el) => (a11yHandover.trapRef.value = el)" role="dialog" aria-modal="true" aria-labelledby="modal-title-handover" @keydown="a11yHandover.onKeydown" class="max-h-[90vh] w-full max-w-lg overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
-                <div class="mb-4 flex items-start justify-between">
-                    <div><h3 id="modal-title-handover" class="text-lg font-bold text-ink-900">Handover</h3><p class="text-sm text-ink-400">{{ hModal.row.name }} · MRN {{ hModal.row.mrn }}</p></div>
-                    <button @click="closeHandover" aria-label="Close" class="text-ink-400 hover:text-ink-700">✕</button>
-                </div>
+        <BaseModal :open="!!hModal" title="Handover" :subtitle="hModal ? `${hModal.row.name} · MRN ${hModal.row.mrn}` : ''" size="lg" tall @close="closeHandover">
+            <template v-if="hModal">
                 <p v-if="!hModal.data" class="py-6 text-center text-sm text-ink-400">Loading…</p>
                 <template v-else>
                     <p class="mb-2 text-xs text-ink-400">
@@ -779,45 +689,13 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                         </ul>
                     </template>
                 </template>
-            </div>
-        </div>
+            </template>
+        </BaseModal>
 
-        <!-- modify modal -->
-        <div v-if="editing" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="closeModify">
-            <div :ref="(el) => (a11yModify.trapRef.value = el)" role="dialog" aria-modal="true" aria-labelledby="modal-title-modify" @keydown="a11yModify.onKeydown" class="max-h-[90vh] w-full max-w-lg overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
-                <div class="mb-4 flex items-center justify-between"><h3 id="modal-title-modify" class="text-lg font-bold text-ink-900">Modify patient</h3><button @click="closeModify" aria-label="Close" class="text-ink-400 hover:text-ink-700">✕</button></div>
+        <!-- modify modal (canonical PatientForm inside BaseModal) -->
+        <BaseModal :open="!!editing" title="Modify patient" size="lg" tall @close="closeModify">
                 <form @submit.prevent="submitModify" class="space-y-3">
-                    <div class="grid grid-cols-2 gap-3">
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">MRN</label><input v-model="mForm.mrn" inputmode="numeric" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" :class="{ 'border-danger-500': mForm.errors.mrn }" /><p v-if="mForm.errors.mrn" class="mt-1 text-xs text-danger-600">{{ mForm.errors.mrn }}</p></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Bed</label><input v-model="mForm.bed" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" /></div>
-                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Name</label><input v-model="mForm.name" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" :class="{ 'border-danger-500': mForm.errors.name }" /></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Age</label><input v-model="mForm.age" inputmode="numeric" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" /></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Gender</label><select v-model="mForm.gender" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500"><option value="">—</option><option>Male</option><option>Female</option></select></div>
-                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Nationality</label>
-                            <select v-model="mForm.nationality" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500">
-                                <option value="">—</option>
-                                <!-- keep a dirty legacy value selectable (validate-only-on-change) -->
-                                <option v-if="mForm.nationality && !countries.includes(mForm.nationality)" :value="mForm.nationality">{{ mForm.nationality }} (legacy)</option>
-                                <option v-for="c in countries" :key="c">{{ c }}</option>
-                            </select>
-                            <p v-if="mForm.errors.nationality" class="mt-1 text-xs text-danger-600">{{ mForm.errors.nationality }}</p></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Admit date</label><input v-model="mForm.admit_date" type="date" :max="today" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" :class="{ 'border-danger-500': mForm.errors.admit_date }" /><p v-if="mForm.errors.admit_date" class="mt-1 text-xs text-danger-600">{{ mForm.errors.admit_date }}</p></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">Location</label><select v-model="mForm.current_location" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500"><option>ER</option><option>Ward</option><option>ICU</option></select></div>
-                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Admitted from</label><input v-model="mForm.admitted_from" list="admit-from-options" placeholder="ER, Clinic, Referral…" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" /><datalist id="admit-from-options"><option v-for="o in admitFromOptions" :key="o" :value="o" /></datalist></div>
-                        <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Consultant <span class="font-normal text-ink-400">(quiet change — no “New” badge)</span></label>
-                            <select v-model="mForm.consultant_id" title="On-service consultants only" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500">
-                                <option value="">— no change —</option>
-                                <option v-for="c in modifyConsultants" :key="c.id" :value="c.id">{{ c.name }}{{ !c.on_service ? ' (off service)' : '' }}</option>
-                            </select>
-                            <p v-if="mForm.errors.consultant_id" class="mt-1 text-xs text-danger-600">{{ mForm.errors.consultant_id }}</p></div>
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-sm font-semibold text-ink-700">Diagnoses</label>
-                        <IcdTypeahead @select="addDx" />
-                        <div v-if="selectedDx.length" class="mt-2 flex flex-wrap gap-1.5">
-                            <span v-for="d in selectedDx" :key="d.code" class="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700"><span class="nums">{{ d.code }}</span> {{ d.name }} <button type="button" @click="removeDx(d.code)" class="text-brand-500 hover:text-danger-600">✕</button></span>
-                        </div>
-                    </div>
+                    <PatientForm :form="mForm" :selected-dx="selectedDx" :countries="countries" :consultants="consultants" :today="today" @add-dx="addDx" @remove-dx="removeDx" />
                     <!-- per-patient activity trail (Phase 2 — Item 2) -->
                     <details class="rounded-xl ring-1 ring-line">
                         <summary class="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-ink-700">Activity <span class="nums font-normal text-ink-400">({{ mActivity.length }})</span></summary>
@@ -825,7 +703,6 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                     </details>
                     <div class="flex justify-end gap-2 pt-1"><button type="button" @click="closeModify" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save changes</button></div>
                 </form>
-            </div>
-        </div>
+        </BaseModal>
     </AppLayout>
 </template>

@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { useForm, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { xsrf } from '@/lib/ui.js';
 
 /**
  * Phase 4 — Item 9: admin patient-merge / MRN-dedup tooling. A two-panel interface: pick a SOURCE
@@ -13,8 +14,6 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 const props = defineProps({
     possibleDuplicates: { type: Array, default: () => [] },
 });
-
-const xsrf = () => decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/) || [])[1] || '');
 
 // ---- patient typeahead (one per panel) --------------------------------------------------------
 const source = ref(null);

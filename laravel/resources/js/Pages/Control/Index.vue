@@ -1,7 +1,8 @@
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { Link, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import BaseModal from '@/Components/BaseModal.vue';
 import { useConfirm } from '@/composables/useConfirm';
 
 const { ask } = useConfirm();
@@ -73,11 +74,6 @@ const deleteUser = async (u) => {
     if (await ask('Delete user', `Permanently delete ${u.username}. Their historical admissions/consultations are kept (attribution cleared). This cannot be undone.`, 'danger'))
         router.delete(`/control/users/${u.id}`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
 };
-
-// Esc closes the user-edit modal
-const onEsc = (e) => { if (e.key === 'Escape') editing.value = null; };
-onMounted(() => window.addEventListener('keydown', onEsc));
-onUnmounted(() => window.removeEventListener('keydown', onEsc));
 
 // reference data
 const specForm = useForm({ name: '', is_subspecialty: true, is_external: false });
@@ -264,10 +260,7 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
         </div>
 
         <!-- edit user modal -->
-        <div v-if="editing" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="editing = null">
-            <div class="w-full max-w-md rounded-2xl bg-card p-6 shadow-2xl">
-                <h3 class="text-lg font-bold text-ink-900">{{ editing.name }}</h3>
-                <p class="mb-4 text-sm text-ink-400">{{ editing.username }}</p>
+        <BaseModal :open="!!editing" :title="editing ? editing.name : ''" :subtitle="editing ? editing.username : ''" size="md" :closable="false" @close="editing = null">
                 <div class="space-y-4">
                     <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Username</span>
                         <input v-model="uForm.username" :class="field" placeholder="login name" />
@@ -308,7 +301,6 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
                     <button @click="editing = null" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
                     <button @click="saveUser" :disabled="uForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save</button>
                 </div>
-            </div>
-        </div>
+        </BaseModal>
     </AppLayout>
 </template>

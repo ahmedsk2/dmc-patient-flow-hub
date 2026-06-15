@@ -4,6 +4,7 @@ import { Link, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AdminBandCard from '@/Components/AdminBandCard.vue';
 import { useChartTheme } from '@/composables/useChartTheme';
+import { locTone } from '@/lib/ui.js';
 
 // theme-aware chart colors (grid/axis read CSS tokens; donut gaps match the card)
 const { gridColor, axisColor, strokeColor, inkColor } = useChartTheme();
@@ -246,7 +247,6 @@ const consultDonutOptions = computed(() => ({
 const consultDonutSeries = computed(() => [props.consultDonut.signed24h, props.consultDonut.active]);
 
 const consultantMax = computed(() => Math.max(1, ...props.perConsultant.map((c) => c.c)));
-const locTone = (loc) => loc === 'ICU' ? 'bg-danger-100 text-danger-600' : loc === 'ER' ? 'bg-warning-100 text-warning-500' : 'bg-brand-100 text-brand-700';
 
 // per-consultant activity since yesterday (grouped bars)
 const act24Options = computed(() => colOptions(props.activity24h.map((r) => r.name), [C.blue, C.gold]));

@@ -1,5 +1,6 @@
 <script setup>
 import { ref, watch } from 'vue';
+import { FIELD } from '@/lib/ui.js';
 
 /**
  * ICD-10 async typeahead — one debounced /api/icd10 lookup shared by every diagnosis picker.
@@ -8,7 +9,7 @@ import { ref, watch } from 'vue';
  */
 const props = defineProps({
     placeholder: { type: String, default: 'Search ICD-10 (≥2 chars)…' },
-    inputClass: { type: String, default: 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500' },
+    inputClass: { type: String, default: FIELD },
 });
 const emit = defineEmits(['select']);
 
