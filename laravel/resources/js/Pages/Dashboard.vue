@@ -340,8 +340,8 @@ onUnmounted(() => clearInterval(autoRefresh));
             <button @click="setMyToggle(true)" class="text-xs font-semibold text-brand-600 hover:underline">Show my patients →</button>
         </div>
 
-        <!-- KPI hero row -->
-        <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-7">
+        <!-- KPI hero row (data-tour anchor for the onboarding tour, Item 10) -->
+        <div data-tour="dashboard-hero" class="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-7">
             <component :is="c.href ? 'button' : 'div'" v-for="c in kpiCards" :key="c.label" type="button"
                 @click="c.href && goHref(c.href)"
                 class="relative w-full overflow-hidden rounded-2xl bg-card p-5 text-left shadow-card-lg ring-1 transition"

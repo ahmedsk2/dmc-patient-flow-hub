@@ -30,6 +30,9 @@ class HandleInertiaRequests extends Middleware
                     'is_admin' => $user->isAdmin(),
                     // Phase 4 — Item 4: drives the optional TOTP field on the step-up form
                     'mfa_enrolled' => $user->mfaEnabled(),
+                    // Wave 2, Item 10: first-login tour gate. NULL → the tour auto-starts; the "?"
+                    // replay never touches this. ISO string (or null) so the client can compare.
+                    'tour_completed_at' => optional($user->tour_completed_at)->toIso8601String(),
                     'can' => [
                         'assign' => (bool) $user->can_assign,
                         'add' => (bool) $user->can_add,

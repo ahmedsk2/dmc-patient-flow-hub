@@ -28,6 +28,15 @@ class PatientsController extends Controller
         $tbExists = $this->tbExists();
         [$groups, $readmitWindow] = $this->boardGroups($filters, $settings, $scope, $tbExists, $ownOnlyId);
 
+        // Wave 2, Item 1: discharged/unassigned fall-through. The board only matches active+assigned
+        // patients, so a search for a discharged or not-yet-assigned patient silently returns nothing.
+        // When a search yielded an EMPTY board, run two cheap COUNTs so the zero-state can say
+        // "Found N discharged / M awaiting assignment". The discharged count keeps the D1 scope
+        // (a consultant only sees fall-through counts within their own unit); the unassigned queue is
+        // global (already so on the board chips) since anyone may grab from it. Computed here BEFORE
+        // $scope is broadened for the longterm/TB chips below.
+        $fallback = $this->boardFallback($filters, $groups, $scope);
+
         // chips follow the SAME D1 exemption as boardGroups (J1-7): the longterm/TB views are
         // unit-wide, so their chips must count the unit too — not the viewer's own list (L1-14)
         if (in_array($filters['view'] ?? null, ['longterm', 'tb'], true)) {
@@ -37,6 +46,7 @@ class PatientsController extends Controller
         return Inertia::render('Patients/Index', [
             'groups' => $groups,
             'filters' => $filters,
+            'fallback' => $fallback,
             'readmitWindow' => $readmitWindow,
             'consultants' => User::consultantOptions(),
             'countries' => \App\Models\Country::orderBy('name')->pluck('name'),   // Modify modal nationality select
@@ -53,6 +63,83 @@ class PatientsController extends Controller
                 'unassigned' => Admission::active()->whereNull('consultant_id')->count(),
             ],
         ]);
+    }
+
+    /**
+     * Wave 2, Item 1: the discharged/unassigned fall-through counts for the board zero-state.
+     * Returns null unless a search was entered AND it matched no active+assigned patient (so the
+     * affordance only ever appears when the user is otherwise stuck). The match closure mirrors the
+     * board's own search (name OR mrn LIKE). $scope is the D1 closure — a consultant sees discharged
+     * counts only within their own unit; the unassigned queue is global (anyone may grab from it).
+     *
+     * @return array{discharged:int,unassigned:int,search:string}|null
+     */
+    private function boardFallback(array $filters, array $groups, \Closure $scope): ?array
+    {
+        $s = trim((string) ($filters['search'] ?? ''));
+        if ($s === '' || ! empty($groups)) {
+            return null;
+        }
+
+        $match = fn ($q) => $q->whereHas('patient',
+            fn ($p) => $p->where('name', 'like', "%{$s}%")->orWhere('mrn', 'like', "%{$s}%"));
+
+        return [
+            'discharged' => Admission::whereNotNull('discharge_date')->tap($scope)->tap($match)->count(),
+            'unassigned' => Admission::whereNull('discharge_date')->whereNull('consultant_id')->tap($match)->count(),
+            'search' => $s,
+        ];
+    }
+
+    /**
+     * Wave 2, Item 2: global patient quick-jump (header). Returns up to 8 results as JSON for the
+     * keyboard-first "/" search. Scope rules (PHI-aware, server-enforced — NOT just by blocking the
+     * route):
+     *   • Admin: all patients (active + discharged). Discharged results route to the admin registry.
+     *   • Non-admin (registrar/resident/consultant/observer): ACTIVE episodes only, inside the SAME
+     *     D1 scope as the board (consultants get their own group; everyone else gets all active).
+     * The match is a prepared LIKE binding (no interpolation). < 2 chars → 422 + [] (client debounces
+     * and also guards). This is deliberately NOT the admin-only PatientMergeController::searchPatients
+     * (different scope + payload); the shared search shape lives here.
+     */
+    public function quickSearch(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $q = trim((string) $request->query('q', ''));
+        if (mb_strlen($q) < 2) {
+            return response()->json([], 422);
+        }
+
+        $u = $request->user();
+        $isAdmin = $u->isAdmin();
+        [$scope] = $this->boardScope($request);
+
+        $like = "%{$q}%";
+        $rows = Admission::query()
+            // admin sees full history; everyone else only open episodes, D1-scoped
+            ->when(! $isAdmin, fn ($a) => $a->whereNull('discharge_date')->tap($scope))
+            ->whereHas('patient', fn ($p) => $p->where('name', 'like', $like)->orWhere('mrn', 'like', $like))
+            ->with(['patient:id,mrn,name', 'consultant:id,full_name,name'])
+            ->orderByDesc('admit_date')
+            ->limit(8)
+            ->get();
+
+        return response()->json($rows->map(function (Admission $a) {
+            $discharged = $a->discharge_date !== null;
+            $status = $discharged ? 'discharged' : ($a->consultant_id ? 'active' : 'unassigned');
+            $mrn = $a->patient?->mrn;
+
+            return [
+                'id' => $a->id,
+                'mrn' => $mrn,
+                'name' => $a->patient?->name ?? 'Unknown',
+                'status' => $status,
+                'consultant' => $a->consultant ? ($a->consultant->full_name ?: $a->consultant->name) : null,
+                // active/unassigned → the board handles ?search; discharged (admin-only result) → registry
+                'href' => $discharged
+                    ? '/registry?mode=admissions&search=' . rawurlencode((string) $mrn)
+                    : '/patients?search=' . rawurlencode((string) $mrn),
+            ];
+        })->values());
     }
 
     /**

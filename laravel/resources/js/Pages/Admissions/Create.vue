@@ -3,10 +3,11 @@ import { ref } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
+import { localToday } from '@/lib/ui.js';
 
 const props = defineProps({ consultants: Array, countries: Array, locations: Array, admitFrom: Array });
 
-const today = new Date().toISOString().slice(0, 10);
+const today = localToday();
 const form = useForm({
     mrn: '', name: '', age: '', gender: '', nationality: '',
     bed: '', admit_date: today, admitted_from: 'ER', current_location: 'Ward',

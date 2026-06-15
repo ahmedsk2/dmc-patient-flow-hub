@@ -5,8 +5,17 @@ import EhcLogo from '@/Components/EhcLogo.vue';
 import ConfirmDialog from '@/Components/ConfirmDialog.vue';
 import NavLink from '@/Components/NavLink.vue';
 import Breadcrumbs from '@/Components/Breadcrumbs.vue';
+import QuickJump from '@/Components/QuickJump.vue';
+import { useTour } from '@/composables/useTour';
 
 const logout = () => router.post('/logout');
+
+// Wave 2, Item 10: onboarding tour. maybeAutoStart() fires once on first authenticated load when
+// auth.user.tour_completed_at is null and the route isn't excluded; the header "?" replays it
+// (replay never sets the flag). data-tour anchors live on the nav sections / quick-jump / bell here
+// and on the board + dashboard hero in their pages.
+const { startTour, maybeAutoStart } = useTour();
+const replayTour = () => startTour(usePage().props.auth?.user || {}, { auto: false });
 
 // ---- theme toggle (light / dark / system) -----------------------------------------------------
 // Persisted to localStorage('dmc-theme'); the no-flash bootstrap in app.blade.php applies the
@@ -34,6 +43,8 @@ onMounted(() => {
     mql?.addEventListener('change', () => { if (themePref.value === 'system') applyTheme(); });
     // keep the mobile-drawer viewport flag in sync (scopes aria-hidden to the mobile drawer)
     lgMql?.addEventListener('change', (e) => { mobileViewport.value = e.matches; });
+    // Wave 2, Item 10: first-login onboarding tour (auto-start once when never seen + route allowed)
+    maybeAutoStart(page.props.auth?.user, page.url);
 });
 
 const props = defineProps({
@@ -307,13 +318,14 @@ onUnmounted(() => {
             </div>
 
             <nav class="px-3 py-5 space-y-1">
-                <p class="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-navy-400">Clinical</p>
+                <!-- data-tour anchors for the onboarding tour (Item 10) -->
+                <p data-tour="nav-clinical" class="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-navy-400">Clinical</p>
                 <NavLink v-for="item in clinicalNavItems" :key="item.href"
                     :href="item.href" :icon-path="iconPath(item.icon)" :label="item.label" :active="isActive(item.href)" />
 
                 <template v-if="page.props.auth?.user?.is_admin">
-                    <template v-for="section in adminNavSections" :key="section.section">
-                        <p class="px-3 pt-5 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-navy-400">{{ section.section }}</p>
+                    <template v-for="(section, si) in adminNavSections" :key="section.section">
+                        <p :data-tour="si === 0 ? 'nav-admin' : undefined" class="px-3 pt-5 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-navy-400">{{ section.section }}</p>
                         <template v-for="item in section.items" :key="item.href">
                             <NavLink :href="item.href" :icon-path="iconPath(item.icon)" :label="item.label" :active="isActive(item.href)" />
                             <NavLink v-for="child in (item.children || [])" :key="child.href"
@@ -346,10 +358,17 @@ onUnmounted(() => {
                     <Breadcrumbs :crumbs="breadcrumbs" />
                 </div>
                 <div class="ml-auto flex items-center gap-3">
+                    <!-- Wave 2, Item 2: global patient quick-jump (press /) -->
+                    <QuickJump />
                     <div class="hidden items-center gap-2 rounded-full bg-success-100 px-3 py-1 text-xs font-semibold text-success-600 sm:flex">
                         <span class="relative flex h-2 w-2"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-success-500 opacity-60"></span><span class="relative inline-flex h-2 w-2 rounded-full bg-success-500"></span></span>
                         Live
                     </div>
+                    <!-- Wave 2, Item 10: replay the onboarding tour (never sets the "seen" flag) -->
+                    <button @click="replayTour" aria-label="Replay the guided tour" title="Guided tour"
+                        class="grid h-9 w-9 place-items-center rounded-full text-ink-400 transition hover:bg-ink-50 hover:text-ink-700">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" /></svg>
+                    </button>
                     <!-- theme toggle (light / dark / system) -->
                     <button @click="cycleTheme"
                         :aria-label="`Theme: ${themePref}. Switch theme.`"
@@ -363,7 +382,7 @@ onUnmounted(() => {
                         <span v-if="themePref === 'system'" class="absolute -bottom-0.5 right-1.5 h-1.5 w-1.5 rounded-full bg-brand-400"></span>
                     </button>
                     <!-- notification bell -->
-                    <div class="relative">
+                    <div class="relative" data-tour="bell">
                         <button @click="toggleBell" aria-label="Notifications" title="Notifications" :aria-expanded="bellOpen" aria-controls="notifications-panel" aria-haspopup="dialog" class="relative grid h-9 w-9 place-items-center rounded-full text-ink-400 transition hover:bg-ink-50 hover:text-ink-700">
                             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" /></svg>
                             <span v-if="unread > 0" class="nums absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-danger-600 px-1 text-[10px] font-bold leading-none text-white">{{ unread > 9 ? '9+' : unread }}</span>

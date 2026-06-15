@@ -57,6 +57,7 @@ class User extends Authenticatable
             'mfa_secret' => 'encrypted',
             'mfa_recovery_codes' => 'array',
             'mfa_enrolled_at' => 'datetime',
+            'tour_completed_at' => 'datetime',
             'pass_exp_date' => 'date',
             'active' => 'boolean',
             'on_service' => 'boolean',

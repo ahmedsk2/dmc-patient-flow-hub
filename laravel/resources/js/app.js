@@ -3,6 +3,10 @@ import { createInertiaApp, router } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import VueApexCharts from 'vue3-apexcharts';
 
+// Wave 2, Item 10: onboarding tour. driver.js is bundled (self-hosted — no CDN, PHI-safe). Its base
+// CSS is themed to EHC tokens in resources/css/app.css (.dark + prefers-reduced-motion blocks).
+import 'driver.js/dist/driver.css';
+
 // Self-hosted fonts (NO external CDN — PHI privacy; must work offline).
 // Body: Instrument Sans (400/500/600/700). Display: Hanken Grotesk (600/700/800) for the
 // brand wordmark + big KPI numerals.

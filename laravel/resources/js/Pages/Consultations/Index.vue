@@ -4,6 +4,7 @@ import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { useModalA11y } from '@/composables/useModalA11y';
+import { localToday, vFocus } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
 
@@ -30,13 +31,13 @@ const setStatus = (s) => { status.value = s; apply(); };
 const toggleMine = () => { scope.value = scope.value === 'mine' ? '' : 'mine'; apply(); };
 
 // new consultation
-const today = new Date().toISOString().slice(0, 10);
+const today = localToday();
 const showAdd = ref(false);
 const cForm = useForm({
     mrn: '', patient_name: '', age: '', bed: '', current_location: 'Ward', consultation_date: today,
     consultation_from: '', to_service: '', consultant_id: '', indication: [], other_indication: '',
 });
-const openAdd = () => { showAdd.value = true; a11yAdd.onOpen(); };
+const openAdd = () => { showAdd.value = true; a11yAdd.onOpen(undefined, { fieldFirst: true }); };
 const closeAdd = () => { showAdd.value = false; a11yAdd.onClose(); };
 const submitAdd = () => cForm.post('/consultations', { preserveScroll: true, onSuccess: () => { closeAdd(); cForm.reset(); } });
 
@@ -88,12 +89,10 @@ const onEsc = (e) => {
 onMounted(() => window.addEventListener('keydown', onEsc));
 onUnmounted(() => window.removeEventListener('keydown', onEsc));
 
-// sign off
-const signoff = async (row) => {
-    if (await ask('Sign off consultation', `Sign off the consultation for ${row.name} (MRN ${row.mrn}).`, 'neutral')) {
-        router.post(`/consultations/${row.id}/signoff`, {}, { preserveScroll: true });
-    }
-};
+// sign off — Wave 2, Item 4: no confirm. A single sign-off is reversible (the reverse-signoff
+// button, already instant) and low-stakes; the server flash is the feedback. deleteConsult keeps
+// its danger confirm (irreversible). Sign-all stays confirmed on the Handovers page (bulk).
+const signoff = (row) => router.post(`/consultations/${row.id}/signoff`, {}, { preserveScroll: true });
 const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20';
 </script>
 
@@ -108,7 +107,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
             </div>
             <div class="relative ml-auto">
                 <svg class="pointer-events-none absolute left-3 top-2.5 h-5 w-5 text-ink-400" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" /></svg>
-                <input v-model="search" placeholder="Search name or MRN…" class="w-64 rounded-xl border border-ink-200 bg-card py-2 pl-10 pr-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+                <input v-model="search" v-focus aria-label="Search consultations by name or MRN" placeholder="Search name or MRN…" class="w-64 rounded-xl border border-ink-200 bg-card py-2 pl-10 pr-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
             </div>
             <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line">
                 <button v-for="s in [['active','Active'],['signed','Signed off'],['all','All']]" :key="s[0]" @click="setStatus(s[0])"

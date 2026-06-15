@@ -67,6 +67,38 @@ describe('useModalA11y', () => {
         expect(document.activeElement).toBe(opener);
     });
 
+    it('onOpen({ fieldFirst:true }) focuses the first INPUT, skipping the leading button (Item 6)', async () => {
+        const a11y = useModalA11y();
+        buildModal(a11y);   // order: button#b1, input#b2, button#b3
+        const opener = document.createElement('button');
+        document.body.appendChild(opener);
+        a11y.onOpen(opener, { fieldFirst: true });
+        await Promise.resolve();
+        await new Promise((r) => setTimeout(r, 0));
+        expect(document.activeElement.id).toBe('b2');
+    });
+
+    it('onOpen() with no options focuses the first focusable (unchanged behaviour)', async () => {
+        const a11y = useModalA11y();
+        buildModal(a11y);
+        a11y.onOpen(undefined);
+        await Promise.resolve();
+        await new Promise((r) => setTimeout(r, 0));
+        expect(document.activeElement.id).toBe('b1');
+    });
+
+    it('onOpen({ fieldFirst:true }) falls back to items[0] when the panel has no field', async () => {
+        const a11y = useModalA11y();
+        const root = document.createElement('div');
+        root.innerHTML = '<button id="only">x</button>';
+        document.body.appendChild(root);
+        a11y.trapRef.value = root;
+        a11y.onOpen(undefined, { fieldFirst: true });
+        await Promise.resolve();
+        await new Promise((r) => setTimeout(r, 0));
+        expect(document.activeElement.id).toBe('only');
+    });
+
     it('onOpen falls back to document.activeElement when no opener is passed', async () => {
         const a11y = useModalA11y();
         const opener = document.createElement('button');

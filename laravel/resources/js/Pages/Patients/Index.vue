@@ -1,11 +1,12 @@
 <script setup>
-import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
+import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
 import ActivityPanel from '@/Components/ActivityPanel.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { useModalA11y } from '@/composables/useModalA11y';
+import { localToday, vFocus } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
 
@@ -15,7 +16,7 @@ const a11yReassign = useModalA11y();
 const a11yHandover = useModalA11y();
 const a11yModify = useModalA11y();
 
-const props = defineProps({ groups: Array, filters: Object, stats: Object, consultants: Array, specialties: Array, externalServices: Array, readmitWindow: Number, countries: Array });
+const props = defineProps({ groups: Array, filters: Object, stats: Object, consultants: Array, specialties: Array, externalServices: Array, readmitWindow: Number, countries: Array, fallback: { type: Object, default: null } });
 
 const page = usePage();
 const me = computed(() => page.props.auth.user);
@@ -43,29 +44,63 @@ const setView = (v) => { view.value = view.value === v ? '' : v; apply(); };
 // board density — Comfortable/Compact, persisted per-browser (night-shift census fits more
 // per screen). Pure presentation: a class on the board container, no data/request change.
 const density = ref('comfortable');
-onMounted(() => { const d = localStorage.getItem('dmc-density'); if (d === 'compact' || d === 'comfortable') density.value = d; });
 const setDensity = (d) => { density.value = d; localStorage.setItem('dmc-density', d); };
 const compact = computed(() => density.value === 'compact');
+
+// Wave 2, Item 7: "show only my group" (consultant role only) — purely presentational; server data
+// + D1 scoping are unchanged. Persisted per-browser, mirroring density.
+const myGroupOnly = ref(false);
+const setMyGroupOnly = (v) => { myGroupOnly.value = v; localStorage.setItem('dmc-board-my-group', v ? '1' : '0'); };
+const visibleGroups = computed(() =>
+    myGroupOnly.value && !me.value.is_admin
+        ? props.groups.filter((g) => g.id === me.value.id)
+        : props.groups);
 
 // clear ALL filters (incl. the dashboard drill-through ones) — reset to the default board
 const clearFilters = () => {
     search.value = ''; location.value = ''; view.value = ''; consultantId.value = ''; specialtyId.value = '';
     apply();
 };
-// collapsible consultant sections — expanded when a filter is active, else collapsed
+// collapsible consultant sections — expanded when a filter is active, else collapsed.
+// Wave 2, Item 7: the expanded Set is persisted per-browser ('dmc-board-open') so a consultant's
+// collapses survive navigation; restored in onMounted (intersected with the current group ids).
 const filtering = computed(() => !!(props.filters.search || props.filters.view || props.filters.location
     || props.filters.consultant_id || props.filters.specialty_id));
 const open = ref(new Set(filtering.value ? props.groups.map((g) => g.id) : []));
-const toggle = (id) => { open.value.has(id) ? open.value.delete(id) : open.value.add(id); open.value = new Set(open.value); };
-const allOpen = () => (open.value = new Set(props.groups.map((g) => g.id)));
-const allClosed = () => (open.value = new Set());
+const persistOpen = () => localStorage.setItem('dmc-board-open', JSON.stringify([...open.value]));
+const toggle = (id) => { open.value.has(id) ? open.value.delete(id) : open.value.add(id); open.value = new Set(open.value); persistOpen(); };
+const allOpen = () => { open.value = new Set(props.groups.map((g) => g.id)); persistOpen(); };
+const allClosed = () => { open.value = new Set(); persistOpen(); };
 
-// summary table buckets
+onMounted(() => {
+    const d = localStorage.getItem('dmc-density');
+    if (d === 'compact' || d === 'comfortable') density.value = d;
+    myGroupOnly.value = localStorage.getItem('dmc-board-my-group') === '1';
+
+    // board expand state — persisted per browser; intersect with current group ids (a group may
+    // have been removed since the state was saved). Corrupt storage → fall back to the default.
+    const saved = localStorage.getItem('dmc-board-open');
+    if (saved) {
+        try {
+            const ids = JSON.parse(saved);
+            if (Array.isArray(ids)) {
+                const valid = new Set(props.groups.map((g) => g.id));
+                open.value = new Set(ids.filter((id) => valid.has(id)));
+            }
+        } catch { /* corrupt storage — ignore, use default */ }
+    }
+    // first visit / all collapsed WHILE a filter is active → expand everything as before
+    if (open.value.size === 0 && filtering.value) {
+        open.value = new Set(props.groups.map((g) => g.id));
+    }
+});
+
+// summary table buckets — operate on visibleGroups (Item 7: "my group only" filter)
 const bucket = (g) => g.on_service && g.specialty_id === 1 ? 'hosp' : g.on_service ? 'subs' : 'off';
 const sections = computed(() => [
-    { key: 'hosp', label: 'On-service · Hospitalists', rows: props.groups.filter((g) => bucket(g) === 'hosp') },
-    { key: 'subs', label: 'On-service · Subspecialists', rows: props.groups.filter((g) => bucket(g) === 'subs') },
-    { key: 'off', label: 'Off-service', rows: props.groups.filter((g) => bucket(g) === 'off') },
+    { key: 'hosp', label: 'On-service · Hospitalists', rows: visibleGroups.value.filter((g) => bucket(g) === 'hosp') },
+    { key: 'subs', label: 'On-service · Subspecialists', rows: visibleGroups.value.filter((g) => bucket(g) === 'subs') },
+    { key: 'off', label: 'Off-service', rows: visibleGroups.value.filter((g) => bucket(g) === 'off') },
 ]);
 
 // diagnosis list expand — clicking the "N dx" badge reveals the names (read-only, all roles)
@@ -80,7 +115,7 @@ const closeKebab = () => (kebabOpen.value = null);
 
 // inline bed edit — ANY clinical role, matching the J1-opened /bed endpoint (K1-2; was
 // canManage-only affordance); observers stay read-only. Saves on blur/Enter, Esc cancels.
-const vFocus = { mounted: (el) => el.focus() };
+// (vFocus now imported from @/lib/ui.js — Item 6 shares one directive across pages.)
 const bedEdit = ref(null);
 const startBed = (p) => { if (!isObserver.value && !p.discharged) bedEdit.value = { id: p.id, value: p.bed || '' }; };
 const cancelBed = () => (bedEdit.value = null);
@@ -93,12 +128,14 @@ const saveBed = (p) => {
 };
 
 // shuffle + reassign + action modal
-const shuffle = async () => { if (await ask('Auto-assign unassigned patients', 'Distribute all unassigned patients across the on-service consultants using the balancing shuffle.', 'neutral')) router.post('/admissions/shuffle', {}, { preserveScroll: true }); };
+// Wave 2, Item 4: no confirm — shuffle is low-stakes + reversible (re-shuffle / manual reassign);
+// the server's flash ("Shuffle assigned N patients…" / "No unassigned patients") is the feedback.
+const shuffle = () => router.post('/admissions/shuffle', {}, { preserveScroll: true });
 const reassign = ref(false);
 const rForm = useForm({ from_consultant_id: '', to_consultant_id: '', mark_new: true, admission_ids: [] });
 // group-header 'Change consultant' opens the bulk-reassign modal PRE-FILLED with from=this
 // consultant (J2-11); the toolbar button opens it blank
-const openReassign = (fromId = '') => { rForm.from_consultant_id = fromId; rForm.to_consultant_id = ''; reassign.value = true; a11yReassign.onOpen(); };
+const openReassign = (fromId = '') => { rForm.from_consultant_id = fromId; rForm.to_consultant_id = ''; reassign.value = true; a11yReassign.onOpen(undefined, { fieldFirst: true }); };
 const closeReassign = () => { reassign.value = false; a11yReassign.onClose(); };
 const submitReassign = () => {
     rForm.admission_ids = [...selectedIds.value];   // SUBSET move: only the checked patients travel
@@ -161,6 +198,15 @@ const loadPreflight = async (id) => {
     preflightBodies.value = Object.fromEntries(rows.filter((r) => !r.handover_today).map((r) => [r.id, r.body || '']));
     selectedIds.value = new Set(rows.map((r) => r.id));   // all checked by default (legacy move-everything)
     preflight.value = { loading: false, rows };
+    // Wave 2, Item 9: jump straight to the first handover that needs today's note (no scrolling).
+    nextTick(() => document.querySelector('[data-stale-textarea]')?.focus());
+};
+// Wave 2, Item 9: exclude all stale rows from the move set — the user accepts those patients won't
+// be reassigned in this batch (valid when partial reassignment is intended). With no stale rows left
+// among the selected, preflightReady unlocks and the move proceeds on the non-stale subset.
+const uncheckAllStale = () => {
+    const staleIds = new Set(staleRows.value.map((r) => r.id));
+    selectedIds.value = new Set([...selectedIds.value].filter((id) => !staleIds.has(id)));
 };
 watch(() => rForm.from_consultant_id, (id) => { preflight.value = null; selectedIds.value = new Set(); if (id) loadPreflight(id); });
 const staleRows = computed(() => (preflight.value?.rows || []).filter((r) => !r.handover_today && selectedIds.value.has(r.id)));
@@ -179,7 +225,7 @@ const saveAllStale = async () => {
 };
 
 const modal = ref(null);
-const today = new Date().toISOString().slice(0, 10);
+const today = localToday();
 const aForm = useForm({ consultant_id: '', mark_new: true });
 const mdForm = useForm({ outcome: 'Alive', medical_discharge_date: today, discharge_to: '', delay_reason: '', complete: false });
 const cdForm = useForm({ discharge_date: today, outcome: '', discharge_to: '' });
@@ -193,7 +239,7 @@ const openModal = (mode, row) => {
     if (mode === 'complete') { cdForm.reset(); cdForm.outcome = row.outcome || ''; cdForm.discharge_to = row.discharge_to || ''; }   // prefill the optional override from phase-1
     if (mode === 'icu') icuForm.reset();
     if (mode === 'transfer') { tForm.reset(); tForm.target = row.location === 'ICU' ? 'Ward' : 'ICU'; }
-    a11yAction.onOpen();   // capture opener (the just-clicked button) + focus first field
+    a11yAction.onOpen(undefined, { fieldFirst: true });   // capture opener + focus the first FIELD (not a button) — Item 6
 };
 // controlled destination vocabulary (legacy "Discharged to" list); a death locks to Mortuary.
 // Status (outcome) is strictly Alive/Dead — LAMA/Absconded are DESTINATIONS, not outcomes.
@@ -220,6 +266,15 @@ const transferReady = computed(() =>
     : tForm.mode === 'specialty' ? !!(tForm.specialty_id && tForm.consultant_id)
     : !!tForm.service);
 const closeModal = () => { modal.value = null; a11yAction.onClose(); };
+// Wave 2, Item 5: one title map so "assign" always reads "Assign consultant" — matching the queue's
+// assign modal (Admissions/Index) and the standardized verb table (Item 8: "Assign" / "Reassign").
+const modalTitle = computed(() => ({
+    assign: 'Assign consultant',
+    medical: 'Discharge',
+    complete: 'Complete discharge',
+    icu: 'ICU discharge',
+    transfer: 'Transfer',
+}[modal.value?.mode] ?? ''));
 const opts = { preserveScroll: true, onSuccess: closeModal };
 const submitAssign = () => aForm.post(`/admissions/${modal.value.row.id}/assign`, opts);
 const submitMedical = () => mdForm.post(`/admissions/${modal.value.row.id}/medical-discharge`, opts);
@@ -228,8 +283,10 @@ const submitIcu = () => icuForm.post(`/admissions/${modal.value.row.id}/icu-disc
 const submitTransfer = () => tForm.post(`/admissions/${modal.value.row.id}/transfer`, opts);
 const longterm = (row) => router.post(`/admissions/${row.id}/longterm`, {}, { preserveScroll: true });
 // the board shows active patients only, so the undo here is the phase-1 (medical) one;
-// reversing a COMPLETED discharge lives on the admin Recent registry
-const undoMedical = async (row) => { if (await ask('Undo medical discharge', `Return ${row.name} (MRN ${row.mrn}) to the active board and clear the medical-discharge status.`, 'neutral')) router.post(`/admissions/${row.id}/undo-medical-discharge`, {}, { preserveScroll: true }); };
+// reversing a COMPLETED discharge lives on the admin Recent registry.
+// Wave 2, Item 4: no confirm — this is itself a reversal (re-run medical-discharge to redo); the
+// server flashes 'Medical discharge undone.'
+const undoMedical = (row) => router.post(`/admissions/${row.id}/undo-medical-discharge`, {}, { preserveScroll: true });
 
 // modify (full edit) — fetches detail, then edits demographics + admission facts + diagnoses
 const canModify = computed(() => me.value.is_admin || me.value.can.modify);
@@ -309,7 +366,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
 
             <div class="relative ml-auto">
                 <svg class="pointer-events-none absolute left-3 top-2.5 h-5 w-5 text-ink-400" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" /></svg>
-                <input v-model="search" placeholder="Search name or MRN…" class="w-56 rounded-xl border border-ink-200 bg-card py-2 pl-10 pr-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+                <input v-model="search" v-focus aria-label="Search patients by name or MRN" placeholder="Search name or MRN…" class="w-56 rounded-xl border border-ink-200 bg-card py-2 pl-10 pr-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
             </div>
             <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line">
                 <button v-for="l in ['Ward','ICU','ER']" :key="l" @click="setLocation(l)" class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="location === l ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ l }}</button>
@@ -319,6 +376,12 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
             <button v-if="filtering" @click="clearFilters" class="inline-flex items-center gap-1.5 rounded-xl bg-ink-100 px-3 py-2 text-sm font-semibold text-ink-600 transition hover:bg-ink-200">
                 Clear filters ✕
             </button>
+            <!-- Item 7: "My patients only" — consultant role only (admins/registrars/residents see
+                 all groups, which is correct). Pure client filter, persisted per-browser. -->
+            <button v-if="me.role === 3 && !me.is_admin" @click="setMyGroupOnly(!myGroupOnly)"
+                :aria-pressed="myGroupOnly" :title="myGroupOnly ? 'Showing only your group' : 'Show only your group'"
+                class="rounded-xl px-3 py-2 text-sm font-semibold shadow-sm ring-1 transition"
+                :class="myGroupOnly ? 'bg-accent-500 text-white ring-accent-500' : 'bg-card text-ink-500 ring-line hover:bg-ink-50'">My patients only</button>
             <!-- density: Comfortable/Compact (localStorage 'dmc-density'); compact tightens card padding + gaps -->
             <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line" role="group" aria-label="Board density">
                 <button v-for="d in [['comfortable','Comfortable'],['compact','Compact']]" :key="d[0]" @click="setDensity(d[0])"
@@ -336,8 +399,8 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
             </button>
         </div>
 
-        <!-- summary: patients per consultant -->
-        <div class="mb-5 overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
+        <!-- summary: patients per consultant (data-tour anchor for the onboarding tour, Item 10) -->
+        <div data-tour="board" class="mb-5 overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
           <div class="overflow-x-auto">
             <table class="min-w-[540px] w-full text-sm">
                 <thead>
@@ -362,6 +425,24 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                         </tr>
                     </template>
                     <tr v-if="!groups.length"><td colspan="7" class="px-5 py-8 text-center text-ink-400">No assigned patients match your filters.</td></tr>
+                    <!-- Wave 2, Item 1: discharged/unassigned fall-through. Only shows when a search
+                         returned an empty board AND there are matching discharged/unassigned rows.
+                         Counts are D1-scoped server-side; the registry link 403s for non-admins (a
+                         clean "not authorised" page, not a dead end) — owner-approved default. -->
+                    <tr v-if="!groups.length && fallback && (fallback.discharged || fallback.unassigned)">
+                        <td colspan="7" class="px-5 py-3 text-center text-sm text-ink-500">
+                            No active match.
+                            <span v-if="fallback.discharged">
+                                Found <strong class="nums text-ink-700">{{ fallback.discharged }}</strong> discharged
+                                <Link :href="`/registry?mode=admissions&search=${encodeURIComponent(fallback.search)}&discharged=1`"
+                                      class="font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700">view →</Link>
+                            </span>
+                            <span v-if="fallback.unassigned">
+                                / <strong class="nums text-ink-700">{{ fallback.unassigned }}</strong> awaiting assignment
+                                <Link href="/admissions" class="font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700">queue →</Link>
+                            </span>
+                        </td>
+                    </tr>
                 </tbody>
             </table>
           </div>
@@ -372,14 +453,18 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
             <button @click="allClosed" class="hover:underline">Collapse all</button>
         </div>
 
-        <!-- per-consultant patient cards -->
-        <div v-for="g in groups" :key="g.id" v-show="open.has(g.id)" class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line" :class="compact ? 'mb-2.5' : 'mb-4'">
+        <!-- per-consultant patient cards (Item 7: visibleGroups honours "my group only") -->
+        <div v-for="g in visibleGroups" :key="g.id" v-show="open.has(g.id)" class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line" :class="compact ? 'mb-2.5' : 'mb-4'">
             <div class="flex items-center justify-between border-b border-line px-5 py-3">
                 <h3 class="font-bold text-ink-800">Dr. {{ g.name }} <span class="ml-1 text-sm font-normal text-ink-400">· {{ g.counts.total }} patient(s)</span></h3>
                 <span class="flex items-center gap-2">
-                    <!-- opens the bulk-reassign modal pre-filled with from=this consultant (J2-11) -->
+                    <!-- opens the bulk-reassign modal pre-filled with from=this consultant (J2-11).
+                         Wave 2, Item 8 — canonical verb table (one verb per concept):
+                           • move a patient to a different consultant → "Reassign" (single) / "Bulk reassign" (toolbar aria-label)
+                           • first assignment of an unassigned patient → "Assign" / "Assign to me"
+                         This group-header button changes a whole consultant's list → "Reassign". -->
                     <button v-if="canReassign && !isObserver && g.patients.length" @click="openReassign(g.id)"
-                        class="rounded-lg px-2.5 py-1 text-xs font-semibold text-brand-700 ring-1 ring-brand-200 transition hover:bg-brand-50">Change consultant</button>
+                        class="rounded-lg px-2.5 py-1 text-xs font-semibold text-brand-700 ring-1 ring-brand-200 transition hover:bg-brand-50">Reassign</button>
                     <button @click="toggle(g.id)" title="Collapse" aria-label="Collapse" class="text-ink-400 hover:text-ink-700"><svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" /></svg></button>
                 </span>
             </div>
@@ -470,7 +555,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
         <div v-if="modal" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="closeModal">
             <div :ref="(el) => (a11yAction.trapRef.value = el)" role="dialog" aria-modal="true" aria-labelledby="modal-title-action" @keydown="a11yAction.onKeydown" class="max-h-[90vh] w-full max-w-md overflow-auto rounded-2xl bg-card p-6 shadow-2xl">
                 <div class="mb-4 flex items-start justify-between">
-                    <div><h3 id="modal-title-action" class="text-lg font-bold text-ink-900">{{ ({ assign: 'Reassign consultant', medical: 'Discharge', complete: 'Complete discharge', icu: 'ICU discharge', transfer: 'Transfer' })[modal.mode] }}</h3><p class="text-sm text-ink-400">{{ modal.row.name }} · MRN {{ modal.row.mrn }}</p></div>
+                    <div><h3 id="modal-title-action" class="text-lg font-bold text-ink-900">{{ modalTitle }}</h3><p class="text-sm text-ink-400">{{ modal.row.name }} · MRN {{ modal.row.mrn }}</p></div>
                     <button @click="closeModal" aria-label="Close" class="text-ink-400 hover:text-ink-700">✕</button>
                 </div>
                 <form v-if="modal.mode === 'assign'" @submit.prevent="submitAssign" class="space-y-4">
@@ -630,12 +715,17 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                                 </li>
                             </ul>
                             <template v-if="staleRows.length">
-                                <p class="mt-3 text-xs font-semibold text-warning-500">{{ staleRows.length }} selected patient(s) need today's handover before the move:</p>
-                                <div v-for="r in staleRows" :key="'h' + r.id" class="mt-2">
+                                <!-- Item 9: at-a-glance counter so the user sees how many still block the move -->
+                                <p class="mt-3 text-sm font-semibold text-warning-600">{{ staleRows.length }} of {{ preflight.rows.length }} patient(s) still need today's handover note.</p>
+                                <div v-for="(r, i) in staleRows" :key="'h' + r.id" class="mt-2">
                                     <p class="text-xs font-semibold text-ink-700">{{ r.name }} <span class="nums font-normal text-ink-400">MRN {{ r.mrn }}</span></p>
-                                    <textarea v-model="preflightBodies[r.id]" rows="2" maxlength="5000" :aria-label="`Handover for ${r.name}`" placeholder="Write today's handover…" class="mt-1 w-full rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
+                                    <textarea v-model="preflightBodies[r.id]" :data-stale-textarea="i === 0 ? '' : undefined" rows="2" maxlength="5000" :aria-label="`Handover for ${r.name}`" placeholder="Write today's handover…" class="mt-1 w-full rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
                                 </div>
-                                <div class="mt-2 flex justify-end"><button type="button" @click="saveAllStale" :disabled="savingAll || !allStaleFilled" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50">{{ savingAll ? 'Saving…' : 'Save all handovers' }}</button></div>
+                                <div class="mt-2 flex justify-end gap-2">
+                                    <!-- Item 9: skip note-writing for stale rows by dropping them from the move set -->
+                                    <button type="button" @click="uncheckAllStale" class="rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-50">Uncheck all stale ({{ staleRows.length }})</button>
+                                    <button type="button" @click="saveAllStale" :disabled="savingAll || !allStaleFilled" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50">{{ savingAll ? 'Saving…' : 'Save all handovers' }}</button>
+                                </div>
                             </template>
                             <p v-else-if="selectedIds.size" class="mt-2 flex items-center gap-1.5 text-xs font-semibold text-success-600">
                                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>

@@ -23,6 +23,7 @@ use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\SecurityController;
 use App\Http\Controllers\StatisticsController;
 use App\Http\Controllers\StepUpController;
+use App\Http\Controllers\TourController;
 use App\Http\Controllers\TrashedController;
 use Illuminate\Support\Facades\Route;
 
@@ -72,6 +73,10 @@ Route::middleware(['auth', 'session.timeout', 'mfa.enroll', 'pwd'])->group(funct
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
     Route::get('/patients', [PatientsController::class, 'index'])->name('patients.index');
+    // Wave 2, Item 2: global patient quick-jump. Lives in the AUTH (non-admin) group on purpose — it
+    // is PHI-aware by SCOPING (active-only + D1 for non-admins; full history for admins), not by
+    // blocking non-admins. The admin-only /api/patients/search (PatientMergeController) is unchanged.
+    Route::get('/api/patients/quick-search', [PatientsController::class, 'quickSearch'])->name('patients.quickSearch');
     Route::get('/active-list', [PatientsController::class, 'activeList'])->name('patients.activeList');   // printable census (all roles, D1-scoped)
     Route::post('/admissions/shuffle', [PatientActionController::class, 'shuffle'])->name('admissions.shuffle');
     Route::post('/admissions/reassign', [PatientActionController::class, 'bulkReassign'])->name('admissions.reassign');
@@ -121,6 +126,10 @@ Route::middleware(['auth', 'session.timeout', 'mfa.enroll', 'pwd'])->group(funct
     Route::get('/admissions/create', [AdmissionsController::class, 'create'])->name('admissions.create');
     Route::post('/admissions', [AdmissionsController::class, 'store'])->name('admissions.store');
     Route::get('/api/icd10', [AdmissionsController::class, 'icd10'])->name('icd10.search');
+
+    // Wave 2, Item 10: first-login onboarding tour — mark "seen" so the auto-tour stops nagging.
+    // Auth group (every clinical role gets the tour); idempotent; the "?" replay never posts here.
+    Route::post('/tour/complete', [TourController::class, 'complete'])->name('tour.complete');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('/profile', [ProfileController::class, 'updateProfile'])->name('profile.update');

@@ -5,6 +5,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { useModalA11y } from '@/composables/useModalA11y';
+import { localToday } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
 
@@ -44,12 +45,14 @@ const onServiceConsultants = computed(() => props.consultants.filter((c) => c.on
 const dxOpen = ref(null);
 const toggleDx = (id) => (dxOpen.value = dxOpen.value === id ? null : id);
 
-// assign-to-primary modal — mark_new defaults UNCHECKED here (legacy queue default: a fresh
-// admission gets its "New" badge from the shuffle/board flows, not the queue assign)
+// assign-to-primary modal — mark_new defaults UNCHECKED on the queue (the established G1 default).
+// Unifying it to the board's checked-default is a New-badge / new-today metric change the spec
+// gates behind explicit owner sign-off, so it's left at false pending that call. The rest of Item 5
+// (wording, modal title, assign-to-me toast) is applied. Check the box to show the "New" badge.
 const assigning = ref(null);
 const aForm = useForm({ consultant_id: '', mark_new: false });
 const closeAssign = () => { assigning.value = null; a11yAssign.onClose(); };
-const openAssign = (p) => { assigning.value = p; aForm.consultant_id = ''; aForm.mark_new = false; a11yAssign.onOpen(); };
+const openAssign = (p) => { assigning.value = p; aForm.consultant_id = ''; aForm.mark_new = false; a11yAssign.onOpen(undefined, { fieldFirst: true }); };
 const submitAssign = () => aForm.post(`/admissions/${assigning.value.id}/assign`, { preserveScroll: true, onSuccess: closeAssign });
 const assignToMe = (p) => router.post(`/admissions/${p.id}/assign-to-me`, {}, { preserveScroll: true });
 
@@ -57,10 +60,12 @@ const assignToMe = (p) => router.post(`/admissions/${p.id}/assign-to-me`, {}, { 
 const showIcu = ref(false);
 const openIcu = () => { showIcu.value = true; a11yIcu.onOpen(); };
 const closeIcu = () => { showIcu.value = false; a11yIcu.onClose(); };
-const fromIcu = async (p) => { if (await ask('Admit from ICU', `Pull ${p.name} (MRN ${p.mrn}) from ICU onto the ward — they enter the assignment queue for a new consultant.`, 'neutral')) router.post(`/admissions/${p.id}/icu-pull`, {}, { preserveScroll: true, onSuccess: () => (showIcu.value = false) }); };
+// Wave 2, Item 4: no confirm — the ICU-pull creates a new unassigned queue entry (reversible via
+// discharge); the server flashes 'Patient admitted from ICU — now in the assignment queue.'
+const fromIcu = (p) => router.post(`/admissions/${p.id}/icu-pull`, {}, { preserveScroll: true, onSuccess: () => (showIcu.value = false) });
 
 // modify a queued (unassigned) patient — reuses /admissions/{id}/edit + /modify
-const today = new Date().toISOString().slice(0, 10);
+const today = localToday();
 const admitFromOptions = ['ER', 'Clinic', 'OPD', 'OR', 'ICU', 'Referral', 'Transfer', 'Direct', 'Other service'];
 const editing = ref(null);
 const mForm = useForm({ mrn: '', name: '', age: '', gender: '', nationality: '', bed: '', admit_date: '', admitted_from: '', current_location: 'Ward', consultant_id: '', diagnoses: [] });
@@ -181,14 +186,14 @@ const locTone = (l) => l === 'ICU' ? 'bg-danger-100 text-danger-600' : l === 'ER
         <!-- assign modal -->
         <div v-if="assigning" class="fixed inset-0 z-50 grid place-items-center bg-navy-950/40 p-4 backdrop-blur-sm" @click.self="closeAssign">
             <div :ref="(el) => (a11yAssign.trapRef.value = el)" role="dialog" aria-modal="true" aria-labelledby="modal-title-assign" @keydown="a11yAssign.onKeydown" class="w-full max-w-md rounded-2xl bg-card p-6 shadow-2xl">
-                <h3 id="modal-title-assign" class="text-lg font-bold text-ink-900">Assign to primary</h3>
+                <h3 id="modal-title-assign" class="text-lg font-bold text-ink-900">Assign consultant</h3>
                 <p class="mb-4 text-sm text-ink-400">{{ assigning.name }} · MRN {{ assigning.mrn }}</p>
                 <form @submit.prevent="submitAssign" class="space-y-4">
                     <select v-model="aForm.consultant_id" title="On-service consultants only" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500">
                         <option value="">Select consultant…</option>
                         <option v-for="c in onServiceConsultants" :key="c.id" :value="c.id">{{ c.name }}</option>
                     </select>
-                    <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="aForm.mark_new" class="rounded text-brand-600" /> Mark as new patient <span class="text-xs text-ink-400">(check to show the “New” badge on the board)</span></label>
+                    <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="aForm.mark_new" class="rounded text-brand-600" /> Mark as new patient <span class="text-xs text-ink-400">(check to show the “New” badge)</span></label>
                     <div class="flex justify-end gap-2">
                         <button type="button" @click="closeAssign" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
                         <button type="submit" :disabled="aForm.processing || !aForm.consultant_id" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Assign</button>

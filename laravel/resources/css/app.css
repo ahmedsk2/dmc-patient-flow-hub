@@ -262,3 +262,76 @@
     /* Keep the ActiveList report header visible (its own @media print hides chrome differently). */
     .report header { display: block !important; }
 }
+
+/* ----- Onboarding tour (Wave 2, Item 10) -----------------------------------------------------
+ * driver.js popover, themed to the EHC tokens so it matches both light + dark. driver.js exposes
+ * CSS variables on .driver-popover (added via popoverClass="dmc-tour"); we also restyle its
+ * buttons + arrow. The highlighted-element overlay uses driver's own SVG mask — we only retint the
+ * popover chrome here. Reduced-motion disables its fade/zoom transition. */
+.driver-popover.dmc-tour {
+    background-color: var(--color-card);
+    color: var(--color-ink-700, #1e2a2e);
+    border-radius: 1rem;
+    box-shadow: 0 20px 50px -12px rgb(0 0 0 / 0.35);
+    --driver-color: var(--color-brand-600);
+}
+.driver-popover.dmc-tour .driver-popover-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    color: var(--color-ink-900, #102a2e);
+}
+.driver-popover.dmc-tour .driver-popover-description {
+    color: var(--color-ink-500, #5b6a6e);
+}
+.driver-popover.dmc-tour .driver-popover-progress-text {
+    color: var(--color-ink-400, #7d8c8f);
+}
+/* arrow tip picks up the card surface in both themes */
+.driver-popover.dmc-tour .driver-popover-arrow-side-left.driver-popover-arrow { border-left-color: var(--color-card); }
+.driver-popover.dmc-tour .driver-popover-arrow-side-right.driver-popover-arrow { border-right-color: var(--color-card); }
+.driver-popover.dmc-tour .driver-popover-arrow-side-top.driver-popover-arrow { border-top-color: var(--color-card); }
+.driver-popover.dmc-tour .driver-popover-arrow-side-bottom.driver-popover-arrow { border-bottom-color: var(--color-card); }
+/* buttons → brand-primary "next/done", neutral "previous" */
+.driver-popover.dmc-tour .driver-popover-footer button {
+    text-shadow: none;
+    border-radius: 0.625rem;
+    font-weight: 600;
+    font-size: 0.8125rem;
+    padding: 0.375rem 0.875rem;
+}
+.driver-popover.dmc-tour .driver-popover-next-btn,
+.driver-popover.dmc-tour .driver-popover-footer button.driver-popover-next-btn {
+    background-color: var(--color-brand-600);
+    color: #fff;
+    border: none;
+}
+.driver-popover.dmc-tour .driver-popover-prev-btn {
+    background-color: transparent;
+    color: var(--color-ink-500, #5b6a6e);
+    border: 1px solid var(--color-line, #e2e8e8);
+}
+.driver-popover.dmc-tour .driver-popover-close-btn {
+    color: var(--color-ink-400, #7d8c8f);
+}
+
+/* Dark mode — the card/ink tokens already flip under .dark, but driver.js writes some inline
+ * fallbacks; restate the popover surface so it stays legible. */
+.dark .driver-popover.dmc-tour {
+    background-color: var(--color-card);
+    box-shadow: 0 20px 50px -12px rgb(0 0 0 / 0.6);
+}
+.dark .driver-popover.dmc-tour .driver-popover-arrow-side-left.driver-popover-arrow { border-left-color: var(--color-card); }
+.dark .driver-popover.dmc-tour .driver-popover-arrow-side-right.driver-popover-arrow { border-right-color: var(--color-card); }
+.dark .driver-popover.dmc-tour .driver-popover-arrow-side-top.driver-popover-arrow { border-top-color: var(--color-card); }
+.dark .driver-popover.dmc-tour .driver-popover-arrow-side-bottom.driver-popover-arrow { border-bottom-color: var(--color-card); }
+
+/* Reduced motion — kill driver.js's overlay/popover transition (the global block above already
+ * neutralizes generic transitions, but driver sets its own transition-duration inline). */
+@media (prefers-reduced-motion: reduce) {
+    .driver-popover.dmc-tour,
+    .driver-overlay,
+    .driver-active-element {
+        transition: none !important;
+        animation: none !important;
+    }
+}

@@ -5,6 +5,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
 import ActivityPanel from '@/Components/ActivityPanel.vue';
 import { useConfirm } from '@/composables/useConfirm';
+import { localToday, vFocus } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
 
@@ -62,7 +63,7 @@ const toggleInd = (id) => { f.indication.includes(id) ? (f.indication = f.indica
 
 // edit-from-registry (reuse Modify) — the payload must carry admit_date + current_location
 // (ModifyAdmissionRequest requires them; without them every save silently 422'd)
-const today = new Date().toISOString().slice(0, 10);
+const today = localToday();
 const admitFromOptions = ['ER', 'Clinic', 'OPD', 'OR', 'ICU', 'Referral', 'Transfer', 'Direct', 'Other service'];
 const editing = ref(null);
 const mActivity = ref([]);   // per-patient audit trail (Phase 2 — Item 2)
@@ -127,7 +128,7 @@ const toggleExpand = (id) => {
             <!-- ADMISSIONS -->
             <div v-if="mode === 'admissions'" class="space-y-3">
                 <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                    <input v-model="f.search" @keyup.enter="apply" :class="fld" placeholder="Name or MRN" />
+                    <input v-model="f.search" v-focus @keyup.enter="apply" :class="fld" aria-label="Search admissions by name or MRN" placeholder="Name or MRN" />
                     <select v-model="f.consultant_id" :class="fld"><option value="">Any consultant</option><option v-for="c in options.consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select>
                     <select v-model="f.gender" :class="fld"><option value="">Any gender</option><option>Male</option><option>Female</option></select>
                     <input v-model="f.nationality" :class="fld" list="natlist" placeholder="Nationality" /><datalist id="natlist"><option v-for="c in options.countries" :key="c" :value="c" /></datalist>
@@ -160,7 +161,7 @@ const toggleExpand = (id) => {
             <!-- CONSULTATIONS -->
             <div v-else-if="mode === 'consultations'" class="space-y-3">
                 <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                    <input v-model="f.search" @keyup.enter="apply" :class="fld" placeholder="Name or MRN" />
+                    <input v-model="f.search" v-focus @keyup.enter="apply" :class="fld" aria-label="Search consultations by name or MRN" placeholder="Name or MRN" />
                     <select v-model="f.consultant_id" :class="fld"><option value="">Any consultant</option><option v-for="c in options.consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select>
                     <input v-model="f.consultation_from" :class="fld" placeholder="From service" />
                     <input v-model="f.to_service" :class="fld" placeholder="To service" />
@@ -185,7 +186,7 @@ const toggleExpand = (id) => {
             </div>
             <!-- DIAGNOSIS -->
             <div v-else class="flex flex-wrap items-end gap-3">
-                <div class="grow"><label class="text-xs text-ink-400">Diagnosis keyword</label><input v-model="f.keyword" @keyup.enter="apply" :class="[fld, 'w-full']" placeholder="e.g. pneumonia, sepsis…" /></div>
+                <div class="grow"><label class="text-xs text-ink-400">Diagnosis keyword</label><input v-model="f.keyword" v-focus @keyup.enter="apply" :class="[fld, 'w-full']" aria-label="Diagnosis keyword search" placeholder="e.g. pneumonia, sepsis…" /></div>
                 <div><label class="text-xs text-ink-400">Admitted from</label><input v-model="f.from" type="date" :class="fld" /></div>
                 <div><label class="text-xs text-ink-400">to</label><input v-model="f.to" type="date" :class="fld" /></div>
                 <button @click="apply" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">Search</button>
