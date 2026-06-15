@@ -613,17 +613,22 @@ class Phase1DashboardValueTest extends TestCase
      * ARRAY, never a Collection. (A plain array is the only thing guaranteed to survive any cache
      * driver's serialize→deserialize with zero class-loading.)
      */
-    public function test_dashboard_heavy_cache_payload_uses_plain_arrays_not_collections(): void
+    public function test_dashboard_heavy_cache_payload_survives_a_class_restricted_unserialize(): void
     {
+        // a seeded row makes mix / perConsultant / consultantBoard non-empty
         $this->admission(['consultant_id' => $this->consultant()->id]);
         $this->actingAs($this->admin())->get('/')->assertOk();
 
         $heavy = Cache::get(DashboardCache::KEY);
-        $this->assertIsArray($heavy, 'the cached heavy tier itself is an array');
-        foreach (['admBy', 'disBy', 'perConsultant', 'consultantBoard', 'activity24h', 'topDxWeek'] as $key) {
-            $this->assertIsArray($heavy[$key], "dashboard.heavy['$key'] must be a plain array (a Collection would come back as __PHP_Incomplete_Class on a serializing cache driver)");
-        }
-        // and the whole payload must round-trip through PHP serialize with no incomplete classes
-        $this->assertSame($heavy['admBy'], unserialize(serialize($heavy))['admBy']);
+        $this->assertIsArray($heavy);
+
+        // Reproduce the prod failure mode regardless of the test cache driver: prod's cache
+        // deserializes with NO classes allowed, so ANY object left in the payload (a Collection
+        // from ->pluck/->map, or a stdClass from ->first()) returns as __PHP_Incomplete_Class and
+        // 500s the dashboard on the cache-HIT path. A payload of only arrays + scalars round-trips
+        // identically; assertEquals fails loudly the moment any cached value is an object.
+        $restricted = unserialize(serialize($heavy), ['allowed_classes' => false]);
+        $this->assertEquals($heavy, $restricted,
+            'dashboard.heavy must contain ONLY arrays/scalars — an object becomes __PHP_Incomplete_Class on a class-restricted cache unserialize (as on prod) and breaks the dashboard');
     }
 }

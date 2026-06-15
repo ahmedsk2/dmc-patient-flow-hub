@@ -131,7 +131,7 @@ class DashboardController extends Controller
 
         // census by service (active non-ICU, ASSIGNED only — the legacy donut INNER JOINed
         // members, so unassigned rows never counted; they live on the New Admissions queue)
-        $mix = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
+        $mix = (array) DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
             ->selectRaw("
                 SUM(CASE WHEN u.specialty_id = 1 AND a.is_longterm = 0 THEN 1 ELSE 0 END) hosp,
                 SUM(CASE WHEN (u.specialty_id <> 1 OR u.specialty_id IS NULL) AND a.is_longterm = 0 THEN 1 ELSE 0 END) subs,
@@ -142,7 +142,7 @@ class DashboardController extends Controller
         // (assigned non-ICU active), i.e. the sum of the mix slices, with its TB subset counted
         // over the same rows (legacy dashboard/1.php:151-154 summed the donut buckets; the TB
         // query INNER JOINed members too). The Active Census KPI tile (kpis.census) stays all-active.
-        $donutTotal = (int) (($mix->hosp ?? 0) + ($mix->subs ?? 0) + ($mix->longterm ?? 0));
+        $donutTotal = (int) (($mix['hosp'] ?? 0) + ($mix['subs'] ?? 0) + ($mix['longterm'] ?? 0));
         $donutTb = (int) DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
             ->whereNull('a.discharge_date')->whereNull('a.deleted_at')->whereRaw('(a.current_location <> "ICU" OR a.current_location IS NULL)')
             ->whereExists(fn ($s) => $s->selectRaw('1')->from('admission_diagnoses as ad')
@@ -426,7 +426,7 @@ class DashboardController extends Controller
             'consults' => $cons,
             'consultDonut' => ['signed24h' => $signed24h, 'active' => $activeConsults],
             'los' => ['labels' => array_keys($losBuckets), 'data' => array_values($losBuckets)],
-            'mix' => ['hospitalist' => (int) ($mix->hosp ?? 0), 'subspecialty' => (int) ($mix->subs ?? 0), 'longterm' => (int) ($mix->longterm ?? 0)],
+            'mix' => ['hospitalist' => (int) ($mix['hosp'] ?? 0), 'subspecialty' => (int) ($mix['subs'] ?? 0), 'longterm' => (int) ($mix['longterm'] ?? 0)],
             'donutTotal' => $donutTotal,
             'donutTb' => $donutTb,
             'perConsultant' => $perConsultant,
