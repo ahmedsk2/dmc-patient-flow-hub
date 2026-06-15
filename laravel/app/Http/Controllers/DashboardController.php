@@ -86,8 +86,8 @@ class DashboardController extends Controller
         // 31-point admissions-vs-discharges trend: today-30 .. today INCLUSIVE, like the legacy
         // 31-day loop (dashboard/1.php) — non-ICU (J2-2)
         $start30 = Carbon::today()->subDays(30)->toDateString();
-        $admBy = DB::table('admissions')->selectRaw('admit_date d, COUNT(*) c')->whereBetween('admit_date', [$start30, $today])->whereRaw($nonIcu)->whereNull('deleted_at')->groupBy('admit_date')->pluck('c', 'd');
-        $disBy = DB::table('admissions')->selectRaw('discharge_date d, COUNT(*) c')->whereBetween('discharge_date', [$start30, $today])->whereRaw($nonIcu)->whereNull('deleted_at')->groupBy('discharge_date')->pluck('c', 'd');
+        $admBy = DB::table('admissions')->selectRaw('admit_date d, COUNT(*) c')->whereBetween('admit_date', [$start30, $today])->whereRaw($nonIcu)->whereNull('deleted_at')->groupBy('admit_date')->pluck('c', 'd')->all();   // ->all(): cache a plain array, not a Collection (survives the file/db cache serialize round-trip; a cached object came back as __PHP_Incomplete_Class on prod)
+        $disBy = DB::table('admissions')->selectRaw('discharge_date d, COUNT(*) c')->whereBetween('discharge_date', [$start30, $today])->whereRaw($nonIcu)->whereNull('deleted_at')->groupBy('discharge_date')->pluck('c', 'd')->all();   // ->all(): plain array for cache round-trip safety (see admBy)
         $trend = ['labels' => [], 'admissions' => [], 'discharges' => []];
         for ($i = 30; $i >= 0; $i--) {
             $d = Carbon::today()->subDays($i)->toDateString();
@@ -159,8 +159,8 @@ class DashboardController extends Controller
             ->selectRaw('u.id consultant_id, u.specialty_id, COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
             ->whereNull('a.discharge_date')->whereNull('a.deleted_at')->whereRaw('(a.current_location <> "ICU" OR a.current_location IS NULL)')
             ->groupByRaw('u.id, u.specialty_id, consultant')->orderByDesc('c')->limit(8)->get()
-            ->map(fn ($r) => (object) ['id' => (int) $r->consultant_id, 'specialty_id' => (int) $r->specialty_id,
-                'name' => $r->consultant, 'c' => (int) $r->c]);
+            ->map(fn ($r) => ['id' => (int) $r->consultant_id, 'specialty_id' => (int) $r->specialty_id,
+                'name' => $r->consultant, 'c' => (int) $r->c])->all();   // plain array of arrays — cache round-trip safe
 
         // per-consultant breakdown of the active census (legacy "Patient count per consultant").
         // USERS-driven (left join) so an on-service consultant with ZERO patients still appears
@@ -192,7 +192,7 @@ class DashboardController extends Controller
                 'name' => $r->consultant, 'on_service' => (bool) $r->on_service, 'specialty_id' => (int) $r->specialty_id,
                 'new' => (int) $r->new, 'old' => (int) $r->old, 'icu' => (int) $r->icu, 'ward' => (int) $r->ward,
                 'tb' => (int) $r->tb, 'active' => (int) $r->active, 'total' => (int) $r->total,
-            ]);
+            ])->all();   // plain array — cache round-trip safe
 
         // per-consultant activity since yesterday (legacy dashboard/1.php "last day" block).
         // DATE columns — compare against the yesterday date STRING, so "since yesterday" means
@@ -218,7 +218,7 @@ class DashboardController extends Controller
                 'name' => $name,
                 'admissions' => (int) ($adm24[$name] ?? 0),
                 'discharges' => (int) ($dis24[$name] ?? 0),
-            ]);
+            ])->all();   // plain array — cache round-trip safe
 
         // year-to-date counter strip (non-ICU admissions/discharges, per docs/METRICS.md)
         $ytd = [
@@ -238,7 +238,7 @@ class DashboardController extends Controller
             ->whereRaw('WEEK(a.admit_date) = WEEK(CURDATE())')->whereNull('a.deleted_at')   // Phase 4 — Item 1
             ->selectRaw('ad.icd10_code code, MAX(i.name) name, COUNT(*) c')
             ->groupBy('ad.icd10_code')->orderByDesc('c')->limit(5)->get()
-            ->map(fn ($r) => ['name' => $r->name ?: $r->code, 'count' => (int) $r->c]);
+            ->map(fn ($r) => ['name' => $r->name ?: $r->code, 'count' => (int) $r->c])->all();   // plain array — cache round-trip safe
 
             return compact('trend', 'cons', 'losBuckets', 'mix', 'donutTotal', 'donutTb',
                 'perConsultant', 'consultantBoard', 'activity24h', 'ytd', 'topDxWeek', 'topDxWeekNum',

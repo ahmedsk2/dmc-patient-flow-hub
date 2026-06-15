@@ -599,4 +599,31 @@ class Phase1DashboardValueTest extends TestCase
         $this->admission();
         $this->assertFalse(Cache::has(DashboardCache::KEY), 'admission write must bust the heavy cache via model event');
     }
+
+    // =====================================================================================
+    // Item 7 — the cached heavy payload must be serialize-safe (plain arrays, no Collections)
+    // =====================================================================================
+
+    /**
+     * Regression: a Collection cached in dashboard.heavy comes back as __PHP_Incomplete_Class on a
+     * SERIALIZING cache driver (file/database, as on prod) → the cache-HIT dashboard load 500s when
+     * the delta block subscripts $admBy[$date]. The test cache driver is `array` (in-memory, no
+     * serialize round-trip), so it can't reproduce the incomplete-class itself — but the durable
+     * guard is that every value the controller subscripts/iterates after a cache read is a PLAIN
+     * ARRAY, never a Collection. (A plain array is the only thing guaranteed to survive any cache
+     * driver's serialize→deserialize with zero class-loading.)
+     */
+    public function test_dashboard_heavy_cache_payload_uses_plain_arrays_not_collections(): void
+    {
+        $this->admission(['consultant_id' => $this->consultant()->id]);
+        $this->actingAs($this->admin())->get('/')->assertOk();
+
+        $heavy = Cache::get(DashboardCache::KEY);
+        $this->assertIsArray($heavy, 'the cached heavy tier itself is an array');
+        foreach (['admBy', 'disBy', 'perConsultant', 'consultantBoard', 'activity24h', 'topDxWeek'] as $key) {
+            $this->assertIsArray($heavy[$key], "dashboard.heavy['$key'] must be a plain array (a Collection would come back as __PHP_Incomplete_Class on a serializing cache driver)");
+        }
+        // and the whole payload must round-trip through PHP serialize with no incomplete classes
+        $this->assertSame($heavy['admBy'], unserialize(serialize($heavy))['admBy']);
+    }
 }
