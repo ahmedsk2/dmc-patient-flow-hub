@@ -1446,6 +1446,50 @@ This wave targets the daily friction experienced by clinicians: a board search t
 
 ---
 
+### 10. First-login onboarding tour (effort M, risk low)
+
+**Goal / user value**
+A new user gets a ~60-second guided orientation on first login — where things live (the nav groups), the patient board + key actions, the header patient quick-jump, the dashboard at-a-glance, handovers/notifications, and (for admins) the four Administration sections — with a "don't show again" option and an anytime replay from a header **?** button. Cuts time-to-competence and the "where do I find X?" friction the rest of this roadmap targets. Owner-approved 2026-06-14.
+
+**Files**
+- Create: `laravel/database/migrations/2026_06_14_020001_add_tour_completed_at_to_users.php`
+- Modify: `laravel/app/Models/User.php` (cast `tour_completed_at` => 'datetime'); `laravel/app/Http/Middleware/HandleInertiaRequests.php` (expose `tour_completed_at` on the shared `auth.user`, alongside `is_admin`/`can.*`); `laravel/routes/web.php` (`POST /tour/complete` in the auth group)
+- Create: `laravel/app/Http/Controllers/TourController.php` (single `complete` action); `laravel/resources/js/composables/useTour.js`; `laravel/resources/js/lib/tourSteps.js`
+- Modify: `laravel/resources/js/Layouts/AppLayout.vue` (mount the auto-start bootstrap + the **?** help button left of the theme toggle; add stable `data-tour="…"` anchors on the nav section headings, the bell, and the quick-jump from Wave-2 Item 2); `laravel/resources/js/Pages/Patients/Index.vue` + `Dashboard.vue` (add `data-tour` anchors on the board + hero KPI region); `laravel/package.json` (+ `driver.js`); `laravel/resources/js/app.js` (import driver.js + its CSS); `laravel/resources/css/app.css` (driver.js theme → EHC tokens + `.dark` + `prefers-reduced-motion`)
+- Tests: `laravel/tests/Feature/TourTest.php`; `laravel/resources/js/__tests__/useTour.test.js`
+
+**Design**
+- **Mechanism**: `driver.js` (MIT, ~5KB, zero-dep) installed via npm and bundled by Vite (self-hosted, no CDN → PHI-safe). Its CSS vars/classes are overridden in `app.css` to `bg-card`/`text-ink-*`/`brand` with a `.dark` block and a `@media (prefers-reduced-motion){ }` block disabling its transition.
+- **Migration**: `$table->dateTime('tour_completed_at')->nullable();` (additive; mirrors `mfa_enrolled_at`). `User` casts it to `datetime`.
+- **Shared prop**: `HandleInertiaRequests` adds `tour_completed_at` to `auth.user`.
+- **Endpoint**: `POST /tour/complete` (auth group) → `$request->user()->forceFill(['tour_completed_at' => now()])->save(); return back();`. Idempotent; NO audit row (a UI preference, not PHI/clinical).
+- **`tourSteps.js`** exports `buildSteps(user)` → the driver.js step array, filtered (a) by role/capability and (b) by DOM presence — a step whose `data-tour` anchor is absent (role-hidden nav, or the quick-jump if Wave-2 Item 2 hasn't shipped) is dropped, so the tour degrades gracefully. Steps are `{ element: '[data-tour="x"]', popover: { title, description, side, align } }`; the welcome + finish steps are centered (no element). The finish step carries the "Don't show again" affordance.
+- **`useTour.js`**: `startTour()` (build + instantiate + drive), `completeTour()` (POST via the shared `xsrf()` helper, then suppress for the session), and `maybeAutoStart()` — called on AppLayout mount: if `auth.user.tour_completed_at == null` AND the route is not excluded (`/login`, `/mfa*`, `/forgot*`, `/reset*`, error pages), start after a short paint delay.
+- **Header ? button**: always visible; `@click="startTour()"` — replays without touching the flag; focus returns to it on close.
+- **A11y**: driver.js traps focus in the popover + supports keyboard (← / → / Esc); add an aria-label; reduced-motion via the CSS block.
+
+**Decisions & defaults**
+- Persistence = **server per-user `tour_completed_at`** (owner-approved).
+- The flag is set when the user **finishes** the auto-tour OR ticks **"don't show again"** OR **dismisses** it (Esc/✕) — i.e. any exit of the *auto* tour counts as "seen", so it never nags; anyone who wants it again uses the **?** button (which never changes the flag). [Default — reasonable for shared workstations; flip to "only the explicit checkbox sets it" if the owner prefers re-offering after an accidental dismiss.]
+- `driver.js` over a bespoke overlay (owner-approved).
+- Role-filtered + DOM-presence-filtered steps; admins additionally get the Administration-sections step.
+
+**Test plan**
+- PHPUnit `TourTest`: `POST /tour/complete` sets `tour_completed_at` for the auth user + redirects back; a guest is rejected; an authenticated Inertia page exposes `auth.user.tour_completed_at`.
+- Vitest `useTour.test.js`: `maybeAutoStart` starts only when the flag is null AND the route isn't excluded; `completeTour` POSTs to `/tour/complete` (mocked fetch) and suppresses re-start; `startTour` (replay) runs without POSTing; `buildSteps(user)` filters the admin-only step for a non-admin and drops steps whose element is absent.
+
+**Build sequence**
+1. Write `TourTest` (fail-first) → migration + `User` cast + `HandleInertiaRequests` prop + `TourController@complete` + route → green.
+2. `npm i driver.js`; import in `app.js`; theme in `app.css` (dark + reduced-motion).
+3. Write `useTour.test.js` (fail-first) → `tourSteps.js` `buildSteps` (role + DOM filtering) → green.
+4. `useTour.js` (start / complete / maybeAutoStart) → extend Vitest (mock fetch) → green.
+5. Add `data-tour` anchors across AppLayout / Patients/Index / Dashboard; wire `maybeAutoStart()` + the **?** button in AppLayout.
+6. Manual verify both themes + keyboard + reduced-motion; `npm run build`; commit assets.
+
+**Sequencing**: ships as the **last item of Wave 2**, after Wave 1's nav regroup and Wave 2's quick-jump (Item 2) so their `data-tour` anchors exist; any missing anchor is skipped, so it's safe even if those slip.
+
+---
+
 ## Risks & sequencing notes
 
 **Wave 3 coordination**: Item 3 creates `laravel/resources/js/lib/ui.js`. Wave 3's lib pass should import from this file rather than creating a parallel one. Confirm with Wave 3 author before that wave ships.
