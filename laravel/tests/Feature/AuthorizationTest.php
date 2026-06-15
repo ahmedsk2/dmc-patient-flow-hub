@@ -13,6 +13,7 @@ use Tests\TestCase;
  * Security-critical authorization checks. RefreshDatabase migrates the isolated test database
  * (sqlite :memory: per phpunit.xml) — never touches the live dev/prod data.
  */
+#[\PHPUnit\Framework\Attributes\Group('pdf')]
 class AuthorizationTest extends TestCase
 {
     use RefreshDatabase;

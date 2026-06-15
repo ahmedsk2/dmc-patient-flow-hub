@@ -54,8 +54,15 @@ jobs:
           EOF
           php artisan key:generate
 
-      - name: Run test suite (PHPUnit, MySQL)
-        run: php artisan test
+      - name: Run test suite (PHPUnit, MySQL) — two passes
+        # The dompdf PDF-rendering tests (@group pdf) accumulate native font-compression state
+        # that segfaults the PHP process when run in one long pass alongside the whole suite
+        # ("Premature end of PHP process" inside gzcompress). Split into two fresh processes so
+        # neither accumulates past the crash threshold. (A single pass via ParaTest would also
+        # fix it, but that needs Composer, which the offline build env lacks.)
+        run: |
+          php artisan test --exclude-group pdf
+          php artisan test --group pdf
 
       - name: Dependency advisories (composer)
         # advisory-only for now (won't block on an as-yet-unvetted CVE); promote to a hard gate

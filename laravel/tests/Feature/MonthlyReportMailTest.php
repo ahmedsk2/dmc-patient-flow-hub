@@ -12,6 +12,7 @@ use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
 /** Phase 3 — §3.3: scheduled monthly-report email (job dispatch, recipient CRUD, control panel). */
+#[\PHPUnit\Framework\Attributes\Group('pdf')]
 class MonthlyReportMailTest extends TestCase
 {
     use RefreshDatabase;

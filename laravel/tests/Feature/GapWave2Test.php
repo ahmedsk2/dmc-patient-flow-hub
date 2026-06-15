@@ -28,6 +28,7 @@ use Tests\TestCase;
  *   census = 4; legacy totalPatients = 4 + A4 active Jul..Dec (1 × 6) = 10
  *   legacy longStay = 6 (A4 active and admitted >30 days before each month-end Jul..Dec) → 60.00%
  */
+#[\PHPUnit\Framework\Attributes\Group('pdf')]
 class GapWave2Test extends TestCase
 {
     use RefreshDatabase;

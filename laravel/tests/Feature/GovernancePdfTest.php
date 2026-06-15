@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /** Phase 3 — §3.2: governance / M&M pack PDF (auth, validation, de-identified line lists). */
+#[\PHPUnit\Framework\Attributes\Group('pdf')]
 class GovernancePdfTest extends TestCase
 {
     use RefreshDatabase;

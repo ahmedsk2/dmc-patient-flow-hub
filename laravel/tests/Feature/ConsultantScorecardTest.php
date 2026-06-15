@@ -9,6 +9,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /** Phase 3 — §3.1: per-consultant scorecard PDF (auth, validation, value). */
+#[\PHPUnit\Framework\Attributes\Group('pdf')]
 class ConsultantScorecardTest extends TestCase
 {
     use RefreshDatabase;

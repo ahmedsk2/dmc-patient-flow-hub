@@ -10,6 +10,7 @@ use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
 /** Phase 3 — §3.7: report year clamp/validation + registry filter validation + empty-state props. */
+#[\PHPUnit\Framework\Attributes\Group('pdf')]
 class ParamValidationTest extends TestCase
 {
     use RefreshDatabase;

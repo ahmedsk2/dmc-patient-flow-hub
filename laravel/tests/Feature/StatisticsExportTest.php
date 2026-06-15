@@ -11,6 +11,7 @@ use OpenSpout\Reader\XLSX\Reader as XlsxReader;
 use Tests\TestCase;
 
 /** Phase 3 — §3.4 + §3.8: Statistics XLSX/PDF exports + the "export == index" KPI-grid contract. */
+#[\PHPUnit\Framework\Attributes\Group('pdf')]
 class StatisticsExportTest extends TestCase
 {
     use RefreshDatabase;

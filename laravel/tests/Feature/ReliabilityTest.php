@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 /** Phase 3 — §3.6: reliability — registry match-count, async PDF dispatch, dompdf config. */
+#[\PHPUnit\Framework\Attributes\Group('pdf')]
 class ReliabilityTest extends TestCase
 {
     use RefreshDatabase;
