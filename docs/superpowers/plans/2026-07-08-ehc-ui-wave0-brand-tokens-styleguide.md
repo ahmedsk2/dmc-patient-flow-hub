@@ -1096,10 +1096,14 @@ const STATUS = [
             <!-- Brand + logo -->
             <section :class="[card, 'p-5']">
                 <h2 class="mb-4 text-lg font-semibold text-ink-900">Brand</h2>
+                <!-- `mono` paints in currentColor, so the CALLER owns the contrast. Here: navy-900
+                     (#003339) on the bg-card panel (#ffffff light / #13201f dark). Note AppLayout's
+                     sidebar chip is bg-card too, which is why it correctly uses the COLOUR variant —
+                     passing `mono` there would inherit text-navy-100 (#cfe9e7) at 1.28:1. -->
                 <div class="flex items-center gap-6">
                     <EhcLogo class="h-12 w-12" />
-                    <EhcLogo class="h-12 w-12 text-navy-900" mono />
-                    <p class="text-sm text-ink-500">Colour mark · monochrome mark (dark chrome + print)</p>
+                    <EhcLogo class="h-12 w-12 text-navy-900 dark:text-navy-100" mono />
+                    <p class="text-sm text-ink-500">Colour mark · monochrome mark (caller supplies the colour)</p>
                 </div>
                 <div class="mt-5 flex flex-wrap gap-2">
                     <div v-for="c in BRAND" :key="c" class="w-24">
