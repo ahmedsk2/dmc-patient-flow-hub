@@ -443,10 +443,25 @@ describe('FlowAlert', () => {
         expect(mountAlert({ tone: 'warning' }).classes()).not.toContain('text-warning-500');
     });
 
-    it('announces only the critical tone (role=alert); calmer tones are role=note', () => {
-        expect(mountAlert({ tone: 'critical' }).attributes('role')).toBe('alert');
+    it('gives critical a polite live region (role=status); calmer tones are role=note', () => {
+        expect(mountAlert({ tone: 'critical' }).attributes('role')).toBe('status');
         expect(mountAlert({ tone: 'warning' }).attributes('role')).toBe('note');
         expect(mountAlert({ tone: 'info' }).attributes('role')).toBe('note');
+    });
+
+    // A missing map key would silently erase all three redundant channels at once.
+    it.each(['info', 'warning', 'critical'])('tone %s renders all three redundant signals', (tone) => {
+        const w = mountAlert({ tone });
+        const has = (re) => w.classes().some((c) => re.test(c));
+        expect(w.find('.sr-only').text()).not.toBe('');
+        expect(w.find('path').attributes('d')).toBeTruthy();
+        expect(has(/^rail-/) && has(/^bg-tint-/) && has(/^text-on-/)).toBe(true);
+    });
+
+    it('degrades an unknown tone UP to the critical treatment, never to a bare grey box', () => {
+        const w = mountAlert({ tone: 'criticl' });   // typo
+        expect(w.classes()).toContain('rail-danger');
+        expect(w.find('.sr-only').text()).toBe('Action needed:');
     });
 
     it('defaults to the info tone', () => {
@@ -492,23 +507,33 @@ const props = defineProps({
     title: { type: String, required: true },
 });
 
-const PREFIX = { info: 'Information:', warning: 'Important:', critical: 'Action needed:' };
+// Trailing space so AT announces "Important: Two discharges…" rather than running the prefix into
+// the title. Template whitespace can't do this (Vue's `condense` strips it); VTU's .text() trims,
+// so the toBe('Important:') assertions still hold.
+const PREFIX = { info: 'Information: ', warning: 'Important: ', critical: 'Action needed: ' };
 const RAIL = { info: 'rail-info', warning: 'rail-warning', critical: 'rail-danger' };
 const TINT = { info: 'bg-tint-info', warning: 'bg-tint-warning', critical: 'bg-tint-danger' };
 const TEXT = { info: 'text-on-info', warning: 'text-on-warning', critical: 'text-on-danger' };
-// 24x24 stroke paths: circled-i · triangle · solid triangle-alert. Distinct SHAPES, not just hues.
+// 24x24 paths, all rendered as OUTLINES (the <svg> sets fill="none"). Three distinct SILHOUETTES —
+// circle (info) · triangle (warning) · octagon (critical) — so the icon still distinguishes the tier
+// when hue is unavailable. The SR prefix and title carry the real load.
 const ICON = {
     info: 'M12 16v-4m0-4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
     warning: 'M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z',
-    critical: 'M12 8v5m0 3h.01M12 2 2 20h20L12 2Z',
+    critical: 'M12 8v4m0 4h.01M8.5 2h7L22 8.5v7L15.5 22h-7L2 15.5v-7L8.5 2Z',
 };
 
-const prefix = computed(() => PREFIX[props.tone]);
-const rail = computed(() => RAIL[props.tone]);
-const tint = computed(() => TINT[props.tone]);
-const text = computed(() => TEXT[props.tone]);
-const iconPath = computed(() => ICON[props.tone]);
-const role = computed(() => (props.tone === 'critical' ? 'alert' : 'note'));
+// An unknown tone must never render as an unmarked grey box — a missing key would silently erase
+// ALL THREE redundant channels at once (no rail, no tint, no prefix, no icon). Degrade UP: in a
+// clinical UI an over-loud alert beats an invisible one. Vue strips prop validators from production
+// builds, so the validator alone cannot protect this. Object.hasOwn, not `in` ('constructor' in ICON).
+const t = computed(() => (Object.hasOwn(ICON, props.tone) ? props.tone : 'critical'));
+
+// role="alert" is assertive: a live region already in the DOM at page load is NOT announced, but on
+// an Inertia SPA navigation it interrupts the heading announcement. These callouts are a standing
+// summary of state, not a transient event — so `status` (polite: queues) is correct, and `note` for
+// the calmer tones. Urgency is carried by the prefix/icon/title, not by interrupting the user.
+const role = computed(() => (t.value === 'critical' ? 'status' : 'note'));
 </script>
 
 <!-- rounded-e-* (logical) leaves the rail edge square: the "ticket" silhouette.
@@ -516,7 +541,7 @@ const role = computed(() => (props.tone === 'critical' ? 'alert' : 'note'));
      Vue compile the SFC as a multi-root Fragment, and @vue/test-utils' wrapper.classes() /
      wrapper.attributes() then silently return []/undefined instead of the root div's values. -->
 <template>
-    <div :role="role" :class="['status-rail flex gap-3 rounded-e-xl p-3', rail, tint, text]">
+    <div :role="role" :class="['status-rail flex gap-3 rounded-e-xl p-3', RAIL[t], TINT[t], TEXT[t]]">
         <svg
             class="mt-0.5 h-5 w-5 shrink-0"
             viewBox="0 0 24 24"
@@ -527,11 +552,14 @@ const role = computed(() => (props.tone === 'critical' ? 'alert' : 'note'));
             stroke-linejoin="round"
             aria-hidden="true"
         >
-            <path :d="iconPath" />
+            <path :d="ICON[t]" />
         </svg>
         <div class="min-w-0">
-            <p class="text-sm font-semibold"><span class="sr-only">{{ prefix }}</span>{{ title }}</p>
-            <div v-if="$slots.default" class="mt-0.5 text-sm opacity-90"><slot /></div>
+            <p class="text-sm font-semibold"><span class="sr-only">{{ PREFIX[t] }}</span>{{ title }}</p>
+            <!-- NO opacity-* here. `opacity` composites the text over the tint: at 90% the light-theme
+                 on-info/on-warning pairs fall to 4.41:1 and 4.21:1, below the 4.5:1 AA bar for 14px
+                 text. Hierarchy comes from font-weight (title is semibold), never from opacity. -->
+            <div v-if="$slots.default" class="mt-0.5 text-sm"><slot /></div>
         </div>
     </div>
 </template>
@@ -993,8 +1021,8 @@ const w = () => mount(StyleGuide);
 describe('StyleGuide page', () => {
     it('renders all three FlowAlert tones so both themes can be eyeballed', () => {
         const page = w();
-        expect(page.findAll('[role="note"]')).toHaveLength(2); // info + warning
-        expect(page.findAll('[role="alert"]')).toHaveLength(1); // critical
+        expect(page.findAll('[role="note"]')).toHaveLength(2);   // info + warning
+        expect(page.findAll('[role="status"]')).toHaveLength(1); // critical (polite live region)
     });
 
     it('documents every status-rail tone', () => {
