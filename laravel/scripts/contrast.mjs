@@ -12,8 +12,10 @@ const lin = (c) => {
     return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
 };
 
-/** '#rrggbb' -> relative luminance L. */
+/** '#rrggbb' -> relative luminance L. Throws on malformed input: a silently-wrong ratio would
+ *  look just as authoritative as a correct one, and this script certifies accessibility. */
 const lum = (hex) => {
+    if (!/^#[0-9a-f]{6}$/i.test(hex)) throw new Error(`bad hex: ${hex}`);
     const n = parseInt(hex.slice(1), 16);
     return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
 };
