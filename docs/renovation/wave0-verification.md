@@ -114,11 +114,12 @@ local-only admin** was seeded for this verification:
 ```
 URL:      http://127.0.0.1:8001/style-guide   (php artisan serve)
 Username: sgpreview
-Password: StyleGuide!Local1
+Password: (throwaway; set locally during verification — not published here)
 ```
 
 This account exists **only in the local `dmc_laravel` dev DB** (no PHI, never committed, never
-deployed). Delete it when finished:
+deployed) and grants nothing on any real system. Its password is intentionally kept out of the repo.
+Delete it when finished:
 
 ```php
 php artisan tinker --execute="App\Models\User::where('username','sgpreview')->forceDelete();"
