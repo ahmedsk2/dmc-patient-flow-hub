@@ -49,14 +49,15 @@ const PAIRS = [
     ['brand-800 on white', '#00565e', '#ffffff'],
     // --- status colours as TEXT: the sweep routed every text/badge use through bg-tint-X + text-on-X
     //     (enforced by resources/js/__tests__/a11y-status-text.spec.js). What remains of these raw pairs
-    //     is NON-TEXT only: bg-X-100 status ICON circles/chips (1.4.11 → 3:1 bar), which 4.32–4.39:1 clears.
-    //     The warning/info rows no longer ship at all — kept as pre-fix baselines so a regression reads as
-    //     a number. (See the on-*-on-card rows below for the pairs that NOW ship as text.) ---
+    //     is NON-TEXT only: bg-X-100 status ICON circles/chips + icon-hover glyphs (1.4.11 → 3:1 bar),
+    //     which 3.24–4.39:1 clears. The warning rows no longer ship at all (kept as pre-fix baselines so a
+    //     regression reads as a number). (See the on-*-on-card rows below for the pairs that NOW ship as
+    //     text.) ---
     ['warning-500 on white (pre-fix baseline; migrated to on-warning)', '#e69209', '#ffffff', { info: true }],
     ['warning-500 on warning-100 (pre-fix baseline; migrated)', '#e69209', '#fdedd2', { info: true }],
-    ['danger-600 on danger-100 (status ICON chips only — non-text UI)', '#c1302d', '#fbdcdc', { large: true }],
-    ['success-600 on success-100 (status ICON circle only — non-text UI)', '#15803d', '#d8f5e3', { large: true }],
-    ['info-500 on info-100 (pre-fix baseline; migrated to on-info)', '#2f7fe0', '#d7e9fb', { info: true }],
+    ['danger-600 on danger-100 (status ICON chips/hover only — non-text UI)', '#c1302d', '#fbdcdc', { large: true }],
+    ['success-600 on success-100 (status ICON circle/hover only — non-text UI)', '#15803d', '#d8f5e3', { large: true }],
+    ['info-500 on info-100 (reassign-button ICON hover only — non-text UI)', '#2f7fe0', '#d7e9fb', { large: true }],
     // --- PROPOSED AA-safe `on-*` text tokens, light theme ---
     ['on-info on tint-info', '#1b5cad', '#d7e9fb'],
     ['on-warning on tint-warning', '#8a5a00', '#fdedd2'],

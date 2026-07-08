@@ -19,8 +19,13 @@ const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) =
     return /\.(vue|js)$/.test(e.name) ? [p] : [];
 });
 
-// The exact failing-as-text steps. bg-*/border-*/ring-*/from-*/to-* fills are unaffected.
-const FORBIDDEN = /\b(?:text-warning-500|text-success-600|text-danger-600|text-danger-500|text-info-500|text-brand-500)\b/;
+// Every status TEXT step that fails AA on the card/tint (they are theme-invariant, so a light-mode
+// pass is not enough), plus text-brand-500. Broadened beyond the steps used at fix-time to the whole
+// failing family so a FUTURE reintroduction (e.g. text-warning-600 as body text) also trips the guard;
+// the verifier confirmed the extra steps have zero current source uses. bg-*/border-*/ring-* FILLS are
+// unaffected — only `text-*` colour usage is forbidden. text-brand-{600,700,800} are theme-aware and AA,
+// so they are NOT listed. (Any legitimate non-text/large use is carved out by the allowlist below.)
+const FORBIDDEN = /\btext-(?:warning|success|danger|info)-(?:400|500|600|700)\b|\btext-brand-500\b/;
 
 // Universal LEAVE patterns (any file):
 //  - required-marker asterisk: text-danger-500 on a bare "*" is a non-text indicator (>=3:1)
