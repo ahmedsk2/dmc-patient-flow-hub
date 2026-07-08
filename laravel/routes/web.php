@@ -23,6 +23,7 @@ use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\SecurityController;
 use App\Http\Controllers\StatisticsController;
 use App\Http\Controllers\StepUpController;
+use App\Http\Controllers\StyleGuideController;
 use App\Http\Controllers\TourController;
 use App\Http\Controllers\TrashedController;
 use Illuminate\Support\Facades\Route;
@@ -143,6 +144,9 @@ Route::middleware(['auth', 'session.timeout', 'mfa.enroll', 'pwd'])->group(funct
     // Admin — analytics + registry + reports + all exports are admin-only (PHI exposure control;
     // non-admins' only statistics is the dashboard).
     Route::middleware('admin')->group(function () {
+        // Wave 0 — internal design-system reference. No patient data; admin-gated as internal tooling.
+        Route::get('/style-guide', [StyleGuideController::class, 'index'])->name('styleguide');
+
         Route::get('/statistics', [StatisticsController::class, 'index'])->name('statistics.index');
         // Phase 3 — §3.4: currently-filtered statistics exports (reuse the index query methods)
         Route::get('/statistics/export', [StatisticsController::class, 'exportXlsx'])->name('statistics.export.xlsx');
