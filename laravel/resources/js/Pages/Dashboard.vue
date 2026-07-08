@@ -7,7 +7,7 @@ import { useChartTheme } from '@/composables/useChartTheme';
 import { locTone } from '@/lib/ui.js';
 
 // theme-aware chart colors (grid/axis read CSS tokens; donut gaps match the card)
-const { gridColor, axisColor, strokeColor, inkColor } = useChartTheme();
+const { gridColor, axisColor, strokeColor, inkColor, series } = useChartTheme();
 
 const props = defineProps({
     // Wave 1, Item 7 — admin landing band counts; null for non-admins (band then renders nothing).
@@ -158,7 +158,8 @@ const boardSections = computed(() => {
     ].filter((s) => s.rows.length);
 });
 
-const C = { teal: '#009ca6', tealLight: '#38b4ba', navy: '#00565e', gold: '#d9a23c', pink: '#cf4b8f', red: '#e0413e', blue: '#2f7fe0', slate: '#5b6a6e' };
+// W4: chart series colours come from the theme-reactive token palette (useChartTheme → `series`),
+// never local hex — so the deep/muted hues lighten on dark instead of vanishing into the card.
 
 const kpiCards = computed(() => [
     { label: 'Active Census', value: props.kpis.census, sub: `${props.kpis.ward} ward · ${props.kpis.icu} ICU`, icon: 'bed', tone: 'brand', href: '/patients' },
@@ -190,7 +191,7 @@ const dlToolbar = { show: true, tools: { download: true, selection: false, zoom:
 
 const areaOptions = computed(() => ({
     chart: { type: 'area', toolbar: dlToolbar, fontFamily: 'inherit', animations: { easing: 'easeinout', speed: 600 } },
-    colors: [C.teal, C.gold],
+    colors: [series.value.primary, series.value.muted],
     dataLabels: { enabled: false },
     stroke: { curve: 'smooth', width: 2.5 },
     fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 90] } },
@@ -207,12 +208,12 @@ const areaSeries = computed(() => [
 
 const gaugeOptions = computed(() => ({
     chart: { type: 'radialBar', fontFamily: 'inherit', sparkline: { enabled: true } },
-    colors: [C.teal],
+    colors: [series.value.primary],
     plotOptions: { radialBar: {
         hollow: { size: '64%' }, track: { background: gridColor.value, strokeWidth: '100%' },
         dataLabels: { name: { offsetY: 22, color: axisColor.value, fontSize: '12px' }, value: { offsetY: -14, color: inkColor.value, fontSize: '30px', fontWeight: 700, formatter: () => props.kpis.occupancy + '%' } },
     } },
-    fill: { type: 'gradient', gradient: { shade: 'dark', type: 'horizontal', gradientToColors: [C.tealLight], stops: [0, 100] } },
+    fill: { type: 'gradient', gradient: { shade: 'dark', type: 'horizontal', gradientToColors: [series.value.primarySoft], stops: [0, 100] } },
     stroke: { lineCap: 'round' },
     labels: ['Occupancy'],
 }));
@@ -227,6 +228,10 @@ const colOptions = (cats, colors) => ({
 });
 const consultsSeries = computed(() => [{ name: 'New', data: props.consults.new }, { name: 'Signed off', data: props.consults.signed }]);
 const losSeries = computed(() => [{ name: 'Patients', data: props.los.data }]);
+// Reactive option getters (were inline colOptions() calls in the template, which never re-themed on
+// dark-mode flip because the template didn't track axisColor/series). As computeds they update.
+const consultsOptions = computed(() => colOptions(props.consults.labels, [series.value.primary, series.value.accent]));
+const losOptions = computed(() => colOptions(props.los.labels, [series.value.deep]));
 
 const donutOptions = computed(() => ({
     chart: { type: 'donut', toolbar: dlToolbar, fontFamily: 'inherit', events: {
@@ -237,7 +242,7 @@ const donutOptions = computed(() => ({
             if (['hospitalist', 'subspecialty', 'longterm'][config.dataPointIndex] === 'longterm') drillTo({ view: 'longterm' });
         },
     } },
-    colors: [C.teal, C.gold, C.navy],
+    colors: [series.value.primary, series.value.accent, series.value.deep],
     labels: ['Hospitalist', 'Sub-specialty', 'Long-term'],
     legend: { position: 'bottom', fontWeight: 600 },
     dataLabels: { enabled: true, formatter: (v) => Math.round(v) + '%' },
@@ -249,7 +254,7 @@ const donutSeries = computed(() => [props.mix.hospitalist, props.mix.subspecialt
 // consultation donut — legacy dashboard/1.php pair: [signed off in the last 24h, active] (J2-5)
 const consultDonutOptions = computed(() => ({
     chart: { type: 'donut', toolbar: dlToolbar, fontFamily: 'inherit' },
-    colors: [C.gold, C.teal],
+    colors: [series.value.accent, series.value.primary],
     labels: ['Signed off (24h)', 'Active'],
     legend: { position: 'bottom', fontWeight: 600 },
     dataLabels: { enabled: true, formatter: (v, o) => o.w.globals.series[o.seriesIndex] },
@@ -261,7 +266,7 @@ const consultDonutSeries = computed(() => [props.consultDonut.signed24h, props.c
 const consultantMax = computed(() => Math.max(1, ...props.perConsultant.map((c) => c.c)));
 
 // per-consultant activity since yesterday (grouped bars)
-const act24Options = computed(() => colOptions(props.activity24h.map((r) => r.name), [C.blue, C.gold]));
+const act24Options = computed(() => colOptions(props.activity24h.map((r) => r.name), [series.value.info, series.value.accent]));
 const act24Series = computed(() => [
     { name: 'Admissions', data: props.activity24h.map((r) => r.admissions) },
     { name: 'Discharges', data: props.activity24h.map((r) => r.discharges) },
@@ -463,7 +468,7 @@ onUnmounted(() => clearInterval(autoRefresh));
         <div class="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2 xl:grid-cols-4">
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h3 class="mb-2 font-semibold text-ink-700">Consultations</h3>
-                <apexchart type="bar" height="260" :options="colOptions(consults.labels, [C.teal, C.gold])" :series="consultsSeries" role="img" aria-label="Bar chart: consultations received and signed off" />
+                <apexchart type="bar" height="260" :options="consultsOptions" :series="consultsSeries" role="img" aria-label="Bar chart: consultations received and signed off" />
             </div>
             <!-- legacy dashboard/1.php consultation donut: signed off in the last 24h vs active (J2-5) -->
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
@@ -472,7 +477,7 @@ onUnmounted(() => clearInterval(autoRefresh));
             </div>
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h3 class="mb-2 font-semibold text-ink-700">Length of Stay <span class="font-normal text-ink-400">(this year)</span></h3>
-                <apexchart type="bar" height="260" :options="colOptions(los.labels, [C.navy])" :series="losSeries" role="img" aria-label="Bar chart: length-of-stay distribution this year" />
+                <apexchart type="bar" height="260" :options="losOptions" :series="losSeries" role="img" aria-label="Bar chart: length-of-stay distribution this year" />
             </div>
             <!-- legacy census donut title carries the headline + TB count over the DONUT'S OWN
                  population (assigned non-ICU — dashboard/1.php:151-154), not the all-active KPI (M1/5) -->

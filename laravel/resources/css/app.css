@@ -271,6 +271,16 @@
     --chart-axis: #94a3b5;
     --chart-stroke: #ffffff;  /* donut slice gaps / card-matched separators */
 
+    /* Chart SERIES palette (W4) — calm, teal-primary, theme-reactive (read by useChartTheme `series`).
+     * Deep/muted hues MUST lighten on dark or they vanish into the dark card — the exact hardcoded-hex
+     * drift W4 removes. Keep teal as the single primary; the rest are context/secondary. */
+    --chart-primary: #009ca6;       /* teal — the single primary series */
+    --chart-accent: #d9a23c;        /* olive-gold — secondary */
+    --chart-deep: #00565e;          /* deep teal — tertiary */
+    --chart-info: #2f7fe0;          /* blue */
+    --chart-muted: #5b6a6e;         /* slate — muted context series */
+    --chart-primary-soft: #38b4ba;  /* lighter teal — fills / gradient stop */
+
     /* Signature hairline — brand teal at low alpha over the light surfaces. */
     --surface-hairline: rgb(0 156 166 / 0.16);
     /* Colour slot for --shadow-overlay (the whole shadow value cannot be theme-flipped). */
@@ -344,6 +354,14 @@
     --chart-grid: rgb(255 255 255 / 0.08);
     --chart-axis: #8aa0a3;
     --chart-stroke: #13201f;  /* matches card so donut gaps disappear into the panel */
+
+    /* Chart series on dark — deep teal + slate LIGHTEN so they stay visible on the dark card. */
+    --chart-primary: #38b4ba;
+    --chart-accent: #e9bd63;
+    --chart-deep: #7fc7c4;
+    --chart-info: #6fa8ec;
+    --chart-muted: #8aa0a3;
+    --chart-primary-soft: #7accc9;
 
     /* Card shadow reads as a darker, softer pool on a dark page. */
     --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -10px rgb(0 0 0 / 0.6);

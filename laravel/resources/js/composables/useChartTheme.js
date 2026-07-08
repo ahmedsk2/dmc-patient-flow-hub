@@ -14,6 +14,16 @@ export function useChartTheme() {
     const strokeColor = ref('#ffffff');
     const inkColor = ref('#1e2a2e');   // strong text (e.g. gauge centre value) — resolved, not a var
 
+    // Canonical, theme-reactive chart SERIES palette (W4). Reads --chart-* tokens so the deep/muted
+    // hues lighten on dark instead of vanishing into the card. Charts must use THIS, never local hex.
+    // The object is REPLACED (not mutated) on each read so `series.value.X` inside option computeds
+    // re-evaluates on theme change.
+    const SERIES_TOKENS = {
+        primary: '--chart-primary', accent: '--chart-accent', deep: '--chart-deep',
+        info: '--chart-info', muted: '--chart-muted', primarySoft: '--chart-primary-soft',
+    };
+    const series = ref({ primary: '#009ca6', accent: '#d9a23c', deep: '#00565e', info: '#2f7fe0', muted: '#5b6a6e', primarySoft: '#38b4ba' });
+
     const read = () => {
         if (typeof window === 'undefined') return;
         const cs = getComputedStyle(document.documentElement);
@@ -25,6 +35,13 @@ export function useChartTheme() {
         if (a) axisColor.value = a;
         if (s) strokeColor.value = s;
         if (i) inkColor.value = i;
+        const next = { ...series.value };
+        let changed = false;
+        for (const [k, tok] of Object.entries(SERIES_TOKENS)) {
+            const val = cs.getPropertyValue(tok).trim();
+            if (val && val !== next[k]) { next[k] = val; changed = true; }
+        }
+        if (changed) series.value = next;
     };
 
     onMounted(() => {
@@ -33,5 +50,5 @@ export function useChartTheme() {
     });
     onUnmounted(() => document.removeEventListener('dmc-theme-change', read));
 
-    return { gridColor, axisColor, strokeColor, inkColor };
+    return { gridColor, axisColor, strokeColor, inkColor, series };
 }

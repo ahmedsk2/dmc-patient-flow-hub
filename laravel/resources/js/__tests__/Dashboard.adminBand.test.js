@@ -27,7 +27,11 @@ vi.mock('@inertiajs/vue3', () => ({
 vi.mock('@/Layouts/AppLayout.vue', () => ({ default: { template: '<div><slot /></div>' } }));
 // the chart-theme composable touches CSS vars / matchMedia — stub to inert refs.
 vi.mock('@/composables/useChartTheme', () => ({
-    useChartTheme: () => ({ gridColor: { value: '#000' }, axisColor: { value: '#000' }, strokeColor: { value: '#000' }, inkColor: { value: '#000' } }),
+    useChartTheme: () => ({
+        gridColor: { value: '#000' }, axisColor: { value: '#000' }, strokeColor: { value: '#000' }, inkColor: { value: '#000' },
+        // W4: chart-option computeds read series.value.<name>; the mock must expose it or they throw.
+        series: { value: { primary: '#009ca6', accent: '#d9a23c', deep: '#00565e', info: '#2f7fe0', muted: '#5b6a6e', primarySoft: '#38b4ba' } },
+    }),
 }));
 // AdminBandCard is the unit under test downstream — count its instances via the stub.
 vi.mock('@/Components/AdminBandCard.vue', () => ({ default: { name: 'AdminBandCard', props: ['label', 'count', 'href', 'iconPath', 'urgent'], template: '<a class="band-card">{{ count }} {{ label }}</a>' } }));

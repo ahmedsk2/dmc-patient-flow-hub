@@ -23,6 +23,12 @@ describe('useChartTheme', () => {
                 '--chart-axis': '#222222',
                 '--chart-stroke': '#333333',
                 '--ink-900': '#444444',
+                '--chart-primary': '#00aabb',
+                '--chart-accent': '#ccdd00',
+                '--chart-deep': '#005566',
+                '--chart-info': '#3388ff',
+                '--chart-muted': '#667788',
+                '--chart-primary-soft': '#55ccdd',
             }[name.trim()] ?? ''),
         }));
     });
@@ -34,6 +40,25 @@ describe('useChartTheme', () => {
         expect(api.axisColor.value).toBe('#222222');
         expect(api.strokeColor.value).toBe('#333333');
         expect(api.inkColor.value).toBe('#444444');
+    });
+
+    it('exposes the theme-reactive chart series palette from --chart-* tokens', () => {
+        const { api } = mountWith();
+        expect(api.series.value).toMatchObject({
+            primary: '#00aabb', accent: '#ccdd00', deep: '#005566',
+            info: '#3388ff', muted: '#667788', primarySoft: '#55ccdd',
+        });
+    });
+
+    it('re-reads the series palette when the theme flips (deep hue must be able to change)', () => {
+        const { api } = mountWith();
+        expect(api.series.value.deep).toBe('#005566');
+        window.getComputedStyle = vi.fn(() => ({
+            getPropertyValue: (name) => ({ '--chart-deep': '#7fc7c4', '--chart-primary': '#38b4ba' }[name.trim()] ?? ''),
+        }));
+        document.dispatchEvent(new CustomEvent('dmc-theme-change'));
+        expect(api.series.value.deep).toBe('#7fc7c4');
+        expect(api.series.value.primary).toBe('#38b4ba');
     });
 
     it('refreshes when the dmc-theme-change event fires', async () => {
