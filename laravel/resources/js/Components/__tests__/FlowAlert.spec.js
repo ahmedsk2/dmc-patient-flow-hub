@@ -19,10 +19,26 @@ describe('FlowAlert', () => {
         expect(mountAlert({ tone: 'critical' }).find('.sr-only').text()).toBe('Action needed:');
     });
 
+    // The prefix shares a <p> with the title, so AT reads them as one string. `.text()` trims, so
+    // only raw textContent can catch a run-together "Information:Two discharges are overdue".
+    it('separates the screen-reader prefix from the title (not run together)', () => {
+        const p = mountAlert({ tone: 'info' }).get('p').element.textContent;
+        expect(p).toBe('Information: Two discharges are overdue');
+    });
+
     it('always renders a decorative icon beside the text', () => {
         const svg = mountAlert({ tone: 'critical' }).find('svg');
         expect(svg.exists()).toBe(true);
         expect(svg.attributes('aria-hidden')).toBe('true');
+    });
+
+    // Locks the PROPERTY (three silhouettes: circle / triangle / octagon), not the curve data — the
+    // paths may be redrawn freely, but two tones may never share a glyph, or the icon stops being a
+    // signal at those tiers.
+    it('gives every tone a pairwise-distinct icon path', () => {
+        const d = (tone) => mountAlert({ tone }).get('path').attributes('d');
+        const paths = [d('info'), d('warning'), d('critical')];
+        expect(new Set(paths).size).toBe(3);
     });
 
     it('applies the status-rail plus the matching tone rail class', () => {
