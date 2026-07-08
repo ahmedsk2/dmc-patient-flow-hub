@@ -109,6 +109,24 @@
      * occupancy gauge). Reads as a slightly deeper lift so the eye lands there first. */
     --shadow-card-lg: 0 2px 4px rgb(30 42 46 / 0.06), 0 14px 34px -12px rgb(30 42 46 / 0.22);
     --radius-xl2: 1.1rem;
+
+    /* ---- "Census Board" signature (Wave 0) ----------------------------------------------
+     * Hairline: a teal-tinted separator that REPLACES drop-shadows as the depth cue. Distinct
+     * from --color-line (neutral). Shadow is reserved for TRUE overlays only. */
+    --color-hairline: var(--surface-hairline);
+    --shadow-overlay: 0 24px 60px -18px rgb(30 42 46 / 0.35);
+
+    /* Status callout surfaces + their AA-verified text colours. Theme-aware: the tint darkens
+     * and the text lightens under .dark, while the HUE is held constant so a status never
+     * re-reads across a shift change. Ratios proven by scripts/contrast.mjs. */
+    --color-tint-info: var(--tint-info);
+    --color-tint-warning: var(--tint-warning);
+    --color-tint-danger: var(--tint-danger);
+    --color-tint-success: var(--tint-success);
+    --color-on-info: var(--on-info);
+    --color-on-warning: var(--on-warning);
+    --color-on-danger: var(--on-danger);
+    --color-on-success: var(--on-success);
 }
 
 /* ----- LIGHT theme raw values (the defaults the @theme vars above point at) ----- */
@@ -134,6 +152,22 @@
     --chart-grid: #eef2f6;
     --chart-axis: #94a3b5;
     --chart-stroke: #ffffff;  /* donut slice gaps / card-matched separators */
+
+    /* Signature hairline — brand teal at low alpha over the light surfaces. */
+    --surface-hairline: rgb(0 156 166 / 0.16);
+    /* Density: rows consume --row-py; a .density-* container overrides it. */
+    --row-py: 0.5rem;
+
+    /* Status tints + AA-safe text (light). warning-500/info-500/etc. FAIL as text — see
+     * scripts/contrast.mjs. These `on-*` values all clear 4.5:1 on their tint AND on white. */
+    --tint-info: #d7e9fb;
+    --tint-warning: #fdedd2;
+    --tint-danger: #fbdcdc;
+    --tint-success: #d8f5e3;
+    --on-info: #1b5cad;
+    --on-warning: #8a5a00;
+    --on-danger: #a82824;
+    --on-success: #11672f;
 }
 
 /* ----- DARK theme overrides ----- */
@@ -163,6 +197,21 @@
     /* Card shadow reads as a darker, softer pool on a dark page. */
     --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -10px rgb(0 0 0 / 0.6);
     --shadow-card-lg: 0 2px 6px rgb(0 0 0 / 0.5), 0 18px 40px -14px rgb(0 0 0 / 0.75);
+
+    /* Signature hairline reads brighter against the dark page. */
+    --surface-hairline: rgb(0 156 166 / 0.26);
+    --shadow-overlay: 0 24px 60px -18px rgb(0 0 0 / 0.7);
+
+    /* Status tints go deep + opaque (exact contrast maths, no alpha compositing); the `on-*`
+     * text lightens. Hues held constant with the light theme. */
+    --tint-info: #12293f;
+    --tint-warning: #3a2a09;
+    --tint-danger: #3a1a19;
+    --tint-success: #10291a;
+    --on-info: #9cc4f5;
+    --on-warning: #f0c073;
+    --on-danger: #f4a6a4;
+    --on-success: #86d6a3;
 }
 
 /* Brand text legibility: on dark, brand-700 (the common link/heading teal) is too deep —
@@ -198,6 +247,10 @@
         font-variant-numeric: tabular-nums;
         font-feature-settings: 'tnum';
     }
+    /* Density — a container sets the row rhythm; `row-pad` rows consume it. Persisted per
+     * user in Wave 2 (shared-workstation ergonomics: rounds laptop vs wide ward monitor). */
+    .density-comfortable { --row-py: 0.5rem; }
+    .density-compact { --row-py: 0.25rem; }
     /* thin, themed scrollbars */
     * {
         scrollbar-width: thin;
@@ -237,6 +290,57 @@
     & > :not([hidden]) ~ :not([hidden]) {
         border-color: var(--color-line);
     }
+}
+
+/* ----- "Census Board" signature utilities (Wave 0) --------------------------------------------
+ * Flat surfaces separated by teal-tinted hairlines, NOT floating drop-shadow cards. Shadow is
+ * reserved for TRUE overlays (command palette, dialogs) via `shadow-overlay`. Every patient row
+ * carries a 3px inset status rail — the app's fingerprint; the board reads as a stack of tickets.
+ * Logical properties (border-inline-start) are used so a future RTL mode is a no-op (Wave 5).
+ */
+@utility border-hairline {
+    border-color: var(--color-hairline);
+}
+@utility ring-hairline {
+    --tw-ring-color: var(--color-hairline);
+}
+@utility divide-hairline {
+    & > :not([hidden]) ~ :not([hidden]) {
+        border-color: var(--color-hairline);
+    }
+}
+
+/* The fingerprint. Pair with exactly one rail-* tone. */
+@utility status-rail {
+    border-inline-start: 3px solid var(--rail-color, var(--color-line));
+}
+@utility rail-neutral {
+    --rail-color: var(--color-ink-200);
+}
+@utility rail-info {
+    --rail-color: var(--color-info-500);
+}
+@utility rail-ok {
+    --rail-color: var(--color-success-500);
+}
+@utility rail-warning {
+    --rail-color: var(--color-warning-500);
+}
+@utility rail-critical {
+    --rail-color: var(--color-danger-500);
+}
+
+/* Density-aware row padding. */
+@utility row-pad {
+    padding-block: var(--row-py, 0.5rem);
+}
+
+/* The ONE meaningful transition in the signature (120ms). The global prefers-reduced-motion
+ * block at the top of this file neutralizes it automatically. */
+@utility transition-row {
+    transition:
+        background-color 120ms ease,
+        border-color 120ms ease;
 }
 
 /* Canonical form-input utility — the SAME string as the FIELD constant in resources/js/lib/ui.js.
