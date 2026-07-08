@@ -130,6 +130,12 @@ already exist to fix all of it; applying them across ~30 call sites + the shared
 **Wave 5** task, not part of completing Wave 0's tail. These rows are pinned `KNOWN` in contrast.mjs
 so the new 4.5 default protects new pairs without reddening on the historical debt.
 
+The adversarial verification pass (5 agents; it also caught two real defects in the first commit —
+a contrast-reducing ✕ hover wash and a dishonest gate opt-down, both fixed) added one more site to
+this bucket: **`text-brand-500` used as the ✕ remove-glyph in diagnosis chips** (`DxChips.vue`,
+`Admissions/Create`, `Registry`), 12px semibold on `bg-brand-100` = **2.78:1** in light mode (below
+even 3:1). Same class of fix (a darker brand step), same Wave 5 sweep.
+
 ---
 
 ## How to view live

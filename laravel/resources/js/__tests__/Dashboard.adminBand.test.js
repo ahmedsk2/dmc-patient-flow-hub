@@ -164,8 +164,9 @@ describe('Dashboard — "My unit today" tiles (W0-T3i)', () => {
 });
 
 // W0-T3j — the alert dismiss ✕. `hover:opacity-*` composites the whole glyph toward the tinted
-// backdrop on hover (WCAG 1.4.3 has no hover exemption); the affordance must be a background wash
-// that leaves the glyph colour intact.
+// backdrop on hover (WCAG 1.4.3 has no hover exemption). A DARKENING background wash is no better —
+// it darkens the glyph's own local background (light on-warning 5.20 -> 4.16, sub-AA). The affordance
+// must be a ring (a border-edge mark that never touches the glyph's background).
 describe('Dashboard — alert dismiss ✕ (W0-T3j)', () => {
     const withAlert = () => mountAs({ role: 0, is_admin: true }, {
         alerts: [{ key: 'k1', severity: 'warning', message: 'Two discharges overdue' }],

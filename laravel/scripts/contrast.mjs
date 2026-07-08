@@ -45,7 +45,7 @@ const PAIRS = [
     // NOT "large text" (needs ≥18.66px bold), so both need 4.5:1. KNOWN so the gate stays honest without
     // reddening on debt tracked with the rest of the status/brand-as-text sweep.
     ['brand-500 on brand-100 (DxChips ✕ glyph, light)', '#009ca6', '#d4f0ef', { known: 'systemic brand-as-text (W5): 12px ✕ glyph 2.78:1; migrate to a darker brand step' }],
-    ['brand-500 on white (PDF KPI numerals, 15px bold)', '#009ca6', '#ffffff', { known: 'systemic brand-as-text (W5): 15px bold ≠ large text; 3.33:1' }],
+    ['brand-500 on #f1f6f6 (PDF KPI numerals, 15px bold)', '#009ca6', '#f1f6f6', { known: 'systemic brand-as-text (W5): 15px bold ≠ large text; 3.05:1 on the report cell (worse than 3.33:1 on pure white)' }],
     ['brand-700 on white', '#00727b', '#ffffff'],
     ['brand-800 on white', '#00565e', '#ffffff'],
     // --- CURRENT status colours used as TEXT (this is what we are checking) ---
