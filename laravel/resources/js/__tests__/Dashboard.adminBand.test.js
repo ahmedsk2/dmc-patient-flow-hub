@@ -175,9 +175,12 @@ describe('Dashboard — alert dismiss ✕ (W0-T3j)', () => {
         expect(btn.exists()).toBe(true);
         expect(btn.classes().some((c) => c.startsWith('hover:opacity-'))).toBe(false);
     });
-    it('uses a theme-aware background wash for its hover affordance instead', () => {
+    it('uses a ring for its hover affordance — never a darkening bg wash (which cuts glyph contrast)', () => {
         const c = withAlert().find('button[aria-label="Dismiss alert"]').classes();
-        expect(c).toContain('hover:bg-black/10');
-        expect(c).toContain('dark:hover:bg-white/10');
+        expect(c).toContain('hover:ring-1');
+        expect(c).toContain('hover:ring-current');
+        // A wash behind the glyph reduces its contrast (light on-warning 5.20 -> 4.16, sub-AA). Forbid it.
+        expect(c).not.toContain('hover:bg-black/10');
+        expect(c).not.toContain('dark:hover:bg-white/10');
     });
 });

@@ -38,7 +38,14 @@ const verdict = (r) => (r >= 4.5 ? 'AA text' : r >= 3 ? 'UI / large text only' :
 // Each row is [label, fg, bg] or [label, fg, bg, { known: 'why this is a deliberate exception' }].
 const PAIRS = [
     // --- brand on the light page surfaces ---
-    ['brand-500 on white', '#009ca6', '#ffffff', { large: true }],   // 3.33:1 — primary; large numerals/icons/links, never 14px body
+    // brand-500 as TEXT/GLYPH is sub-AA on its REAL surfaces — a systemic finding (W5), not a large-text
+    // exemption (an earlier { large:true } here modelled the wrong background). Its only shipped text use
+    // is the ✕ remove-glyph in diagnosis chips (DxChips.vue / Admissions·Create / Registry), 12px semibold
+    // on bg-brand-100 = 2.78:1 light; plus the 15px-bold PDF KPI numerals on white = 3.33:1. 15px bold is
+    // NOT "large text" (needs ≥18.66px bold), so both need 4.5:1. KNOWN so the gate stays honest without
+    // reddening on debt tracked with the rest of the status/brand-as-text sweep.
+    ['brand-500 on brand-100 (DxChips ✕ glyph, light)', '#009ca6', '#d4f0ef', { known: 'systemic brand-as-text (W5): 12px ✕ glyph 2.78:1; migrate to a darker brand step' }],
+    ['brand-500 on white (PDF KPI numerals, 15px bold)', '#009ca6', '#ffffff', { known: 'systemic brand-as-text (W5): 15px bold ≠ large text; 3.33:1' }],
     ['brand-700 on white', '#00727b', '#ffffff'],
     ['brand-800 on white', '#00565e', '#ffffff'],
     // --- CURRENT status colours used as TEXT (this is what we are checking) ---
