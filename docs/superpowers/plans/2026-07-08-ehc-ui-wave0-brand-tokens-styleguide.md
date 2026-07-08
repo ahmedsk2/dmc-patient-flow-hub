@@ -511,8 +511,11 @@ const iconPath = computed(() => ICON[props.tone]);
 const role = computed(() => (props.tone === 'critical' ? 'alert' : 'note'));
 </script>
 
+<!-- rounded-e-* (logical) leaves the rail edge square: the "ticket" silhouette.
+     NOTE: this comment MUST live outside <template>. A root-level comment inside <template> makes
+     Vue compile the SFC as a multi-root Fragment, and @vue/test-utils' wrapper.classes() /
+     wrapper.attributes() then silently return []/undefined instead of the root div's values. -->
 <template>
-    <!-- rounded-e-* (logical) leaves the rail edge square: the "ticket" silhouette. -->
     <div :role="role" :class="['status-rail flex gap-3 rounded-e-xl p-3', rail, tint, text]">
         <svg
             class="mt-0.5 h-5 w-5 shrink-0"
