@@ -57,7 +57,7 @@ const kpiCards = computed(() => [
     { label: `≤${props.readmitWindow ?? 3}d readmits`, value: props.kpis.readmissions, tone: 'danger' },
 ]);
 const toneClass = (t) => ({
-    brand: 'text-brand-700', info: 'text-info-500', danger: 'text-danger-600', accent: 'text-on-accent', ink: 'text-ink-700',
+    brand: 'text-brand-700', info: 'text-info-500', danger: 'text-on-danger', accent: 'text-on-accent', ink: 'text-ink-700',
 }[t]);
 
 // PNG-export-only toolbar (no zoom/pan clutter) — applied to every chart on this page
@@ -241,7 +241,7 @@ const donut = (labels) => ({
         </div>
 
         <!-- day-interval cap notice -->
-        <div v-if="truncated" class="mb-5 flex items-start gap-2 rounded-xl bg-warning-100 px-4 py-3 text-sm font-medium text-warning-500 ring-1 ring-warning-500/20" role="alert">
+        <div v-if="truncated" class="mb-5 flex items-start gap-2 rounded-xl bg-tint-warning px-4 py-3 text-sm font-medium text-on-warning ring-1 ring-warning-500/20" role="alert">
             <svg class="mt-0.5 h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
             <span>Daily view is capped at ~370 days — the chart and grid stop before {{ range.to }}. Switch to <button @click="setInterval2('month')" class="font-bold underline underline-offset-2 hover:opacity-80">Monthly</button> to cover the whole range.</span>
         </div>
@@ -260,7 +260,7 @@ const donut = (labels) => ({
         <div v-if="compareData" class="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-5">
             <div v-for="k in deltaCards" :key="k.label" class="rounded-xl bg-app p-2 text-center ring-1 ring-line text-sm">
                 <div class="text-[10px] uppercase tracking-wide text-ink-400">{{ k.label }} vs {{ compareData.range.from }}–{{ compareData.range.to }}</div>
-                <div class="nums font-bold" :class="k.delta > 0 ? 'text-danger-600' : k.delta < 0 ? 'text-brand-600' : 'text-ink-400'">{{ k.delta > 0 ? '+' : '' }}{{ k.delta }}</div>
+                <div class="nums font-bold" :class="k.delta > 0 ? 'text-on-danger' : k.delta < 0 ? 'text-brand-600' : 'text-ink-400'">{{ k.delta > 0 ? '+' : '' }}{{ k.delta }}</div>
             </div>
         </div>
         <div v-else class="mb-6"></div>
@@ -377,8 +377,8 @@ const donut = (labels) => ({
                                 <td class="px-3 py-1.5 font-medium text-ink-700">{{ r.label }}</td>
                                 <td class="nums px-3 py-1.5 text-right">{{ r.admissions }}</td>
                                 <td class="nums px-3 py-1.5 text-right">{{ r.discharges }}</td>
-                                <td class="nums px-3 py-1.5 text-right text-danger-600">{{ r.icu }}</td>
-                                <td class="nums px-3 py-1.5 text-right text-danger-600">{{ r.transToIcu }}</td>
+                                <td class="nums px-3 py-1.5 text-right text-on-danger">{{ r.icu }}</td>
+                                <td class="nums px-3 py-1.5 text-right text-on-danger">{{ r.transToIcu }}</td>
                                 <td class="nums px-3 py-1.5 text-right">{{ r.icuDeaths }}</td>
                                 <td class="nums px-3 py-1.5 text-right">{{ r.wardDeaths }}</td>
                                 <td class="nums px-3 py-1.5 text-right text-on-accent">{{ r.readmits }}</td>

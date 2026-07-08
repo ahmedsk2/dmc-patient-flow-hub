@@ -33,11 +33,11 @@ const fld = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-n
 
 // action badge colour by category
 const catTone = (cat) => ({
-    phi_read: 'bg-warning-100 text-warning-500',
+    phi_read: 'bg-tint-warning text-on-warning',
     admission: 'bg-brand-100 text-brand-700',
-    consultation: 'bg-info-500/10 text-info-500',
+    consultation: 'bg-tint-info text-on-info',
     patient: 'bg-tint-accent text-on-accent',
-    user: 'bg-danger-100 text-danger-600',
+    user: 'bg-tint-danger text-on-danger',
     settings: 'bg-ink-100 text-ink-500',
 }[cat] || 'bg-ink-100 text-ink-500');
 

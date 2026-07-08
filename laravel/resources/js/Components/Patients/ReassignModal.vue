@@ -109,8 +109,8 @@ defineExpose({
                                 <input type="checkbox" :checked="selectedIds.has(r.id)" @change="toggleSelected(r.id)" class="rounded text-brand-600" />
                                 <span class="font-semibold">{{ r.name }}</span>
                                 <span class="nums text-xs text-ink-400">MRN {{ r.mrn }}</span>
-                                <span v-if="!r.handover_today" class="ml-auto rounded-full bg-warning-100 px-2 py-0.5 text-[10px] font-semibold text-warning-500">handover stale</span>
-                                <span v-else class="ml-auto rounded-full bg-success-100 px-2 py-0.5 text-[10px] font-semibold text-success-600">today ✓</span>
+                                <span v-if="!r.handover_today" class="ml-auto rounded-full bg-tint-warning px-2 py-0.5 text-[10px] font-semibold text-on-warning">handover stale</span>
+                                <span v-else class="ml-auto rounded-full bg-tint-success px-2 py-0.5 text-[10px] font-semibold text-on-success">today ✓</span>
                             </label>
                         </li>
                     </ul>
@@ -127,16 +127,16 @@ defineExpose({
                             <button type="button" @click="saveAllStale" :disabled="savingAll || !allStaleFilled" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50">{{ savingAll ? 'Saving…' : 'Save all handovers' }}</button>
                         </div>
                     </template>
-                    <p v-else-if="selectedIds.size" class="mt-2 flex items-center gap-1.5 text-xs font-semibold text-success-600">
+                    <p v-else-if="selectedIds.size" class="mt-2 flex items-center gap-1.5 text-xs font-semibold text-on-success">
                         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
                         All {{ selectedIds.size }} selected handover(s) updated today — ready to move.
                     </p>
-                    <p v-else class="mt-2 text-xs font-semibold text-warning-500">Select at least one patient to move.</p>
+                    <p v-else class="mt-2 text-xs font-semibold text-on-warning">Select at least one patient to move.</p>
                 </template>
                 <p v-else class="text-xs text-ink-400">No active patients under this consultant.</p>
             </div>
-            <p v-if="rForm.errors.handover" class="text-xs font-semibold text-danger-600">{{ rForm.errors.handover }}</p>
-            <p v-if="rForm.errors.admission_ids" class="text-xs font-semibold text-danger-600">{{ rForm.errors.admission_ids }}</p>
+            <p v-if="rForm.errors.handover" class="text-xs font-semibold text-on-danger">{{ rForm.errors.handover }}</p>
+            <p v-if="rForm.errors.admission_ids" class="text-xs font-semibold text-on-danger">{{ rForm.errors.admission_ids }}</p>
 
             <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="rForm.processing || !rForm.from_consultant_id || !rForm.to_consultant_id || !preflightReady" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Reassign {{ selectedIds.size || '' }} selected</button></div>
         </form>

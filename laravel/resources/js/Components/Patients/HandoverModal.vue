@@ -61,11 +61,11 @@ defineExpose({ data, hForm, editing, histOpen, submitHandover });
             <template v-else>
                 <p class="mb-2 text-xs text-ink-400">
                     {{ data.updated_at ? `Last updated by ${data.updated_by_name || '—'} · ${fmtAt(data.updated_at)}` : 'No handover yet.' }}
-                    <span v-if="data.updated_at" class="ml-1 rounded-full px-2 py-0.5 text-[10px] font-semibold" :class="data.today ? 'bg-brand-100 text-brand-700' : 'bg-warning-100 text-warning-500'">{{ data.today ? 'Updated today' : 'Stale' }}</span>
+                    <span v-if="data.updated_at" class="ml-1 rounded-full px-2 py-0.5 text-[10px] font-semibold" :class="data.today ? 'bg-brand-100 text-brand-700' : 'bg-tint-warning text-on-warning'">{{ data.today ? 'Updated today' : 'Stale' }}</span>
                 </p>
                 <template v-if="editing">
                     <textarea v-model="hForm.body" rows="6" maxlength="5000" aria-label="Handover text" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
-                    <p v-if="hForm.errors.body" class="mt-1 text-xs text-danger-600">{{ hForm.errors.body }}</p>
+                    <p v-if="hForm.errors.body" class="mt-1 text-xs text-on-danger">{{ hForm.errors.body }}</p>
                     <div class="mt-3 flex justify-end gap-2">
                         <button type="button" @click="editing = false" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
                         <button type="button" @click="submitHandover" :disabled="hForm.processing || !hForm.body.trim()" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save</button>

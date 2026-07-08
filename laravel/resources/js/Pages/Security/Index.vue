@@ -48,7 +48,7 @@ const td = 'px-5 py-3 text-sm text-ink-700';
                         <tr v-for="(c, i) in failedClusters" :key="i">
                             <td :class="td">{{ c.actor_name || '—' }}</td>
                             <td :class="[td, 'nums']">{{ c.ip || '—' }}</td>
-                            <td :class="td"><span class="nums rounded-full px-2 py-0.5 text-xs font-bold" :class="c.attempts >= 5 ? 'bg-danger-100 text-danger-600' : 'bg-warning-100 text-warning-500'">{{ c.attempts }}</span></td>
+                            <td :class="td"><span class="nums rounded-full px-2 py-0.5 text-xs font-bold" :class="c.attempts >= 5 ? 'bg-tint-danger text-on-danger' : 'bg-tint-warning text-on-warning'">{{ c.attempts }}</span></td>
                             <td :class="[td, 'nums text-ink-400']">{{ when(c.last_at) }}</td>
                         </tr>
                         <tr v-if="!failedClusters.length"><td :class="[td, 'text-ink-300']" colspan="4">No failed logins in the last 24 hours.</td></tr>
@@ -70,7 +70,7 @@ const td = 'px-5 py-3 text-sm text-ink-700';
                         <tr v-for="(r, i) in firstSeenIps" :key="i">
                             <td :class="td">{{ r.actor_name || '—' }}</td>
                             <td :class="[td, 'nums']">{{ r.ip || '—' }}</td>
-                            <td :class="td"><span class="rounded-full px-2 py-0.5 text-xs font-semibold" :class="r.action === 'login.success' ? 'bg-success-100 text-success-600' : 'bg-warning-100 text-warning-500'">{{ r.action }}</span></td>
+                            <td :class="td"><span class="rounded-full px-2 py-0.5 text-xs font-semibold" :class="r.action === 'login.success' ? 'bg-tint-success text-on-success' : 'bg-tint-warning text-on-warning'">{{ r.action }}</span></td>
                             <td :class="[td, 'nums text-ink-400']">{{ when(r.first_at) }}</td>
                         </tr>
                         <tr v-if="!firstSeenIps.length"><td :class="[td, 'text-ink-300']" colspan="4">No first-seen IPs recorded yet.</td></tr>

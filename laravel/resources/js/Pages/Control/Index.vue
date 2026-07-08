@@ -91,7 +91,7 @@ const countCards = [
     ['Admissions', 'admissions'], ['Consultations', 'consultations'], ['ICD-10 codes', 'icd10'], ['Specialties', 'specialties'],
 ];
 const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20';
-const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'bg-brand-100 text-brand-700' : 'bg-ink-100 text-ink-500';
+const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'bg-brand-100 text-brand-700' : 'bg-ink-100 text-ink-500';
 </script>
 
 <template>
@@ -166,7 +166,7 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
 
             <div class="mt-5 flex items-center gap-3">
                 <button @click="saveSettings" :disabled="sForm.processing" class="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save settings</button>
-                <span v-if="sForm.recentlySuccessful" class="text-sm font-semibold text-success-600">Saved ✓</span>
+                <span v-if="sForm.recentlySuccessful" class="text-sm font-semibold text-on-success">Saved ✓</span>
             </div>
         </div>
 
@@ -213,7 +213,7 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
                                 </div>
                             </td>
                             <td class="px-3 py-3"><span v-if="u.on_service" class="rounded-full bg-brand-100 px-2.5 py-0.5 text-xs font-semibold text-brand-700">On</span><span v-else class="text-xs text-ink-300">—</span></td>
-                            <td class="px-3 py-3"><span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="u.active ? 'bg-success-100 text-success-600' : 'bg-ink-100 text-ink-400'">{{ u.active ? 'Active' : 'Disabled' }}</span></td>
+                            <td class="px-3 py-3"><span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="u.active ? 'bg-tint-success text-on-success' : 'bg-ink-100 text-ink-400'">{{ u.active ? 'Active' : 'Disabled' }}</span></td>
                             <td class="px-5 py-3 text-right"><button @click="editUser(u)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50">Edit</button></td>
                         </tr>
                     </tbody>
@@ -255,7 +255,7 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
                     <input v-model="recipientForm.email" type="email" :class="field" placeholder="name@dmc-im.com" />
                     <button :disabled="recipientForm.processing || !recipientForm.email" class="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Add</button>
                 </form>
-                <p v-if="recipientForm.errors.email" class="mt-1 text-xs text-danger-600">{{ recipientForm.errors.email }}</p>
+                <p v-if="recipientForm.errors.email" class="mt-1 text-xs text-on-danger">{{ recipientForm.errors.email }}</p>
             </div>
         </div>
 
@@ -264,17 +264,17 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
                 <div class="space-y-4">
                     <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Username</span>
                         <input v-model="uForm.username" :class="field" placeholder="login name" />
-                        <span v-if="uForm.errors.username" class="mt-1 block text-xs text-danger-600">{{ uForm.errors.username }}</span>
+                        <span v-if="uForm.errors.username" class="mt-1 block text-xs text-on-danger">{{ uForm.errors.username }}</span>
                         <span class="mt-1 block text-xs text-ink-400">The login name — changing it changes what they type to sign in.</span>
                     </label>
                     <div class="grid grid-cols-2 gap-3">
                         <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Full name</span>
                             <input v-model="uForm.full_name" :class="field" placeholder="Dr …" />
-                            <span v-if="uForm.errors.full_name" class="mt-1 block text-xs text-danger-600">{{ uForm.errors.full_name }}</span>
+                            <span v-if="uForm.errors.full_name" class="mt-1 block text-xs text-on-danger">{{ uForm.errors.full_name }}</span>
                         </label>
                         <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Email</span>
                             <input v-model="uForm.email" type="email" :class="field" placeholder="name@dmc-im.com" />
-                            <span v-if="uForm.errors.email" class="mt-1 block text-xs text-danger-600">{{ uForm.errors.email }}</span>
+                            <span v-if="uForm.errors.email" class="mt-1 block text-xs text-on-danger">{{ uForm.errors.email }}</span>
                         </label>
                     </div>
                     <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Role</span>
@@ -296,8 +296,8 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
                 </div>
                 <div class="mt-6 flex items-center justify-end gap-2">
                     <button v-if="editing.email" @click="sendReset(editing)" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-600 hover:bg-ink-50">Send reset email</button>
-                    <button v-if="editing.mfa" @click="resetMfa(editing)" class="rounded-xl px-3 py-2 text-sm font-semibold text-danger-600 hover:bg-danger-100">Reset MFA</button>
-                    <button @click="deleteUser(editing)" class="mr-auto rounded-xl px-3 py-2 text-sm font-semibold text-danger-600 hover:bg-danger-100">Delete</button>
+                    <button v-if="editing.mfa" @click="resetMfa(editing)" class="rounded-xl px-3 py-2 text-sm font-semibold text-on-danger hover:bg-tint-danger">Reset MFA</button>
+                    <button @click="deleteUser(editing)" class="mr-auto rounded-xl px-3 py-2 text-sm font-semibold text-on-danger hover:bg-tint-danger">Delete</button>
                     <button @click="editing = null" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
                     <button @click="saveUser" :disabled="uForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save</button>
                 </div>

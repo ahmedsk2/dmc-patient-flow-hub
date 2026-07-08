@@ -41,17 +41,17 @@ const field = 'w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm out
             <section class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <h3 class="mb-4 font-bold text-ink-800">Profile details</h3>
                 <div class="grid gap-4 sm:grid-cols-2">
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Full name</label><input v-model="pForm.full_name" :class="[field, pForm.errors.full_name && 'border-danger-500']" /><p v-if="pForm.errors.full_name" class="mt-1 text-xs text-danger-600">{{ pForm.errors.full_name }}</p></div>
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Email</label><input v-model="pForm.email" type="email" :class="[field, pForm.errors.email && 'border-danger-500']" /><p v-if="pForm.errors.email" class="mt-1 text-xs text-danger-600">{{ pForm.errors.email }}</p></div>
+                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Full name</label><input v-model="pForm.full_name" :class="[field, pForm.errors.full_name && 'border-danger-500']" /><p v-if="pForm.errors.full_name" class="mt-1 text-xs text-on-danger">{{ pForm.errors.full_name }}</p></div>
+                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Email</label><input v-model="pForm.email" type="email" :class="[field, pForm.errors.email && 'border-danger-500']" /><p v-if="pForm.errors.email" class="mt-1 text-xs text-on-danger">{{ pForm.errors.email }}</p></div>
                     <div class="sm:col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Username</label>
                         <input v-model="pForm.username" autocomplete="username" :class="[field, 'sm:max-w-xs', pForm.errors.username && 'border-danger-500']" />
-                        <p v-if="pForm.errors.username" class="mt-1 text-xs text-danger-600">{{ pForm.errors.username }}</p>
+                        <p v-if="pForm.errors.username" class="mt-1 text-xs text-on-danger">{{ pForm.errors.username }}</p>
                         <p class="mt-1 text-xs text-ink-400">This is your <strong>login name</strong> — changing it changes what you type to sign in. Letters, numbers, dashes and underscores only.</p>
                     </div>
                 </div>
                 <div class="mt-4 flex items-center gap-3">
                     <button @click="saveProfile" :disabled="pForm.processing" class="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save profile</button>
-                    <span v-if="pForm.recentlySuccessful" class="text-sm font-semibold text-success-600">Saved ✓</span>
+                    <span v-if="pForm.recentlySuccessful" class="text-sm font-semibold text-on-success">Saved ✓</span>
                 </div>
             </section>
 
@@ -60,13 +60,13 @@ const field = 'w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm out
                 <h3 class="mb-1 font-bold text-ink-800">Change password</h3>
                 <p class="mb-4 text-sm text-ink-400">At least 8 characters, with letters and numbers.</p>
                 <div class="grid gap-4 sm:grid-cols-3">
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Current</label><input v-model="wForm.current_password" type="password" :class="[field, wForm.errors.current_password && 'border-danger-500']" /><p v-if="wForm.errors.current_password" class="mt-1 text-xs text-danger-600">{{ wForm.errors.current_password }}</p></div>
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">New</label><input v-model="wForm.password" type="password" :class="[field, wForm.errors.password && 'border-danger-500']" /><PasswordMeter :password="wForm.password" @score="pwScore = $event" /><p v-if="wForm.errors.password" class="mt-1 text-xs text-danger-600">{{ wForm.errors.password }}</p></div>
+                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Current</label><input v-model="wForm.current_password" type="password" :class="[field, wForm.errors.current_password && 'border-danger-500']" /><p v-if="wForm.errors.current_password" class="mt-1 text-xs text-on-danger">{{ wForm.errors.current_password }}</p></div>
+                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">New</label><input v-model="wForm.password" type="password" :class="[field, wForm.errors.password && 'border-danger-500']" /><PasswordMeter :password="wForm.password" @score="pwScore = $event" /><p v-if="wForm.errors.password" class="mt-1 text-xs text-on-danger">{{ wForm.errors.password }}</p></div>
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Confirm</label><input v-model="wForm.password_confirmation" type="password" :class="field" /></div>
                 </div>
                 <div class="mt-4 flex items-center gap-3">
                     <button @click="savePassword" :disabled="wForm.processing || pwTooWeak" class="rounded-xl bg-navy-800 px-5 py-2.5 text-sm font-semibold text-white hover:bg-navy-900 disabled:opacity-50">Update password</button>
-                    <span v-if="wForm.recentlySuccessful" class="text-sm font-semibold text-success-600">Password changed ✓</span>
+                    <span v-if="wForm.recentlySuccessful" class="text-sm font-semibold text-on-success">Password changed ✓</span>
                 </div>
             </section>
 
@@ -76,7 +76,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm out
                     <div>
                         <h3 class="flex items-center gap-2 font-bold text-ink-800">
                             Two-factor authentication
-                            <span v-if="profile.mfa_enabled" class="rounded-full bg-success-100 px-2 py-0.5 text-xs font-semibold text-success-600">Enabled</span>
+                            <span v-if="profile.mfa_enabled" class="rounded-full bg-tint-success px-2 py-0.5 text-xs font-semibold text-on-success">Enabled</span>
                             <span v-else class="rounded-full bg-ink-100 px-2 py-0.5 text-xs font-semibold text-ink-500">Off</span>
                         </h3>
                         <p class="mt-1 max-w-md text-sm text-ink-400">Protect your account with a time-based code from an authenticator app, in addition to your password.</p>

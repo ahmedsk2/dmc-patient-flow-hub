@@ -40,23 +40,23 @@ const field = 'w-full rounded-xl border border-ink-200 bg-card px-3.5 py-2.5 tex
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-ink-700">MRN <span class="text-danger-500">*</span></label>
                         <input v-model="form.mrn" :class="[field, form.errors.mrn && 'border-danger-500']" placeholder="Medical record number" inputmode="numeric" />
-                        <p v-if="form.errors.mrn" class="mt-1 text-xs text-danger-600">{{ form.errors.mrn }}</p>
+                        <p v-if="form.errors.mrn" class="mt-1 text-xs text-on-danger">{{ form.errors.mrn }}</p>
                     </div>
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-ink-700">Full name <span class="text-danger-500">*</span></label>
                         <input v-model="form.name" :class="[field, form.errors.name && 'border-danger-500']" placeholder="Patient name" />
-                        <p v-if="form.errors.name" class="mt-1 text-xs text-danger-600">{{ form.errors.name }}</p>
+                        <p v-if="form.errors.name" class="mt-1 text-xs text-on-danger">{{ form.errors.name }}</p>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="mb-1 block text-sm font-semibold text-ink-700">Age <span class="text-danger-500">*</span></label>
                             <input v-model="form.age" :class="[field, form.errors.age && 'border-danger-500']" inputmode="numeric" placeholder="Years" />
-                            <p v-if="form.errors.age" class="mt-1 text-xs text-danger-600">{{ form.errors.age }}</p>
+                            <p v-if="form.errors.age" class="mt-1 text-xs text-on-danger">{{ form.errors.age }}</p>
                         </div>
                         <div>
                             <label class="mb-1 block text-sm font-semibold text-ink-700">Gender <span class="text-danger-500">*</span></label>
                             <select v-model="form.gender" :class="[field, form.errors.gender && 'border-danger-500']"><option value="">—</option><option>Male</option><option>Female</option></select>
-                            <p v-if="form.errors.gender" class="mt-1 text-xs text-danger-600">{{ form.errors.gender }}</p>
+                            <p v-if="form.errors.gender" class="mt-1 text-xs text-on-danger">{{ form.errors.gender }}</p>
                         </div>
                     </div>
                     <div>
@@ -65,7 +65,7 @@ const field = 'w-full rounded-xl border border-ink-200 bg-card px-3.5 py-2.5 tex
                             <option value="">Select country…</option>
                             <option v-for="c in countries" :key="c">{{ c }}</option>
                         </select>
-                        <p v-if="form.errors.nationality" class="mt-1 text-xs text-danger-600">{{ form.errors.nationality }}</p>
+                        <p v-if="form.errors.nationality" class="mt-1 text-xs text-on-danger">{{ form.errors.nationality }}</p>
                     </div>
                 </div>
             </section>
@@ -79,7 +79,7 @@ const field = 'w-full rounded-xl border border-ink-200 bg-card px-3.5 py-2.5 tex
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-ink-700">Admit date <span class="text-danger-500">*</span></label>
                         <input v-model="form.admit_date" type="date" :max="today" :class="[field, form.errors.admit_date && 'border-danger-500']" />
-                        <p v-if="form.errors.admit_date" class="mt-1 text-xs text-danger-600">{{ form.errors.admit_date }}</p>
+                        <p v-if="form.errors.admit_date" class="mt-1 text-xs text-on-danger">{{ form.errors.admit_date }}</p>
                     </div>
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-ink-700">Admitted from</label>
@@ -92,7 +92,7 @@ const field = 'w-full rounded-xl border border-ink-200 bg-card px-3.5 py-2.5 tex
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-ink-700">Bed <span class="text-danger-500">*</span></label>
                         <input v-model="form.bed" :class="[field, form.errors.bed && 'border-danger-500']" placeholder="Bed / room" />
-                        <p v-if="form.errors.bed" class="mt-1 text-xs text-danger-600">{{ form.errors.bed }}</p>
+                        <p v-if="form.errors.bed" class="mt-1 text-xs text-on-danger">{{ form.errors.bed }}</p>
                     </div>
                     <div class="sm:col-span-2">
                         <label class="mb-1 block text-sm font-semibold text-ink-700">Consultant</label>
@@ -113,11 +113,11 @@ const field = 'w-full rounded-xl border border-ink-200 bg-card px-3.5 py-2.5 tex
                 <div v-if="selectedDx.length" class="mt-3 flex flex-wrap gap-2">
                     <span v-for="d in selectedDx" :key="d.code" class="inline-flex items-center gap-1.5 rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-700">
                         <span class="nums">{{ d.code }}</span> {{ d.name }}
-                        <button type="button" @click="removeDx(d.code)" class="text-brand-500 hover:text-danger-600">✕</button>
+                        <button type="button" @click="removeDx(d.code)" class="text-brand-700 hover:text-on-danger">✕</button>
                     </span>
                 </div>
                 <p v-else class="mt-3 text-sm text-ink-400">No diagnoses added yet — at least one is required.</p>
-                <p v-if="form.errors.diagnoses" class="mt-2 text-xs text-danger-600">{{ form.errors.diagnoses }}</p>
+                <p v-if="form.errors.diagnoses" class="mt-2 text-xs text-on-danger">{{ form.errors.diagnoses }}</p>
             </section>
 
             <div class="flex items-center justify-end gap-3">

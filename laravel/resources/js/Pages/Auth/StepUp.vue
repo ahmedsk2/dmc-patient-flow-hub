@@ -31,13 +31,13 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outli
                 <label class="block">
                     <span class="mb-1 block text-sm font-semibold text-ink-700">Password</span>
                     <input v-model="form.password" type="password" autocomplete="current-password" autofocus :class="field" />
-                    <p v-if="form.errors.password" class="mt-1 text-sm text-danger-600">{{ form.errors.password }}</p>
+                    <p v-if="form.errors.password" class="mt-1 text-sm text-on-danger">{{ form.errors.password }}</p>
                 </label>
 
                 <label v-if="mfaEnrolled" class="block">
                     <span class="mb-1 block text-sm font-semibold text-ink-700">Authentication code</span>
                     <input v-model="form.code" inputmode="numeric" autocomplete="one-time-code" placeholder="6-digit code" :class="[field, 'nums tracking-widest']" />
-                    <p v-if="form.errors.code" class="mt-1 text-sm text-danger-600">{{ form.errors.code }}</p>
+                    <p v-if="form.errors.code" class="mt-1 text-sm text-on-danger">{{ form.errors.code }}</p>
                 </label>
 
                 <button type="submit" :disabled="form.processing"

@@ -17,7 +17,7 @@
 //     static list would have made the winner an implementation detail of Tailwind's sort.
 //     This card has no panel behind it, so /60 composites over `--surface-app`: #f7e6e6 / #281818.
 //
-//  2. The count moves from `text-danger-600` to `text-on-danger`. danger-600 is a fixed literal:
+//  2. The count moves from the danger-600 literal to `text-on-danger`. danger-600 is a fixed literal:
 //     5.63:1 on the white card, but only 2.97:1 on the dark card TODAY, and 3.02:1 on the new dark
 //     tint — it was already failing AA in dark mode before this change. `on-danger` is theme-aware:
 //     5.82:1 light / 8.78:1 dark on the tint. The icon chip keeps `danger-600` on `danger-100`

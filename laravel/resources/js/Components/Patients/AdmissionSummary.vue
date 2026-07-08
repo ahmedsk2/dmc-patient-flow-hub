@@ -13,7 +13,7 @@ defineProps({
 
 <template>
     <div class="rounded-xl bg-app/70 p-3 ring-1 ring-line">
-        <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-warning-500">Kindly review admission details</p>
+        <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-on-warning">Kindly review admission details</p>
         <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
             <div><dt class="font-semibold text-ink-400">Name</dt><dd class="text-ink-700">{{ patient.name }}</dd></div>
             <div><dt class="font-semibold text-ink-400">MRN</dt><dd class="nums text-ink-700">{{ patient.mrn || '—' }}</dd></div>

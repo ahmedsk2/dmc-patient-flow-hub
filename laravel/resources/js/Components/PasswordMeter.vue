@@ -12,7 +12,7 @@ let zxcvbn = null;
 
 const LABELS = ['Very weak', 'Weak', 'Fair', 'Strong', 'Very strong'];
 const BAR = ['bg-danger-500', 'bg-danger-500', 'bg-warning-500', 'bg-success-500', 'bg-success-600'];
-const TEXT = ['text-danger-600', 'text-danger-600', 'text-warning-500', 'text-success-600', 'text-success-600'];
+const TEXT = ['text-on-danger', 'text-on-danger', 'text-on-warning', 'text-on-success', 'text-on-success'];
 
 watch(() => props.password, async (pwd) => {
     if (!pwd) {

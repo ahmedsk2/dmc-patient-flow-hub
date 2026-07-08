@@ -53,8 +53,8 @@ export const OUTCOME_STATUSES = ['Alive', 'Dead'];
  * everything else (Ward/—)=brand.
  */
 export function locTone(loc) {
-    return loc === 'ICU' ? 'bg-danger-100 text-danger-600'
-        : loc === 'ER' ? 'bg-warning-100 text-warning-500'
+    return loc === 'ICU' ? 'bg-tint-danger text-on-danger'
+        : loc === 'ER' ? 'bg-tint-warning text-on-warning'
         : 'bg-brand-100 text-brand-700';
 }
 

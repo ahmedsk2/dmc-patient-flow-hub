@@ -73,9 +73,9 @@ const { form: mForm, editing, selectedDx: mDx, activity: mActivity, open: openEd
 const openEdit = (id) => openEditForm({ id });
 
 const fld = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20';
-const outcomeTone = (o) => o === 'Dead' ? 'bg-danger-100 text-danger-600' : o === 'Alive' ? 'bg-success-100 text-success-600' : 'bg-ink-100 text-ink-500';
+const outcomeTone = (o) => o === 'Dead' ? 'bg-tint-danger text-on-danger' : o === 'Alive' ? 'bg-tint-success text-on-success' : 'bg-ink-100 text-ink-500';
 // same short/long LOS band colors as the board cards (J2-7)
-const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b === 'long' ? 'bg-danger-100 text-danger-600' : 'bg-warning-100 text-warning-500';
+const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b === 'long' ? 'bg-tint-danger text-on-danger' : 'bg-tint-warning text-on-warning';
 const modes = [['admissions', 'Admissions'], ['consultations', 'Consultations'], ['diagnosis', 'Diagnosis (free text)']];
 
 // expandable row detail (admissions mode) — fresh Set per toggle so Vue picks up the change
@@ -117,7 +117,7 @@ const toggleExpand = (id) => {
                 </div>
                 <IcdTypeahead :input-class="fld" placeholder="Add diagnosis filter (ICD-10)…" @select="addDx" />
                 <div v-if="selectedDx.length" class="flex flex-wrap items-center gap-2">
-                    <span v-for="d in selectedDx" :key="d.code" class="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700"><span class="nums">{{ d.code }}</span> <button type="button" @click="removeDx(d.code)" class="text-brand-500 hover:text-danger-600">✕</button></span>
+                    <span v-for="d in selectedDx" :key="d.code" class="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700"><span class="nums">{{ d.code }}</span> <button type="button" @click="removeDx(d.code)" class="text-brand-700 hover:text-on-danger">✕</button></span>
                     <label class="ml-2 flex items-center gap-1 text-xs text-ink-500"><input type="radio" value="or" v-model="f.dx_match" /> any</label>
                     <label class="flex items-center gap-1 text-xs text-ink-500"><input type="radio" value="and" v-model="f.dx_match" /> all</label>
                 </div>
@@ -176,7 +176,7 @@ const toggleExpand = (id) => {
             <span v-if="matchCount !== null" class="nums text-xs">· export contains {{ matchCount.toLocaleString() }} rows</span>
         </div>
         <!-- §3.6: advisory banner for very large exports -->
-        <div v-if="matchCount !== null && matchCount > 20000" class="mb-3 flex items-start gap-2 rounded-xl bg-warning-100 px-4 py-3 text-sm font-medium text-warning-500 ring-1 ring-warning-500/20" role="alert">
+        <div v-if="matchCount !== null && matchCount > 20000" class="mb-3 flex items-start gap-2 rounded-xl bg-tint-warning px-4 py-3 text-sm font-medium text-on-warning ring-1 ring-warning-500/20" role="alert">
             <svg class="mt-0.5 h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
             <span>This export contains {{ matchCount.toLocaleString() }} rows and may take several minutes. Consider narrowing the filters.</span>
         </div>
@@ -193,7 +193,7 @@ const toggleExpand = (id) => {
                         <td class="px-3 py-3"><span v-for="r in c.reasons" :key="r" class="mr-1 inline-block rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">{{ r }}</span></td>
                         <td class="px-3 py-3 text-ink-600">{{ c.consultant }}</td>
                         <td class="nums px-3 py-3 text-ink-500">{{ c.date || '—' }}</td>
-                        <td class="px-5 py-3"><span v-if="c.signoff" class="rounded-full bg-success-100 px-2.5 py-0.5 text-xs font-semibold text-success-600">Signed {{ c.signoff }}</span><span v-else class="rounded-full bg-tint-accent px-2.5 py-0.5 text-xs font-semibold text-on-accent">Active</span></td>
+                        <td class="px-5 py-3"><span v-if="c.signoff" class="rounded-full bg-tint-success px-2.5 py-0.5 text-xs font-semibold text-on-success">Signed {{ c.signoff }}</span><span v-else class="rounded-full bg-tint-accent px-2.5 py-0.5 text-xs font-semibold text-on-accent">Active</span></td>
                     </tr>
                     <tr v-if="!results.data.length"><td colspan="7" class="px-5 py-10 text-center text-ink-400">{{ hasSearched ? 'No consultations match the current filters.' : 'No consultations match.' }}</td></tr>
                 </tbody>
@@ -223,10 +223,10 @@ const toggleExpand = (id) => {
                             <td></td>
                             <td colspan="9" class="px-5 py-4">
                                 <div v-if="r.is_tb || r.is_readmission || r.is_longterm || r.disch_still_in" class="mb-3 flex flex-wrap gap-1.5">
-                                    <span v-if="r.is_tb" class="rounded-full bg-danger-100 px-2.5 py-0.5 text-xs font-semibold text-danger-600">TB</span>
-                                    <span v-if="r.is_readmission" class="rounded-full bg-warning-100 px-2.5 py-0.5 text-xs font-semibold text-warning-500">≤{{ options.readmitWindow ?? 3 }}d readmit</span>
+                                    <span v-if="r.is_tb" class="rounded-full bg-tint-danger px-2.5 py-0.5 text-xs font-semibold text-on-danger">TB</span>
+                                    <span v-if="r.is_readmission" class="rounded-full bg-tint-warning px-2.5 py-0.5 text-xs font-semibold text-on-warning">≤{{ options.readmitWindow ?? 3 }}d readmit</span>
                                     <span v-if="r.is_longterm" class="rounded-full bg-tint-accent px-2.5 py-0.5 text-xs font-semibold text-on-accent">Long-term</span>
-                                    <span v-if="r.disch_still_in" class="rounded-full bg-warning-100 px-2.5 py-0.5 text-xs font-semibold text-warning-500">Disch. still in</span>
+                                    <span v-if="r.disch_still_in" class="rounded-full bg-tint-warning px-2.5 py-0.5 text-xs font-semibold text-on-warning">Disch. still in</span>
                                 </div>
                                 <dl class="grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
                                     <div class="sm:col-span-2 lg:col-span-4">
@@ -247,7 +247,7 @@ const toggleExpand = (id) => {
                                     <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Clinical discharge</dt><dd class="nums mt-0.5 text-ink-700">{{ r.medical_discharge_date || '—' }}</dd></div>
                                     <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Physical discharge</dt><dd class="nums mt-0.5 text-ink-700">{{ r.discharge_date || '—' }}</dd></div>
                                     <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Delay reason</dt><dd class="mt-0.5 text-ink-700">{{ r.delay_reason || '—' }}</dd></div>
-                                    <div v-if="r.transfer_label"><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Transfer</dt><dd class="mt-0.5"><span class="rounded-full bg-info-500/10 px-2.5 py-0.5 text-xs font-semibold text-info-500">{{ r.transfer_label }}</span></dd></div>
+                                    <div v-if="r.transfer_label"><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Transfer</dt><dd class="mt-0.5"><span class="rounded-full bg-tint-info px-2.5 py-0.5 text-xs font-semibold text-on-info">{{ r.transfer_label }}</span></dd></div>
                                 </dl>
                             </td>
                         </tr>

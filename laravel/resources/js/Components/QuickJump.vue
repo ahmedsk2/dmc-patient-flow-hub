@@ -90,7 +90,7 @@ const onEnter = () => { if (results.value[active.value]) go(results.value[active
                             <span class="flex-1 text-sm font-semibold text-ink-800">{{ r.name }}</span>
                             <span v-if="r.consultant" class="hidden text-xs text-ink-400 sm:inline">{{ r.consultant }}</span>
                             <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                                :class="r.status === 'active' ? 'bg-success-100 text-success-600'
+                                :class="r.status === 'active' ? 'bg-tint-success text-on-success'
                                     : r.status === 'unassigned' ? 'bg-tint-accent text-on-accent'
                                     : 'bg-ink-100 text-ink-500'">{{ r.status }}</span>
                         </button>

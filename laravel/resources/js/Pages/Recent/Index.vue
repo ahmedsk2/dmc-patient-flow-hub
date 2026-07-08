@@ -30,9 +30,9 @@ const dischargeGroups = computed(() => {
     return groups;
 });
 
-const outcomeTone = (o) => o === 'Dead' ? 'bg-danger-100 text-danger-600' : o === 'Alive' ? 'bg-success-100 text-success-600' : 'bg-ink-100 text-ink-500';
+const outcomeTone = (o) => o === 'Dead' ? 'bg-tint-danger text-on-danger' : o === 'Alive' ? 'bg-tint-success text-on-success' : 'bg-ink-100 text-ink-500';
 // same short/long LOS band colors as the board cards (J2-7)
-const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b === 'long' ? 'bg-danger-100 text-danger-600' : 'bg-warning-100 text-warning-500';
+const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b === 'long' ? 'bg-tint-danger text-on-danger' : 'bg-tint-warning text-on-warning';
 </script>
 
 <template>
@@ -69,7 +69,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                             <td class="px-3 py-3 text-ink-600">{{ d.admitter || '—' }}</td>
                             <td class="px-3 py-3 text-ink-600">{{ d.actor || '—' }}</td>
                             <td class="px-5 py-3 text-right">
-                                <button v-if="isAdmin && d.reversible" @click="undoDischarge(d)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-danger-600 hover:bg-danger-100">Undo</button>
+                                <button v-if="isAdmin && d.reversible" @click="undoDischarge(d)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-on-danger hover:bg-tint-danger">Undo</button>
                                 <span v-else class="text-xs text-ink-300" :title="isAdmin ? 'Undo is same-day only' : 'Undo is admin-only'">—</span>
                             </td>
                         </tr>
@@ -99,7 +99,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                         <td class="px-3 py-3 text-ink-600">{{ s.consultant || '—' }}</td>
                         <td class="px-3 py-3 text-ink-600">{{ s.entered_by || '—' }}</td>
                         <td class="px-5 py-3 text-right">
-                            <button v-if="isAdmin && s.reversible" @click="undoSignoff(s)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-danger-600 hover:bg-danger-100">Undo</button>
+                            <button v-if="isAdmin && s.reversible" @click="undoSignoff(s)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-on-danger hover:bg-tint-danger">Undo</button>
                             <span v-else class="text-xs text-ink-300" :title="isAdmin ? 'Undo is same-day only' : 'Undo is admin-only'">—</span>
                         </td>
                     </tr>

@@ -43,8 +43,8 @@ const label = (action) => ACTION_LABELS[action] || action;
 
 // destructive (red) vs PHI-read (amber) vs default action tone on the timeline dot/label
 const tone = (action) => {
-    if (/\.(delete|reverse|reverse_|undo_)/.test(action)) return 'text-danger-600';
-    if (action.startsWith('registry.')) return 'text-warning-500';
+    if (/\.(delete|reverse|reverse_|undo_)/.test(action)) return 'text-on-danger';
+    if (action.startsWith('registry.')) return 'text-on-warning';
     return 'text-ink-700';
 };
 const dotTone = (action) => {
@@ -102,13 +102,13 @@ const hasItems = computed(() => props.items && props.items.length > 0);
                         <template v-for="e in entries(it.details)" :key="e.key">
                             <dt class="font-semibold capitalize text-ink-500">{{ prettyKey(e.key) }}</dt>
                             <dd v-if="e.kind === 'diff'" class="text-ink-700">
-                                <span class="text-danger-500 line-through">{{ e.from }}</span>
+                                <span class="text-on-danger line-through">{{ e.from }}</span>
                                 <span class="mx-1 text-ink-400">→</span>
                                 <span class="font-semibold text-brand-600">{{ e.to }}</span>
                             </dd>
                             <dd v-else-if="e.kind === 'diagnoses'" class="space-x-1">
-                                <span v-for="c in e.added" :key="'a' + c" class="nums inline-block rounded bg-success-100 px-1.5 py-0.5 font-semibold text-success-600">+{{ c }}</span>
-                                <span v-for="c in e.removed" :key="'r' + c" class="nums inline-block rounded bg-danger-100 px-1.5 py-0.5 font-semibold text-danger-600 line-through">{{ c }}</span>
+                                <span v-for="c in e.added" :key="'a' + c" class="nums inline-block rounded bg-tint-success px-1.5 py-0.5 font-semibold text-on-success">+{{ c }}</span>
+                                <span v-for="c in e.removed" :key="'r' + c" class="nums inline-block rounded bg-tint-danger px-1.5 py-0.5 font-semibold text-on-danger line-through">{{ c }}</span>
                             </dd>
                             <dd v-else class="text-ink-700">{{ e.value }}</dd>
                         </template>

@@ -84,8 +84,8 @@ const deltaChip = (d) => {
     const arrow = d.direction === 'flat' ? '■' : up ? '▲' : '▼';
     return {
         label: `${arrow} ${Math.abs(d.delta)}`,
-        cls: isGood === true ? 'bg-success-100 text-success-600'
-            : isGood === false ? 'bg-danger-100 text-danger-600'
+        cls: isGood === true ? 'bg-tint-success text-on-success'
+            : isGood === false ? 'bg-tint-danger text-on-danger'
             : 'bg-ink-100 text-ink-500',
     };
 };
@@ -455,7 +455,7 @@ onUnmounted(() => clearInterval(autoRefresh));
                 <apexchart type="radialBar" height="260" :options="gaugeOptions" :series="[kpis.occupancyGauge]" role="img" :aria-label="`Gauge: bed occupancy ${kpis.occupancy}% (${kpis.ward} ward patients of ${kpis.wardBeds} beds)`" />
                 <div class="mt-1 grid grid-cols-2 gap-3 text-center">
                     <div class="rounded-xl bg-brand-50 py-2"><p class="nums text-xl font-bold text-brand-700">{{ kpis.ward }}</p><p class="text-xs text-ink-400">Ward</p></div>
-                    <div class="rounded-xl bg-danger-100 py-2"><p class="nums text-xl font-bold text-danger-600">{{ kpis.icu }}</p><p class="text-xs text-ink-400">ICU</p></div>
+                    <div class="rounded-xl bg-tint-danger py-2"><p class="nums text-xl font-bold text-on-danger">{{ kpis.icu }}</p><p class="text-xs text-ink-400">ICU</p></div>
                 </div>
             </div>
         </div>
@@ -506,7 +506,7 @@ onUnmounted(() => clearInterval(autoRefresh));
                 </div>
                 <!-- load-spread summary + rebalance hint -->
                 <div v-if="overloaded || underloaded" class="mt-3 flex items-center gap-3 text-xs">
-                    <span v-if="overloaded" class="font-semibold text-danger-600">{{ overloaded }} over max</span>
+                    <span v-if="overloaded" class="font-semibold text-on-danger">{{ overloaded }} over max</span>
                     <span v-if="underloaded" class="font-semibold text-on-warning">{{ underloaded }} below min</span>
                     <button v-if="canShuffle" @click="goHref('/patients')" class="ml-auto font-semibold text-brand-600 hover:underline">
                         Rebalance (Shuffle / Reassign) →
@@ -564,10 +564,10 @@ onUnmounted(() => clearInterval(autoRefresh));
                             <tr v-for="c in sec.rows" :key="c.name" class="cursor-pointer hover:bg-brand-50/40" @click="drillTo({ consultant_id: c.id })">
                                 <td class="px-5 py-2 font-semibold text-ink-700">Dr. {{ c.name }}</td>
                                 <td class="nums px-3 py-2 text-center text-ink-600">{{ c.old || '' }}</td>
-                                <td class="nums px-3 py-2 text-center text-info-500">{{ c.new || '' }}</td>
+                                <td class="nums px-3 py-2 text-center text-on-info">{{ c.new || '' }}</td>
                                 <td class="nums px-3 py-2 text-center font-semibold text-brand-700">{{ c.active }}</td>
                                 <td class="nums px-3 py-2 text-center text-ink-600">{{ c.ward }}</td>
-                                <td class="nums px-3 py-2 text-center text-danger-600">{{ c.icu || '' }}</td>
+                                <td class="nums px-3 py-2 text-center text-on-danger">{{ c.icu || '' }}</td>
                                 <td class="nums px-3 py-2 text-center text-ink-500">{{ c.tb || '' }}</td>
                             </tr>
                         </template>

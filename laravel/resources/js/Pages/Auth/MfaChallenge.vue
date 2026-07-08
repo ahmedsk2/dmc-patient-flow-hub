@@ -24,7 +24,7 @@ const submit = () => form.post('/mfa/challenge', { onFinish: () => form.reset('c
                     :placeholder="recovery ? 'XXXX-XXXX' : '123456'"
                     class="w-full rounded-xl border border-ink-200 px-4 py-3 text-center text-2xl font-bold tracking-[0.3em] text-ink-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                     :class="{ 'border-danger-500': form.errors.code }" />
-                <p v-if="form.errors.code" class="mt-2 text-center text-xs text-danger-600">{{ form.errors.code }}</p>
+                <p v-if="form.errors.code" class="mt-2 text-center text-xs text-on-danger">{{ form.errors.code }}</p>
                 <button type="submit" :disabled="form.processing"
                     class="mt-4 w-full rounded-xl bg-gradient-to-r from-brand-500 to-brand-700 px-4 py-3 font-semibold text-white shadow-lg shadow-brand-900/20 transition hover:from-brand-600 hover:to-brand-800 disabled:opacity-60">
                     {{ form.processing ? 'Verifying…' : 'Verify' }}

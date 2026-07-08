@@ -34,7 +34,7 @@ const td = 'px-5 py-3 text-sm text-ink-700';
                         <td :class="[td, 'nums']">{{ o.admissions }}</td>
                         <td :class="[td, 'nums text-ink-400']">{{ when(o.last_seen) }}</td>
                     </tr>
-                    <tr v-if="!orphans.length"><td :class="[td, 'text-success-600']" colspan="3">No orphan diagnosis codes — every recorded code matches an ICD-10 row.</td></tr>
+                    <tr v-if="!orphans.length"><td :class="[td, 'text-on-success']" colspan="3">No orphan diagnosis codes — every recorded code matches an ICD-10 row.</td></tr>
                 </tbody>
             </table>
         </div>

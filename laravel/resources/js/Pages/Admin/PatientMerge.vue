@@ -126,10 +126,10 @@ const btn = 'rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opac
         <div class="mt-4 flex items-center gap-3">
             <button :class="[btn, 'bg-brand-600 text-white hover:bg-brand-700']"
                 :disabled="!source || !target || sameSelected" @click="loadPreview">Preview merge</button>
-            <span v-if="sameSelected" class="text-sm text-danger-600">Source and target must be different patients.</span>
-            <span v-if="previewError" class="text-sm text-danger-600">{{ previewError }}</span>
-            <span v-if="form.errors.source_id" class="text-sm text-danger-600">{{ form.errors.source_id }}</span>
-            <span v-if="form.errors.target_id" class="text-sm text-danger-600">{{ form.errors.target_id }}</span>
+            <span v-if="sameSelected" class="text-sm text-on-danger">Source and target must be different patients.</span>
+            <span v-if="previewError" class="text-sm text-on-danger">{{ previewError }}</span>
+            <span v-if="form.errors.source_id" class="text-sm text-on-danger">{{ form.errors.source_id }}</span>
+            <span v-if="form.errors.target_id" class="text-sm text-on-danger">{{ form.errors.target_id }}</span>
         </div>
 
         <!-- preview / confirm card -->
@@ -137,18 +137,18 @@ const btn = 'rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opac
             <h2 class="mb-4 text-sm font-bold uppercase tracking-wide text-ink-700">Merge preview</h2>
             <div class="grid gap-6 sm:grid-cols-2">
                 <div>
-                    <p class="text-xs font-semibold uppercase text-danger-600">Source · will be retired</p>
+                    <p class="text-xs font-semibold uppercase text-on-danger">Source · will be retired</p>
                     <p class="nums mt-1 text-lg font-bold text-ink-800">#{{ preview.source.id }} · {{ preview.source.mrn }}</p>
                     <p class="text-sm text-ink-600">{{ preview.source.name || '—' }}</p>
                     <p class="mt-2 nums text-sm text-ink-700">{{ preview.source.admissions }} admission(s) · {{ preview.source.consultations }} consultation(s) will move</p>
-                    <p v-if="preview.source.has_open_admission" class="mt-1 text-xs font-semibold text-warning-500">Has an open admission</p>
+                    <p v-if="preview.source.has_open_admission" class="mt-1 text-xs font-semibold text-on-warning">Has an open admission</p>
                 </div>
                 <div>
                     <p class="text-xs font-semibold uppercase text-brand-700">Target · canonical</p>
                     <p class="nums mt-1 text-lg font-bold text-ink-800">#{{ preview.target.id }} · {{ preview.target.mrn }}</p>
                     <p class="text-sm text-ink-600">{{ preview.target.name || '—' }}</p>
                     <p class="mt-2 nums text-sm text-ink-700">currently {{ preview.target.admissions }} admission(s) · {{ preview.target.consultations }} consultation(s)</p>
-                    <p v-if="preview.target.has_open_admission" class="mt-1 text-xs font-semibold text-warning-500">Has an open admission</p>
+                    <p v-if="preview.target.has_open_admission" class="mt-1 text-xs font-semibold text-on-warning">Has an open admission</p>
                 </div>
             </div>
 
@@ -216,7 +216,7 @@ const btn = 'rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opac
                             <button :class="[btn, 'bg-brand-50 text-brand-700 hover:bg-brand-100']" @click="useDuplicate(d)">Merge…</button>
                         </td>
                     </tr>
-                    <tr v-if="!possibleDuplicates.length"><td :class="[td, 'text-success-600']" colspan="4">No obvious duplicate patients found.</td></tr>
+                    <tr v-if="!possibleDuplicates.length"><td :class="[td, 'text-on-success']" colspan="4">No obvious duplicate patients found.</td></tr>
                 </tbody>
             </table>
         </section>
@@ -253,7 +253,7 @@ export default {
             template: `
                 <section class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line p-5">
                     <p class="mb-2 text-xs font-semibold uppercase tracking-wide"
-                       :class="tone === 'danger' ? 'text-danger-600' : 'text-brand-700'">{{ label }}</p>
+                       :class="tone === 'danger' ? 'text-on-danger' : 'text-brand-700'">{{ label }}</p>
                     <div class="relative">
                         <input v-model="query" @input="onInput" role="combobox" aria-autocomplete="list"
                             :aria-expanded="results.length > 0"
@@ -265,7 +265,7 @@ export default {
                                 @mousedown.prevent="choose(p)"
                                 class="flex cursor-pointer items-center justify-between px-3 py-1.5 text-sm hover:bg-brand-50">
                                 <span><span class="nums font-semibold text-brand-700">{{ p.mrn }}</span> · {{ p.name || '—' }}</span>
-                                <span v-if="p.open_admissions_count > 0" class="ml-2 rounded-full bg-warning-100 px-2 py-0.5 text-xs font-semibold text-warning-500">open</span>
+                                <span v-if="p.open_admissions_count > 0" class="ml-2 rounded-full bg-tint-warning px-2 py-0.5 text-xs font-semibold text-on-warning">open</span>
                             </li>
                         </ul>
                     </div>

@@ -59,14 +59,14 @@ const print = () => window.print();
                     </thead>
                     <tbody>
                         <template v-for="sec in sections" :key="sec.key">
-                            <tr><td colspan="7" class="border-b border-ink-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide" :class="sec.key === 'off' ? 'text-danger-600' : 'text-ink-500'">{{ sec.label }}</td></tr>
+                            <tr><td colspan="7" class="border-b border-ink-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide" :class="sec.key === 'off' ? 'text-on-danger' : 'text-ink-500'">{{ sec.label }}</td></tr>
                             <tr v-for="g in sec.rows" :key="g.id" class="border-b border-ink-50">
                                 <td class="px-2 py-1 font-semibold text-ink-700">Dr. {{ g.name }}</td>
                                 <td class="nums px-2 py-1 text-center">{{ g.counts.old }}</td>
                                 <td class="nums px-2 py-1 text-center">{{ g.counts.new }}</td>
                                 <td class="nums px-2 py-1 text-center font-semibold text-brand-700">{{ g.counts.active }}</td>
                                 <td class="nums px-2 py-1 text-center">{{ g.counts.ward }}</td>
-                                <td class="nums px-2 py-1 text-center text-danger-600">{{ g.counts.icu || '' }}</td>
+                                <td class="nums px-2 py-1 text-center text-on-danger">{{ g.counts.icu || '' }}</td>
                                 <td class="nums px-2 py-1 text-center">{{ g.counts.tb || '' }}</td>
                             </tr>
                         </template>

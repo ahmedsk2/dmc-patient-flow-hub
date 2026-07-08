@@ -13,7 +13,7 @@ const tone = computed(() => state.value?.tone ?? 'danger');
 const danger = computed(() => tone.value === 'danger');
 
 // per-tone classes (spec tone mapping)
-const headerClass = computed(() => danger.value ? 'bg-danger-100 text-danger-600' : 'bg-ink-50 text-ink-700');
+const headerClass = computed(() => danger.value ? 'bg-tint-danger text-on-danger' : 'bg-ink-50 text-ink-700');
 const confirmClass = computed(() => danger.value
     ? 'bg-danger-600 hover:bg-danger-700 text-white focus-visible:ring-danger-500'
     : 'bg-brand-600 hover:bg-brand-700 text-white focus-visible:ring-brand-500');

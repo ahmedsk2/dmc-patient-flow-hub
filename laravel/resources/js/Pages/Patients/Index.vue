@@ -142,7 +142,7 @@ const fmtAt = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { day: '2-
 // W0-T3e: the stale branch hovered to warning-600 as text, an undeclared step → no hover at all.
 // `text-on-warning` is the AA-safe amber (5.93:1 light / 9.96:1 dark) and darkens on light, brightens
 // on dark — the right affordance in both. warning-600 itself is a FILL token; as text it is 3.29:1.
-const handoverTone = (p) => !p.handover ? 'text-ink-300 hover:text-ink-500' : p.handover.today ? 'text-brand-600 hover:text-brand-700' : 'text-warning-500 hover:text-on-warning';
+const handoverTone = (p) => !p.handover ? 'text-ink-300 hover:text-ink-500' : p.handover.today ? 'text-brand-600 hover:text-brand-700' : 'text-on-warning hover:text-on-warning';
 const handoverTitle = (p) => p.handover ? `Handover — last updated ${p.handover.updated_by || '—'} ${fmtAt(p.handover.updated_at)}` : 'No handover yet';
 
 // ---- modal orchestration: Index OPENS the child modals + reloads/flashes on their `saved` --------
@@ -197,7 +197,7 @@ const destroyAdmission = async (row) => {
         router.delete(`/admissions/${row.id}`, { preserveScroll: true });
 };
 
-const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b === 'long' ? 'bg-danger-100 text-danger-600' : 'bg-warning-100 text-warning-500';
+const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b === 'long' ? 'bg-tint-danger text-on-danger' : 'bg-tint-warning text-on-warning';
 </script>
 
 <template>
@@ -210,7 +210,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
         <div class="mb-4 flex flex-wrap items-center gap-2">
             <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Census <span class="nums ml-1 text-brand-700">{{ stats.total }}</span></span>
             <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Ward (non-ICU) <span class="nums ml-1 text-brand-700">{{ stats.ward }}</span></span>
-            <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">ICU <span class="nums ml-1 text-danger-600">{{ stats.icu }}</span></span>
+            <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">ICU <span class="nums ml-1 text-on-danger">{{ stats.icu }}</span></span>
             <!-- observers don't get the queue link — the page behind it is clinical-role only (J2-12) -->
             <!-- W0-T3e. Was accent-300 at /30 behind accent-600 text, hovering to /50 — 2.99:1 (light)
                  / 2.22:1 (dark) at rest, 1.26:1 (dark) on hover. Both fills were theme-invariant gold
@@ -285,10 +285,10 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                                 <svg class="mr-1.5 inline h-4 w-4 text-ink-300" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" :d="open.has(g.id) ? 'm4.5 15.75 7.5-7.5 7.5 7.5' : 'm19.5 8.25-7.5 7.5-7.5-7.5'" /></svg> Dr. {{ g.name }}
                             </td>
                             <td class="nums px-3 py-2 text-center text-ink-600">{{ g.counts.old || '' }}</td>
-                            <td class="nums px-3 py-2 text-center text-info-500">{{ g.counts.new || '' }}</td>
+                            <td class="nums px-3 py-2 text-center text-on-info">{{ g.counts.new || '' }}</td>
                             <td class="nums px-3 py-2 text-center font-semibold text-brand-700">{{ g.counts.active }}</td>
                             <td class="nums px-3 py-2 text-center text-ink-600">{{ g.counts.ward }}</td>
-                            <td class="nums px-3 py-2 text-center text-danger-600">{{ g.counts.icu || '' }}</td>
+                            <td class="nums px-3 py-2 text-center text-on-danger">{{ g.counts.icu || '' }}</td>
                             <td class="nums px-3 py-2 text-center text-ink-500">{{ g.counts.tb || '' }}</td>
                         </tr>
                     </template>
@@ -404,8 +404,8 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                             <div v-if="kebabOpen === p.id" class="fixed inset-0 z-0" @click="closeKebab"></div>
                             <div v-if="kebabOpen === p.id" role="menu" class="absolute right-0 bottom-12 z-10 w-44 overflow-hidden rounded-xl bg-card py-1 shadow-lg ring-1 ring-line" @keydown.esc="closeKebab">
                                 <button type="button" role="menuitem" @click="longterm(p); closeKebab()" class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-ink-700 hover:bg-ink-50">{{ p.is_longterm ? 'Remove long-term' : 'Mark long-term' }}</button>
-                                <button v-if="canManage(p) && p.medically_discharged && p.location !== 'ICU'" type="button" role="menuitem" @click="undoMedical(p); closeKebab()" class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-danger-600 hover:bg-danger-100">Undo medical discharge</button>
-                                <button v-if="me.is_admin" type="button" role="menuitem" @click="destroyAdmission(p); closeKebab()" class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-danger-600 hover:bg-danger-100">Delete admission</button>
+                                <button v-if="canManage(p) && p.medically_discharged && p.location !== 'ICU'" type="button" role="menuitem" @click="undoMedical(p); closeKebab()" class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-on-danger hover:bg-tint-danger">Undo medical discharge</button>
+                                <button v-if="me.is_admin" type="button" role="menuitem" @click="destroyAdmission(p); closeKebab()" class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-on-danger hover:bg-tint-danger">Delete admission</button>
                             </div>
                         </div>
                     </div>

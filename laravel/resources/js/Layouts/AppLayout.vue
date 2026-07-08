@@ -360,7 +360,7 @@ onUnmounted(() => {
                 <div class="ml-auto flex items-center gap-3">
                     <!-- Wave 2, Item 2: global patient quick-jump (press /) -->
                     <QuickJump />
-                    <div class="hidden items-center gap-2 rounded-full bg-success-100 px-3 py-1 text-xs font-semibold text-success-600 sm:flex">
+                    <div class="hidden items-center gap-2 rounded-full bg-tint-success px-3 py-1 text-xs font-semibold text-on-success sm:flex">
                         <span class="relative flex h-2 w-2"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-success-500 opacity-60"></span><span class="relative inline-flex h-2 w-2 rounded-full bg-success-500"></span></span>
                         Live
                     </div>
@@ -446,7 +446,7 @@ onUnmounted(() => {
         <!-- Phase 4 — Item 2: idle session-timeout warning (60s countdown) -->
         <div v-if="showIdleWarning" class="fixed inset-0 z-[90] grid place-items-center bg-navy-950/50 p-4" role="alertdialog" aria-modal="true" aria-labelledby="idle-title">
             <div class="w-full max-w-sm rounded-2xl bg-card p-6 text-center shadow-2xl ring-1 ring-line">
-                <div class="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-warning-100 text-warning-500">
+                <div class="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-tint-warning text-on-warning">
                     <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
                 </div>
                 <h2 id="idle-title" class="font-display text-lg font-bold text-ink-900">Session expiring</h2>

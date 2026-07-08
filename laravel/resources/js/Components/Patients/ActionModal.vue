@@ -120,8 +120,8 @@ defineExpose({
                 <select v-model="aForm.consultant_id" title="On-service consultants only" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select consultant…</option><option v-for="c in assignConsultants" :key="c.id" :value="c.id">{{ c.name }}{{ !c.on_service ? ' (off service)' : '' }}</option></select>
                 <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="aForm.mark_new" class="rounded text-brand-600" /> Mark as new patient <span class="text-xs text-ink-400">(uncheck for a quiet administrative move — no “New” badge)</span></label>
                 <!-- handover gate: write today's handover here, save, retry the assign -->
-                <div v-if="aForm.errors.handover" class="rounded-xl bg-warning-100/60 p-3 ring-1 ring-warning-500/30">
-                    <p class="text-xs font-semibold text-warning-500">{{ aForm.errors.handover }}</p>
+                <div v-if="aForm.errors.handover" class="rounded-xl bg-tint-warning/60 p-3 ring-1 ring-warning-500/30">
+                    <p class="text-xs font-semibold text-on-warning">{{ aForm.errors.handover }}</p>
                     <textarea v-model="gateBody" rows="3" maxlength="5000" placeholder="Write today's handover for this patient…" aria-label="Handover text" class="mt-2 w-full rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
                     <div class="mt-2 flex justify-end"><button type="button" @click="saveGateThen(submitAssign)" :disabled="gateBusy || !gateBody.trim()" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save handover & assign</button></div>
                 </div>
@@ -136,21 +136,21 @@ defineExpose({
                         <label v-for="t in [[false, 'Medical only (still in bed)'], [true, 'Complete (leaving now)']]" :key="String(t[0])" class="flex-1 cursor-pointer rounded-xl border-2 px-3 py-2.5 text-center text-sm font-semibold transition" :class="mdForm.complete === t[0] ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'"><input type="radio" v-model="mdForm.complete" :value="t[0]" class="hidden" /> {{ t[1] }}</label>
                     </div>
                 </div>
-                <div><label class="mb-1 block text-sm font-semibold text-ink-700">Medical discharge date</label><input v-model="mdForm.medical_discharge_date" type="date" :max="today" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" /><p v-if="mdForm.errors.medical_discharge_date" class="mt-1 text-xs text-danger-600">{{ mdForm.errors.medical_discharge_date }}</p></div>
+                <div><label class="mb-1 block text-sm font-semibold text-ink-700">Medical discharge date</label><input v-model="mdForm.medical_discharge_date" type="date" :max="today" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" /><p v-if="mdForm.errors.medical_discharge_date" class="mt-1 text-xs text-on-danger">{{ mdForm.errors.medical_discharge_date }}</p></div>
                 <!-- one-step close asks Status + Destination; medical-only locks Alive (asked at completion) -->
                 <div v-if="mdForm.complete" class="grid grid-cols-2 gap-3">
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Status</label>
                         <select v-model="mdForm.outcome" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option v-for="s in statuses" :key="s">{{ s }}</option></select>
-                        <p v-if="mdForm.errors.outcome" class="mt-1 text-xs text-danger-600">{{ mdForm.errors.outcome }}</p></div>
+                        <p v-if="mdForm.errors.outcome" class="mt-1 text-xs text-on-danger">{{ mdForm.errors.outcome }}</p></div>
                     <!-- destination is REQUIRED on a close unless Dead (auto-Mortuary) — N1-4 -->
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge to <span v-if="mdForm.outcome !== 'Dead'" class="text-danger-600">*</span></label>
+                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge to <span v-if="mdForm.outcome !== 'Dead'" class="text-on-danger">*</span></label>
                         <select v-model="mdForm.discharge_to" :disabled="mdForm.outcome === 'Dead'" :required="mdForm.outcome !== 'Dead'" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">—</option><option v-for="d in destinations" :key="d">{{ d }}</option></select>
-                        <p v-if="mdForm.errors.discharge_to" class="mt-1 text-xs text-danger-600">{{ mdForm.errors.discharge_to }}</p></div>
+                        <p v-if="mdForm.errors.discharge_to" class="mt-1 text-xs text-on-danger">{{ mdForm.errors.discharge_to }}</p></div>
                 </div>
                 <!-- still-in delay reason is REQUIRED on a medical-only discharge — N1-4 -->
-                <div v-else><label class="mb-1 block text-sm font-semibold text-ink-700">Delay reason <span class="text-danger-600">*</span></label>
+                <div v-else><label class="mb-1 block text-sm font-semibold text-ink-700">Delay reason <span class="text-on-danger">*</span></label>
                     <select v-model="mdForm.delay_reason" required class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">—</option><option value="Physical">Physical bed availability</option><option value="System">System</option></select>
-                    <p v-if="mdForm.errors.delay_reason" class="mt-1 text-xs text-danger-600">{{ mdForm.errors.delay_reason }}</p></div>
+                    <p v-if="mdForm.errors.delay_reason" class="mt-1 text-xs text-on-danger">{{ mdForm.errors.delay_reason }}</p></div>
                 <p class="text-xs text-ink-400">{{ mdForm.complete ? 'Closes the file and frees the bed in one step.' : 'Marks the patient clinically discharged but still in a bed. Status and destination are recorded at Complete discharge, when they physically leave.' }}</p>
                 <!-- W0-T3d. `text-white` on bg-warning-500 was 2.48:1 — a WCAG AA failure for this
                      14px semibold label. The amber FILL stays (a fill is not text; the tone is the
@@ -183,16 +183,16 @@ defineExpose({
             </form>
             <form v-else-if="mode === 'complete'" @submit.prevent="submitComplete" class="space-y-4">
                 <p class="text-sm text-ink-600">Close the file and free the bed.</p>
-                <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge date</label><input v-model="cdForm.discharge_date" type="date" :max="today" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" /><p v-if="cdForm.errors.discharge_date" class="mt-1 text-xs text-danger-600">{{ cdForm.errors.discharge_date }}</p></div>
+                <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge date</label><input v-model="cdForm.discharge_date" type="date" :max="today" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" /><p v-if="cdForm.errors.discharge_date" class="mt-1 text-xs text-on-danger">{{ cdForm.errors.discharge_date }}</p></div>
                 <!-- optional override of the phase-1 outcome/destination (prefilled with the current values) -->
                 <div class="grid grid-cols-2 gap-3">
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Status</label>
                         <select v-model="cdForm.outcome" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">—</option><option v-for="s in statuses" :key="s">{{ s }}</option></select>
-                        <p v-if="cdForm.errors.outcome" class="mt-1 text-xs text-danger-600">{{ cdForm.errors.outcome }}</p></div>
+                        <p v-if="cdForm.errors.outcome" class="mt-1 text-xs text-on-danger">{{ cdForm.errors.outcome }}</p></div>
                     <!-- destination is REQUIRED on the close unless Dead (auto-Mortuary) — N1-4 -->
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Destination <span v-if="cdForm.outcome !== 'Dead'" class="text-danger-600">*</span></label>
+                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Destination <span v-if="cdForm.outcome !== 'Dead'" class="text-on-danger">*</span></label>
                         <select v-model="cdForm.discharge_to" :disabled="cdForm.outcome === 'Dead'" :required="cdForm.outcome !== 'Dead'" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">—</option><option v-for="d in destinations" :key="d">{{ d }}</option></select>
-                        <p v-if="cdForm.errors.discharge_to" class="mt-1 text-xs text-danger-600">{{ cdForm.errors.discharge_to }}</p></div>
+                        <p v-if="cdForm.errors.discharge_to" class="mt-1 text-xs text-on-danger">{{ cdForm.errors.discharge_to }}</p></div>
                 </div>
                 <p class="text-xs text-ink-400">Status and destination carry over from the medical discharge — change them here only if the situation changed before the bed exit.</p>
                 <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="cdForm.processing" class="rounded-xl bg-success-600 px-5 py-2 text-sm font-semibold text-white hover:bg-success-700 disabled:opacity-50">Complete discharge</button></div>
@@ -203,10 +203,10 @@ defineExpose({
                 <AdmissionSummary :patient="patient" />
                 <div><label class="mb-1 block text-sm font-semibold text-ink-700">Status</label><select v-model="icuForm.outcome" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option v-for="s in statuses" :key="s">{{ s }}</option></select></div>
                 <!-- destination is REQUIRED on the ICU close unless Dead (auto-Mortuary) — N1-4 -->
-                <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge to <span v-if="icuForm.outcome !== 'Dead'" class="text-danger-600">*</span></label>
+                <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge to <span v-if="icuForm.outcome !== 'Dead'" class="text-on-danger">*</span></label>
                     <select v-model="icuForm.discharge_to" :disabled="icuForm.outcome === 'Dead'" :required="icuForm.outcome !== 'Dead'" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">—</option><option v-for="d in destinations" :key="d">{{ d }}</option></select>
-                    <p v-if="icuForm.errors.discharge_to" class="mt-1 text-xs text-danger-600">{{ icuForm.errors.discharge_to }}</p></div>
-                <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge date</label><input v-model="icuForm.discharge_date" type="date" :max="today" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" /><p v-if="icuForm.errors.discharge_date" class="mt-1 text-xs text-danger-600">{{ icuForm.errors.discharge_date }}</p></div>
+                    <p v-if="icuForm.errors.discharge_to" class="mt-1 text-xs text-on-danger">{{ icuForm.errors.discharge_to }}</p></div>
+                <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge date</label><input v-model="icuForm.discharge_date" type="date" :max="today" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" /><p v-if="icuForm.errors.discharge_date" class="mt-1 text-xs text-on-danger">{{ icuForm.errors.discharge_date }}</p></div>
                 <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="icuForm.processing" class="rounded-xl bg-success-600 px-5 py-2 text-sm font-semibold text-white hover:bg-success-700 disabled:opacity-50">ICU discharge</button></div>
             </form>
             <form v-else @submit.prevent="submitTransfer" class="space-y-4">
@@ -222,15 +222,15 @@ defineExpose({
                 <template v-else-if="tForm.mode === 'specialty'">
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Receiving specialty</label>
                         <select v-model="tForm.specialty_id" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select specialty…</option><option v-for="s in specialties" :key="s.id" :value="s.id">{{ s.name }}</option></select>
-                        <p v-if="tForm.errors.specialty_id" class="mt-1 text-xs text-danger-600">{{ tForm.errors.specialty_id }}</p></div>
+                        <p v-if="tForm.errors.specialty_id" class="mt-1 text-xs text-on-danger">{{ tForm.errors.specialty_id }}</p></div>
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">Receiving consultant <span class="font-normal text-ink-400">(on-service only)</span></label>
                         <select v-model="tForm.consultant_id" :disabled="!tForm.specialty_id" title="On-service consultants only" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">Select consultant…</option><option v-for="c in specConsultants" :key="c.id" :value="c.id">{{ c.name }}</option></select>
-                        <p v-if="tForm.specialty_id && !specConsultants.length" class="mt-1 text-xs text-warning-500">No on-service consultants under this specialty.</p>
-                        <p v-if="tForm.errors.consultant_id" class="mt-1 text-xs text-danger-600">{{ tForm.errors.consultant_id }}</p></div>
+                        <p v-if="tForm.specialty_id && !specConsultants.length" class="mt-1 text-xs text-on-warning">No on-service consultants under this specialty.</p>
+                        <p v-if="tForm.errors.consultant_id" class="mt-1 text-xs text-on-danger">{{ tForm.errors.consultant_id }}</p></div>
                     <p class="text-xs text-ink-400">Closes this episode as a specialty handover and opens a new one under the chosen consultant.</p>
                     <!-- handover gate: write today's handover here, save, retry the transfer -->
-                    <div v-if="tForm.errors.handover" class="rounded-xl bg-warning-100/60 p-3 ring-1 ring-warning-500/30">
-                        <p class="text-xs font-semibold text-warning-500">{{ tForm.errors.handover }}</p>
+                    <div v-if="tForm.errors.handover" class="rounded-xl bg-tint-warning/60 p-3 ring-1 ring-warning-500/30">
+                        <p class="text-xs font-semibold text-on-warning">{{ tForm.errors.handover }}</p>
                         <textarea v-model="gateBody" rows="3" maxlength="5000" placeholder="Write today's handover for this patient…" aria-label="Handover text" class="mt-2 w-full rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
                         <div class="mt-2 flex justify-end"><button type="button" @click="saveGateThen(submitTransfer)" :disabled="gateBusy || !gateBody.trim()" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save handover & transfer</button></div>
                     </div>
@@ -238,7 +238,7 @@ defineExpose({
                 <template v-else>
                     <div><label class="mb-1 block text-sm font-semibold text-ink-700">External / allied service</label>
                         <select v-model="tForm.service" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select service…</option><option v-for="s in externalServices" :key="s" :value="s">{{ s }}</option></select>
-                        <p v-if="tForm.errors.service" class="mt-1 text-xs text-danger-600">{{ tForm.errors.service }}</p></div>
+                        <p v-if="tForm.errors.service" class="mt-1 text-xs text-on-danger">{{ tForm.errors.service }}</p></div>
                     <p class="text-xs text-ink-400">Closes this episode — the patient leaves the department (no new episode).</p>
                 </template>
                 <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="tForm.processing || !transferReady" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Transfer</button></div>

@@ -38,28 +38,25 @@ const verdict = (r) => (r >= 4.5 ? 'AA text' : r >= 3 ? 'UI / large text only' :
 // Each row is [label, fg, bg] or [label, fg, bg, { known: 'why this is a deliberate exception' }].
 const PAIRS = [
     // --- brand on the light page surfaces ---
-    // brand-500 as TEXT/GLYPH is sub-AA on its REAL surfaces — a systemic finding (W5), not a large-text
-    // exemption (an earlier { large:true } here modelled the wrong background). Its only shipped text use
-    // is the ✕ remove-glyph in diagnosis chips (DxChips.vue / Admissions·Create / Registry), 12px semibold
-    // on bg-brand-100 = 2.78:1 light; plus the 15px-bold PDF KPI numerals on white = 3.33:1. 15px bold is
-    // NOT "large text" (needs ≥18.66px bold), so both need 4.5:1. KNOWN so the gate stays honest without
-    // reddening on debt tracked with the rest of the status/brand-as-text sweep.
-    ['brand-500 on brand-100 (DxChips ✕ glyph, light)', '#009ca6', '#d4f0ef', { known: 'systemic brand-as-text (W5): 12px ✕ glyph 2.78:1; migrate to a darker brand step' }],
-    ['brand-500 on #f1f6f6 (PDF KPI numerals, 15px bold)', '#009ca6', '#f1f6f6', { known: 'systemic brand-as-text (W5): 15px bold ≠ large text; 3.05:1 on the report cell (worse than 3.33:1 on pure white)' }],
+    // The status/brand-as-text sweep migrated every brand TEXT/GLYPH use to the theme-aware brand-700
+    // (the ✕ diagnosis-chip glyph — DxChips/Admissions·Create/Registry — now uses it), so brand-500 no
+    // longer ships as text in the Vue app (a11y-status-text.spec.js enforces it). It DOES still ship in
+    // the dompdf PRINT templates (annual/statistics-pdf KPI numerals, #009ca6 15px bold on the #f1f6f6
+    // cell = 3.05:1) — a print-only fail kept KNOWN pending a dedicated PDF-template a11y pass.
+    ['brand-500 on brand-100 (ex DxChips ✕ glyph — now brand-700)', '#009ca6', '#d4f0ef', { info: true }],
+    ['brand-500 on #f1f6f6 (PDF KPI numerals, 15px bold — still ships in print)', '#009ca6', '#f1f6f6', { known: 'print-only (dompdf): 15px bold ≠ large text; 3.05:1 on the report cell. Pending a PDF-template a11y pass.' }],
     ['brand-700 on white', '#00727b', '#ffffff'],
     ['brand-800 on white', '#00565e', '#ffffff'],
-    // --- CURRENT status colours used as TEXT (this is what we are checking) ---
-    // SYSTEMIC status-colour-as-text finding (W0-T3b discovery → tracked for the Wave 5 a11y sweep).
-    // Contrary to an earlier note here, warning-500 IS shipped as badge/label text in ~30 places via
-    // losTone / outcomeTone / stateTone / locTone and inline badges — at 2.15–2.48:1, a severe fail.
-    // danger-600 / success-600 on their -100 tints are the milder end (4.32–4.39:1, just under the
-    // 12px badge bar). All KNOWN here so the new default 4.5 bar can protect NEW pairs without
-    // reddening on this pre-existing debt; the fix (route them through the on-* tokens) is a Wave-5 item.
-    ['warning-500 on white', '#e69209', '#ffffff', { known: 'systemic status-as-text (W5): shipped as badge text; migrate to on-warning' }],
-    ['warning-500 on warning-100', '#e69209', '#fdedd2', { known: 'systemic status-as-text (W5): shipped badge; migrate to on-warning' }],
-    ['danger-600 on danger-100', '#c1302d', '#fbdcdc', { known: 'systemic status-as-text (W5): ≤12px badge at 4.39:1; migrate to on-danger' }],
-    ['success-600 on success-100', '#15803d', '#d8f5e3', { known: 'systemic status-as-text (W5): ≤12px badge at 4.32:1; migrate to on-success' }],
-    ['info-500 on info-100', '#2f7fe0', '#d7e9fb', { known: 'systemic status-as-text (W5): ≤12px badge at 3.24:1; migrate to on-info' }],
+    // --- status colours as TEXT: the sweep routed every text/badge use through bg-tint-X + text-on-X
+    //     (enforced by resources/js/__tests__/a11y-status-text.spec.js). What remains of these raw pairs
+    //     is NON-TEXT only: bg-X-100 status ICON circles/chips (1.4.11 → 3:1 bar), which 4.32–4.39:1 clears.
+    //     The warning/info rows no longer ship at all — kept as pre-fix baselines so a regression reads as
+    //     a number. (See the on-*-on-card rows below for the pairs that NOW ship as text.) ---
+    ['warning-500 on white (pre-fix baseline; migrated to on-warning)', '#e69209', '#ffffff', { info: true }],
+    ['warning-500 on warning-100 (pre-fix baseline; migrated)', '#e69209', '#fdedd2', { info: true }],
+    ['danger-600 on danger-100 (status ICON chips only — non-text UI)', '#c1302d', '#fbdcdc', { large: true }],
+    ['success-600 on success-100 (status ICON circle only — non-text UI)', '#15803d', '#d8f5e3', { large: true }],
+    ['info-500 on info-100 (pre-fix baseline; migrated to on-info)', '#2f7fe0', '#d7e9fb', { info: true }],
     // --- PROPOSED AA-safe `on-*` text tokens, light theme ---
     ['on-info on tint-info', '#1b5cad', '#d7e9fb'],
     ['on-warning on tint-warning', '#8a5a00', '#fdedd2'],
@@ -70,6 +67,14 @@ const PAIRS = [
     ['on-warning on tint-warning (dark)', '#f0c073', '#3a2a09'],
     ['on-danger on tint-danger (dark)', '#f4a6a4', '#3a1a19'],
     ['on-success on tint-success (dark)', '#86d6a3', '#10291a'],
+    // on-* as PLAIN TEXT on the card surface — now shipped widely after the sweep (menu-item labels,
+    // form-error <p>, table numerals, status words that sit straight on the card, not on a tint chip).
+    ['on-danger on card', '#a82824', '#ffffff'],
+    ['on-danger on card (dark)', '#f4a6a4', '#13201f'],
+    ['on-success on card', '#11672f', '#ffffff'],
+    ['on-success on card (dark)', '#86d6a3', '#13201f'],
+    ['on-info on card', '#1b5cad', '#ffffff'],
+    ['on-info on card (dark)', '#9cc4f5', '#13201f'],
     // --- ACCENT (W0-T3e). The Long-term badge used accent-600 on accent-300/40, which composites to
     //     2.90:1 over the white card and 1.67:1 over the dark one (10px semibold — no large-text
     //     allowance applies). accent now has the same tint/on pair as the four status hues. The

@@ -19,7 +19,7 @@ defineEmits(['remove']);
     <div v-if="diagnoses.length" class="mt-2 flex flex-wrap gap-1.5">
         <span v-for="d in diagnoses" :key="d.code" class="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700">
             <span class="nums">{{ d.code }}</span> {{ d.name }}
-            <button v-if="removable" type="button" @click="$emit('remove', d.code)" class="text-brand-500 hover:text-danger-600">✕</button>
+            <button v-if="removable" type="button" @click="$emit('remove', d.code)" class="text-brand-700 hover:text-on-danger">✕</button>
         </span>
     </div>
 </template>

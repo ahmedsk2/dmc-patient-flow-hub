@@ -27,7 +27,7 @@ const when = (d) => (d ? String(d).slice(0, 10) : '—');
 const card = 'overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line';
 const th = 'px-5 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-ink-400';
 const td = 'px-5 py-2.5 text-sm text-ink-700';
-const badge = (n) => `nums rounded-full px-2 py-0.5 text-xs font-bold ${n > 0 ? 'bg-warning-100 text-warning-500' : 'bg-success-100 text-success-600'}`;
+const badge = (n) => `nums rounded-full px-2 py-0.5 text-xs font-bold ${n > 0 ? 'bg-tint-warning text-on-warning' : 'bg-tint-success text-on-success'}`;
 </script>
 
 <template>
@@ -57,7 +57,7 @@ const badge = (n) => `nums rounded-full px-2 py-0.5 text-xs font-bold ${n > 0 ? 
                             <td :class="[td, 'nums']"><Link :href="patientLink(r.id)" class="text-brand-600 hover:underline">{{ r.mrn }}</Link></td>
                             <td :class="td">{{ r.name }}</td><td :class="[td, 'nums']">{{ r.los }}</td><td :class="[td, 'nums']">{{ when(r.admit_date) }}</td>
                         </tr>
-                        <tr v-if="!overLos.length"><td :class="[td, 'text-success-600']" colspan="4">None.</td></tr>
+                        <tr v-if="!overLos.length"><td :class="[td, 'text-on-success']" colspan="4">None.</td></tr>
                     </tbody>
                 </table>
             </section>
@@ -76,7 +76,7 @@ const badge = (n) => `nums rounded-full px-2 py-0.5 text-xs font-bold ${n > 0 ? 
                             <td :class="[td, 'nums']"><Link :href="patientLink(r.id)" class="text-brand-600 hover:underline">{{ r.mrn }}</Link></td>
                             <td :class="td">{{ r.name }}</td><td :class="[td, 'nums']">{{ when(r.admit_date) }}</td>
                         </tr>
-                        <tr v-if="!noDx.length"><td :class="[td, 'text-success-600']" colspan="3">None.</td></tr>
+                        <tr v-if="!noDx.length"><td :class="[td, 'text-on-success']" colspan="3">None.</td></tr>
                     </tbody>
                 </table>
             </section>
@@ -95,7 +95,7 @@ const badge = (n) => `nums rounded-full px-2 py-0.5 text-xs font-bold ${n > 0 ? 
                             <td :class="[td, 'nums']"><Link :href="patientLink(r.id)" class="text-brand-600 hover:underline">{{ r.mrn }}</Link></td>
                             <td :class="td">{{ r.name }}</td><td :class="[td, 'nums']">{{ when(r.admit_date) }}</td><td :class="[td, 'nums']">{{ when(r.discharge_date) }}</td>
                         </tr>
-                        <tr v-if="!badDates.length"><td :class="[td, 'text-success-600']" colspan="4">None.</td></tr>
+                        <tr v-if="!badDates.length"><td :class="[td, 'text-on-success']" colspan="4">None.</td></tr>
                     </tbody>
                 </table>
             </section>
@@ -114,7 +114,7 @@ const badge = (n) => `nums rounded-full px-2 py-0.5 text-xs font-bold ${n > 0 ? 
                             <td :class="[td, 'nums']"><Link :href="patientLink(r.id)" class="text-brand-600 hover:underline">{{ r.mrn }}</Link></td>
                             <td :class="td">{{ r.name }}</td><td :class="[td, 'nums']">{{ r.icd10_code }}</td>
                         </tr>
-                        <tr v-if="!orphanDx.length"><td :class="[td, 'text-success-600']" colspan="3">None.</td></tr>
+                        <tr v-if="!orphanDx.length"><td :class="[td, 'text-on-success']" colspan="3">None.</td></tr>
                     </tbody>
                 </table>
             </section>
@@ -133,7 +133,7 @@ const badge = (n) => `nums rounded-full px-2 py-0.5 text-xs font-bold ${n > 0 ? 
                             <td :class="[td, 'nums']"><Link :href="patientLink(r.id)" class="text-brand-600 hover:underline">{{ r.mrn }}</Link></td>
                             <td :class="td">{{ r.name }}</td><td :class="[td, 'nums']">{{ r.open_episodes }}</td>
                         </tr>
-                        <tr v-if="!doubleOpen.length"><td :class="[td, 'text-success-600']" colspan="3">None.</td></tr>
+                        <tr v-if="!doubleOpen.length"><td :class="[td, 'text-on-success']" colspan="3">None.</td></tr>
                     </tbody>
                 </table>
             </section>

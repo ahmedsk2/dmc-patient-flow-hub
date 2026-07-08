@@ -50,8 +50,8 @@ describe('xsrf()', () => {
 
 describe('locTone()', () => {
     it('maps ICU → danger, ER → warning, else → brand', () => {
-        expect(locTone('ICU')).toContain('text-danger-600');
-        expect(locTone('ER')).toContain('text-warning-500');
+        expect(locTone('ICU')).toContain('text-on-danger');
+        expect(locTone('ER')).toContain('text-on-warning');
         expect(locTone('Ward')).toContain('text-brand-700');
         expect(locTone(null)).toContain('text-brand-700');
     });

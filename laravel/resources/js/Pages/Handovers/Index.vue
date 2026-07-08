@@ -41,7 +41,7 @@ const saveEdit = (s) => eForm.post(`/admissions/${s.admission_id}/handover`, {
 });
 
 const stateOf = (s) => (s.signed_at ? 'signed' : s.voided_at ? 'voided' : 'pending');
-const stateTone = { signed: 'bg-success-100 text-success-600', voided: 'bg-ink-100 text-ink-500', pending: 'bg-warning-100 text-warning-500' };
+const stateTone = { signed: 'bg-tint-success text-on-success', voided: 'bg-ink-100 text-ink-500', pending: 'bg-tint-warning text-on-warning' };
 const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending: 'Awaiting signature' }));
 </script>
 
@@ -78,7 +78,7 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
                             <td class="px-3 py-3 text-ink-600">Dr. {{ s.from }}</td>
                             <td class="nums px-3 py-3 text-ink-500" :title="fmt(s.required_at)">{{ relTime(s.required_at) }}</td>
                             <!-- W0-T3e. `hover:bg-success-200` was dead (undeclared) → no hover state.
-                                 It cannot be revived under a `text-success-600` label: that pair is
+                                 It cannot be revived under a success-600-as-text label: that pair is
                                  ALREADY 4.32:1 on success-100, so every darker mint is worse (Tailwind's
                                  own green-200 gives 4.14:1). Moved to the theme-aware AA pair —
                                  on-success on tint-success = 6.02:1 light / 8.98:1 dark — and
@@ -114,7 +114,7 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
                         <td class="px-5 py-3">
                             <template v-if="editing === s.id">
                                 <textarea v-model="eForm.body" rows="4" maxlength="5000" aria-label="Handover text" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
-                                <p v-if="eForm.errors.body" class="mt-1 text-xs text-danger-600">{{ eForm.errors.body }}</p>
+                                <p v-if="eForm.errors.body" class="mt-1 text-xs text-on-danger">{{ eForm.errors.body }}</p>
                                 <div class="mt-1.5 flex justify-end gap-2">
                                     <button @click="editing = null" class="rounded-lg px-3 py-1.5 text-xs font-semibold text-ink-500">Cancel</button>
                                     <button @click="saveEdit(s)" :disabled="eForm.processing || !eForm.body.trim()" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save</button>

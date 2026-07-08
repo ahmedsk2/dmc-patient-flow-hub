@@ -62,7 +62,7 @@ const cell = 'w-full min-w-16 rounded-lg border border-ink-200 bg-card px-1.5 py
                 <textarea v-model="form.rows" rows="10" placeholder="Paste rows here…"
                     class="w-full rounded-xl border border-ink-200 p-3 font-mono text-xs outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                     :class="{ 'border-danger-500': form.errors.rows }"></textarea>
-                <p v-if="form.errors.rows" class="mt-1 text-xs text-danger-600">{{ form.errors.rows }}</p>
+                <p v-if="form.errors.rows" class="mt-1 text-xs text-on-danger">{{ form.errors.rows }}</p>
                 <div class="mt-4 flex items-center justify-end gap-3">
                     <span class="mr-auto text-xs text-ink-400">Preview validates every row first; nothing is written until you confirm.</span>
                     <button @click="doPreview" :disabled="form.processing || !form.rows.trim()" class="rounded-xl bg-card px-5 py-2.5 text-sm font-semibold text-ink-700 shadow ring-1 ring-ink-200 transition hover:bg-ink-50 disabled:opacity-50">Preview</button>
@@ -74,8 +74,8 @@ const cell = 'w-full min-w-16 rounded-lg border border-ink-200 bg-card px-1.5 py
                 <div class="mb-3 flex items-center justify-between">
                     <h2 class="font-bold text-ink-800">Preview</h2>
                     <div class="flex gap-2 text-sm font-semibold">
-                        <span class="rounded-full bg-success-100 px-3 py-1 text-success-600">{{ preview.valid }} valid</span>
-                        <span v-if="preview.invalid" class="rounded-full bg-danger-100 px-3 py-1 text-danger-600">{{ preview.invalid }} invalid</span>
+                        <span class="rounded-full bg-tint-success px-3 py-1 text-on-success">{{ preview.valid }} valid</span>
+                        <span v-if="preview.invalid" class="rounded-full bg-tint-danger px-3 py-1 text-on-danger">{{ preview.invalid }} invalid</span>
                     </div>
                 </div>
                 <div class="max-h-96 overflow-auto rounded-xl ring-1 ring-line">
@@ -86,7 +86,7 @@ const cell = 'w-full min-w-16 rounded-lg border border-ink-200 bg-card px-1.5 py
                         <!-- editable preview (full previews): fix typos in place, then confirm — every
                              row is re-validated server-side on import -->
                         <tbody v-if="editable" class="divide-y divide-line">
-                            <tr v-for="r in editRows" :key="r.line" :class="r.ok ? (r.warning ? 'bg-accent-300/15' : '') : 'bg-danger-100/40'">
+                            <tr v-for="r in editRows" :key="r.line" :class="r.ok ? (r.warning ? 'bg-accent-300/15' : '') : 'bg-tint-danger/40'">
                                 <td class="nums px-2 py-1 text-ink-400">{{ r.line }}</td>
                                 <td class="px-1 py-1"><input v-model="r.mrn" inputmode="numeric" aria-label="MRN" :class="cell" /></td>
                                 <td class="px-1 py-1"><input v-model="r.name" aria-label="Name" :class="[cell, 'min-w-28']" /></td>
@@ -104,15 +104,15 @@ const cell = 'w-full min-w-16 rounded-lg border border-ink-200 bg-card px-1.5 py
                                 <td class="px-1 py-1 text-center"><input v-model="r.is_longterm" type="checkbox" aria-label="Long-term" class="rounded text-brand-600" /></td>
                                 <td class="px-1 py-1"><input v-model="r.transfer_type" placeholder="other transfer…" aria-label="Transfer type" :class="[cell, 'min-w-24']" /></td>
                                 <td class="px-3 py-1">
-                                    <span v-if="!r.ok" class="font-semibold text-danger-600">{{ r.error }}</span>
+                                    <span v-if="!r.ok" class="font-semibold text-on-danger">{{ r.error }}</span>
                                     <span v-else-if="r.warning" class="font-semibold text-on-accent">{{ r.warning }}</span>
-                                    <span v-else class="font-semibold text-success-600">OK</span>
+                                    <span v-else class="font-semibold text-on-success">OK</span>
                                 </td>
                             </tr>
                         </tbody>
                         <!-- read-only fallback for truncated (>200-row) previews -->
                         <tbody v-else class="divide-y divide-line">
-                            <tr v-for="r in preview.sample" :key="r.line" :class="r.ok ? (r.warning ? 'bg-accent-300/15' : '') : 'bg-danger-100/40'">
+                            <tr v-for="r in preview.sample" :key="r.line" :class="r.ok ? (r.warning ? 'bg-accent-300/15' : '') : 'bg-tint-danger/40'">
                                 <td class="nums px-3 py-1.5 text-ink-400">{{ r.line }}</td>
                                 <td class="nums px-3 py-1.5">{{ r.mrn || '—' }}</td>
                                 <td class="px-3 py-1.5">{{ r.name || '—' }}</td>
@@ -122,7 +122,7 @@ const cell = 'w-full min-w-16 rounded-lg border border-ink-200 bg-card px-1.5 py
                                 <td class="px-3 py-1.5">{{ r.location }}</td>
                                 <td class="nums px-3 py-1.5">{{ (r.diagnoses || []).join(' | ') || '—' }}</td>
                                 <td class="px-3 py-1.5">
-                                    <span v-if="r.consultant_id" class="text-success-600">{{ r.consultant_name }}</span>
+                                    <span v-if="r.consultant_id" class="text-on-success">{{ r.consultant_name }}</span>
                                     <span v-else-if="r.consultant_name" class="text-on-accent">{{ r.consultant_name }}?</span>
                                     <span v-else>—</span>
                                 </td>
@@ -134,9 +134,9 @@ const cell = 'w-full min-w-16 rounded-lg border border-ink-200 bg-card px-1.5 py
                                 <td class="px-3 py-1.5">{{ r.is_longterm ? 'Yes' : '—' }}</td>
                                 <td class="px-3 py-1.5">{{ r.transfer_type || '—' }}</td>
                                 <td class="px-3 py-1.5">
-                                    <span v-if="!r.ok" class="font-semibold text-danger-600">{{ r.error }}</span>
+                                    <span v-if="!r.ok" class="font-semibold text-on-danger">{{ r.error }}</span>
                                     <span v-else-if="r.warning" class="font-semibold text-on-accent">{{ r.warning }}</span>
-                                    <span v-else class="font-semibold text-success-600">OK</span>
+                                    <span v-else class="font-semibold text-on-success">OK</span>
                                 </td>
                             </tr>
                         </tbody>

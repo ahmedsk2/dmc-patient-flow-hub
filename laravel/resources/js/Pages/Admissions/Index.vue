@@ -92,7 +92,7 @@ const destroyAdmission = async (p) => {
                 </button>
                 <button v-if="canAdd && icuPatients.length" @click="openIcu" class="inline-flex items-center gap-1.5 rounded-xl bg-card px-4 py-2 text-sm font-semibold text-ink-600 shadow ring-1 ring-ink-200 transition hover:bg-ink-50">
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m12.75 15 3-3m0 0-3-3m3 3h-7.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-                    Admission from ICU <span class="nums text-danger-600">{{ icuPatients.length }}</span>
+                    Admission from ICU <span class="nums text-on-danger">{{ icuPatients.length }}</span>
                 </button>
                 <Link v-if="canAdd" href="/admissions/create" class="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-700">
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>

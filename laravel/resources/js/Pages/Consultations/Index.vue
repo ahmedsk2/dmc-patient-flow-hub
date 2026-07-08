@@ -137,11 +137,11 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                         <td class="nums px-3 py-3 text-ink-500">{{ c.date || '—' }}</td>
                         <td class="px-5 py-3">
                             <div class="flex items-center gap-2">
-                                <span v-if="c.signoff" class="rounded-full bg-success-100 px-2.5 py-0.5 text-xs font-semibold text-success-600">Signed {{ c.signoff }}</span>
+                                <span v-if="c.signoff" class="rounded-full bg-tint-success px-2.5 py-0.5 text-xs font-semibold text-on-success">Signed {{ c.signoff }}</span>
                                 <span v-else class="rounded-full bg-tint-accent px-2.5 py-0.5 text-xs font-semibold text-on-accent">Active</span>
-                                <button v-if="!c.signoff && canSignoff(c)" @click="signoff(c)" title="Sign off" class="rounded-lg px-2 py-1 text-xs font-semibold text-success-600 hover:bg-success-100">Sign off</button>
+                                <button v-if="!c.signoff && canSignoff(c)" @click="signoff(c)" title="Sign off" class="rounded-lg px-2 py-1 text-xs font-semibold text-on-success hover:bg-tint-success">Sign off</button>
                                 <button v-if="canEdit(c)" @click="openEdit(c)" title="Edit" class="rounded-lg px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50">Edit</button>
-                                <button v-if="me.is_admin" @click="deleteConsult(c)" title="Delete" class="rounded-lg px-2 py-1 text-xs font-semibold text-danger-600 hover:bg-danger-100">Delete</button>
+                                <button v-if="me.is_admin" @click="deleteConsult(c)" title="Delete" class="rounded-lg px-2 py-1 text-xs font-semibold text-on-danger hover:bg-tint-danger">Delete</button>
                             </div>
                         </td>
                     </tr>
@@ -170,22 +170,22 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                     <div class="grid gap-3 sm:grid-cols-2">
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">MRN</label><input v-model="eForm.mrn" :class="[field, eForm.errors.mrn && 'border-danger-500']" /></div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Patient name</label><input v-model="eForm.patient_name" :class="field" /></div>
-                        <div class="grid grid-cols-2 gap-3"><div><label class="mb-1 block text-sm font-semibold text-ink-700">Age <span class="text-danger-500">*</span></label><input v-model="eForm.age" inputmode="numeric" :class="[field, eForm.errors.age && 'border-danger-500']" /><p v-if="eForm.errors.age" class="mt-1 text-xs text-danger-600">{{ eForm.errors.age }}</p></div><div><label class="mb-1 block text-sm font-semibold text-ink-700">Bed <span class="text-danger-500">*</span></label><input v-model="eForm.bed" :class="[field, eForm.errors.bed && 'border-danger-500']" /><p v-if="eForm.errors.bed" class="mt-1 text-xs text-danger-600">{{ eForm.errors.bed }}</p></div></div>
+                        <div class="grid grid-cols-2 gap-3"><div><label class="mb-1 block text-sm font-semibold text-ink-700">Age <span class="text-danger-500">*</span></label><input v-model="eForm.age" inputmode="numeric" :class="[field, eForm.errors.age && 'border-danger-500']" /><p v-if="eForm.errors.age" class="mt-1 text-xs text-on-danger">{{ eForm.errors.age }}</p></div><div><label class="mb-1 block text-sm font-semibold text-ink-700">Bed <span class="text-danger-500">*</span></label><input v-model="eForm.bed" :class="[field, eForm.errors.bed && 'border-danger-500']" /><p v-if="eForm.errors.bed" class="mt-1 text-xs text-on-danger">{{ eForm.errors.bed }}</p></div></div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Location</label><select v-model="eForm.current_location" :class="field"><option>Ward</option><option>ICU</option><option>ER</option></select></div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Date</label><input v-model="eForm.consultation_date" type="date" :max="today" :class="field" /></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">From service <span class="text-danger-500">*</span></label><input v-model="eForm.consultation_from" list="svc-list" :class="[field, eForm.errors.consultation_from && 'border-danger-500']" /><p v-if="eForm.errors.consultation_from" class="mt-1 text-xs text-danger-600">{{ eForm.errors.consultation_from }}</p></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">To service <span class="text-danger-500">*</span></label><input v-model="eForm.to_service" list="svc-list" :class="[field, eForm.errors.to_service && 'border-danger-500']" /><p v-if="eForm.errors.to_service" class="mt-1 text-xs text-danger-600">{{ eForm.errors.to_service }}</p></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">From service <span class="text-danger-500">*</span></label><input v-model="eForm.consultation_from" list="svc-list" :class="[field, eForm.errors.consultation_from && 'border-danger-500']" /><p v-if="eForm.errors.consultation_from" class="mt-1 text-xs text-on-danger">{{ eForm.errors.consultation_from }}</p></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">To service <span class="text-danger-500">*</span></label><input v-model="eForm.to_service" list="svc-list" :class="[field, eForm.errors.to_service && 'border-danger-500']" /><p v-if="eForm.errors.to_service" class="mt-1 text-xs text-on-danger">{{ eForm.errors.to_service }}</p></div>
                         <div class="sm:col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Receiving consultant <span v-if="eInternal" class="text-danger-500">*</span></label><select v-model="eForm.consultant_id" :disabled="!eInternal" :class="[field, 'disabled:bg-ink-50', eForm.errors.consultant_id && 'border-danger-500']"><option value="">Select consultant…</option><option v-for="c in ePick.list" :key="c.id" :value="c.id">{{ c.name }}</option></select>
                             <p v-if="!eInternal" class="mt-1 text-xs text-ink-400">External / free-text service — no internal consultant is recorded.</p>
-                            <p v-else-if="ePick.fallback" class="mt-1 text-xs text-warning-500">No on-service consultants for this specialty — showing all.</p>
-                            <p v-if="eForm.errors.consultant_id" class="mt-1 text-xs text-danger-600">{{ eForm.errors.consultant_id }}</p></div>
+                            <p v-else-if="ePick.fallback" class="mt-1 text-xs text-on-warning">No on-service consultants for this specialty — showing all.</p>
+                            <p v-if="eForm.errors.consultant_id" class="mt-1 text-xs text-on-danger">{{ eForm.errors.consultant_id }}</p></div>
                     </div>
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-ink-700">Indication <span class="text-danger-500">*</span></label>
                         <div class="flex flex-wrap gap-2">
                             <label v-for="r in reasons" :key="r.id" class="cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold transition" :class="eForm.indication.includes(r.id) ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'"><input type="checkbox" :value="r.id" v-model="eForm.indication" class="hidden" /> {{ r.name }}</label>
                         </div>
-                        <p v-if="eForm.errors.indication" class="mt-1 text-xs text-danger-600">{{ eForm.errors.indication }}</p>
+                        <p v-if="eForm.errors.indication" class="mt-1 text-xs text-on-danger">{{ eForm.errors.indication }}</p>
                         <input v-model="eForm.other_indication" :class="[field, 'mt-2']" placeholder="Other indication (required when 'Other' is selected)" />
                     </div>
                     <div class="flex justify-end gap-2"><button type="button" @click="closeEdit" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="eForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Update consultation</button></div>
@@ -196,21 +196,21 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
         <BaseModal :open="showAdd" title="New consultation" size="2xl" tall field-first @close="closeAdd">
                 <form @submit.prevent="submitAdd" class="space-y-4">
                     <div class="grid gap-3 sm:grid-cols-2">
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">MRN <span class="text-danger-500">*</span></label><input v-model="cForm.mrn" :class="[field, cForm.errors.mrn && 'border-danger-500']" /><p v-if="cForm.errors.mrn" class="mt-1 text-xs text-danger-600">{{ cForm.errors.mrn }}</p></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">MRN <span class="text-danger-500">*</span></label><input v-model="cForm.mrn" :class="[field, cForm.errors.mrn && 'border-danger-500']" /><p v-if="cForm.errors.mrn" class="mt-1 text-xs text-on-danger">{{ cForm.errors.mrn }}</p></div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Patient name <span class="text-danger-500">*</span></label><input v-model="cForm.patient_name" :class="[field, cForm.errors.patient_name && 'border-danger-500']" /></div>
                         <div class="grid grid-cols-2 gap-3">
-                            <div><label class="mb-1 block text-sm font-semibold text-ink-700">Age <span class="text-danger-500">*</span></label><input v-model="cForm.age" inputmode="numeric" :class="[field, cForm.errors.age && 'border-danger-500']" /><p v-if="cForm.errors.age" class="mt-1 text-xs text-danger-600">{{ cForm.errors.age }}</p></div>
-                            <div><label class="mb-1 block text-sm font-semibold text-ink-700">Bed <span class="text-danger-500">*</span></label><input v-model="cForm.bed" :class="[field, cForm.errors.bed && 'border-danger-500']" /><p v-if="cForm.errors.bed" class="mt-1 text-xs text-danger-600">{{ cForm.errors.bed }}</p></div>
+                            <div><label class="mb-1 block text-sm font-semibold text-ink-700">Age <span class="text-danger-500">*</span></label><input v-model="cForm.age" inputmode="numeric" :class="[field, cForm.errors.age && 'border-danger-500']" /><p v-if="cForm.errors.age" class="mt-1 text-xs text-on-danger">{{ cForm.errors.age }}</p></div>
+                            <div><label class="mb-1 block text-sm font-semibold text-ink-700">Bed <span class="text-danger-500">*</span></label><input v-model="cForm.bed" :class="[field, cForm.errors.bed && 'border-danger-500']" /><p v-if="cForm.errors.bed" class="mt-1 text-xs text-on-danger">{{ cForm.errors.bed }}</p></div>
                         </div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Location</label><select v-model="cForm.current_location" :class="field"><option>Ward</option><option>ICU</option><option>ER</option></select></div>
                         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Date <span class="text-danger-500">*</span></label><input v-model="cForm.consultation_date" type="date" :max="today" :class="field" /></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">From service <span class="text-danger-500">*</span></label><input v-model="cForm.consultation_from" list="svc-list" :class="[field, cForm.errors.consultation_from && 'border-danger-500']" placeholder="Referring service" /><p v-if="cForm.errors.consultation_from" class="mt-1 text-xs text-danger-600">{{ cForm.errors.consultation_from }}</p></div>
-                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">To service <span class="text-danger-500">*</span></label><input v-model="cForm.to_service" list="svc-list" :class="[field, cForm.errors.to_service && 'border-danger-500']" placeholder="Consulted service" /><p v-if="cForm.errors.to_service" class="mt-1 text-xs text-danger-600">{{ cForm.errors.to_service }}</p></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">From service <span class="text-danger-500">*</span></label><input v-model="cForm.consultation_from" list="svc-list" :class="[field, cForm.errors.consultation_from && 'border-danger-500']" placeholder="Referring service" /><p v-if="cForm.errors.consultation_from" class="mt-1 text-xs text-on-danger">{{ cForm.errors.consultation_from }}</p></div>
+                        <div><label class="mb-1 block text-sm font-semibold text-ink-700">To service <span class="text-danger-500">*</span></label><input v-model="cForm.to_service" list="svc-list" :class="[field, cForm.errors.to_service && 'border-danger-500']" placeholder="Consulted service" /><p v-if="cForm.errors.to_service" class="mt-1 text-xs text-on-danger">{{ cForm.errors.to_service }}</p></div>
                         <datalist id="svc-list"><option v-for="s in specialties" :key="s.id" :value="s.name" /></datalist>
                         <div class="sm:col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Receiving consultant <span v-if="cInternal" class="text-danger-500">*</span></label><select v-model="cForm.consultant_id" :disabled="!cInternal" :class="[field, 'disabled:bg-ink-50', cForm.errors.consultant_id && 'border-danger-500']"><option value="">Select consultant…</option><option v-for="c in cPick.list" :key="c.id" :value="c.id">{{ c.name }}</option></select>
                             <p v-if="!cInternal" class="mt-1 text-xs text-ink-400">External / free-text service — no internal consultant is recorded.</p>
-                            <p v-else-if="cPick.fallback" class="mt-1 text-xs text-warning-500">No on-service consultants for this specialty — showing all.</p>
-                            <p v-if="cForm.errors.consultant_id" class="mt-1 text-xs text-danger-600">{{ cForm.errors.consultant_id }}</p></div>
+                            <p v-else-if="cPick.fallback" class="mt-1 text-xs text-on-warning">No on-service consultants for this specialty — showing all.</p>
+                            <p v-if="cForm.errors.consultant_id" class="mt-1 text-xs text-on-danger">{{ cForm.errors.consultant_id }}</p></div>
                     </div>
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-ink-700">Indication <span class="text-danger-500">*</span></label>
@@ -220,7 +220,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                                 <input type="checkbox" :value="r.id" v-model="cForm.indication" class="hidden" /> {{ r.name }}
                             </label>
                         </div>
-                        <p v-if="cForm.errors.indication" class="mt-1 text-xs text-danger-600">{{ cForm.errors.indication }}</p>
+                        <p v-if="cForm.errors.indication" class="mt-1 text-xs text-on-danger">{{ cForm.errors.indication }}</p>
                         <input v-model="cForm.other_indication" :class="[field, 'mt-2']" placeholder="Other indication (required when 'Other' is selected)" />
                     </div>
                     <div class="flex justify-end gap-2">
