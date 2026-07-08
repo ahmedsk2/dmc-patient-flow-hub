@@ -38,15 +38,21 @@ const verdict = (r) => (r >= 4.5 ? 'AA text' : r >= 3 ? 'UI / large text only' :
 // Each row is [label, fg, bg] or [label, fg, bg, { known: 'why this is a deliberate exception' }].
 const PAIRS = [
     // --- brand on the light page surfaces ---
-    ['brand-500 on white', '#009ca6', '#ffffff'],
+    ['brand-500 on white', '#009ca6', '#ffffff', { large: true }],   // 3.33:1 — primary; large numerals/icons/links, never 14px body
     ['brand-700 on white', '#00727b', '#ffffff'],
     ['brand-800 on white', '#00565e', '#ffffff'],
     // --- CURRENT status colours used as TEXT (this is what we are checking) ---
-    ['warning-500 on white', '#e69209', '#ffffff', { known: 'documents why a raw semantic colour is never used as TEXT (that is what on-warning is for) — not a shipped call site; guarded by PatientFlags.spec.js RAW_STATUS_TEXT' }],
-    ['warning-500 on warning-100', '#e69209', '#fdedd2', { known: 'same as above' }],
-    ['danger-600 on danger-100', '#c1302d', '#fbdcdc'],
-    ['success-600 on success-100', '#15803d', '#d8f5e3'],
-    ['info-500 on info-100', '#2f7fe0', '#d7e9fb'],
+    // SYSTEMIC status-colour-as-text finding (W0-T3b discovery → tracked for the Wave 5 a11y sweep).
+    // Contrary to an earlier note here, warning-500 IS shipped as badge/label text in ~30 places via
+    // losTone / outcomeTone / stateTone / locTone and inline badges — at 2.15–2.48:1, a severe fail.
+    // danger-600 / success-600 on their -100 tints are the milder end (4.32–4.39:1, just under the
+    // 12px badge bar). All KNOWN here so the new default 4.5 bar can protect NEW pairs without
+    // reddening on this pre-existing debt; the fix (route them through the on-* tokens) is a Wave-5 item.
+    ['warning-500 on white', '#e69209', '#ffffff', { known: 'systemic status-as-text (W5): shipped as badge text; migrate to on-warning' }],
+    ['warning-500 on warning-100', '#e69209', '#fdedd2', { known: 'systemic status-as-text (W5): shipped badge; migrate to on-warning' }],
+    ['danger-600 on danger-100', '#c1302d', '#fbdcdc', { known: 'systemic status-as-text (W5): ≤12px badge at 4.39:1; migrate to on-danger' }],
+    ['success-600 on success-100', '#15803d', '#d8f5e3', { known: 'systemic status-as-text (W5): ≤12px badge at 4.32:1; migrate to on-success' }],
+    ['info-500 on info-100', '#2f7fe0', '#d7e9fb', { known: 'systemic status-as-text (W5): ≤12px badge at 3.24:1; migrate to on-info' }],
     // --- PROPOSED AA-safe `on-*` text tokens, light theme ---
     ['on-info on tint-info', '#1b5cad', '#d7e9fb'],
     ['on-warning on tint-warning', '#8a5a00', '#fdedd2'],
@@ -70,13 +76,19 @@ const PAIRS = [
     //     Readmit badge next to it. Ratios cannot see that; the DELTAS block at the bottom can. ---
     ['accent-600 on accent-300/40 over card (BASELINE, light)', '#b9842a', '#faf0d9', { known: 'W0-T3e baseline — the PRE-fix Long-term badge pairing, kept so the fix reads as a number' }],
     ['accent-600 on accent-300/40 over card (BASELINE, dark)', '#b9842a', '#6d6a53', { known: 'W0-T3e baseline — same' }],
-    ['accent-600 on white (BASELINE plain, light)', '#b9842a', '#ffffff'],
+    ['accent-600 on white (BASELINE plain, light)', '#b9842a', '#ffffff', { info: true }],   // W0-T3j migrated every text-accent-600 → on-accent; this baseline documents the pre-fix fail, nothing ships it now
     ['on-accent on tint-accent', '#4f5314', '#eef0d6'],
     ['on-accent on card', '#4f5314', '#ffffff'],
     ['on-accent on app surface', '#4f5314', '#f1f6f6'],
     ['on-accent on tint-accent (dark)', '#cdd48a', '#262a10'],
     ['on-accent on card (dark)', '#cdd48a', '#13201f'],
     ['on-accent on app surface (dark)', '#cdd48a', '#0c1416'],
+    // on-warning as plain text on the page surfaces (W0-T3j: the Statistics "(Fri/Sat ticks in amber)"
+    // hint moved here from text-accent-600, to keep the word "amber" honest and clear AA).
+    ['on-warning on card', '#8a5a00', '#ffffff'],
+    ['on-warning on app surface', '#8a5a00', '#f1f6f6'],
+    ['on-warning on card (dark)', '#f0c073', '#13201f'],
+    ['on-warning on app surface (dark)', '#f0c073', '#0c1416'],
     // --- FILL-ONLY steps. These are hover fills; they would FAIL as text on the card, which is why
     //     every warning-600 / danger-700 TEXT call site was migrated to an on-* token first. The pair
     //     that matters is the fill against its OWN label.
@@ -104,7 +116,7 @@ const PAIRS = [
     // white-on-success-600 became 4.17:1 on hover over the light card panel. WCAG 1.4.3 exempts
     // `disabled`, never `hover`. Both figures below must stay above 4.5:1.
     ['white on success-600 (rest)', '#ffffff', '#15803d'],
-    ['white on success-600 at 90% opacity over card (HISTORICAL FAIL)', '#ffffff', '#2c8d50'],
+    ['white on success-600 at 90% opacity over card (HISTORICAL FAIL)', '#ffffff', '#2c8d50', { info: true }],   // documents the opacity-composite trap; the fade was removed (W0-T3f), nothing ships this
     // --- danger-200 is FIXED (not theme-aware) because the sidebar is always navy. Backdrop is the
     //     bg-danger-600/20 chip composited on navy-900, the lighter end of the sidebar gradient. ---
     ['danger-200 on nav chip over navy-900', '#f4a6a4', '#273237'],
@@ -287,16 +299,27 @@ const DELTAS = [
     ['HOVER danger-700 vs danger-600', '#9f2724', '#c1302d', MIN_DE00_HOVER],
 ];
 
+// Per-row WCAG target (W0-T3b). DEFAULT is the 4.5:1 NORMAL-TEXT bar. The old exit test was `r < 3`,
+// which silently green-lit any body-text pair in the 3–4.5 gap — a real WCAG 1.4.3 AA failure the gate
+// was supposed to catch but reported as merely "UI / large text only". A row opts DOWN only by saying
+// what it actually is, so the default protects every NEW pair a future edit adds:
+//   { large: true } → 3:1  (WCAG 1.4.3 large text: ≥24px, or ≥18.66px bold — and 1.4.11 non-text UI)
+//   { info:  true } → 0     (informational BASELINE: a pre-fix number kept for legibility; nothing ships it)
+// `{ known }` still excludes a row from the exit code — a documented, tracked defect — independent of its bar.
+const barFor = (o) => (o?.info ? 0 : o?.large ? 3 : 4.5);
+
 let failures = 0;
-for (const [label, fg, bg, known] of PAIRS) {
+for (const [label, fg, bg, opts] of PAIRS) {
     const r = ratio(fg, bg);
     const v = verdict(r);
-    const isKnown = v === 'FAIL' && known;
-    if (v === 'FAIL' && !isKnown) failures++;
-    const tag = v === 'FAIL' ? (isKnown ? '  KNOWN' : '') : '';
-    console.log(`${label.padEnd(36)} ${fg} on ${bg}  ${r.toFixed(2).padStart(6)}:1  ${v}${tag}`);
+    const bar = barFor(opts);
+    const fails = bar > 0 && r < bar;
+    const isKnown = fails && opts?.known;
+    if (fails && !opts?.known) failures++;
+    const tag = fails ? (isKnown ? '  KNOWN' : '  FAIL') : '';
+    console.log(`${label.padEnd(36)} ${fg} on ${bg}  ${r.toFixed(2).padStart(6)}:1  bar ${String(bar || '—').padStart(3)}  ${v}${tag}`);
 }
-console.log(`\n${failures} pair(s) below 3:1 (excluding KNOWN historical/trap rows).`);
+console.log(`\n${failures} pair(s) below their per-row WCAG bar (excluding KNOWN rows).`);
 
 console.log('\n--- perceptual distance: CIEDE2000 (verdict) + CIE76 (reference/comparison) ---');
 let tooClose = 0;

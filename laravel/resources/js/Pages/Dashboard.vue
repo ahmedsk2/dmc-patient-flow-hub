@@ -345,7 +345,10 @@ onUnmounted(() => clearInterval(autoRefresh));
                 <span class="text-sm font-semibold">{{ alert.message }}</span>
                 <button v-if="alert.link" @click="goHref(alert.link)" class="ml-2 text-xs font-bold underline hover:no-underline">View →</button>
             </div>
-            <button @click="dismiss(alert.key)" aria-label="Dismiss alert" class="shrink-0 text-inherit hover:opacity-60">✕</button>
+            <!-- W0-T3j. Hover affordance is a subtle inset wash, NOT `opacity`: `opacity` composites the
+                 whole glyph (label included) toward the tinted backdrop, dropping the ✕ to ~2.5:1 on hover
+                 — WCAG 1.4.3 has no hover exemption. A background tint leaves the glyph's own colour intact. -->
+            <button @click="dismiss(alert.key)" aria-label="Dismiss alert" class="shrink-0 rounded p-0.5 text-inherit transition hover:bg-black/10 dark:hover:bg-white/10">✕</button>
         </div>
 
         <!-- 'My unit today' lens (Item 5): consultants only; default ON, toggle persisted per-browser -->

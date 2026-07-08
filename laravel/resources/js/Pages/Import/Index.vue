@@ -105,7 +105,7 @@ const cell = 'w-full min-w-16 rounded-lg border border-ink-200 bg-card px-1.5 py
                                 <td class="px-1 py-1"><input v-model="r.transfer_type" placeholder="other transfer…" aria-label="Transfer type" :class="[cell, 'min-w-24']" /></td>
                                 <td class="px-3 py-1">
                                     <span v-if="!r.ok" class="font-semibold text-danger-600">{{ r.error }}</span>
-                                    <span v-else-if="r.warning" class="font-semibold text-accent-600">{{ r.warning }}</span>
+                                    <span v-else-if="r.warning" class="font-semibold text-on-accent">{{ r.warning }}</span>
                                     <span v-else class="font-semibold text-success-600">OK</span>
                                 </td>
                             </tr>
@@ -123,7 +123,7 @@ const cell = 'w-full min-w-16 rounded-lg border border-ink-200 bg-card px-1.5 py
                                 <td class="nums px-3 py-1.5">{{ (r.diagnoses || []).join(' | ') || '—' }}</td>
                                 <td class="px-3 py-1.5">
                                     <span v-if="r.consultant_id" class="text-success-600">{{ r.consultant_name }}</span>
-                                    <span v-else-if="r.consultant_name" class="text-accent-600">{{ r.consultant_name }}?</span>
+                                    <span v-else-if="r.consultant_name" class="text-on-accent">{{ r.consultant_name }}?</span>
                                     <span v-else>—</span>
                                 </td>
                                 <td class="px-3 py-1.5">{{ r.discharged_to || '—' }}</td>
@@ -135,7 +135,7 @@ const cell = 'w-full min-w-16 rounded-lg border border-ink-200 bg-card px-1.5 py
                                 <td class="px-3 py-1.5">{{ r.transfer_type || '—' }}</td>
                                 <td class="px-3 py-1.5">
                                     <span v-if="!r.ok" class="font-semibold text-danger-600">{{ r.error }}</span>
-                                    <span v-else-if="r.warning" class="font-semibold text-accent-600">{{ r.warning }}</span>
+                                    <span v-else-if="r.warning" class="font-semibold text-on-accent">{{ r.warning }}</span>
                                     <span v-else class="font-semibold text-success-600">OK</span>
                                 </td>
                             </tr>

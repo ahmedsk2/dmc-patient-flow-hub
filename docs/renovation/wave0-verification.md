@@ -91,18 +91,44 @@ the `<img>` lights up automatically with no code change.
 
 ---
 
-## 3. Tracked / deferred items (unchanged by this wave)
+## 3. Wave 0-tail items — RESOLVED (follow-up pass)
 
-Per the "defer the debt" decision, these remain open and are **not** blockers for Wave 0:
+The deferred debt from the first pass was completed. All green: Vitest 259, PHPUnit 507 + 56,
+contrast/allowlist/determinism gates PASS, `public/build` reproducible byte-identical.
 
-- **#145 — logo medallion ring is sub-pixel.** Confirmed: `stroke-width="1.4"` on a 100-unit viewBox
-  renders **0.39 CSS px** at the 28px header size. Cosmetic (a hairline that rounds away at small
-  sizes); revisit when the official raster/SVG asset lands.
-- **#147 — residual accent-as-text + a Dashboard hover-opacity glyph at 2.49:1.** The olive rotation
-  resolved the accent-vs-amber collision; the remaining hover-opacity glyph is tracked for a later a11y pass.
-- **#139 — contrast.mjs body-text bar** (largely satisfied by the CIEDE2000 self-validation now in place).
-- **#151 — delete unrouted `welcome.blade.php`** (136 dead selectors).
-- **#152 — `color-mix` fallback degrades tint alphas inconsistently.**
+- **#151 — DONE.** `resources/views/welcome.blade.php` (Laravel's unrouted stock scaffold) deleted;
+  its 133 dead selectors (`bg-[#FDFDFC]`, `motion-safe:starting:…`, `mix-blend-*`, scaffold shadows)
+  dropped from the bundle. Verified by selector-diff and captured in the `check-source-allowlist`
+  snapshot (770 → 640 classes, a reviewed delta).
+- **#147 — DONE.** The `✕` alert-dismiss glyph no longer fades via `hover:opacity-*` (WCAG 1.4.3 has
+  no hover exemption) — it uses a theme-aware background wash. Every `text-accent-600` (warm-gold,
+  3.28:1 as text) migrated to `text-on-accent` (8.14:1 light / 10.67:1 dark) across Consultations,
+  Admissions, Import, Statistics; the one "…in amber" label went to `text-on-warning` to match its
+  own wording. A source-scan test (`a11y-accent-text.spec.js`) blocks any reappearance.
+- **#145 — DONE.** The medallion edge stroke now carries `vector-effect="non-scaling-stroke"`, so it
+  renders a crisp constant 1.4 CSS px at any size instead of collapsing to 0.39 px at 28 px. Locked
+  by an `EhcLogo.spec.js` assertion.
+- **#139 — DONE.** `scripts/contrast.mjs` now enforces a per-row WCAG bar (default **4.5:1** for
+  normal text; rows opt down to 3:1 only by declaring `{ large: true }`, or 0 via `{ info: true }`).
+  The old exit test was `r < 3`, which silently passed body text in the 3–4.5 gap. Proven to bite: a
+  synthetic 3.54:1 body-text pair now exits 1.
+- **#152 — assessed, DECLINED (not a real defect).** The `@supports (color-mix …)` guard Tailwind v4
+  emits for every `/alpha` utility is its *standard* output. The fallback (full-opacity colour) only
+  triggers on pre-2023 browsers, and when it does it makes tints **darker/more saturated** — which
+  *raises* `text-ink-900` contrast, never lowers it. "Fixing" it means abandoning `/alpha` for
+  hand-computed opaque tints app-wide — disproportionate to a fallback that never fires on supported
+  browsers and is safe when it does.
+
+### New finding — systemic status-colour-as-text (→ Wave 5 a11y)
+
+Hardening #139 surfaced a **pre-existing, app-wide** issue beyond Wave 0's scope: `text-warning-500`
+(#e69209 amber) is used as badge/label text in **~30 sites** — the `losTone` / `outcomeTone` /
+`stateTone` / `locTone` helpers plus inline badges (Registry, Security, Handovers, Control, …) — at
+**2.15–2.48:1**, a severe WCAG fail. `text-success-600` / `text-danger-600` on `-100` tints are the
+milder end (4.32 / 4.39:1, just under the 12px bar; both pass ~5:1 on white). The `on-*` tokens
+already exist to fix all of it; applying them across ~30 call sites + the shared tone helpers is a
+**Wave 5** task, not part of completing Wave 0's tail. These rows are pinned `KNOWN` in contrast.mjs
+so the new 4.5 default protects new pairs without reddening on the historical debt.
 
 ---
 

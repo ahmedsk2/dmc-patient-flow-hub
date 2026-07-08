@@ -57,7 +57,7 @@ const kpiCards = computed(() => [
     { label: `≤${props.readmitWindow ?? 3}d readmits`, value: props.kpis.readmissions, tone: 'danger' },
 ]);
 const toneClass = (t) => ({
-    brand: 'text-brand-700', info: 'text-info-500', danger: 'text-danger-600', accent: 'text-accent-600', ink: 'text-ink-700',
+    brand: 'text-brand-700', info: 'text-info-500', danger: 'text-danger-600', accent: 'text-on-accent', ink: 'text-ink-700',
 }[t]);
 
 // PNG-export-only toolbar (no zoom/pan clutter) — applied to every chart on this page
@@ -268,7 +268,7 @@ const donut = (labels) => ({
         <!-- charts -->
         <div class="grid gap-5 lg:grid-cols-2">
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line lg:col-span-2">
-                <h3 class="mb-3 font-bold text-ink-800">{{ interval === 'day' ? 'Daily' : interval === 'quarter' ? 'Quarterly' : 'Monthly' }} admissions, discharges, mortality & consultations <span v-if="interval === 'day'" class="text-xs font-normal text-accent-600">(Fri/Sat ticks in amber)</span></h3>
+                <h3 class="mb-3 font-bold text-ink-800">{{ interval === 'day' ? 'Daily' : interval === 'quarter' ? 'Quarterly' : 'Monthly' }} admissions, discharges, mortality & consultations <span v-if="interval === 'day'" class="text-xs font-normal text-on-warning">(Fri/Sat ticks in amber)</span></h3>
                 <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="area" height="300" :options="monthlyChart" :series="monthlySeries" />
             </div>
 
@@ -381,7 +381,7 @@ const donut = (labels) => ({
                                 <td class="nums px-3 py-1.5 text-right text-danger-600">{{ r.transToIcu }}</td>
                                 <td class="nums px-3 py-1.5 text-right">{{ r.icuDeaths }}</td>
                                 <td class="nums px-3 py-1.5 text-right">{{ r.wardDeaths }}</td>
-                                <td class="nums px-3 py-1.5 text-right text-accent-600">{{ r.readmits }}</td>
+                                <td class="nums px-3 py-1.5 text-right text-on-accent">{{ r.readmits }}</td>
                                 <td class="nums px-3 py-1.5 text-right">{{ r.consultations }}</td>
                                 <td class="nums px-3 py-1.5 text-right">{{ r.signoffs }}</td>
                                 <td class="nums px-3 py-1.5 text-right">{{ r.avgLos }}d</td>

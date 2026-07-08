@@ -51,12 +51,19 @@ const petals = [0, 72, 144, 216, 288];
                 :transform="`rotate(${a} 50 50)`"
             />
         </g>
+        <!-- W0-T4b. `vector-effect="non-scaling-stroke"` pins the medallion edge stroke to 1.4 CSS px
+             at ANY render size. Without it, a 1.4-user-unit stroke on the 100-unit viewBox scales
+             WITH the glyph — 0.39 px at the 28 px header size, i.e. sub-pixel and effectively gone.
+             Non-scaling keeps it a crisp hairline whether the logo is drawn at 28 px or 200 px.
+             (Prose here avoids the words r·i·n·g / o·u·t·l·i·n·e / i·n·v·i·s·i·b·l·e — Tailwind's
+             extractor reads comments and would mint those as real utilities; see app.css §top.) -->
         <circle
             cx="50" cy="50" r="10.5"
             :fill="mono ? 'currentColor' : '#eaf4f4'"
             :fill-opacity="mono ? 0.25 : 1"
             :stroke="mono ? 'currentColor' : '#2f97c4'"
             stroke-width="1.4"
+            vector-effect="non-scaling-stroke"
         />
         <circle cx="50" cy="50" r="3.4" :fill="mono ? 'currentColor' : '#7fa8bd'" />
     </svg>

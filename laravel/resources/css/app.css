@@ -20,15 +20,15 @@
  *  2. resources/js/**\/__tests__ is subtracted: specs are not shipped, and their regression guards
  *     (`expect(c).not.toContain('<some-utility>')`) are the ONLY remaining source of four inert
  *     production rules.
- *  3. resources/views/**\/*.blade.php — app.blade.php's <html>/<body> classes. Measured: this glob
- *     contributes 138 class names. TWO of them are load-bearing and unique to app.blade.php
- *     (`antialiased`, `font-sans`; its other classes are also used in resources/js). The other 136
- *     all come from `welcome.blade.php` — Laravel's stock landing page, which is NOT routed ('/' goes
- *     to DashboardController). Those 136 are dead weight, and they were equally dead under the old
- *     auto-detection, so keeping the glob preserves the bundle byte-for-byte. Deleting that scaffold
- *     view (or narrowing this glob) is a separate change with its own selector delta. The errors/,
- *     mail/ and reports/ blades are deliberately Vite-free and carry their own <style>: they
- *     contribute zero.
+ *  3. resources/views/**\/*.blade.php — app.blade.php's <html>/<body> classes. Two of them are
+ *     load-bearing and unique to app.blade.php (`antialiased`, `font-sans`; its other classes are
+ *     also used in resources/js). This glob USED to also pull 136 dead selectors out of
+ *     `welcome.blade.php` — Laravel's stock landing page, which was NOT routed ('/' goes to
+ *     DashboardController) — arbitrary values like `bg-[#FDFDFC]` and `motion-safe:starting:...`
+ *     that shipped from nowhere. That scaffold has now been DELETED (W0-T3n), so those 136 are gone
+ *     from the bundle; the reduction is captured in scripts/check-source-allowlist.mjs's snapshot.
+ *     The glob stays — app.blade.php still needs it. The errors/, mail/ and reports/ blades are
+ *     deliberately Vite-free and carry their own <style>: they contribute zero.
  *  4. The vendored pagination views live under vendor/, which IS gitignored — auto-detection could
  *     never reach them, and source(none) does not change that. This @source has always been the
  *     only thing making pagination render.

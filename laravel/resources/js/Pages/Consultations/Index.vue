@@ -88,7 +88,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
     <AppLayout title="Consultations">
         <div class="mb-5 flex flex-wrap items-center gap-3">
             <div class="flex gap-2">
-                <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Active <span class="nums ml-1 text-accent-600">{{ stats.active }}</span></span>
+                <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Active <span class="nums ml-1 text-on-accent">{{ stats.active }}</span></span>
                 <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Total <span class="nums ml-1 text-ink-600">{{ stats.total }}</span></span>
                 <!-- personal counter for consultant viewers (K1-13): own active out of total active -->
                 <span v-if="me.role === 3" class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Mine <span class="nums ml-1 text-brand-700">{{ stats.mine_active }} of {{ stats.active }} active</span></span>

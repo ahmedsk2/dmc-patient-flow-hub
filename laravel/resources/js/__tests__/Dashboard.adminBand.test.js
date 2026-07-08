@@ -162,3 +162,22 @@ describe('Dashboard — "My unit today" tiles (W0-T3i)', () => {
         expect(isThemeAwareStep('brand-100')).toBe(true);
     });
 });
+
+// W0-T3j — the alert dismiss ✕. `hover:opacity-*` composites the whole glyph toward the tinted
+// backdrop on hover (WCAG 1.4.3 has no hover exemption); the affordance must be a background wash
+// that leaves the glyph colour intact.
+describe('Dashboard — alert dismiss ✕ (W0-T3j)', () => {
+    const withAlert = () => mountAs({ role: 0, is_admin: true }, {
+        alerts: [{ key: 'k1', severity: 'warning', message: 'Two discharges overdue' }],
+    });
+    it('the dismiss button carries no hover:opacity fade', () => {
+        const btn = withAlert().find('button[aria-label="Dismiss alert"]');
+        expect(btn.exists()).toBe(true);
+        expect(btn.classes().some((c) => c.startsWith('hover:opacity-'))).toBe(false);
+    });
+    it('uses a theme-aware background wash for its hover affordance instead', () => {
+        const c = withAlert().find('button[aria-label="Dismiss alert"]').classes();
+        expect(c).toContain('hover:bg-black/10');
+        expect(c).toContain('dark:hover:bg-white/10');
+    });
+});

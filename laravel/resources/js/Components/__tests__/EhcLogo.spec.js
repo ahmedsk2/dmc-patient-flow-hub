@@ -50,6 +50,19 @@ describe('EhcLogo', () => {
         expect(circles[1].attributes('fill-opacity')).toBeUndefined(); // inner dot: opaque
     });
 
+    // W0-T4b. The ring stroke is 1.4 USER UNITS on a 100-unit viewBox; at the 28px header size that
+    // scales to 0.39 CSS px — sub-pixel, effectively invisible. `vector-effect="non-scaling-stroke"`
+    // makes the browser evaluate the stroke width AFTER the viewport transform, so it stays a crisp
+    // 1.4 CSS px at any render size. Assert it is present on the ring (circles[0]), absent-irrelevant
+    // on the strokeless inner dot.
+    it('the medallion ring uses a non-scaling stroke so it never renders sub-pixel', async () => {
+        const w = mount(EhcLogo);
+        await w.find('img').trigger('error');
+        const ring = w.findAll('circle')[0];
+        expect(ring.attributes('stroke-width')).toBe('1.4');
+        expect(ring.attributes('vector-effect')).toBe('non-scaling-stroke');
+    });
+
     it('the fallback exposes an accessible name via role=img', async () => {
         const w = mount(EhcLogo);
         await w.find('img').trigger('error');
