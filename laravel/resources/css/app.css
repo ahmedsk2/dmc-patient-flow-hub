@@ -289,24 +289,22 @@
 }
 
 /* Semantic surface utilities backed by the theme-aware tokens (mechanical migration targets).
- * bg-card / bg-app / ring-line / border-line / divide-line. */
+ * bg-card / bg-app. */
 @utility bg-card {
     background-color: var(--color-card);
 }
 @utility bg-app {
     background-color: var(--color-app);
 }
-@utility ring-line {
-    --tw-ring-color: var(--color-line);
-}
-@utility border-line {
-    border-color: var(--color-line);
-}
-@utility divide-line {
-    & > :not([hidden]) ~ :not([hidden]) {
-        border-color: var(--color-line);
-    }
-}
+
+/* `border-/ring-/divide-line` need no @utility — Tailwind auto-generates them from the
+ * --color-line theme key, exactly as it does for the `-hairline` set below.
+ *
+ * The hand-written `divide-line` that used to live here was a v3 leftover: it selected
+ * `& > :not([hidden]) ~ :not([hidden])` (all-but-FIRST child), while v4's `divide-y` puts the
+ * border WIDTH on `:where(& > :not(:last-child))` (all-but-LAST). It therefore never coloured the
+ * first child, and only ever looked right because the auto-generated rule emitted alongside it and
+ * covered that child. Re-adding it would resurrect a first-row `currentColor` border. */
 
 /* ----- "Census Board" signature utilities (Wave 0) --------------------------------------------
  * Flat surfaces separated by teal-tinted hairlines, NOT floating drop-shadow cards. Shadow is
@@ -316,8 +314,7 @@
  */
 
 /* `bg-/text-/border-/ring-/divide-/outline-hairline` are auto-generated from the --color-hairline
- * theme key — no @utility needed. (The older `-line` set above duplicates this; harmless, and
- * out of scope to remove here.) */
+ * theme key — no @utility needed. Same for the `-line` set above. */
 
 /* Custom properties inherit by default; without this a toned row would silently re-tone every
  * nested rail. `syntax: '*'` with no initial-value keeps the guaranteed-invalid initial value, so
