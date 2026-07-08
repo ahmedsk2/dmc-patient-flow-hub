@@ -14,6 +14,21 @@
  * parent-managed open state); this component is purely the status badges.
  *
  * `readmitWindow` is the days label on the Readmit flag (server-computed flag; this is display only).
+ *
+ * COLOUR (W0-T3d). Every badge draws from the AA-verified `bg-tint-*` + `text-on-*` pairs, exactly
+ * as FlowAlert.vue does — never the raw `*-500`/`*-600` status colours. Those raw pairings were real
+ * WCAG 1.4.3 failures at this size (scripts/contrast.mjs: warning-500 on warning-100 = 2.15:1,
+ * info-500 on info-100 = 3.24:1, danger-600 on danger-100 = 4.39:1, all against a 4.5:1 bar — the
+ * 3:1 large-text allowance needs 24px, or 18.66px bold, and these are 10px). The `tint-*`/`on-*`
+ * pairs clear 5.14:1–8.25:1 in BOTH themes; they are also theme-AWARE, which fixes a second bug:
+ * `*-100` is a fixed hex, so the old pills rendered a light peach lozenge on the dark board.
+ *
+ * TWO DELIBERATE EXCEPTIONS, both already AA or knowingly deferred:
+ *   - `Discharged` chip: ink-100/ink-500 = 4.62:1 light, 6.63:1 dark. The ink scale inverts under
+ *     `.dark`, so it is already theme-aware. Left alone.
+ *   - `Long-term`: `accent` has NO `on-*` / `tint-*` pair. accent-600 on accent-300/40 composites to
+ *     2.90:1 (light) / 1.67:1 (dark) — it FAILS. Minting an `on-accent` token is a design decision,
+ *     not a mechanical migration, so this is REPORTED and left as found, not silently invented.
  */
 defineProps({
     patient: { type: Object, required: true },
@@ -23,19 +38,22 @@ defineProps({
 </script>
 
 <template>
+    <!-- `plain` has no tint behind it, so the on-* token is doing the work against the card/page:
+         on-info 6.60:1, on-warning 5.93:1, on-danger 7.01:1 (light) and 9.27/9.96/8.64:1 (dark).
+         This is also what makes the printed census legible — warning-500 was 2.48:1 on white. -->
     <template v-if="variant === 'plain'">
-        <span v-if="patient.is_new" class="mr-1 font-semibold text-info-500">New</span>
-        <span v-if="patient.is_readmission" class="mr-1 font-semibold text-warning-500">Readmit ≤{{ readmitWindow ?? 3 }}d</span>
+        <span v-if="patient.is_new" class="mr-1 font-semibold text-on-info">New</span>
+        <span v-if="patient.is_readmission" class="mr-1 font-semibold text-on-warning">Readmit ≤{{ readmitWindow ?? 3 }}d</span>
         <span v-if="patient.is_longterm" class="mr-1 font-semibold text-accent-600">Long-term</span>
-        <span v-if="patient.is_tb" class="mr-1 font-semibold text-danger-600">TB</span>
-        <span v-if="patient.medically_discharged" class="font-semibold text-warning-500">Disch. still in</span>
+        <span v-if="patient.is_tb" class="mr-1 font-semibold text-on-danger">TB</span>
+        <span v-if="patient.medically_discharged" class="font-semibold text-on-warning">Disch. still in</span>
     </template>
     <template v-else>
-        <span v-if="patient.is_new" class="rounded-full bg-info-100 px-1.5 py-0.5 text-[10px] font-semibold text-info-500">New</span>
-        <span v-if="patient.is_readmission" class="rounded-full bg-warning-100 px-1.5 py-0.5 text-[10px] font-semibold text-warning-500">Readmit ≤{{ readmitWindow ?? 3 }}d</span>
+        <span v-if="patient.is_new" class="rounded-full bg-tint-info px-1.5 py-0.5 text-[10px] font-semibold text-on-info">New</span>
+        <span v-if="patient.is_readmission" class="rounded-full bg-tint-warning px-1.5 py-0.5 text-[10px] font-semibold text-on-warning">Readmit ≤{{ readmitWindow ?? 3 }}d</span>
         <span v-if="patient.is_longterm" class="rounded-full bg-accent-300/40 px-1.5 py-0.5 text-[10px] font-semibold text-accent-600">Long-term</span>
-        <span v-if="patient.is_tb" class="rounded-full bg-danger-100 px-1.5 py-0.5 text-[10px] font-semibold text-danger-600">TB</span>
+        <span v-if="patient.is_tb" class="rounded-full bg-tint-danger px-1.5 py-0.5 text-[10px] font-semibold text-on-danger">TB</span>
         <span v-if="patient.discharged" class="rounded-full bg-ink-100 px-1.5 py-0.5 text-[10px] font-semibold text-ink-500">Discharged {{ patient.discharge_date }}</span>
-        <span v-else-if="patient.medically_discharged" class="rounded-full bg-warning-100 px-1.5 py-0.5 text-[10px] font-semibold text-warning-500">Disch. still in</span>
+        <span v-else-if="patient.medically_discharged" class="rounded-full bg-tint-warning px-1.5 py-0.5 text-[10px] font-semibold text-on-warning">Disch. still in</span>
     </template>
 </template>

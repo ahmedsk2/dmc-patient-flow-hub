@@ -152,7 +152,15 @@ defineExpose({
                     <select v-model="mdForm.delay_reason" required class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">—</option><option value="Physical">Physical bed availability</option><option value="System">System</option></select>
                     <p v-if="mdForm.errors.delay_reason" class="mt-1 text-xs text-danger-600">{{ mdForm.errors.delay_reason }}</p></div>
                 <p class="text-xs text-ink-400">{{ mdForm.complete ? 'Closes the file and frees the bed in one step.' : 'Marks the patient clinically discharged but still in a bed. Status and destination are recorded at Complete discharge, when they physically leave.' }}</p>
-                <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mdForm.processing" class="rounded-xl px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50" :class="mdForm.complete ? 'bg-success-600 hover:bg-success-700' : 'bg-warning-500'">{{ mdForm.complete ? 'Discharge & close file' : 'Medical discharge' }}</button></div>
+                <!-- W0-T3d. `text-white` on bg-warning-500 was 2.48:1 — a WCAG AA failure for this
+                     14px semibold label. The amber FILL stays (a fill is not text; the tone is the
+                     signal); the label goes dark instead. NOT `text-ink-900`: the ink scale inverts
+                     under `.dark`, so it would resolve to #f4f8f8 and sit at 2.31:1 on the
+                     theme-invariant amber — fixing light while breaking dark. `text-navy-950`
+                     (#00252a) is a literal in @theme that `.dark` never remaps: 6.53:1 in both
+                     themes, and still 6.25:1 / 4.82:1 under this button's own hover:opacity-90.
+                     The success branch keeps text-white: #ffffff on #15803d is 5.02:1 — already AA. -->
+                <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mdForm.processing" class="rounded-xl px-5 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-50" :class="mdForm.complete ? 'bg-success-600 text-white hover:bg-success-700' : 'bg-warning-500 text-navy-950'">{{ mdForm.complete ? 'Discharge & close file' : 'Medical discharge' }}</button></div>
             </form>
             <form v-else-if="mode === 'complete'" @submit.prevent="submitComplete" class="space-y-4">
                 <p class="text-sm text-ink-600">Close the file and free the bed.</p>

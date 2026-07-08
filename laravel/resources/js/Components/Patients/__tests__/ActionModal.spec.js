@@ -156,6 +156,48 @@ describe('ActionModal — HANDOVER GATE-THEN-RETRY (clinical safety control)', (
     });
 });
 
+// The medical-discharge submit button is reachable because BaseModal is mocked to render its slot
+// unconditionally (above), so no contortion is needed to assert on it.
+//
+// W0-T3d. `text-white` on `bg-warning-500` (#ffffff on #e69209) is 2.48:1 — a hard WCAG AA failure
+// for this 14px semibold label (1.4.3's 3:1 large-text allowance needs 24px, or 18.66px bold).
+// The fill stays amber (a fill is not text, and the tone is the signal); the LABEL goes dark.
+//
+// `text-ink-900` — the obvious dark label — is a TRAP: the ink scale INVERTS under `.dark`, so
+// ink-900 resolves to #f4f8f8 there and lands at 2.31:1 on the (theme-invariant) amber fill. It
+// fixes light and breaks dark. `text-navy-950` (#00252a) is a literal in @theme, never remapped by
+// `.dark`, and clears 6.53:1 against #e69209 in BOTH themes (6.25:1 / 4.82:1 even under the
+// button's own hover:opacity-90 composite).
+describe('ActionModal — medical-discharge button meets WCAG AA in both themes (W0-T3d)', () => {
+    const submitBtn = (w) => w.find('form button[type="submit"]');
+
+    it('medical-only: amber fill with a theme-invariant dark label, never white-on-amber', () => {
+        const c = submitBtn(mountWith('medical')).classes();
+        expect(c).toEqual(expect.arrayContaining(['bg-warning-500', 'text-navy-950']));
+        expect(c).not.toContain('text-white');       // 2.48:1 — the defect this locks out
+        expect(c).not.toContain('text-ink-900');     // 2.31:1 under .dark — the near-miss fix
+    });
+
+    // The sibling branch: white on success-600 (#ffffff on #15803d) is 5.02:1 — it PASSES, so it is
+    // left exactly as it was. Locked so the migration above doesn't strip its label colour.
+    it('complete branch keeps white on success-600 (5.02:1 — already AA)', async () => {
+        const w = mountWith('medical');
+        w.vm.mdForm.complete = true;
+        await w.vm.$nextTick();
+        const c = submitBtn(w).classes();
+        expect(c).toEqual(expect.arrayContaining(['bg-success-600', 'text-white']));
+        expect(c).not.toContain('bg-warning-500');
+    });
+
+    it('the label text is unchanged by the colour migration', async () => {
+        const w = mountWith('medical');
+        expect(submitBtn(w).text()).toBe('Medical discharge');
+        w.vm.mdForm.complete = true;
+        await w.vm.$nextTick();
+        expect(submitBtn(w).text()).toBe('Discharge & close file');
+    });
+});
+
 describe('ActionModal — close', () => {
     it('emits close on the Cancel path', () => {
         const w = mountWith('assign');
