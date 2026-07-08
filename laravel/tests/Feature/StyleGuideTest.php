@@ -43,15 +43,17 @@ class StyleGuideTest extends TestCase
 
     public function test_an_admin_sees_the_style_guide(): void
     {
-        // shouldExist=false: AssertableInertia::component() defaults to
-        // config('inertia.testing.ensure_pages_exist', true) (vendor default, no app override in
-        // this repo), which fails the assertion if the .vue file isn't on disk yet — independent of
-        // TestCase::withoutVite() (that only bypasses the manifest/asset lookup at render time, not
-        // this test-time page-exists check). Task 7 ships StyleGuide.vue; this test only needs to
-        // confirm the correct component name is wired through routing/authz.
+        // shouldExist is now left at its default, which resolves to
+        // config('inertia.testing.ensure_pages_exist') — the vendor default `true`, with no app
+        // override in this repo. So this asserts BOTH that the response names the component AND that
+        // resources/js/Pages/StyleGuide.vue exists on disk (Task 7 ships it). That second half is a
+        // real guard: a page renamed or moved out from under a still-passing route reddens here.
+        //
+        // The existence check is independent of TestCase::withoutVite(), which only bypasses the
+        // manifest/asset lookup at render time.
         $this->actingAs($this->user(User::ROLE_ADMIN))
             ->get('/style-guide')
             ->assertOk()
-            ->assertInertia(fn (AssertableInertia $page) => $page->component('StyleGuide', false));
+            ->assertInertia(fn (AssertableInertia $page) => $page->component('StyleGuide'));
     }
 }

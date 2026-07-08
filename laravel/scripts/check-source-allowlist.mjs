@@ -90,9 +90,14 @@ function extractClasses(cssText) {
 
 const current = extractClasses(css);
 
-// --- Committed snapshot (758 classes as of this commit) ------------------------------------------
+// --- Committed snapshot (770 classes as of this commit) ------------------------------------------
 // Regenerate deliberately (never silently) after a REVIEWED, intentional change:
 //   npm run build && node scripts/check-source-allowlist.mjs --write
+//
+// Last regenerated for Pages/StyleGuide.vue (+12, -0). Five of those twelve — rail-neutral,
+// rail-success, row-pad, transition-row, and the hairline fill — were @utility declarations in
+// app.css with NO consumer anywhere in resources/, so Tailwind had never emitted them. The style
+// guide is their first and (for now) only call site.
 const SNAPSHOT = [
     ".-bottom-0\\.5",
     ".-bottom-24",
@@ -146,6 +151,8 @@ const SNAPSHOT = [
     ".bg-app\\/80",
     ".bg-brand-100",
     ".bg-brand-100\\/60",
+    ".bg-brand-200",
+    ".bg-brand-300",
     ".bg-brand-400",
     ".bg-brand-50",
     ".bg-brand-500",
@@ -153,6 +160,9 @@ const SNAPSHOT = [
     ".bg-brand-50\\/30",
     ".bg-brand-50\\/60",
     ".bg-brand-600",
+    ".bg-brand-700",
+    ".bg-brand-800",
+    ".bg-brand-900",
     ".bg-card",
     ".bg-card\\/80",
     ".bg-danger-100",
@@ -165,6 +175,7 @@ const SNAPSHOT = [
     ".bg-gradient-to-r",
     ".bg-gray-100",
     ".bg-gray-200",
+    ".bg-hairline",
     ".bg-info-500\\/10",
     ".bg-ink-100",
     ".bg-ink-50",
@@ -283,6 +294,7 @@ const SNAPSHOT = [
     ".dark\\:text-gray-400",
     ".dark\\:text-gray-600",
     ".dark\\:text-ink-200",
+    ".dark\\:text-navy-100",
     ".decoration-dotted",
     ".delay-200",
     ".delay-300",
@@ -368,6 +380,7 @@ const SNAPSHOT = [
     ".grid-cols-4",
     ".grid-cols-\\[auto\\,1fr\\]",
     ".grow",
+    ".h-0\\.5",
     ".h-1",
     ".h-10",
     ".h-11",
@@ -645,6 +658,8 @@ const SNAPSHOT = [
     ".py-8",
     ".rail-danger",
     ".rail-info",
+    ".rail-neutral",
+    ".rail-success",
     ".rail-warning",
     ".relative",
     ".right-0",
@@ -681,6 +696,7 @@ const SNAPSHOT = [
     ".rounded-t-lg",
     ".rounded-t-xl",
     ".rounded-xl",
+    ".row-pad",
     ".rtl\\:flex-row-reverse",
     ".select-none",
     ".shadow",
@@ -800,6 +816,7 @@ const SNAPSHOT = [
     ".transition-all",
     ".transition-colors",
     ".transition-opacity",
+    ".transition-row",
     ".transition-transform",
     ".translate-x-0",
     ".translate-y-0",
