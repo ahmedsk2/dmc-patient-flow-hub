@@ -166,11 +166,19 @@ defineExpose({
                      quietly degrades the label rather than just the fill. White on success-600 fell
                      from 5.02:1 to 4.17:1 over the light bg-card panel (4.68:1 dark). 1.4.3 exempts
                      `disabled` controls (so `disabled:opacity-50` stays) but has NO hover exemption.
-                     Both branches now hover on a real, darker FILL, which touches only the fill:
-                       success-700 #166534 under text-white     = 7.13:1
-                       warning-600 #c87d06 under text-navy-950  = 4.92:1
-                     Those steps were dead classes until W0-T3e declared them; see app.css for why
-                     warning-600 may never be used as TEXT (3.29:1 on the light card). -->
+                     Both branches now hover on a real, darker FILL, which touches only the fill.
+
+                     W0-T3h. The two branches are NOT symmetric, and the amber one needed a second
+                     pass. Its label is near-black, so darkening the fill LOWERS contrast — the first
+                     hover step (#c87d06) made hover the button's WEAKEST state, 4.92:1 against a
+                     6.53:1 rest. Only the white-labelled branch gains from a darker hover:
+                       success-700 #166534 under text-white     7.13:1  (rest 5.02:1 — RISES)
+                       warning-600 #d58506 under text-navy-950  5.54:1  (rest 6.53:1 — still falls,
+                                                                         but stays above 4.5:1)
+                     #d58506 is a LIGHTER 600 than the original. It keeps the amber unmistakably
+                     darker than the 500 rest fill (luminance 0.3093 vs 0.3740; dE76 6.55, ~3x the
+                     JND), so the state change is still obvious. See app.css for why warning-600 may
+                     never be used as TEXT (2.92:1 on the light card). -->
                 <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mdForm.processing" class="rounded-xl px-5 py-2 text-sm font-semibold disabled:opacity-50" :class="mdForm.complete ? 'bg-success-600 text-white hover:bg-success-700' : 'bg-warning-500 text-navy-950 hover:bg-warning-600'">{{ mdForm.complete ? 'Discharge & close file' : 'Medical discharge' }}</button></div>
             </form>
             <form v-else-if="mode === 'complete'" @submit.prevent="submitComplete" class="space-y-4">

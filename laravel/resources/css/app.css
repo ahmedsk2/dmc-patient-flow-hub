@@ -1,31 +1,58 @@
-@import 'tailwindcss';
+/* ----- Source scanning: EXPLICIT ALLOW-LIST, never automatic ---------------------------------
+ * `source(none)` disables Tailwind v4's automatic source detection. Auto-detection walks the whole
+ * project tree (minus .gitignore'd paths) and hands every file to a REGEX EXTRACTOR that reads raw
+ * bytes — PHP docblocks, English prose, string literals, test fixtures. Ordinary sentences therefore
+ * mint real utilities. This bundle was shipping, from prose alone:
+ *   · a top-offset rule, from the phrase "top-5 diagnoses" in StatisticsController's docblocks
+ *   · a text-transform rule, from a "lowercase(...)" error string in ImportController
+ *   · a flex-shrink rule, from "px would shrink to 75%" in ReportSvg
+ *   · a ring rule and a font-variant-numeric rule, from unrelated prose
+ *   · the very colour utility that scripts/contrast.mjs's comment WARNED about, because the warning
+ *     spelled it out
+ *   · four utilities resurrected only by the `not.toContain(...)` regression guards in the Vue specs
+ * None of those appears as a class in any shipped template. Under `source(none)` the only files
+ * scanned are the ones named below.
+ *
+ * WHY EACH LINE:
+ *  1. resources/js/**\/*.{vue,js} — the entire client. `.js` is NOT optional: lib/ui.js holds the
+ *     FIELD input-class constant and locTone()'s pill classes as plain string literals; scanning
+ *     only *.vue would silently drop them.
+ *  2. resources/js/**\/__tests__ is subtracted: specs are not shipped, and their regression guards
+ *     (`expect(c).not.toContain('<some-utility>')`) are the ONLY remaining source of four inert
+ *     production rules.
+ *  3. resources/views/**\/*.blade.php — app.blade.php's <html>/<body> classes. Measured: this glob
+ *     contributes 138 class names. TWO of them are load-bearing and unique to app.blade.php
+ *     (`antialiased`, `font-sans`; its other classes are also used in resources/js). The other 136
+ *     all come from `welcome.blade.php` — Laravel's stock landing page, which is NOT routed ('/' goes
+ *     to DashboardController). Those 136 are dead weight, and they were equally dead under the old
+ *     auto-detection, so keeping the glob preserves the bundle byte-for-byte. Deleting that scaffold
+ *     view (or narrowing this glob) is a separate change with its own selector delta. The errors/,
+ *     mail/ and reports/ blades are deliberately Vite-free and carry their own <style>: they
+ *     contribute zero.
+ *  4. The vendored pagination views live under vendor/, which IS gitignored — auto-detection could
+ *     never reach them, and source(none) does not change that. This @source has always been the
+ *     only thing making pagination render.
+ *
+ * NOT NEEDED ANY MORE: `@source not '../../public/build'`. public/build is committed (it is the
+ * deployed artifact), so auto-detection used to re-read the PREVIOUS build's own `assets/*.js` and
+ * `assets/app-*.css` and re-extract class names out of them — non-deterministic (build#1 != build#2
+ * after any rename) and self-perpetuating (it found a class name inside its own emitted rule, so a
+ * bogus selector could never leave). Under source(none) that directory is simply never scanned, so
+ * the negative rule is dead weight and has been removed.
+ *
+ * Also NOT scanned, and deliberately so: storage/framework/views (the machine-local compiled Blade
+ * cache — an explicit @source there once leaked ~194 selectors from Laravel's debug exception page
+ * into the shipped bundle), app/, routes/, docs/, scripts/, and this file itself.
+ *
+ * Safety note on the class names spelled above: the stylesheet ROOT is not a scan target (verified —
+ * `blur`, `resize`, `top-100` are named in the removed comment and emit nothing), so naming them
+ * here is inert. That is NOT true of a real source file: see scripts/contrast.mjs. */
+@import 'tailwindcss' source(none);
 
+@source '../js/**/*.{vue,js}';
+@source not '../js/**/__tests__';
+@source '../views/**/*.blade.php';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-/* Do NOT add an @source for storage/framework/views/*.php (the compiled Blade cache). It is
- * gitignored and machine-local, so an explicit @source here would override Tailwind's
- * gitignore-aware auto-detection and pull in whatever pages happen to be compiled on THIS
- * machine — e.g. Laravel's debug exception-renderer, once compiled here after a local error,
- * leaked ~194 of its own selectors (bg-rose-*, text-emerald-*, group-hover/exception:*, ...)
- * into the shipped production bundle. resources/views/**\/*.blade.php is not gitignored, so
- * auto-detection already covers it with no @source needed. The line below is an explicit
- * @source for resources/js/**\/*.vue: auto-detection covers it too, but for a *committed,
- * deployed* build artifact we'd rather be explicit than rely solely on implicit scanning
- * (unlike storage/framework/views, this path is real app source, so pinning it down is safe). */
-@source '../js/**/*.vue';
-
-/* Exclude the build's OWN committed output from its own scan set. `public/build/` is not gitignored
- * (it is the deployed artifact), so Tailwind's auto-detection was reading the previous build's
- * `assets/*.js` AND `assets/app-*.css` and re-extracting class names out of them. Two consequences:
- *   1. NOT DETERMINISTIC. The first build after any class rename still emits the RETIRED utilities,
- *      because it scanned yesterday's bundle. Only a second build converges. (Verified: with this
- *      line removed, build#1 != build#2 on the W0-T3e rename; build#2 == build#3.)
- *   2. SELF-PERPETUATING PHANTOMS. Tailwind found `top-100` inside its own `.top-100{...}` rule, so
- *      once a bogus selector entered the bundle it could never leave. It shipped 8 of them —
- *      `.blur`, `.resize`, `.drop-shadow`, `.ease-out`, `.backdrop-filter`, `.filter!`, `.top-10`,
- *      `.top-100` — none of which appears as a class token anywhere in source.
- * Nothing real is lost: the built JS is DERIVED from resources/js, which is scanned directly (above).
- * Same defect family as the storage/framework/views leak described below, hence the same treatment. */
-@source not '../../public/build';
 
 /* Class-based dark mode: `.dark` on <html> flips the variant (Tailwind v4 custom variant). */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -98,8 +125,14 @@
     --color-ink-900: var(--ink-900);
 
     /* Accent — restrained warm gold (secondary highlight only). These four are theme-INVARIANT and
-     * are fills/graphics only. accent-600 as TEXT is 3.28:1 on the white card — never use it for a
-     * label; use `text-on-accent` (below). */
+     * are fills/graphics only: decorative tints (`bg-accent-300/20`), KPI gradient stops, weekend
+     * row shading. accent-600 as TEXT is 3.28:1 on the white card — never use it for a label; use
+     * `text-on-accent`.
+     *
+     * NOTE the deliberate divergence: this raw scale stays GOLD, but the `tint-accent`/`on-accent`
+     * TEXT pair below is OLIVE-gold. They no longer share a hue, and that is the point — the pair's
+     * only job is to carry a legible label that a clinician cannot confuse with the amber `warning`
+     * pair beside it on a 10px badge. See the `:root` block for the CIE dE76 figures. */
     --color-accent-300: #f3d9a0;
     --color-accent-400: #e9bd63;
     --color-accent-500: #d9a23c;
@@ -112,14 +145,21 @@
      * So a step minted to fix a dead *fill* silently starts painting at every dead *text* call site.
      * Before adding a step here, migrate its text call sites — or prove the value is AA as text on
      * every backdrop it lands on. Two of the steps below are fills ONLY, and would FAIL as text:
-     *   warning-600 #c87d06 as text on the light card = 3.29:1   (fill under text-navy-950 = 4.92:1)
+     *   warning-600 #d58506 as text on the light card = 2.92:1   (fill under text-navy-950 = 5.54:1)
      *   danger-700  #9f2724 as text on the dark  card = 2.22:1   (fill under text-white     = 7.53:1)
-     * That is why Dashboard's alert strip and every `text-warning-600` call site were migrated to the
-     * theme-aware `text-on-*` tokens first. Ratios: scripts/contrast.mjs.
+     * That is why Dashboard's alert strip and every warning-600 TEXT call site were migrated to the
+     * theme-aware `on-*` tokens first. Ratios: scripts/contrast.mjs.
      *
      * Roles:  100 = tint · 200/300 = light text-on-navy / rings & borders · 400/500 = graphics &
      *         gradient stops · 500/600 = solid fills · 600/700 = hover fills (never text).
-     * Luminance is monotonic 100 → 700 within each family (checked by hand; see the commit). */
+     *
+     * Luminance is monotonic 100 → 700 within each family in the LIGHT theme only. It is NOT in dark,
+     * and exactly one token is responsible: `success-200` is theme-aware (see the raw var below) and
+     * INVERTS, because it is the hover step of a tint that itself darkens on dark. Dark luminances:
+     * success-200 = 0.0403, success-700 = 0.0973 — the "200" is darker than the "700". It is a tint-
+     * hover token wearing a scale-step name; the name is kept only because `hover:bg-success-200` is
+     * the utility its one consumer (Handovers' Sign chip) already uses. Every OTHER step here is a
+     * literal, so for those the monotonic claim holds in both themes. */
     --color-success-100: #d8f5e3;
     --color-success-200: var(--success-200);  /* theme-aware: the hover step OF bg-tint-success (see below) */
     --color-success-500: #16a34a;
@@ -129,7 +169,12 @@
     --color-warning-300: #f4c06a;             /* decorative ring/border */
     --color-warning-400: #ecab34;             /* gradient from-stop */
     --color-warning-500: #e69209;
-    --color-warning-600: #c87d06;             /* hover fill ONLY; navy-950 label = 4.92:1. NOT text. */
+    /* Hover fill ONLY (one consumer: ActionModal's medical-discharge button). Its label is near-black
+     * `text-navy-950`, so DARKENING the fill always LOWERS contrast — the old #c87d06 made hover the
+     * button's weakest state (4.92:1, below the 6.53:1 rest). #d58506 is a lighter 600: label rises to
+     * 5.54:1 while dE76 from warning-500 stays 6.55 (~3x the ~2.3 JND), so the hover is still plainly
+     * a state change. Still darker than 500 (lum 0.3093 vs 0.3740), so the scale stays ordered. */
+    --color-warning-600: #d58506;             /* navy-950 label = 5.54:1. NEVER text: 2.92:1 on white. */
     --color-danger-100: #fbdcdc;
     --color-danger-200: #f4a6a4;              /* text on the always-navy sidebar = 6.78:1 (see NavLink.vue) */
     --color-danger-300: #ed7b78;              /* decorative ring/border */
@@ -224,17 +269,26 @@
     /* Status tints + AA-safe text (light). warning-500/info-500/etc. FAIL as text — see
      * scripts/contrast.mjs. These `on-*` values all clear 4.5:1 on their tint AND on white.
      * `accent` joined the set in W0-T3e: it is the ONLY non-status hue here, but the Long-term badge
-     * needed the same treatment (accent-600 on accent-300/40 was 2.90:1 light / 1.67:1 dark). */
+     * needed the same treatment (accent-600 on accent-300/40 was 2.90:1 light / 1.67:1 dark).
+     *
+     * The accent pair is OLIVE-gold, not the warm gold of --color-accent-300..600. W0-T3e's first
+     * attempt kept the warm hue: AA-compliant, but ~3 degrees of hue from `on-warning`. CIE dE76 was
+     * 14.15 light / 6.37 dark for the text and 2.09 / 3.85 for the fill — so the Long-term badge and
+     * the Readmit-amber badge beside it (PatientFlags.vue) were indistinguishable at 10px, which is
+     * the one thing the badge exists to signal. Rotating to olive takes the TEXT to dE 30.24 / 23.87,
+     * far past the ~2.3 JND (and past ~10, the practical floor for small glyphs). The pill FILLS move
+     * to dE 6.75 / 12.32: the dark pair is now clearly separate, the light pair is still close, so on
+     * light the distinction is carried by the label colour and the word, not by the pill. */
     --tint-info: #d7e9fb;
     --tint-warning: #fdedd2;
     --tint-danger: #fbdcdc;
     --tint-success: #d8f5e3;
-    --tint-accent: #f7ecd2;
+    --tint-accent: #eef0d6;
     --on-info: #1b5cad;
     --on-warning: #8a5a00;
     --on-danger: #a82824;
     --on-success: #11672f;
-    --on-accent: #6b4a08;   /* 6.86:1 on tint-accent · 8.05:1 on bg-card */
+    --on-accent: #4f5314;   /* 7.00:1 on tint-accent · 8.14:1 on bg-card · 7.46:1 on bg-app */
 
     /* The hover step of `bg-tint-success`. It MUST be theme-aware: the Handovers "Sign" chip is the
      * only consumer, and no theme-invariant mint can carry a legible label. text-success-600 on
@@ -283,12 +337,12 @@
     --tint-warning: #3a2a09;
     --tint-danger: #3a1a19;
     --tint-success: #10291a;
-    --tint-accent: #33270a;
+    --tint-accent: #262a10;
     --on-info: #9cc4f5;
     --on-warning: #f0c073;
     --on-danger: #f4a6a4;
     --on-success: #86d6a3;
-    --on-accent: #e9c77a;   /* 9.00:1 on tint-accent · 10.30:1 on bg-card */
+    --on-accent: #cdd48a;   /* 9.42:1 on tint-accent · 10.67:1 on bg-card · 11.87:1 on bg-app */
 
     /* Hover step of bg-tint-success — LIGHTENS on dark (the tint darkens), so the affordance still
      * reads as "more colour". text-on-success on it = 6.74:1. */

@@ -121,4 +121,34 @@ describe('ConfirmDialog.vue', () => {
         await wrapper.vm.$nextTick();
         expect(document.querySelector('[data-test="cd-confirm"]').className).toContain('brand');
     });
+
+    // W0-T3l. `hover:bg-danger-700` went live when cd1f710 declared that colour step — silently, in
+    // a file the commit never opened. This is THE destructive-confirm button (every hard delete in
+    // the app funnels through it), so its hover state is pinned here rather than left to chance:
+    //   rest  white on danger-600 #c1302d = 5.63:1
+    //   hover white on danger-700 #9f2724 = 7.53:1   (contrast RISES; a fill hover never touches the
+    //                                                 label, unlike an opacity fade)
+    // An `opacity` hover would composite the LABEL too and is excluded: WCAG 1.4.3 exempts `disabled`
+    // controls, never `hover`. Ratios computed by scripts/contrast.mjs.
+    const confirmClasses = () => document.querySelector('[data-test="cd-confirm"]').className.split(/\s+/);
+
+    it('destructive confirm: solid danger-600 fill hovering to a real, darker danger-700 fill', async () => {
+        const { ask } = useConfirm();
+        ask('Delete admission', 'This cannot be undone.', 'danger');
+        await wrapper.vm.$nextTick();
+        const c = confirmClasses();
+        expect(c).toEqual(expect.arrayContaining(['bg-danger-600', 'text-white', 'hover:bg-danger-700']));
+        expect(c.some((x) => x.startsWith('hover:opacity-'))).toBe(false);
+        expect(c).not.toContain('hover:bg-danger-600');   // a no-op hover: rest and hover identical
+    });
+
+    it('neutral confirm: brand-600 fill hovering to brand-700, never the danger fill', async () => {
+        const { ask } = useConfirm();
+        ask('Proceed', 'body', 'neutral');
+        await wrapper.vm.$nextTick();
+        const c = confirmClasses();
+        expect(c).toEqual(expect.arrayContaining(['bg-brand-600', 'text-white', 'hover:bg-brand-700']));
+        expect(c).not.toContain('hover:bg-danger-700');
+        expect(c.some((x) => x.startsWith('hover:opacity-'))).toBe(false);
+    });
 });

@@ -67,3 +67,48 @@ describe('Dashboard — admin landing band (Wave 1, Item 7)', () => {
         expect(w.find('section[aria-label="Administrative overview"]').exists()).toBe(false);
     });
 });
+
+// W0-T3i — the "My unit today" lens. Colocated here because this file already owns the only
+// Dashboard mount harness; the tiles are a sibling of the admin band in the same template.
+//
+// Three of the six tiles asked for `bg-danger-50` / `bg-warning-50` / `bg-info-50`. Those steps are
+// not declared in @theme, so Tailwind emitted NO rule for them and the tiles rendered with no fill
+// at all: half the row's colour coding was silently dead. They now use the theme-aware `bg-tint-*`
+// tokens at 30% — the alpha whose CIE dE76 from `bg-card` (4.2 / 4.6 / 4.4) matches the two fills
+// that always worked (bg-brand-50 = 4.25, bg-ink-50 = 3.90), so the row keeps one visual weight.
+// The `nums` value keeps `text-ink-900`: 13.7-14.2:1 light, 15.0-15.6:1 dark on every new fill.
+describe('Dashboard — "My unit today" tiles (W0-T3i)', () => {
+    const myUnit = { total: 12, ward: 9, icu: 3, boarding: 2, new: 4, myConsults: 5, signPending: 0 };
+    // label -> class list. The label is the second <p> in each tile button.
+    const tiles = (w) => Object.fromEntries(
+        w.findAll('.grid-cols-3 button').map((b) => [b.findAll('p')[1].text(), b.classes()]),
+    );
+    const mountConsultant = () => mountAs({ role: 3, is_admin: false }, { myUnit });
+
+    it('renders all six tiles for a consultant', () => {
+        expect(Object.keys(tiles(mountConsultant()))).toEqual(
+            ['Active', 'Ward', 'ICU', 'Boarding', 'New (24h)', 'Consults'],
+        );
+    });
+
+    it('the three formerly fill-less tiles now carry theme-aware tint fills', () => {
+        const t = tiles(mountConsultant());
+        expect(t['ICU']).toContain('bg-tint-danger/30');
+        expect(t['Boarding']).toContain('bg-tint-warning/30');
+        expect(t['New (24h)']).toContain('bg-tint-info/30');
+    });
+
+    it('no tile references an undeclared *-50 colour step (the defect: zero emitted CSS)', () => {
+        for (const [label, classes] of Object.entries(tiles(mountConsultant()))) {
+            const dead = classes.filter((c) => /^bg-(danger|warning|info|success)-50(\/|$)/.test(c));
+            expect(dead, `${label} tile still asks for an undeclared step`).toEqual([]);
+        }
+    });
+
+    it('leaves the two fills that always emitted alone', () => {
+        const t = tiles(mountConsultant());
+        expect(t['Active']).toContain('bg-brand-50');
+        expect(t['Ward']).toContain('bg-ink-50');
+        expect(t['Consults']).toContain('bg-accent-300/20');
+    });
+});

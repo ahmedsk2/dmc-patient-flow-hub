@@ -106,16 +106,28 @@ const visibleAlerts = computed(() => (props.alerts || []).filter((a) => !dismiss
 const isConsultant = computed(() => auth.value?.role === 3);
 const myToggle = ref(localStorage.getItem('dmc-my-unit') !== 'off');   // default ON for consultants
 const setMyToggle = (v) => { myToggle.value = v; localStorage.setItem('dmc-my-unit', v ? 'on' : 'off'); };
+// W0-T3i. Three of these six fills used to name a `-50` step that @theme never declared, so Tailwind
+// emitted no rule and ICU / Boarding / New rendered with NO fill at all — half the row's colour
+// coding was dead, invisibly. They now use the theme-aware `tint-*` tokens (the same family the
+// alert strip and the flags use), at the alpha whose CIE dE76 from `bg-card` matches the two fills
+// that always worked: brand-50 = 4.25, ink-50 = 3.90; tint-danger/30 = 4.23, tint-warning/30 = 4.60,
+// tint-info/30 = 4.37. Value labels (`text-ink-900`) land at 13.7-14.2:1 light and 15.0-15.6:1 dark.
+// Declaring the `-50` steps instead was rejected: it would light up `text-*-50` and `border-*-50`
+// app-wide (see the @theme warning in app.css) to fix three fills.
 const myUnitCards = computed(() => props.myUnit ? [
     ['Active', props.myUnit.total, 'bg-brand-50', '/patients'],
     ['Ward', props.myUnit.ward, 'bg-ink-50', '/patients?location=Ward'],
-    ['ICU', props.myUnit.icu, 'bg-danger-50', '/patients?location=ICU'],
-    ['Boarding', props.myUnit.boarding, 'bg-warning-50', '/patients?view=boarding'],
-    ['New (24h)', props.myUnit.new, 'bg-info-50', null],
+    ['ICU', props.myUnit.icu, 'bg-tint-danger/30', '/patients?location=ICU'],
+    ['Boarding', props.myUnit.boarding, 'bg-tint-warning/30', '/patients?view=boarding'],
+    ['New (24h)', props.myUnit.new, 'bg-tint-info/30', null],
     ['Consults', props.myUnit.myConsults, 'bg-accent-300/20', '/consultations'],
 ] : []);
 
 // ── Load-fairness bands (Item 6) ─────────────────────────────────────────────────────────────
+// W0-T3l. The `from-warning-400` / `from-danger-400` stops below (and `from-warning-400` in
+// `toneClass`) were undeclared steps until cd1f710, so every under/over-loaded bar started from
+// `transparent` and only acquired colour at its `to-` stop. They are decorative gradient fills
+// carrying no text; declaring the steps simply gives each bar the intended two-stop ramp.
 const barTone = (c) => {
     const isHosp = c.specialty_id === 1;
     const min = isHosp ? props.loadBands.minHosp : props.loadBands.minSubs;
@@ -306,11 +318,23 @@ onUnmounted(() => clearInterval(autoRefresh));
         <!-- Threshold alert strip (Item 4): dismissible, severity-coloured, atop the dashboard.
              W0-T3e: danger-700 / warning-600 AS TEXT were DEAD (undeclared steps → zero CSS), so
              both branches rendered in the inherited body ink. Declaring those steps is not the fix:
-             they are dark fills, and on the theme-INVARIANT `*-100/80` strip they'd land at 3.93:1
-             (danger, dark) and 1.98:1 (warning, dark). Migrated to the FlowAlert vocabulary instead —
-             `bg-tint-*` + `text-on-*`, both theme-aware: 5.76/8.29:1 danger, 5.30/8.65:1 warning.
-             The LIGHT fill is byte-identical to before (tint-danger == danger-100), so this is a
-             dark-mode-only visual change. The rings are now live (warning-300 / danger-300). -->
+             they are dark fills, and on the theme-INVARIANT `*-100/80` strip they'd land at 3.84:1
+             (danger, dark) and 1.66:1 (warning, dark). Migrated to the FlowAlert vocabulary instead —
+             `bg-tint-*` + `text-on-*`, both theme-aware. The LIGHT fill is byte-identical to before
+             (tint-danger == danger-100), so this is a dark-mode-only visual change. The rings are now
+             live (warning-300 / danger-300).
+
+             BACKDROP: this strip is a direct child of AppLayout's <main>, which sets no background —
+             so an /80 fill composites over `--surface-app`, NOT over `bg-card`. Every ratio W0-T3e
+             recorded here used bg-card and was therefore slightly off. Correct figures:
+                        light  dark
+               danger   5.64   8.45      (bg-card would have said 5.76 / 8.29)
+               warning  5.21   8.84      (bg-card would have said 5.30 / 8.65)
+             All four still clear AA, so this is a documentation fix, not a colour change. (For the
+             record, the "1.98:1" above was the same bg-card error: warning-600 #c87d06 as text on
+             that strip was 1.90:1 over bg-card and 1.86:1 over the real backdrop. warning-600 has
+             since moved to the lighter #d58506, which takes it to 1.69 / 1.66 — still nowhere near
+             text, which is the point.) -->
         <div v-for="alert in visibleAlerts" :key="alert.key"
              class="no-print mb-4 flex items-start justify-between gap-3 rounded-2xl px-5 py-3 ring-1"
              :class="alert.severity === 'danger'

@@ -14,14 +14,15 @@ const only = (flag, extra = {}, props = {}) => mountFlags({ [flag]: true, ...ext
 // regression guard: they are what stops the pre-Wave-0 colours creeping back in.
 //
 // W0-T3e: `accent` JOINED this list. It used to be the one deliberate exception (accent had no
-// on-*/tint-* pair), but the pair now exists — `--on-accent`/`--tint-accent`, theme-aware, 6.86:1 on
-// its tint + 8.05:1 on bg-card (light) and 9.00:1 / 10.30:1 (dark). The old pairing composited to
+// on-*/tint-* pair), but the pair now exists — `--on-accent`/`--tint-accent`, theme-aware, 7.00:1 on
+// its tint + 8.14:1 on bg-card (light) and 9.42:1 / 10.67:1 (dark). The old pairing composited to
 // 2.90:1 (light) / 1.67:1 (dark) at 10px semibold.
 //
-// Every string below is a real Tailwind candidate, and Tailwind SCANS THIS FILE — so each one keeps
-// its (inert, call-site-less) rule alive in the shipped CSS. That is the price of the guard and it is
-// worth paying; it is also why the prose above spells tokens without their utility prefix. Only add
-// an entry that guards a colour a developer might plausibly reach for.
+// W0-T3h/k: every string below is a real Tailwind candidate. This file USED to be scanned, so the
+// guard array was minting four inert, call-site-less rules into the production bundle — a regression
+// test paying its rent in shipped bytes. resources/css/app.css now pins its scan set with
+// `source(none)` and subtracts `__tests__`, so the strings are free. Only add an entry that guards a
+// colour a developer might plausibly reach for.
 const RAW_STATUS_TEXT = [
     'text-info-500', 'text-info-600', 'text-success-500', 'text-success-600',
     'text-warning-500', 'text-warning-600', 'text-danger-500', 'text-danger-600',
@@ -100,7 +101,9 @@ describe('PatientFlags — AA-safe colour tokens', () => {
     // W0-T3e. The on-accent/tint-accent pair now exists, so Long-term is no longer an exception: it
     // draws from the same AA-verified vocabulary as every sibling badge. The old pairing (accent-300
     // at /40 behind accent-600 text) composited to 2.90:1 light / 1.67:1 dark at 10px semibold —
-    // a hard 1.4.3 failure in both themes. The new one is 6.86:1 / 9.00:1.
+    // a hard 1.4.3 failure in both themes. The new one is 7.00:1 / 9.42:1. (The pair was rotated to
+    // olive-gold in W0-T3h: the warm-gold original was AA but sat dE76 14.15 / 6.37 from `on-warning`,
+    // so this badge and the Readmit badge beside it read as the same colour at 10px. Now 30.24 / 23.87.)
     it('Long-term badge uses the on-accent + tint-accent AA-verified pair', () => {
         const c = only('is_longterm').get('span').classes();
         expect(c).toEqual(expect.arrayContaining(['bg-tint-accent', 'text-on-accent']));

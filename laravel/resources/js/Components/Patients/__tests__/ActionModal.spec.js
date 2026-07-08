@@ -173,7 +173,11 @@ describe('ActionModal — HANDOVER GATE-THEN-RETRY (clinical safety control)', (
 // success-600 drops 5.02:1 -> 4.17:1 over the light `bg-card` panel (4.68:1 dark). WCAG 1.4.3
 // exempts `disabled` controls (hence `disabled:opacity-50` survives) but has NO hover exemption.
 // The `-600`/`-700` steps are now really declared, so every hover is a genuine darker FILL:
-//   white on success-700 #166534 = 7.13:1 · navy-950 on warning-600 #c87d06 = 4.92:1.
+//   white on success-700 #166534 = 7.13:1 · navy-950 on warning-600 #d58506 = 5.54:1.
+//
+// W0-T3h. warning-600 was #c87d06, which put the amber hover at 4.92:1 — BELOW its own 6.53:1 rest
+// state, because darkening a fill under a near-black label can only reduce contrast. The step is now
+// the lighter #d58506 (5.54:1) and remains a visible state change (dE76 6.55 from warning-500).
 describe('ActionModal — medical-discharge button meets WCAG AA in both themes (W0-T3d/e/f)', () => {
     const submitBtn = (w) => w.find('form button[type="submit"]');
 
@@ -186,7 +190,7 @@ describe('ActionModal — medical-discharge button meets WCAG AA in both themes 
 
     it('medical-only: hovers with a real darker amber fill, not a whole-element opacity fade', () => {
         const c = submitBtn(mountWith('medical')).classes();
-        expect(c).toContain('hover:bg-warning-600');   // 4.92:1 under text-navy-950
+        expect(c).toContain('hover:bg-warning-600');   // 5.54:1 under text-navy-950
         expect(c).not.toContain('hover:opacity-90');   // composites the LABEL too — 1.4.3 has no hover exemption
     });
 

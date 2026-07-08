@@ -215,10 +215,19 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
             <!-- W0-T3e. Was accent-300 at /30 behind accent-600 text, hovering to /50 — 2.99:1 (light)
                  / 2.22:1 (dark) at rest, 1.26:1 (dark) on hover. Both fills were theme-invariant gold
                  at alpha, so on the dark board they LIGHTENED behind an already-pale label. The base
-                 is now the theme-aware tint at /70 and the hover fills it in: contrast RISES on hover
-                 in both themes (7.21 -> 6.86 light, 9.45 -> 9.00 dark; the tint itself is the floor).
-                 (Class names are spelled WITHOUT their utility prefix on purpose — Tailwind's
-                 extractor reads comments, and naming them would re-emit the rules we just retired.) -->
+                 is now the theme-aware tint at /70 and the hover fills it in.
+
+                 W0-T3h. Contrast FALLS on hover, it does not rise — filling in the tint moves the
+                 backdrop AWAY from the page surface and toward the label. The earlier note said
+                 "rises", and also composited against `bg-card`; this chip is a direct child of
+                 AppLayout's <main>, which has no background, so the /70 rest fill actually sits on
+                 `--surface-app`. With the olive `on-accent`:
+                   rest  on tint-accent/70 over bg-app   7.15:1 light · 10.26:1 dark
+                   hover on tint-accent (opaque)         7.00:1 light ·  9.42:1 dark
+                 The opaque tint is the FLOOR, and the floor clears AA in both themes — which is the
+                 property that actually matters. (Class names are spelled WITHOUT their utility prefix
+                 on purpose — Tailwind's extractor reads comments, and naming them would re-emit the
+                 rules we just retired.) -->
             <Link v-if="stats.unassigned && !isObserver" href="/admissions" class="inline-flex items-center gap-1.5 rounded-xl bg-tint-accent/70 px-3 py-2 text-sm font-semibold text-on-accent ring-1 ring-accent-300/50 transition hover:bg-tint-accent">
                 {{ stats.unassigned }} awaiting assignment →
             </Link>

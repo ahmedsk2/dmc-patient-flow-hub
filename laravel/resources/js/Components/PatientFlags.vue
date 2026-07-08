@@ -30,7 +30,14 @@
  * `Long-term` used to be a second exception — `accent` had no `on-*`/`tint-*` pair, so the badge
  * shipped accent-600 on accent-300/40: 2.90:1 (light, composited over the white card) and 1.67:1
  * (dark, over #13201f). W0-T3e minted the pair (`--tint-accent`/`--on-accent`, theme-aware like the
- * other four), and the badge now reads 6.86:1 / 9.00:1. The plain variant is 8.05:1 / 10.30:1.
+ * other four), and the badge now reads 7.00:1 / 9.42:1. The plain variant is 8.14:1 / 10.67:1.
+ *
+ * W0-T3h. The accent pair is OLIVE-gold, not the warm gold of the raw accent scale, and this
+ * component is the reason. `Long-term` and `Readmit` sit side by side, same shape, same 10px
+ * semibold. W0-T3e's warm-gold pair cleared AA but was dE76 14.15 (light) / 6.37 (dark) from
+ * `on-warning`, and its tint was dE76 2.09 / 3.85 from `tint-warning` — two badges, one colour.
+ * The olive text is now dE76 30.24 / 23.87 away. The light-mode PILLS remain close (dE76 6.75), so
+ * on light the separation is carried by the label and the word, not by the fill.
  */
 defineProps({
     patient: { type: Object, required: true },
@@ -41,8 +48,8 @@ defineProps({
 
 <template>
     <!-- `plain` has no tint behind it, so the on-* token is doing the work against the card/page:
-         on-info 6.60:1, on-warning 5.93:1, on-danger 7.01:1, on-accent 8.05:1 (light) and
-         9.27/9.96/8.64/10.30:1 (dark).
+         on-info 6.60:1, on-warning 5.93:1, on-danger 7.01:1, on-accent 8.14:1 (light) and
+         9.27/9.96/8.64/10.67:1 (dark).
          This is also what makes the printed census legible — warning-500 was 2.48:1 on white. -->
     <template v-if="variant === 'plain'">
         <span v-if="patient.is_new" class="mr-1 font-semibold text-on-info">New</span>
