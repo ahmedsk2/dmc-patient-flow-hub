@@ -6,6 +6,8 @@ import FlowAlert from '@/Components/FlowAlert.vue';
 const mountAlert = (props = {}, slots = {}) =>
     mount(FlowAlert, { props: { title: 'Two discharges are overdue', ...props }, slots });
 
+const has = (cls, re) => cls.some((c) => re.test(c));
+
 describe('FlowAlert', () => {
     it('renders the title and the default-slot body', () => {
         const w = mountAlert({}, { default: 'Review the boarding worklist.' });
@@ -41,6 +43,29 @@ describe('FlowAlert', () => {
         expect(new Set(paths).size).toBe(3);
     });
 
+    // Shape-agnostic: catches a tone half-added to some maps but not others (six coordinated edits,
+    // and a miss produces NO signal rather than a loud failure).
+    it.each(['info', 'warning', 'critical'])('tone %s renders all three redundant signals', (tone) => {
+        const w = mountAlert({ tone });
+        expect(w.find('.sr-only').text()).not.toBe('');
+        expect(w.find('path').attributes('d')).toBeTruthy();
+        const c = w.classes();
+        expect(has(c, /^rail-/) && has(c, /^bg-tint-/) && has(c, /^text-on-/)).toBe(true);
+    });
+
+    // An unknown tone must degrade UP to the critical treatment, never to an unmarked grey box.
+    // Vue strips prop validators from production builds, so the validator alone cannot protect this.
+    it('degrades an unknown tone to the critical treatment', () => {
+        // 'constructor' is the `in`-operator trap: `'constructor' in ICON` is true, hasOwn is false.
+        for (const tone of ['success', 'criticl', 'constructor']) {
+            const w = mountAlert({ tone });
+            expect(w.find('.sr-only').text()).toBe('Action needed:');
+            expect(w.find('path').attributes('d')).toBeTruthy();
+            expect(w.classes()).toEqual(expect.arrayContaining(['rail-danger', 'bg-tint-danger', 'text-on-danger']));
+            expect(w.attributes('role')).toBe('status');
+        }
+    });
+
     it('applies the status-rail plus the matching tone rail class', () => {
         expect(mountAlert({ tone: 'info' }).classes()).toContain('status-rail');
         expect(mountAlert({ tone: 'info' }).classes()).toContain('rail-info');
@@ -54,8 +79,10 @@ describe('FlowAlert', () => {
         expect(mountAlert({ tone: 'warning' }).classes()).not.toContain('text-warning-500');
     });
 
-    it('announces only the critical tone (role=alert); calmer tones are role=note', () => {
-        expect(mountAlert({ tone: 'critical' }).attributes('role')).toBe('alert');
+    // critical is a POLITE live region (role=status): it queues behind the page-title/heading
+    // announcement on Inertia navigation instead of interrupting it. Calmer tones are inert notes.
+    it('makes only the critical tone a polite live region (role=status); calmer tones are role=note', () => {
+        expect(mountAlert({ tone: 'critical' }).attributes('role')).toBe('status');
         expect(mountAlert({ tone: 'warning' }).attributes('role')).toBe('note');
         expect(mountAlert({ tone: 'info' }).attributes('role')).toBe('note');
     });
