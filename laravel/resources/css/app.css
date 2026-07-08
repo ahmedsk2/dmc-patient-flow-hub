@@ -104,10 +104,14 @@
     /* Focus ring — a token that flips per theme so the ring stays visible on light + dark. */
     --color-focus: var(--focus-ring);
 
-    /* NOTE: Tailwind v4 inlines --shadow-* at build time (only the colour slot can indirect via a
-     * var). The `.dark` overrides of --shadow-card/-lg below are therefore INERT — dark mode renders
-     * the light-mode card shadow. Pre-existing; fixing it means unifying per-theme geometry, so it is
-     * tracked separately rather than smuggled into a token commit. See --overlay-ink for the pattern. */
+    /* NOTE: Tailwind v4 inlines --shadow-* at build time, so a `.dark { --shadow-card: ... }` override
+     * of the theme key itself is INERT — dark mode has always rendered the light-mode card shadow.
+     * (Any indirection must live in a var REFERENCED BY the inlined value: the colour slot, the
+     * geometry, or the whole value — all three compile. See --overlay-ink for the colour-slot form,
+     * which additionally keeps --tw-shadow-color working.) Pre-existing and deferred, not because the
+     * fix is hard — `--shadow-card: var(--card-shadow)` + :root/.dark raws is ~4 lines — but because
+     * it is a VISIBLE dark-mode change to every card in the app and wants eyeballs, not a mechanical
+     * edit smuggled into a token commit. Tracked separately. */
     --shadow-card: 0 1px 2px rgb(30 42 46 / 0.05), 0 6px 20px -8px rgb(30 42 46 / 0.14);
     /* Elevated — one tier above shadow-card, for PRIMARY surfaces (dashboard hero KPIs +
      * occupancy gauge). Reads as a slightly deeper lift so the eye lands there first. */
@@ -118,9 +122,10 @@
      * Hairline: a teal-tinted separator that REPLACES drop-shadows as the depth cue. Distinct
      * from --color-line (neutral). Shadow is reserved for TRUE overlays only.
      *
-     * The indirection sits at the COLOUR SLOT, not the whole value: Tailwind parses --shadow-* at
-     * build time and inlines the geometry, injecting only a colour var. A `.dark { --shadow-overlay }`
-     * override would be dead code — so `.dark` remaps --overlay-ink instead. */
+     * Tailwind parses --shadow-* at build time and inlines it, so a `.dark { --shadow-overlay }`
+     * override would be dead code. The indirection therefore lives in a var the inlined value
+     * REFERENCES — here the colour slot, which also preserves the --tw-shadow-color slot (so
+     * `shadow-overlay shadow-black/50` keeps working). `.dark` remaps --overlay-ink instead. */
     --color-hairline: var(--surface-hairline);
     --shadow-overlay: 0 24px 60px -18px var(--overlay-ink);
 

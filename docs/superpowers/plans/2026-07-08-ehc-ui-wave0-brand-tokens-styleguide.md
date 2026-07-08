@@ -1281,5 +1281,9 @@ git commit -m "docs(renovation): Wave 0 style-guide screenshots (light + dark)"
   `.dark` override of the shadow token itself is inert. `@property --rail-color { inherits: false }`
   was added so a toned row cannot silently re-tone nested rails. Both were proven by compiling the
   real stylesheet through Tailwind's own API. The identical inert-dark-shadow bug in the pre-existing
-  `--shadow-card`/`--shadow-card-lg` is documented in-file but deliberately NOT fixed here: a correct
-  fix unifies per-theme shadow geometry and belongs in its own reviewed commit.
+  `--shadow-card`/`--shadow-card-lg` is documented in-file but deliberately NOT fixed here — **not**
+  because it is hard (`--shadow-card: var(--card-shadow)` + `:root`/`.dark` raws is ~4 lines; Tailwind
+  happily indirects the colour slot, the geometry, *or* the whole value), but because it is a **visible
+  dark-mode change to every card** and wants eyeballs, not a mechanical edit inside a token commit.
+  Spun off separately. (An earlier draft of this note wrongly claimed the fix required unifying
+  per-theme geometry — corrected after the reviewer disproved it by compiling three shapes.)
