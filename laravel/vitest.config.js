@@ -6,7 +6,13 @@ import { resolve } from 'path';
 // production Vite build. The `@` alias mirrors vite.config.js's resolve alias so test imports of
 // `@/...` resolve the same way the app does.
 export default defineConfig({
-    plugins: [vue()],
+    // Mirrors vite.config.js's transformAssetUrls override: without it, @vitejs/plugin-vue falls
+    // back to its build-mode default (includeAbsolute: true) here because vitest never fires the
+    // plugin's configureServer hook, so an absolute `<img src="/images/...">` gets rewritten into
+    // a module import and Vite's import-analysis plugin throws when the file doesn't exist yet.
+    // Production intentionally allows dropping such assets in post-build with no rebuild — tests
+    // must not require them to exist either.
+    plugins: [vue({ template: { transformAssetUrls: { base: null, includeAbsolute: false } } })],
     test: {
         environment: 'jsdom',
         globals: true,
