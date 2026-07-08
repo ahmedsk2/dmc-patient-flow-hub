@@ -29,6 +29,7 @@ class DashboardController extends Controller
 
         $settings = Setting::current();
         $wardBeds = max(1, (int) ($settings->ward_beds ?? 50));   // licensed ward (non-ICU) beds — set in Control
+        $icuBeds = max(0, (int) ($settings->icu_beds ?? 10));     // licensed ICU beds — set in Control (drives the OccupancyTracker ICU band)
 
         // Phase 4 — Item 1: every raw admissions/consultations analytic excludes soft-deleted rows.
         $active = (int) DB::table('admissions')->whereNull('discharge_date')->whereNull('deleted_at')->count();
@@ -411,7 +412,7 @@ class DashboardController extends Controller
                 'census' => $active, 'ward' => $activeWard, 'icu' => $activeIcu,
                 'admissionsToday' => $admissionsToday, 'dischargesToday' => $dischargesToday,
                 'activeConsults' => $activeConsults, 'deathsMonth' => $deathsMonth, 'avgLosMonth' => $avgLosMonth,
-                'occupancy' => $occupancy, 'occupancyGauge' => $occupancyGauge, 'wardBeds' => $wardBeds,
+                'occupancy' => $occupancy, 'occupancyGauge' => $occupancyGauge, 'wardBeds' => $wardBeds, 'icuBeds' => $icuBeds,
             ],
             'boardingCount' => $boardingCount,
             'boardingWorklist' => $boardingWorklist,

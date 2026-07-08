@@ -3,11 +3,17 @@ import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AdminBandCard from '@/Components/AdminBandCard.vue';
+import OccupancyTracker from '@/Components/OccupancyTracker.vue';
+import ChartFigure from '@/Components/ChartFigure.vue';
+import Sparkline from '@/Components/Sparkline.vue';
 import { useChartTheme } from '@/composables/useChartTheme';
-import { locTone } from '@/lib/ui.js';
+import { useReducedMotion, chartAnimations } from '@/composables/useReducedMotion';
+import { locTone, deltaChipClass } from '@/lib/ui.js';
 
 // theme-aware chart colors (grid/axis read CSS tokens; donut gaps match the card)
-const { gridColor, axisColor, strokeColor, inkColor, series } = useChartTheme();
+const { gridColor, axisColor, strokeColor, series } = useChartTheme();
+// prefers-reduced-motion → every chart's draw animation is gated through chartAnimations(reduced)
+const { reduced } = useReducedMotion();
 
 const props = defineProps({
     // Wave 1, Item 7 — admin landing band counts; null for non-admins (band then renders nothing).
@@ -75,21 +81,18 @@ const drillToConsultant = (name) => {
     if (id) drillTo({ consultant_id: id });
 };
 
-// ── KPI deltas (Item 2) ──────────────────────────────────────────────────────────────────────
-// {value, delta, direction, good_up} → an up/down chip coloured good (green) / bad (red) / neutral.
-const deltaChip = (d) => {
+// ── KPI deltas (Item 2 + W4 polarity) ──────────────────────────────────────────────────────────
+// A delta {value, delta, direction} plus the KPI's own `polarity` → an up/down chip. The chip's
+// colour is driven by polarity + direction (deltaChipClass in lib/ui.js), NOT by the delta's own
+// good_up flag: a rise in a 'bad' KPI (mortality, occupancy) is red; a rise in a 'good' KPI is
+// green; a 'neutral' KPI (census, admissions) is always ink. The arrow glyph + number carry the
+// meaning too, so colour is never the sole signal.
+const deltaChip = (d, polarity) => {
     if (!d || d.delta === undefined || d.delta === null) return null;
-    const up = d.direction === 'up';
-    const isGood = d.good_up === true ? up : d.good_up === false ? !up : null;
-    const arrow = d.direction === 'flat' ? '■' : up ? '▲' : '▼';
-    return {
-        label: `${arrow} ${Math.abs(d.delta)}`,
-        cls: isGood === true ? 'bg-tint-success text-on-success'
-            : isGood === false ? 'bg-tint-danger text-on-danger'
-            : 'bg-ink-100 text-ink-500',
-    };
+    const arrow = d.direction === 'flat' ? '■' : d.direction === 'up' ? '▲' : '▼';
+    return { label: `${arrow} ${Math.abs(d.delta)}`, cls: deltaChipClass(polarity, d.direction) };
 };
-const chip = (c) => (c.deltaKey ? deltaChip(props.deltas?.[c.deltaKey]) : null);
+const chip = (c) => (c.deltaKey ? deltaChip(props.deltas?.[c.deltaKey], c.polarity) : null);
 
 // ── Threshold alert strip (Item 4) ───────────────────────────────────────────────────────────
 // dismissible per-key via sessionStorage (tab-scoped) so a ward screen re-surfaces the alert on
@@ -161,14 +164,18 @@ const boardSections = computed(() => {
 // W4: chart series colours come from the theme-reactive token palette (useChartTheme → `series`),
 // never local hex — so the deep/muted hues lighten on dark instead of vanishing into the card.
 
+// W4 triad: each KPI carries a `polarity` (good | bad | neutral) that drives the delta-chip colour,
+// and — where a real payload series exists — a `spark` array rendered as an inline Sparkline. Only
+// Admissions (trend.admissions) and Active Consultations (consults.new) have a genuine series; the
+// rest deliberately have no spark (no invented data).
 const kpiCards = computed(() => [
-    { label: 'Active Census', value: props.kpis.census, sub: `${props.kpis.ward} ward · ${props.kpis.icu} ICU`, icon: 'bed', tone: 'brand', href: '/patients' },
-    { label: 'Admissions Today', value: props.kpis.admissionsToday, sub: `${props.kpis.dischargesToday} discharged today · vs 7d avg`, icon: 'in', tone: 'blue', deltaKey: 'admissions' },
-    { label: 'Active Consultations', value: props.kpis.activeConsults, sub: 'awaiting sign-off', icon: 'chat', tone: 'gold', href: '/consultations' },
-    { label: 'Bed Occupancy', value: props.kpis.occupancy + '%', sub: `of ${props.kpis.wardBeds} ward beds · vs 1w ago`, icon: 'gauge', tone: 'teal', deltaKey: 'occupancy' },
-    { label: 'Avg LOS (month)', value: props.kpis.avgLosMonth, sub: 'days · non-ICU discharges', icon: 'clock', tone: 'navy' },
-    { label: 'Mortality (Month)', value: props.kpis.deathsMonth, sub: 'this calendar month · vs prior month', icon: 'trendDown', tone: 'red', deltaKey: 'deathsMonth' },
-    { label: 'Boarding', value: props.boardingCount, sub: 'medically cleared · bed still occupied', icon: 'boarding', tone: 'warning', href: '/patients?view=boarding' },
+    { label: 'Active Census', value: props.kpis.census, sub: `${props.kpis.ward} ward · ${props.kpis.icu} ICU`, icon: 'bed', tone: 'brand', href: '/patients', polarity: 'neutral' },
+    { label: 'Admissions Today', value: props.kpis.admissionsToday, sub: `${props.kpis.dischargesToday} discharged today · vs 7d avg`, icon: 'in', tone: 'blue', deltaKey: 'admissions', polarity: 'neutral', spark: props.trend.admissions },
+    { label: 'Active Consultations', value: props.kpis.activeConsults, sub: 'awaiting sign-off', icon: 'chat', tone: 'gold', href: '/consultations', polarity: 'neutral', spark: props.consults.new },
+    { label: 'Bed Occupancy', value: props.kpis.occupancy + '%', sub: `of ${props.kpis.wardBeds} ward beds · vs 1w ago`, icon: 'gauge', tone: 'teal', deltaKey: 'occupancy', polarity: 'bad' },
+    { label: 'Avg LOS (month)', value: props.kpis.avgLosMonth, sub: 'days · non-ICU discharges', icon: 'clock', tone: 'navy', polarity: 'bad' },
+    { label: 'Mortality (Month)', value: props.kpis.deathsMonth, sub: 'this calendar month · vs prior month', icon: 'trendDown', tone: 'red', deltaKey: 'deathsMonth', polarity: 'bad' },
+    { label: 'Boarding', value: props.boardingCount, sub: 'medically cleared · bed still occupied', icon: 'boarding', tone: 'warning', href: '/patients?view=boarding', polarity: 'bad' },
 ]);
 const toneClass = {
     brand: 'from-brand-500 to-brand-700', blue: 'from-info-500 to-blue-700', gold: 'from-accent-400 to-accent-600',
@@ -185,20 +192,47 @@ const kpiIcons = {
     boarding: 'M12 6v6l3.75 2.25M3.75 12a8.25 8.25 0 1 1 16.5 0 8.25 8.25 0 0 1-16.5 0Z',
 };
 
-// PNG-export-only toolbar (no zoom/pan clutter) — applied to every chart on this page
-// (the occupancy gauge runs in sparkline mode, which suppresses the toolbar by design)
+// Bed-occupancy segmented tracker (W4) — replaces the old radialBar gauge, which blended ward+ICU
+// into one % and hid the composition. Ward + ICU each read their licensed bed count from `settings`
+// (kpis.wardBeds / kpis.icuBeds); the tracker draws one calm band per unit + a summed line.
+const occUnits = computed(() => [
+    { key: 'ward', label: 'Ward', occupied: props.kpis.ward, total: props.kpis.wardBeds },
+    { key: 'icu', label: 'ICU', occupied: props.kpis.icu, total: props.kpis.icuBeds },
+]);
+// warning/critical as fractions of capacity — the OccupancyTracker design defaults, kept explicit here.
+const occThresholds = { warning: 0.85, critical: 0.95 };
+
+// PNG-export-only toolbar (no zoom/pan clutter) — applied to every chart on this page.
 const dlToolbar = { show: true, tools: { download: true, selection: false, zoom: false, zoomin: false, zoomout: false, pan: false, reset: false } };
 
+// direct end-of-line labels for the trend area (replaces the top legend): a pill at each series'
+// last point. Null-safe when there are no labels (empty period).
+const areaAnnotations = computed(() => {
+    const labels = props.trend.labels;
+    if (!labels.length) return {};
+    const lastX = new Date(labels[labels.length - 1]).getTime();
+    const end = (data, text, color) => ({
+        x: lastX, y: data[data.length - 1] ?? 0,
+        marker: { size: 0 },
+        label: { text, borderWidth: 0, offsetY: -6, textAnchor: 'end',
+            style: { color: '#fff', background: color, fontWeight: 700, fontSize: '11px', padding: { left: 6, right: 6, top: 2, bottom: 2 } } },
+    });
+    return { points: [
+        end(props.trend.admissions, 'Admissions', series.value.primary),
+        end(props.trend.discharges, 'Discharges', series.value.muted),
+    ] };
+});
 const areaOptions = computed(() => ({
-    chart: { type: 'area', toolbar: dlToolbar, fontFamily: 'inherit', animations: { easing: 'easeinout', speed: 600 } },
+    chart: { type: 'area', toolbar: dlToolbar, fontFamily: 'inherit', animations: chartAnimations(reduced) },
     colors: [series.value.primary, series.value.muted],
     dataLabels: { enabled: false },
     stroke: { curve: 'smooth', width: 2.5 },
     fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 90] } },
-    grid: { borderColor: gridColor.value, strokeDashArray: 4, padding: { left: 8, right: 8 } },
+    grid: { borderColor: gridColor.value, strokeDashArray: 4, padding: { left: 8, right: 64 } },   // right pad = room for the end-labels
     xaxis: { categories: props.trend.labels, type: 'datetime', labels: { style: { colors: axisColor.value }, datetimeFormatter: { day: 'dd MMM' } }, axisBorder: { show: false }, axisTicks: { show: false }, tickAmount: 6 },
     yaxis: { labels: { style: { colors: axisColor.value } } },
-    legend: { position: 'top', horizontalAlign: 'right', markers: { radius: 12 }, fontWeight: 600 },
+    legend: { show: false },   // direct-labelled at each line's end instead (+ ChartFigure caption/table)
+    annotations: areaAnnotations.value,
     tooltip: { x: { format: 'ddd, dd MMM' } },
 }));
 const areaSeries = computed(() => [
@@ -206,25 +240,13 @@ const areaSeries = computed(() => [
     { name: 'Discharges', data: props.trend.discharges },
 ]);
 
-const gaugeOptions = computed(() => ({
-    chart: { type: 'radialBar', fontFamily: 'inherit', sparkline: { enabled: true } },
-    colors: [series.value.primary],
-    plotOptions: { radialBar: {
-        hollow: { size: '64%' }, track: { background: gridColor.value, strokeWidth: '100%' },
-        dataLabels: { name: { offsetY: 22, color: axisColor.value, fontSize: '12px' }, value: { offsetY: -14, color: inkColor.value, fontSize: '30px', fontWeight: 700, formatter: () => props.kpis.occupancy + '%' } },
-    } },
-    fill: { type: 'gradient', gradient: { shade: 'dark', type: 'horizontal', gradientToColors: [series.value.primarySoft], stops: [0, 100] } },
-    stroke: { lineCap: 'round' },
-    labels: ['Occupancy'],
-}));
-
 const colOptions = (cats, colors) => ({
-    chart: { type: 'bar', toolbar: dlToolbar, fontFamily: 'inherit', stacked: false },
+    chart: { type: 'bar', toolbar: dlToolbar, fontFamily: 'inherit', stacked: false, animations: chartAnimations(reduced) },
     colors, plotOptions: { bar: { borderRadius: 6, columnWidth: '55%' } },
     dataLabels: { enabled: false }, grid: { borderColor: gridColor.value, strokeDashArray: 4 },
     xaxis: { categories: cats, labels: { style: { colors: axisColor.value } }, axisBorder: { show: false }, axisTicks: { show: false } },
     yaxis: { labels: { style: { colors: axisColor.value } } },
-    legend: { position: 'top', horizontalAlign: 'right', fontWeight: 600 },
+    legend: { position: 'top', horizontalAlign: 'right', fontWeight: 600, labels: { colors: axisColor.value } },
 });
 const consultsSeries = computed(() => [{ name: 'New', data: props.consults.new }, { name: 'Signed off', data: props.consults.signed }]);
 const losSeries = computed(() => [{ name: 'Patients', data: props.los.data }]);
@@ -233,8 +255,14 @@ const losSeries = computed(() => [{ name: 'Patients', data: props.los.data }]);
 const consultsOptions = computed(() => colOptions(props.consults.labels, [series.value.primary, series.value.accent]));
 const losOptions = computed(() => colOptions(props.los.labels, [series.value.deep]));
 
+// Both donuts are DIRECT-LABELLED on the slice (dataLabels: % for the mix, raw count for the
+// consult pair) and keep only a MINIMAL bottom legend for slice IDENTITY. The legend is not removed
+// outright because a value-only slice label doesn't say WHICH slice, and a tiny slice (e.g. a small
+// long-term segment) drops its on-slice label below ApexCharts' min-angle threshold — the compact
+// legend is the reliable identifier. `chartAnimations(reduced)` gates the draw animation.
+const donutLegend = { position: 'bottom', fontSize: '12px', fontWeight: 600, markers: { size: 7 }, itemMargin: { horizontal: 8, vertical: 0 } };
 const donutOptions = computed(() => ({
-    chart: { type: 'donut', toolbar: dlToolbar, fontFamily: 'inherit', events: {
+    chart: { type: 'donut', toolbar: dlToolbar, fontFamily: 'inherit', animations: chartAnimations(reduced), events: {
         // drill-through (Item 3): the long-term slice → the long-term board view. Hospitalist /
         // subspecialty slices map to a per-admission field the board can't filter coarsely yet, so
         // only long-term drills for now (consistent with the donut's own definition).
@@ -244,7 +272,7 @@ const donutOptions = computed(() => ({
     } },
     colors: [series.value.primary, series.value.accent, series.value.deep],
     labels: ['Hospitalist', 'Sub-specialty', 'Long-term'],
-    legend: { position: 'bottom', fontWeight: 600 },
+    legend: { ...donutLegend, labels: { colors: axisColor.value } },
     dataLabels: { enabled: true, formatter: (v) => Math.round(v) + '%' },
     stroke: { width: 2, colors: [strokeColor.value] },
     plotOptions: { pie: { donut: { size: '70%', labels: { show: true, total: { show: true, label: 'Census', color: axisColor.value, formatter: (w) => w.globals.seriesTotals.reduce((a, b) => a + b, 0) } } } } },
@@ -253,10 +281,10 @@ const donutSeries = computed(() => [props.mix.hospitalist, props.mix.subspecialt
 
 // consultation donut — legacy dashboard/1.php pair: [signed off in the last 24h, active] (J2-5)
 const consultDonutOptions = computed(() => ({
-    chart: { type: 'donut', toolbar: dlToolbar, fontFamily: 'inherit' },
+    chart: { type: 'donut', toolbar: dlToolbar, fontFamily: 'inherit', animations: chartAnimations(reduced) },
     colors: [series.value.accent, series.value.primary],
     labels: ['Signed off (24h)', 'Active'],
-    legend: { position: 'bottom', fontWeight: 600 },
+    legend: { ...donutLegend, labels: { colors: axisColor.value } },
     dataLabels: { enabled: true, formatter: (v, o) => o.w.globals.series[o.seriesIndex] },
     stroke: { width: 2, colors: [strokeColor.value] },
     plotOptions: { pie: { donut: { size: '70%' } } },
@@ -277,6 +305,31 @@ const ytdCards = computed(() => [
     ['Admissions', props.ytd.admissions], ['Discharges', props.ytd.discharges],
     ['Consultations', props.ytd.consultations], ['Sign-offs', props.ytd.signoffs],
 ]);
+
+// ── ChartFigure accessible-alternative tables + empty guards (W4) ────────────────────────────────
+// Each full chart is wrapped in <ChartFigure>, which appends an sr-only caption + data table so the
+// numbers are reachable without sight. The `has*` guards swap a blank/NaN chart for a calm visible
+// "No data for this period." note (donuts especially render broken with an all-zero series). Rows are
+// emptied in lock-step so the sr-only table matches what sighted users see.
+const hasTrend = computed(() => props.trend.labels.length > 0);
+const hasConsults = computed(() => props.consults.labels.length > 0);
+const hasLos = computed(() => props.los.labels.length > 0);
+const hasMix = computed(() => props.donutTotal > 0);
+const hasConsultDonut = computed(() => (props.consultDonut.signed24h + props.consultDonut.active) > 0);
+const hasAct24 = computed(() => props.activity24h.length > 0);
+
+const trendRows = computed(() => (hasTrend.value
+    ? props.trend.labels.map((d, i) => [d, props.trend.admissions[i] ?? 0, props.trend.discharges[i] ?? 0]) : []));
+const consultsRows = computed(() => (hasConsults.value
+    ? props.consults.labels.map((m, i) => [m, props.consults.new[i] ?? 0, props.consults.signed[i] ?? 0]) : []));
+const losRows = computed(() => (hasLos.value
+    ? props.los.labels.map((b, i) => [b, props.los.data[i] ?? 0]) : []));
+const mixRows = computed(() => (hasMix.value
+    ? [['Hospitalist', props.mix.hospitalist], ['Sub-specialty', props.mix.subspecialty], ['Long-term', props.mix.longterm]] : []));
+const consultDonutRows = computed(() => (hasConsultDonut.value
+    ? [['Signed off (24h)', props.consultDonut.signed24h], ['Active', props.consultDonut.active]] : []));
+const act24Rows = computed(() => (hasAct24.value
+    ? props.activity24h.map((r) => [r.name, r.admissions, r.discharges]) : []));
 
 const refresh = () => router.reload({ only: ['kpis', 'boardingCount', 'boardingWorklist', 'deltas', 'alerts', 'myUnit', 'loadBands', 'trend', 'consults', 'consultDonut', 'los', 'mix', 'donutTotal', 'donutTb', 'perConsultant', 'consultantBoard', 'activity24h', 'ytd', 'topDxWeek', 'topDxWeekNum', 'recent', 'generatedAt'] });
 const print = () => window.print();
@@ -364,7 +417,7 @@ onUnmounted(() => clearInterval(autoRefresh));
         <!-- 'My unit today' lens (Item 5): consultants only; default ON, toggle persisted per-browser -->
         <div v-if="isConsultant && myUnit && myToggle" class="mb-5 rounded-2xl bg-card p-5 shadow-card-lg ring-1 ring-brand-200/60">
             <div class="mb-3 flex items-center justify-between">
-                <h3 class="font-bold text-ink-800">My patients today</h3>
+                <h2 class="font-bold text-ink-800">My patients today</h2>
                 <button @click="setMyToggle(false)" class="text-xs text-ink-400 hover:text-ink-600">Hide</button>
             </div>
             <div class="grid grid-cols-3 gap-3 sm:grid-cols-6">
@@ -385,20 +438,29 @@ onUnmounted(() => clearInterval(autoRefresh));
         </div>
 
         <!-- KPI hero row (data-tour anchor for the onboarding tour, Item 10) -->
+        <h2 class="sr-only">Key performance indicators</h2>
         <div data-tour="dashboard-hero" class="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-7">
+            <!-- W4 triad: label → big tabular numeral → (delta chip + inline sparkline) row, brand icon tile kept -->
             <component :is="c.href ? 'button' : 'div'" v-for="c in kpiCards" :key="c.label" type="button"
+                :data-kpi="c.label"
                 @click="c.href && goHref(c.href)"
-                class="relative w-full overflow-hidden rounded-2xl bg-card p-5 text-left shadow-card-lg ring-1 transition"
-                :class="c.tone === 'warning' ? 'ring-warning-300/60' : 'ring-brand-200/60'"
-                :style="c.href ? '' : ''">
-                <div class="flex items-start justify-between">
-                    <div>
+                class="relative w-full overflow-hidden rounded-2xl bg-card p-5 text-start shadow-card-lg ring-1 transition"
+                :class="c.tone === 'warning' ? 'ring-warning-300/60' : 'ring-brand-200/60'">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0 flex-1">
                         <p class="text-xs font-semibold uppercase tracking-wide text-ink-400">{{ c.label }}</p>
                         <p class="font-display nums mt-2 text-3xl font-extrabold" :class="c.tone === 'warning' ? 'text-on-warning' : 'text-ink-900'">{{ c.value }}</p>
                         <p class="mt-1 text-xs text-ink-400">{{ c.sub }}</p>
-                        <span v-if="chip(c)" class="mt-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold" :class="chip(c).cls">{{ chip(c).label }}</span>
+                        <!-- triad row 3: delta chip + inline sparkline. Colour is a graphic hue on the spark
+                             (text-brand-600 → currentColor); meaning on the chip is arrow + number, not colour. -->
+                        <div v-if="chip(c) || c.spark?.length" class="mt-2 flex items-center gap-2">
+                            <span v-if="chip(c)" class="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-bold" :class="chip(c).cls">{{ chip(c).label }}</span>
+                            <div v-if="c.spark?.length" class="min-w-0 flex-1">
+                                <Sparkline :data="c.spark" :aria-label="`${c.label}, recent trend`" class="text-brand-600" />
+                            </div>
+                        </div>
                     </div>
-                    <div class="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br text-white shadow-lg" :class="toneClass[c.tone]">
+                    <div class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br text-white shadow-lg" :class="toneClass[c.tone]">
                         <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" :d="kpiIcons[c.icon]" /></svg>
                     </div>
                 </div>
@@ -410,9 +472,9 @@ onUnmounted(() => clearInterval(autoRefresh));
         <!-- Boarding worklist (Item 1): ranked longest-boarding first, links to the board view -->
         <div v-if="boardingWorklist.length" class="mt-5 rounded-2xl bg-card p-5 shadow-card ring-1 ring-warning-300/60">
             <div class="mb-3 flex items-center justify-between">
-                <h3 class="font-semibold text-ink-700">Boarding patients
+                <h2 class="font-semibold text-ink-700">Boarding patients
                     <span class="nums ml-2 rounded-full bg-tint-warning px-2 py-0.5 text-xs font-bold text-on-warning">{{ boardingCount }}</span>
-                </h3>
+                </h2>
                 <button @click="goHref('/patients?view=boarding')" class="text-xs font-semibold text-brand-600 hover:underline">View board →</button>
             </div>
             <div class="overflow-x-auto">
@@ -449,41 +511,52 @@ onUnmounted(() => clearInterval(autoRefresh));
             <!-- trend (2/3) -->
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line lg:col-span-2">
                 <div class="mb-2 flex items-center justify-between">
-                    <h3 class="font-semibold text-ink-700">Admissions vs Discharges</h3>
+                    <h2 class="font-semibold text-ink-700">Admissions vs Discharges</h2>
                     <span class="rounded-full bg-ink-50 px-3 py-1 text-xs font-semibold text-ink-500">Last 30 days</span>
                 </div>
-                <apexchart type="area" height="300" :options="areaOptions" :series="areaSeries" role="img" aria-label="Area chart: admissions versus discharges over the last 30 days" />
+                <ChartFigure title="Admissions vs Discharges" caption="Daily non-ICU admissions versus discharges over the last 30 days; each line is labelled at its end." :columns="['Day', 'Admissions', 'Discharges']" :rows="trendRows">
+                    <apexchart v-if="hasTrend" type="area" height="300" :options="areaOptions" :series="areaSeries" aria-label="Area chart: admissions versus discharges over the last 30 days" />
+                    <p v-else class="grid h-[300px] place-items-center text-sm text-ink-400">No data for this period.</p>
+                </ChartFigure>
             </div>
-            <!-- occupancy gauge — PRIMARY tier (hero), matches the KPI tiles' elevation + brand hairline -->
+            <!-- Bed occupancy — segmented tracker (W4, replaces the radialBar gauge). PRIMARY tier (hero). -->
             <div class="rounded-2xl bg-card p-5 shadow-card-lg ring-1 ring-brand-200/60">
-                <h3 class="mb-2 font-bold text-ink-800">Bed Occupancy</h3>
-                <apexchart type="radialBar" height="260" :options="gaugeOptions" :series="[kpis.occupancyGauge]" role="img" :aria-label="`Gauge: bed occupancy ${kpis.occupancy}% (${kpis.ward} ward patients of ${kpis.wardBeds} beds)`" />
-                <div class="mt-1 grid grid-cols-2 gap-3 text-center">
-                    <div class="rounded-xl bg-brand-50 py-2"><p class="nums text-xl font-bold text-brand-700">{{ kpis.ward }}</p><p class="text-xs text-ink-400">Ward</p></div>
-                    <div class="rounded-xl bg-tint-danger py-2"><p class="nums text-xl font-bold text-on-danger">{{ kpis.icu }}</p><p class="text-xs text-ink-400">ICU</p></div>
-                </div>
+                <h2 class="mb-3 font-bold text-ink-800">Bed Occupancy</h2>
+                <OccupancyTracker :units="occUnits" :thresholds="occThresholds" />
             </div>
         </div>
 
         <div class="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2 xl:grid-cols-4">
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-                <h3 class="mb-2 font-semibold text-ink-700">Consultations</h3>
-                <apexchart type="bar" height="260" :options="consultsOptions" :series="consultsSeries" role="img" aria-label="Bar chart: consultations received and signed off" />
+                <h2 class="mb-2 font-semibold text-ink-700">Consultations</h2>
+                <ChartFigure title="Consultations" caption="New consultations versus sign-offs over the last six months." :columns="['Month', 'New', 'Signed off']" :rows="consultsRows">
+                    <apexchart v-if="hasConsults" type="bar" height="260" :options="consultsOptions" :series="consultsSeries" aria-label="Bar chart: consultations received and signed off" />
+                    <p v-else class="grid h-[260px] place-items-center text-sm text-ink-400">No data for this period.</p>
+                </ChartFigure>
             </div>
             <!-- legacy dashboard/1.php consultation donut: signed off in the last 24h vs active (J2-5) -->
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-                <h3 class="mb-2 font-semibold text-ink-700">Consultations <span class="font-normal text-ink-400">(24h sign-offs vs active)</span></h3>
-                <apexchart type="donut" height="260" :options="consultDonutOptions" :series="consultDonutSeries" role="img" :aria-label="`Donut chart: ${consultDonut.signed24h} consultations signed off in the last 24 hours, ${consultDonut.active} active`" />
+                <h2 class="mb-2 font-semibold text-ink-700">Consultations <span class="font-normal text-ink-400">(24h sign-offs vs active)</span></h2>
+                <ChartFigure title="Consultations — 24h sign-offs vs active" caption="Consultations signed off in the last 24 hours versus those still active." :columns="['Status', 'Count']" :rows="consultDonutRows">
+                    <apexchart v-if="hasConsultDonut" type="donut" height="260" :options="consultDonutOptions" :series="consultDonutSeries" :aria-label="`Donut chart: ${consultDonut.signed24h} consultations signed off in the last 24 hours, ${consultDonut.active} active`" />
+                    <p v-else class="grid h-[260px] place-items-center text-sm text-ink-400">No data for this period.</p>
+                </ChartFigure>
             </div>
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-                <h3 class="mb-2 font-semibold text-ink-700">Length of Stay <span class="font-normal text-ink-400">(this year)</span></h3>
-                <apexchart type="bar" height="260" :options="losOptions" :series="losSeries" role="img" aria-label="Bar chart: length-of-stay distribution this year" />
+                <h2 class="mb-2 font-semibold text-ink-700">Length of Stay <span class="font-normal text-ink-400">(this year)</span></h2>
+                <ChartFigure title="Length of Stay" caption="Distribution of length of stay (days) for non-ICU discharges this year." :columns="['LOS (days)', 'Patients']" :rows="losRows">
+                    <apexchart v-if="hasLos" type="bar" height="260" :options="losOptions" :series="losSeries" aria-label="Bar chart: length-of-stay distribution this year" />
+                    <p v-else class="grid h-[260px] place-items-center text-sm text-ink-400">No data for this period.</p>
+                </ChartFigure>
             </div>
             <!-- legacy census donut title carries the headline + TB count over the DONUT'S OWN
                  population (assigned non-ICU — dashboard/1.php:151-154), not the all-active KPI (M1/5) -->
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-                <h3 class="mb-2 font-semibold text-ink-700">Current patients: <span class="nums">{{ donutTotal }}</span> <span class="font-normal text-ink-400">(incl. {{ donutTb }} TB)</span></h3>
-                <apexchart type="donut" height="260" :options="donutOptions" :series="donutSeries" role="img" :aria-label="`Donut chart: assigned non-ICU census by service — ${donutTotal} patients including ${donutTb} TB`" />
+                <h2 class="mb-2 font-semibold text-ink-700">Current patients: <span class="nums">{{ donutTotal }}</span> <span class="font-normal text-ink-400">(incl. {{ donutTb }} TB)</span></h2>
+                <ChartFigure title="Current patients by service" caption="Assigned non-ICU census by service line (Hospitalist, Sub-specialty, Long-term)." :columns="['Service', 'Patients']" :rows="mixRows">
+                    <apexchart v-if="hasMix" type="donut" height="260" :options="donutOptions" :series="donutSeries" :aria-label="`Donut chart: assigned non-ICU census by service — ${donutTotal} patients including ${donutTb} TB`" />
+                    <p v-else class="grid h-[260px] place-items-center text-sm text-ink-400">No data for this period.</p>
+                </ChartFigure>
             </div>
         </div>
 
@@ -491,7 +564,7 @@ onUnmounted(() => clearInterval(autoRefresh));
             <!-- per consultant — load-fairness bands (Item 6) + drill-through (Item 3) -->
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <div class="mb-1 flex items-center justify-between">
-                    <h3 class="font-semibold text-ink-700">Active Load by Consultant</h3>
+                    <h2 class="font-semibold text-ink-700">Active Load by Consultant</h2>
                     <span class="text-[11px] text-ink-400">band = min–max census</span>
                 </div>
                 <div class="space-y-3">
@@ -518,11 +591,14 @@ onUnmounted(() => clearInterval(autoRefresh));
                     </button>
                 </div>
             </div>
-            <!-- recent admissions -->
+            <!-- recent admissions — each row deep-links to that patient on the board (search=MRN);
+                 a native <button> so it is keyboard-operable, text-start + ms-/me- for RTL safety -->
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-                <h3 class="mb-4 font-semibold text-ink-700">Recent Admissions</h3>
+                <h2 class="mb-4 font-semibold text-ink-700">Recent Admissions</h2>
                 <div class="divide-y divide-line">
-                    <div v-for="r in recent" :key="r.mrn + r.admitted" class="flex items-center gap-3 py-2.5">
+                    <button v-for="r in recent" :key="r.mrn + r.admitted" type="button"
+                            @click="goHref(`/patients?search=${encodeURIComponent(r.mrn)}`)"
+                            class="flex w-full items-center gap-3 rounded-lg px-1 py-2.5 text-start transition hover:bg-brand-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
                         <div class="grid h-9 w-9 place-items-center rounded-full bg-ink-50 text-xs font-bold text-ink-500">{{ (r.name || '?').slice(0,2).toUpperCase() }}</div>
                         <div class="min-w-0 flex-1">
                             <p class="truncate text-sm font-semibold text-ink-800">{{ r.name || 'Unknown' }}</p>
@@ -530,7 +606,7 @@ onUnmounted(() => clearInterval(autoRefresh));
                         </div>
                         <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="locTone(r.loc)">{{ r.loc || '—' }}</span>
                         <span class="nums hidden text-xs text-ink-400 sm:block">{{ r.admitted }}</span>
-                    </div>
+                    </button>
                     <p v-if="!recent.length" class="py-2 text-sm text-ink-400">No recent admissions.</p>
                 </div>
             </div>
@@ -538,7 +614,7 @@ onUnmounted(() => clearInterval(autoRefresh));
 
         <!-- top diagnoses: this calendar week-number across ALL years (legacy seasonal view) -->
         <div class="print-break-before mt-5 rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-            <h3 class="mb-4 font-semibold text-ink-700">Top diagnoses <span class="font-normal text-ink-400">(week {{ topDxWeekNum }}, all years)</span></h3>
+            <h2 class="mb-4 font-semibold text-ink-700">Top diagnoses <span class="font-normal text-ink-400">(week {{ topDxWeekNum }}, all years)</span></h2>
             <div class="grid gap-x-8 gap-y-2 sm:grid-cols-2">
                 <div v-for="(d, i) in topDxWeek" :key="i" class="flex items-center gap-3">
                     <div class="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">{{ i + 1 }}</div>
@@ -550,14 +626,17 @@ onUnmounted(() => clearInterval(autoRefresh));
         </div>
 
         <!-- per-consultant 24h activity -->
-        <div v-if="activity24h.length" class="mt-5 rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-            <h3 class="mb-2 font-semibold text-ink-700">Admissions / Discharges per consultant <span class="font-normal text-ink-400">(since yesterday)</span></h3>
-            <apexchart type="bar" height="280" :options="act24Options" :series="act24Series" role="img" aria-label="Grouped bar chart: admissions and discharges per consultant since yesterday" />
+        <div class="mt-5 rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
+            <h2 class="mb-2 font-semibold text-ink-700">Admissions / Discharges per consultant <span class="font-normal text-ink-400">(since yesterday)</span></h2>
+            <ChartFigure title="Admissions / Discharges per consultant" caption="Per-consultant admissions and discharges since yesterday." :columns="['Consultant', 'Admissions', 'Discharges']" :rows="act24Rows">
+                <apexchart v-if="hasAct24" type="bar" height="280" :options="act24Options" :series="act24Series" aria-label="Grouped bar chart: admissions and discharges per consultant since yesterday" />
+                <p v-else class="grid h-[280px] place-items-center text-sm text-ink-400">No data for this period.</p>
+            </ChartFigure>
         </div>
 
         <!-- per-consultant breakdown table -->
         <div class="mt-5 overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
-            <div class="border-b border-line px-5 py-3"><h3 class="font-semibold text-ink-700">Patient count per consultant</h3></div>
+            <div class="border-b border-line px-5 py-3"><h2 class="font-semibold text-ink-700">Patient count per consultant</h2></div>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">

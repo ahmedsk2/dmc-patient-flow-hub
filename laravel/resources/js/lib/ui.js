@@ -66,6 +66,26 @@ export function locTone(loc) {
 export const FIELD = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500';
 
 /**
+ * KPI delta-chip token pair (W4). The chip's colour is driven by the KPI's own POLARITY plus the
+ * delta DIRECTION — NOT by the raw number: an increase on a 'bad' KPI (mortality, readmissions,
+ * boarding, occupancy-high, avg-LOS-up) is danger; an increase on a 'good' KPI (discharges) is
+ * success; a 'neutral' KPI (census, admissions) is always ink; a flat delta is always ink. Meaning
+ * is ALSO carried by the arrow glyph + number in the label, so colour is never the only signal
+ * (WCAG 1.4.1). Uses the AA-verified, theme-aware `bg-tint-*` + `text-on-*` pairs — never
+ * `text-{status}-{n}`, which the a11y-status-text guard forbids on the theme-aware surfaces.
+ *
+ * @param {'good'|'bad'|'neutral'} polarity   whether a rise in this KPI is good, bad, or neither
+ * @param {'up'|'down'|'flat'}     direction  the delta's direction
+ */
+export function deltaChipClass(polarity, direction) {
+    if (polarity === 'neutral' || direction === 'flat') return 'bg-ink-100 text-ink-500';
+    const up = direction === 'up';
+    if (polarity === 'good') return up ? 'bg-tint-success text-on-success' : 'bg-tint-danger text-on-danger';
+    if (polarity === 'bad') return up ? 'bg-tint-danger text-on-danger' : 'bg-tint-success text-on-success';
+    return 'bg-ink-100 text-ink-500';
+}
+
+/**
  * Returns a filtered consultant list for a dropdown — names the "on-service, plus keep the current
  * assignee even when off-service, optionally narrow by specialty" rule that was re-expressed across
  * Patients / Admissions / Registry. PRESERVES the existing (unsorted) order of the source list so

@@ -4,8 +4,8 @@ import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { useChartTheme } from '@/composables/useChartTheme';
 
-// theme-aware grid/axis colors (legible in light + dark)
-const { gridColor, axisColor } = useChartTheme();
+// theme-aware grid/axis colors + the canonical theme-reactive chart SERIES palette (legible in light + dark)
+const { gridColor, axisColor, series } = useChartTheme();
 
 const props = defineProps({ range: Object, kpis: Object, monthly: Object, los: Object, topDx: Array, reasons: Object, perConsultant: Array, sourceMix: Array, kpiGrid: Array, interval: String, truncated: Boolean, destinations: Object, destByConsultant: Array, readmitWindow: Number, consultants: Array, physician: Object, compareData: Object });
 
@@ -44,7 +44,13 @@ watch(() => props.destByConsultant, (list) => {
     if (destChoice.value && !(list || []).some((x) => x.name === destChoice.value)) destChoice.value = '';
 });
 
-const C = { teal: '#009ca6', tealLt: '#7accc9', navy: '#00565e', gold: '#d9a23c', red: '#e0413e', blue: '#2f7fe0', slate: '#5b6a6e', green: '#16a34a' };
+// W4: chart series colours come from the theme-reactive token palette (useChartTheme → `series`),
+// never local hex — so the deep/muted hues lighten on dark instead of vanishing into the card.
+// Mapping: teal→primary, gold→accent, navy→deep, blue→info, slate→muted, tealLight→primarySoft.
+// The series palette has no danger token (status red is forbidden on charts by default — spec §2).
+// Mortality is drawn in `muted` grey: distinct from the teal `primary` admissions line, calm, and
+// somber-appropriate; the readmit single-bar keeps `deep`. Meaning is carried by the labelled series,
+// not colour.
 
 const kpiCards = computed(() => [
     { label: 'Admissions', value: props.kpis.admissions, tone: 'brand' },
@@ -71,7 +77,7 @@ const tickColors = computed(() => props.interval !== 'day'
     ? axisColor.value
     : (props.monthly.keys || []).map((k) => {
         const dow = new Date(`${k}T00:00:00Z`).getUTCDay();   // 5 = Fri, 6 = Sat
-        return dow === 5 || dow === 6 ? '#d9a23c' : axisColor.value;
+        return dow === 5 || dow === 6 ? series.value.accent : axisColor.value;
     }));
 // §3.5: when a comparison is active, append 3 dashed "ghost" series (admissions/discharges/deaths
 // of the comparison period) drawn at reduced opacity on top of the primary 5-series area chart
@@ -79,8 +85,8 @@ const cyr = computed(() => props.compareData?.range?.from?.slice(0, 4) ?? '');
 const monthlyChart = computed(() => ({
     chart: { type: 'area', toolbar: dlToolbar, fontFamily: 'inherit' },
     colors: props.compareData
-        ? [C.teal, C.blue, C.red, C.gold, C.slate, C.teal, C.blue, C.red]
-        : [C.teal, C.blue, C.red, C.gold, C.slate],
+        ? [series.value.primary, series.value.info, series.value.muted, series.value.accent, series.value.deep, series.value.primary, series.value.info, series.value.muted]
+        : [series.value.primary, series.value.info, series.value.muted, series.value.accent, series.value.deep],
     stroke: props.compareData
         ? { width: [3, 3, 2, 2, 2, 2, 2, 2], curve: 'smooth', dashArray: [0, 0, 0, 0, 0, 5, 5, 5] }
         : { width: [3, 3, 2, 2, 2], curve: 'smooth' },
@@ -131,21 +137,22 @@ const consModes = computed(() => [
     ['readmits', `${props.readmitWindow ?? 3}d readmits`],
     ['activity', 'Activity'],
 ]);
-const consModeColor = computed(() => ({ admissions: C.tealLt, avgLos: C.gold, readmits: C.red }[consMode.value]));
+const consModeColor = computed(() => ({ admissions: series.value.primarySoft, avgLos: series.value.accent, readmits: series.value.deep }[consMode.value]));
 const consCats = computed(() => props.perConsultant.map((c) => c.name));
 // the canonical 4-series activity palette + names — shared by the by-consultant Activity mode
 // and the physician drill-down time-series so the two read identically
-const activityDefs = [['admissions', 'Admissions', C.teal], ['discharges', 'Discharges', C.blue], ['consultations', 'Consultations', C.gold], ['signoffs', 'Sign-offs', C.slate]];
+// computed (not a plain const) so the series colours re-theme on the dark-mode flip
+const activityDefs = computed(() => [['admissions', 'Admissions', series.value.primary], ['discharges', 'Discharges', series.value.info], ['consultations', 'Consultations', series.value.accent], ['signoffs', 'Sign-offs', series.value.muted]]);
 const consSeries = computed(() => consMode.value === 'activity'
-    ? activityDefs.map(([key, name]) => ({ name, data: props.perConsultant.map((c) => c[key]) }))
+    ? activityDefs.value.map(([key, name]) => ({ name, data: props.perConsultant.map((c) => c[key]) }))
     : [{
         name: consModes.value.find((m) => m[0] === consMode.value)?.[1] ?? '',
         data: props.perConsultant.map((c) => c[consMode.value]),
     }]);
 const consOptions = computed(() => consMode.value === 'activity'
     ? {
-        ...barChart(consCats.value, C.teal, true),
-        colors: activityDefs.map((d) => d[2]),
+        ...barChart(consCats.value, series.value.primary, true),
+        colors: activityDefs.value.map((d) => d[2]),
         legend: { position: 'top', horizontalAlign: 'right' },
         plotOptions: { bar: { horizontal: true, borderRadius: 2, barHeight: '80%' } },
     }
@@ -176,11 +183,11 @@ const physNumbers = computed(() => props.physician ? [
 ] : []);
 // bucketed 4-series activity for the selected physician (interval-aligned with the page)
 const physSeries = computed(() => props.physician?.series
-    ? activityDefs.map(([key, name]) => ({ name, data: props.physician.series[key] }))
+    ? activityDefs.value.map(([key, name]) => ({ name, data: props.physician.series[key] }))
     : []);
 const physSeriesOptions = computed(() => ({
     chart: { type: 'bar', toolbar: dlToolbar, fontFamily: 'inherit' },
-    colors: activityDefs.map((d) => d[2]),
+    colors: activityDefs.value.map((d) => d[2]),
     plotOptions: { bar: { borderRadius: 2, columnWidth: '60%' } },
     dataLabels: { enabled: false }, legend: { position: 'top', horizontalAlign: 'right' },
     xaxis: { categories: props.physician?.series?.labels ?? [], labels: { style: { colors: axisColor.value } } },
@@ -196,10 +203,18 @@ const barChart = (cats, color, horizontal = false) => ({
 });
 const donut = (labels) => ({
     chart: { type: 'donut', toolbar: dlToolbar, fontFamily: 'inherit' }, labels,
-    colors: [C.teal, C.gold, C.blue, C.navy, C.tealLt, C.slate],
+    colors: [series.value.primary, series.value.accent, series.value.info, series.value.deep, series.value.primarySoft, series.value.muted],
     legend: { position: 'bottom' }, dataLabels: { enabled: true }, stroke: { width: 0 },
     plotOptions: { pie: { donut: { size: '68%' } } },
 });
+
+// Inline template barChart()/donut() calls promoted to computeds so they re-theme on the dark
+// flip (a plain template call doesn't re-evaluate when `series` changes) — same fix as Dashboard.
+const losOptions = computed(() => barChart(props.los.labels, series.value.primary));
+const sourceMixOptions = computed(() => donut(props.sourceMix.map((s) => s.src)));
+const destDonutOptions = computed(() => donut(destDonut.value.labels));
+const topDxOptions = computed(() => barChart(props.topDx.map((d) => d.label), series.value.deep, true));
+const reasonsOptions = computed(() => barChart(props.reasons.labels, series.value.accent, true));
 </script>
 
 <template>
@@ -274,11 +289,11 @@ const donut = (labels) => ({
 
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h3 class="mb-3 font-bold text-ink-800">Length of stay distribution</h3>
-                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="bar" height="280" :options="barChart(los.labels, C.teal)" :series="[{ name: 'Discharges', data: los.data }]" />
+                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="bar" height="280" :options="losOptions" :series="[{ name: 'Discharges', data: los.data }]" />
             </div>
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h3 class="mb-3 font-bold text-ink-800">Admission source</h3>
-                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="donut" height="280" :options="donut(sourceMix.map(s => s.src))" :series="sourceMix.map(s => s.c)" />
+                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="donut" height="280" :options="sourceMixOptions" :series="sourceMix.map(s => s.c)" />
             </div>
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <div class="mb-3 flex items-center justify-between gap-2">
@@ -288,17 +303,17 @@ const donut = (labels) => ({
                         <option v-for="c in destByConsultant" :key="c.name" :value="c.name">{{ c.name }}</option>
                     </select>
                 </div>
-                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" v-if="destDonut.data.some((v) => v > 0)" type="donut" height="280" :options="donut(destDonut.labels)" :series="destDonut.data" />
+                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" v-if="destDonut.data.some((v) => v > 0)" type="donut" height="280" :options="destDonutOptions" :series="destDonut.data" />
                 <p v-else class="py-10 text-center text-sm text-ink-300">{{ destChoice ? 'No discharges for this consultant in range.' : 'No discharges in range.' }}</p>
             </div>
 
             <div class="print-break-before rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h3 class="mb-3 font-bold text-ink-800">Top diagnoses</h3>
-                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="bar" height="320" :options="barChart(topDx.map(d => d.label), C.navy, true)" :series="[{ name: 'Admissions', data: topDx.map(d => d.value) }]" />
+                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="bar" height="320" :options="topDxOptions" :series="[{ name: 'Admissions', data: topDx.map(d => d.value) }]" />
             </div>
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h3 class="mb-3 font-bold text-ink-800">Consultation indications</h3>
-                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="bar" height="320" :options="barChart(reasons.labels, C.gold, true)" :series="[{ name: 'Consultations', data: reasons.data }]" />
+                <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="bar" height="320" :options="reasonsOptions" :series="[{ name: 'Consultations', data: reasons.data }]" />
             </div>
 
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line lg:col-span-2">

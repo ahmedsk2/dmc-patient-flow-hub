@@ -38,8 +38,10 @@ vi.mock('@/Components/AdminBandCard.vue', () => ({ default: { name: 'AdminBandCa
 
 import Dashboard from '@/Pages/Dashboard.vue';
 import AdminBandCard from '@/Components/AdminBandCard.vue';
+import Sparkline from '@/Components/Sparkline.vue';
+import { deltaChipClass } from '@/lib/ui.js';
 
-const emptyKpis = { census: 0, ward: 0, icu: 0, admissionsToday: 0, dischargesToday: 0, activeConsults: 0, deathsMonth: 0, avgLosMonth: 0, occupancy: 0, occupancyGauge: 0, wardBeds: 50 };
+const emptyKpis = { census: 0, ward: 0, icu: 0, admissionsToday: 0, dischargesToday: 0, activeConsults: 0, deathsMonth: 0, avgLosMonth: 0, occupancy: 0, occupancyGauge: 0, wardBeds: 50, icuBeds: 8 };
 const baseProps = (over = {}) => ({
     adminBand: null,
     kpis: emptyKpis, boardingCount: 0, boardingWorklist: [], deltas: {}, alerts: [], myUnit: null,
@@ -164,6 +166,63 @@ describe('Dashboard — "My unit today" tiles (W0-T3i)', () => {
     it('bg-brand-50 (the Active tile fill) is theme-aware, not a fixed literal', () => {
         expect(isThemeAwareStep('brand-50')).toBe(true);
         expect(isThemeAwareStep('brand-100')).toBe(true);
+    });
+});
+
+// W4 — KPI triad: polarity-driven delta chips + inline sparklines. The chip's colour comes from the
+// KPI's own polarity (a rise in a 'bad' KPI is red; a rise in a 'good' KPI is green; a 'neutral' KPI
+// is always ink), NOT the raw number — proven both on the pure helper and on the rendered cards.
+describe('Dashboard — KPI triad, polarity & sparklines (W4)', () => {
+    // The pure token map (lib/ui.js). This is where the 'good' path is asserted: no rendered KPI card
+    // carries 'good' polarity today (discharges — the archetypal 'good' KPI — is sub-text, not a card),
+    // so the good→success mapping is proven here on the single source of truth the cards consume.
+    it('deltaChipClass: bad+up → danger, good+up → success, neutral/flat → ink', () => {
+        expect(deltaChipClass('bad', 'up')).toBe('bg-tint-danger text-on-danger');
+        expect(deltaChipClass('good', 'up')).toBe('bg-tint-success text-on-success');
+        expect(deltaChipClass('bad', 'down')).toBe('bg-tint-success text-on-success');
+        expect(deltaChipClass('good', 'down')).toBe('bg-tint-danger text-on-danger');
+        expect(deltaChipClass('neutral', 'up')).toBe('bg-ink-100 text-ink-500');
+        expect(deltaChipClass('bad', 'flat')).toBe('bg-ink-100 text-ink-500');
+    });
+
+    const chipOf = (w, label) => w.find(`[data-kpi="${label}"] span.rounded-full`);
+    const withDeltas = (over = {}) => mountAs({ role: 0, is_admin: true }, {
+        deltas: {
+            deathsMonth: { delta: 2, direction: 'up' },   // Mortality is a 'bad' KPI
+            admissions: { delta: 1, direction: 'up' },     // Admissions is 'neutral'
+            occupancy: { delta: 3, direction: 'up' },      // Occupancy is 'bad' (good_up was null in the payload)
+        },
+        ...over,
+    });
+
+    it('renders the danger token chip for a bad-polarity KPI with a positive (up) delta', () => {
+        const chip = chipOf(withDeltas(), 'Mortality (Month)');
+        expect(chip.exists()).toBe(true);
+        expect(chip.classes()).toContain('bg-tint-danger');
+        expect(chip.classes()).toContain('text-on-danger');
+        expect(chip.text()).toContain('▲');   // meaning carried by the arrow too, not colour alone
+    });
+
+    it('a rise in occupancy (bad polarity) is danger, overriding the payload good_up=null', () => {
+        expect(chipOf(withDeltas(), 'Bed Occupancy').classes()).toContain('bg-tint-danger');
+    });
+
+    it('keeps a neutral KPI (Admissions) ink on an up delta — never green', () => {
+        const chip = chipOf(withDeltas(), 'Admissions Today');
+        expect(chip.classes()).toContain('bg-ink-100');
+        expect(chip.classes()).not.toContain('bg-tint-success');
+    });
+
+    it('renders an inline Sparkline only for a KPI that has a real series payload', () => {
+        const w = withDeltas({ trend: { labels: [], admissions: [3, 5, 2, 8, 4], discharges: [] } });
+        // Admissions Today carries spark=trend.admissions → a Sparkline; Mortality has none.
+        expect(w.find('[data-kpi="Admissions Today"]').findComponent(Sparkline).exists()).toBe(true);
+        expect(w.find('[data-kpi="Mortality (Month)"]').findComponent(Sparkline).exists()).toBe(false);
+    });
+
+    it('renders no Sparkline when the KPI series is empty', () => {
+        const w = withDeltas({ trend: { labels: [], admissions: [], discharges: [] } });
+        expect(w.find('[data-kpi="Admissions Today"]').findComponent(Sparkline).exists()).toBe(false);
     });
 });
 
