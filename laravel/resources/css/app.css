@@ -85,9 +85,14 @@
      * + big KPI numerals (kept tabular-nums via .nums). */
     --font-display: 'Hanken Grotesk', 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
 
-    /* Brand — EHC teal (500 = primary #009CA6, 800 = deep #00565E, 200 = light aqua #A9DED8) */
-    --color-brand-50: #f0fafa;
-    --color-brand-100: #d4f0ef;
+    /* Brand — EHC teal (500 = primary #009CA6, 800 = deep #00565E, 200 = light aqua #A9DED8).
+     * 50/100 resolve to CSS variables (same indirection as --color-ink-50 below) so the .dark
+     * block can remap them: they are BACKGROUND fill steps (chips/badges/rows), and unlike the
+     * theme-invariant accent-300..600 fills below, several of them sit directly under text
+     * (`text-ink-900`, `text-brand-700/800`) — see the raw-value blocks for the dark figures
+     * and scripts/contrast.mjs for the ratios. */
+    --color-brand-50: var(--brand-50);
+    --color-brand-100: var(--brand-100);
     --color-brand-200: #a9ded8;
     --color-brand-300: #7accc9;
     --color-brand-400: #38b4ba;
@@ -250,6 +255,11 @@
     --ink-800: #283538;
     --ink-900: #1e2a2e;
 
+    /* Brand background-tint steps (theme-aware; see @theme comment). Light = the original
+     * literals, byte-identical to what shipped before this indirection. */
+    --brand-50: #f0fafa;
+    --brand-100: #d4f0ef;
+
     --surface-app: #f1f6f6;   /* EHC #F1F6F6 */
     --surface-card: #ffffff;
     --surface-line: #e3eaea;  /* == ink-100 */
@@ -310,6 +320,20 @@
     --ink-700: #d8e3e3;
     --ink-800: #e9f0f0;
     --ink-900: #f4f8f8;
+
+    /* Brand background tints — dark. W0-T3m: these used to be theme-INVARIANT literals, so
+     * `text-ink-900` (near-white on dark) sat on the still-near-white light-mode fill = 1.01:1,
+     * invisible (Dashboard's "Active" tile). Derived by arithmetic, not eyeballed: held at
+     * brand-500's own LCh hue (206.4°) and pushed to a low L* so the dE76-from-card comes out
+     * comparable to --ink-50 dark's ~3.9 (a "barely-there" tint, same family as ink-50 dark, not
+     * a saturated status tint like tint-danger dark). Verified (scripts/contrast.mjs, DELTAS +
+     * ad hoc): dE76(brand-50 dark, card) = 3.70; text-ink-900 dark on it = 14.41:1; text-brand-700
+     * dark on it = 8.30:1; text-brand-800 dark on it = 10.37:1. brand-100 dark carries a larger
+     * chroma at the same hue (mirrors brand-100 light being more saturated than brand-50 light):
+     * dE76(card) = 7.70, text-brand-700 dark on it = 8.09:1. Both clear AA with wide margin —
+     * the binding constraint was the perceptual-distance target, not contrast. */
+    --brand-50: #192728;
+    --brand-100: #0a2b2e;
 
     --surface-app: #0c1416;   /* page bg */
     --surface-card: #13201f;  /* elevated card */

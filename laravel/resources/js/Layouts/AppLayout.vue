@@ -166,7 +166,7 @@ const url = computed(() => page.url);
 // Reports and the nested M&M child; the deeper /reports/governance prefix highlights only M&M).
 const isActive = (href) => href === '/' ? url.value === '/' : url.value.startsWith(href);
 
-// Heroicons-style outline paths (24x24, stroke).
+// Heroicons-style stroked paths (24x24, stroke).
 const icons = {
     grid: 'M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25A2.25 2.25 0 0 1 8.25 10.5H6A2.25 2.25 0 0 1 3.75 8.25V6Zm9.75 0A2.25 2.25 0 0 1 15.75 3.75H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25A2.25 2.25 0 0 1 13.5 8.25V6Zm-9.75 9.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25Zm9.75 0a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z',
     plus: 'M12 4.5v15m7.5-7.5h-15',

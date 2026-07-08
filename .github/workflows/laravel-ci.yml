@@ -82,5 +82,18 @@ jobs:
       - name: Front-end unit tests (Vitest)
         run: npm run test
 
+      - name: Accessibility contrast + perceptual-distance gate (CIEDE2000)
+        # scripts/contrast.mjs process.exit(1)s on any non-KNOWN WCAG contrast failure, any
+        # non-KNOWN CIEDE2000 perceptual-distance failure, or a broken CIEDE2000 implementation
+        # (it self-validates against the Sharma-Wu-Dalal 2005 reference dataset first). Required,
+        # not advisory: this is the only thing standing between a colour-token edit and a repeat of
+        # the warm-gold accent incident (AA-compliant, indistinguishable from the badge next to it).
+        run: npm run contrast
+
+      - name: Class allow-list drift guard
+        # Fails if the set of classes app.css's `@source` allow-list can see drifts from the
+        # committed snapshot — silently, either direction (see scripts/check-source-allowlist.mjs).
+        run: npm run check-allowlist
+
       - name: Dependency advisories (npm, production)
         run: npm audit --omit=dev

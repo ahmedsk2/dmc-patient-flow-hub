@@ -42,7 +42,7 @@ const auth = computed(() => page.props.auth.user);
 // ── Admin landing band (Wave 1, Item 7) ────────────────────────────────────────────────────────
 // is_admin only. Each card deep-links into a regrouped admin section; counts come from the
 // `adminBand` prop (DashboardController, reusing the digest/Security/soft-delete/handover sources).
-// Inline-SVG icon paths follow the app's icon convention (same outline set as the sidebar).
+// Inline-SVG icon paths follow the app's icon convention (same stroked style as the sidebar).
 const bandIcons = {
     quality: 'M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 0-6.23-.693L5 14.5m14.8.8 1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0 1 12 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5',
     security: 'M12 9v3.75m0-10.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.572-.598-3.751h-.152c-3.196 0-6.1-1.249-8.25-3.285Zm0 13.036h.008v.008H12v-.008Z',

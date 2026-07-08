@@ -58,7 +58,7 @@ const hasSearched = computed(() => Object.values(f).some(
 
 // diagnosis ICD picker (admissions mode). Seed the chips from the ACTIVE dx filter (resolved
 // server-side to {code,name}) so they reappear — and stay removable — after a paginated/reloaded
-// visit; without this the filter stayed active on results + export but the chips were invisible (N1-2).
+// visit; without this the filter stayed active on results + export but the chips vanished from view (N1-2).
 const selectedDx = ref((props.options?.dxNames ?? []).map((d) => ({ code: d.code, name: d.name })));
 const addDx = (d) => { if (!selectedDx.value.find((x) => x.code === d.code)) { selectedDx.value.push(d); f.dx.push(d.code); } };
 const removeDx = (code) => { selectedDx.value = selectedDx.value.filter((x) => x.code !== code); f.dx = f.dx.filter((c) => c !== code); };

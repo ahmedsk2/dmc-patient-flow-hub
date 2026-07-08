@@ -13,7 +13,7 @@ import { ref, computed, watch, useId } from 'vue';
 //
 // Note this is why AppLayout's sidebar does NOT pass `mono`: the logo there sits in a `bg-card` chip
 // (#ffffff light / #13201f dark), not on the navy gradient, and `currentColor` would inherit the
-// aside's `text-navy-100` (#cfe9e7) — 1.28:1 on white, i.e. invisible. The chip correctly uses the
+// aside's `text-navy-100` (#cfe9e7) — 1.28:1 on white, i.e. no visible glyph at all. The chip correctly uses the
 // full-colour variant. `mono` is for callers that set an appropriate `color` themselves.
 const props = defineProps({ mono: { type: Boolean, default: false } });
 

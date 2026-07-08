@@ -378,7 +378,7 @@ const losTone = (b) => b === 'short' ? 'bg-success-100 text-success-600' : b ===
                         </ul>
                     </div>
                     <!-- Touch (coarse): primary buttons lift to 40px and the three rare actions
-                         (long-term / undo-medical / delete) collapse into a kebab so the row stays
+                         (long-term / undo-medical / delete) fold away into a kebab so the row stays
                          uncramped. Desktop layout is unchanged (h-7 + every action inline). -->
                     <div v-if="!isObserver && !p.discharged" class="flex items-center gap-1 coarse:gap-0.5 border-t border-ink-50 px-2" :class="compact ? 'py-1' : 'py-1.5'">
                         <button v-if="canAssign" @click="openModal('assign', p)" title="Reassign consultant" aria-label="Reassign consultant" class="grid h-7 w-7 coarse:h-10 coarse:w-10 place-items-center rounded-lg text-ink-400 hover:bg-info-100 hover:text-info-500"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18 7.5v6m3-3h-6m-3.75-1.875a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" /></svg></button>

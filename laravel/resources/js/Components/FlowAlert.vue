@@ -74,7 +74,7 @@ const props = defineProps({
 
 // An unknown tone must never render as an unmarked grey box: with no rail/tint/on-* class and no
 // icon path, all three redundant signals vanish at once and the callout reads as page furniture.
-// Degrade UP — in a clinical UI an over-loud alert beats an invisible one. The validator above
+// Degrade UP — in a clinical UI an over-loud alert beats one nobody can see. The validator above
 // cannot protect this: Vue strips prop validators from production builds entirely.
 const t = computed(() => (Object.hasOwn(ICON, props.tone) ? props.tone : 'critical'));
 const role = computed(() => (t.value === 'critical' ? 'status' : 'note'));

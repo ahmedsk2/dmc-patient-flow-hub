@@ -4,8 +4,12 @@
 // (active problems: data-quality / security); informational counts stay neutral. The parent passes
 // the resolved inline-SVG `iconPath` to match the app-wide icon convention (no new icon system).
 //
-// W0-T3i. The urgent fill was `bg-danger-50/60` — an undeclared step, so it emitted no CSS and the
-// "urgent" card was indistinguishable from a calm one. Two things had to change together:
+// W0-T3i. The urgent fill referenced the danger tint's 50-shade, as a background utility, at 60%
+// opacity — an undeclared colour step, so it emitted no CSS and the "urgent" card was
+// indistinguishable from a calm one. Two things had to change together (and per the discipline
+// Patients/Index.vue states: colour steps are named WITHOUT their utility prefix here on purpose —
+// Tailwind's extractor reads comments, and spelling the full utility would re-mint the dead rule the
+// moment that step is ever declared):
 //
 //  1. The fill is now the theme-aware `bg-tint-danger/60`, and it REPLACES `bg-card` instead of
 //     sitting alongside it. Two background-colour utilities on one element are decided by emission

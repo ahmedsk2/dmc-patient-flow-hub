@@ -8,7 +8,7 @@ import { Link } from '@inertiajs/vue3';
 
 defineProps({
     href: { type: String, required: true },
-    // resolved Heroicon-style outline path string from the parent's `icons` map (24x24 stroke)
+    // resolved Heroicon-style stroked path string from the parent's `icons` map (24x24 stroke)
     iconPath: { type: String, required: true },
     label: { type: String, required: true },
     active: { type: Boolean, default: false },

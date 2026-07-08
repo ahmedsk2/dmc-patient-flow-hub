@@ -1,5 +1,22 @@
 import { describe, it, expect, vi } from 'vitest';
 import { shallowMount } from '@vue/test-utils';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Ground truth for "is this colour step real" pulled from the actual stylesheet source rather
+// than a hand-maintained list here — a hardcoded family list goes stale the moment a step is
+// added or removed and nothing red-flags it (see the W0-T3m postmortem below). `--color-X-N` is
+// DECLARED (Tailwind will emit `bg-X-N`) whenever `@theme` defines it, whatever the right-hand
+// side. It is THEME-AWARE only when that right-hand side is itself a var() indirection that
+// `.dark` can override (`--color-brand-50: var(--brand-50)`), not a bare literal
+// (`--color-brand-50: #f0fafa`) that renders identically — bug-identically — in both themes.
+const appCss = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../css/app.css'),
+    'utf8',
+);
+const declaredColorSteps = new Set([...appCss.matchAll(/--color-([a-z]+-\d+):/g)].map((m) => m[1]));
+const isThemeAwareStep = (step) => new RegExp(`--color-${step}:\\s*var\\(`).test(appCss);
 
 let authUser;
 vi.mock('@inertiajs/vue3', () => ({
@@ -75,8 +92,15 @@ describe('Dashboard — admin landing band (Wave 1, Item 7)', () => {
 // not declared in @theme, so Tailwind emitted NO rule for them and the tiles rendered with no fill
 // at all: half the row's colour coding was silently dead. They now use the theme-aware `bg-tint-*`
 // tokens at 30% — the alpha whose CIE dE76 from `bg-card` (4.2 / 4.6 / 4.4) matches the two fills
-// that always worked (bg-brand-50 = 4.25, bg-ink-50 = 3.90), so the row keeps one visual weight.
+// that always EMITTED (bg-brand-50 = 4.25, bg-ink-50 = 3.90), so the row keeps one visual weight.
 // The `nums` value keeps `text-ink-900`: 13.7-14.2:1 light, 15.0-15.6:1 dark on every new fill.
+//
+// W0-T3m (later fix, do not re-break): "always emitted" is not "always legible". bg-brand-50 was,
+// until then, a theme-INVARIANT literal — so on dark it rendered the SAME near-white fill as
+// light, and `text-ink-900` (near-white in dark) sat on it at 1.01:1: the Active tile's number was
+// there in the DOM and invisible on screen. `--color-brand-50`/`-100` are now var()-indirected
+// (same pattern as `--color-ink-50`) with real dark values; see app.css for the derivation.
+// text-ink-900 on bg-brand-50: light 13.86:1 (unchanged), dark 14.41:1 (up from 1.01:1).
 describe('Dashboard — "My unit today" tiles (W0-T3i)', () => {
     const myUnit = { total: 12, ward: 9, icu: 3, boarding: 2, new: 4, myConsults: 5, signPending: 0 };
     // label -> class list. The label is the second <p> in each tile button.
@@ -98,9 +122,25 @@ describe('Dashboard — "My unit today" tiles (W0-T3i)', () => {
         expect(t['New (24h)']).toContain('bg-tint-info/30');
     });
 
-    it('no tile references an undeclared *-50 colour step (the defect: zero emitted CSS)', () => {
-        for (const [label, classes] of Object.entries(tiles(mountConsultant()))) {
-            const dead = classes.filter((c) => /^bg-(danger|warning|info|success)-50(\/|$)/.test(c));
+    it('no tile references an undeclared *-50/-100 colour step (the defect: zero emitted CSS)', () => {
+        const t = tiles(mountConsultant());
+        // Mutation-proven guard: if `.grid-cols-3` in Dashboard.vue ever stopped matching (e.g. a
+        // `grid-cols-2` typo), `tiles()` would return `{}` and the loop below would iterate zero
+        // times and pass vacuously, even though three OTHER tests in this block would rightly
+        // redden. Pin the tile count so an empty selector match fails HERE too.
+        expect(Object.keys(t)).toHaveLength(6);
+        for (const [label, classes] of Object.entries(t)) {
+            // Broadened from a hardcoded (danger|warning|info|success) family list: that list only
+            // ever protected against families that were undeclared on the day it was written, and
+            // does nothing for a step in ANY OTHER family (accent-50 today; brand-50 was ALWAYS
+            // declared but, until W0-T3m below, theme-broken — a distinct defect this particular
+            // assertion cannot see, which is why the theme-awareness check below exists). Checked
+            // against the real @theme declarations instead of a maintained list, so this guard
+            // cannot go stale the way the old one did.
+            const dead = classes.filter((c) => {
+                const m = /^bg-([a-z]+-(?:50|100))(?:\/\d+)?$/.exec(c);
+                return m && !declaredColorSteps.has(m[1]);
+            });
             expect(dead, `${label} tile still asks for an undeclared step`).toEqual([]);
         }
     });
@@ -110,5 +150,15 @@ describe('Dashboard — "My unit today" tiles (W0-T3i)', () => {
         expect(t['Active']).toContain('bg-brand-50');
         expect(t['Ward']).toContain('bg-ink-50');
         expect(t['Consults']).toContain('bg-accent-300/20');
+    });
+
+    // W0-T3m. The assertion above only proves the Active tile still SPELLS `bg-brand-50` — it
+    // cannot see that the step used to render identically (and invisibly, 1.01:1) in both themes.
+    // This is the reachable check: app.css declares `--color-brand-50` through a var() indirection
+    // that `.dark` overrides, the same shape as `--color-ink-50` — so it is provably theme-aware
+    // at the source level, not just "still the right class name".
+    it('bg-brand-50 (the Active tile fill) is theme-aware, not a fixed literal', () => {
+        expect(isThemeAwareStep('brand-50')).toBe(true);
+        expect(isThemeAwareStep('brand-100')).toBe(true);
     });
 });
