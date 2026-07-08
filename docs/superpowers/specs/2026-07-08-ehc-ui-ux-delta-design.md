@@ -132,17 +132,45 @@ semantics (patterns adapted, never copied — NHS content is Crown copyright / O
   "discharges +5" reads green; never naive green-up. Delta meaning carried by arrow-glyph + text, not color alone.
 - **Per-widget states:** skeleton on load and an **error state with retry** per widget (never a blank card; show
   last-updated); charts keep explicit empty states.
-- **Bed occupancy** as an accessible **segmented tracker** (composition + total; ok/warn/critical from `settings`)
-  with per-segment `aria-label` + a `<figcaption>` and visually-hidden data table; trend charts **direct-labeled**
-  (no legend eye-jump); calm styling (≤5 series, teal primary, no 3D/decorative gradients).
 - **Actionable lists deep-link:** make "Recent admissions" rows navigable; add a real 24h-scoped admissions list and a
   flagged/critical list (long-term · TB · readmit) — all reusing existing flags, **no new endpoints**; rows deep-link
   into the relevant filtered board/registry.
 - **Security P2 — print/export hygiene:** rounds print = clinical minimum (MRN as id; no nationality/free-text beyond
   need) mirroring the de-identified export floor; add a print footer (user · timestamp) for accountability and
   `Cache-Control: no-store` intent on PHI views.
-- **Acceptance:** every widget has loading/empty/error; deltas polarity-correct; occupancy tracker has a text
-  alternative; actionable rows deep-link; print view is clinical-minimum.
+
+#### Wave 4 — chart work (IN SCOPE — owner-approved to improve, edit, and add charts)
+
+Charts may change **type, series, styling, and accessibility**. All chart changes are presentational and read from the
+**existing cached dashboard payload** (`DashboardCache`, 300s) — no new routes/endpoints.
+
+- **Token-bridge the series palette (blocking fix).** `Dashboard.vue:149` and `Statistics/Index.vue:47,74` hand-mirror
+  the brand hex into local `const C = {…}` palettes — the last hardcoded-color drift in the app. Extend
+  `useChartTheme.js` to expose a canonical, **theme-reactive series palette** read from CSS custom properties, and
+  delete the local palettes. Also covers `Reports/Index.vue` and `Reports/Monthly.vue`.
+- **Bed occupancy: radialBar gauge → accessible segmented tracker.** A discrete segmented band (occupied / available,
+  split Ward vs ICU) shows **composition *and* total** at once — a donut/gauge shows neither well. Thresholds from
+  `settings` (ok / warning / critical); each segment a real element with an `aria-label` ("ICU 6 of 8 beds, at warning
+  threshold"). Calm by default — never alarm-red unless the threshold is actually breached.
+- **Add per-KPI inline sparklines** (currently absent): axis-less, single-series, no tooltip on the board (tooltips only
+  in a drill-in). Promote a spark to a full chart only when exact values, ≥2 series, or range-brushing are needed.
+- **Direct-label the trend series** at the line's end instead of a legend (no eye-jump; also aids color-blind users).
+- **Calm clinical styling, enforced:** ≤5 series per chart, teal as the single primary series, muted greys for context,
+  **no 3D, no decorative gradients**, tabular-nums axes, axis text ≥12px. **`prefers-reduced-motion` disables the
+  ApexCharts draw animation** (it animates by default today — a real fix).
+- **Accessible alternative for every chart (upgrade).** Today charts carry `role="img"` + an `aria-label` summary. Full
+  charts additionally get a `<figcaption>` and a **visually-hidden data table**; sparklines keep a descriptive
+  `aria-label`. Meaning is never encoded by color alone.
+- **Service-mix donut:** retain (3 categories, within the ≤3-category rule) but re-colored from the token palette and
+  direct-labeled.
+- **Ward-census trend (conditional).** The gap analysis found only a point-in-time ward snapshot, no historical trend.
+  Add it **only if** it derives from existing tables inside the existing cached payload **without regressing dashboard
+  load < 2 s**; otherwise record it in the wave report as a future, data-backed suggestion (per the plan's
+  "only build widgets whose data already exists" rule). No new endpoint either way.
+- **Acceptance:** every widget has loading/empty/error; deltas polarity-correct; **zero hardcoded chart hex remains**
+  (all series colors token-derived and theme-reactive); occupancy tracker + every full chart has a text/table
+  alternative; charts do not animate under `prefers-reduced-motion`; actionable rows deep-link; print view is
+  clinical-minimum.
 
 ### Wave 5 — Accessibility, i18n-readiness & session-security UX
 - **A11y sweep:** fix heading order (h1→h2→h3) on Dashboard and others; make every click-only row keyboard-operable
@@ -177,6 +205,9 @@ semantics (patterns adapted, never copied — NHS content is Crown copyright / O
 | `useUnsavedGuard` (in `usePatientEdit`) | isDirty → discard-confirm | W3 |
 | `useSessionTimeout` + timeout toast | Countdown warning + Stay/Lock | W5 |
 | `formatDate` + `deltaPolarity` helpers (`lib/ui.js`) | Consistent dates; polarity-aware KPI deltas | W4/W5 |
+| `chartPalette` (extend `useChartTheme.js`) | Token-derived, theme-reactive chart **series** colors; removes the hand-mirrored hex from Dashboard/Statistics/Reports | W4 |
+| `OccupancyTracker.vue` | Accessible segmented bed-occupancy band (replaces the radialBar gauge) | W4 |
+| `ChartFigure.vue` | Chart wrapper supplying `<figcaption>` + visually-hidden data table | W4 |
 
 ---
 
@@ -211,6 +242,10 @@ delete/reverse/merge/admin-grant; self-registration stays inactive + non-admin.
   test. Every other form submits the **same payload to the same endpoint**; every renamed route keeps a redirect.
 - **CSP-ready:** no new inline scripts/handlers.
 - Refactor **styles/markup, not data flow**; smallest possible surface per change.
+- **Charts are in scope** (type/series/styling/a11y may change) but stay **presentational**: every chart reads from the
+  existing cached dashboard payload. **No new routes or endpoints.** The one conditional exception — a ward-census
+  trend aggregate — ships only if it derives from existing tables inside the existing cache without regressing
+  dashboard load < 2 s; otherwise it is recorded as a future suggestion.
 
 ---
 
@@ -232,6 +267,8 @@ delete/reverse/merge/admin-grant; self-registration stays inactive + non-admin.
 - **No PHI in URLs/history/logs** (SPC-TM-011 closed); recents in-memory-only; session-timeout warning live.
 - All touched pages meet WCAG 2.2 AA basics; axe reports no critical issues on Dashboard, board, Registry.
 - Every dashboard widget has loading/empty/error; KPI deltas are polarity-correct.
+- **Zero hardcoded colors in components — including chart series** (all token-derived and theme-reactive); every full
+  chart ships a `<figcaption>` + hidden data table; no chart animates under `prefers-reduced-motion`.
 - Every `SECURITY-AUDIT.md` positive control re-verified intact in the final report; no new runtime deps.
 - Before/after screenshots for each major page in `docs/renovation/`.
 
@@ -255,4 +292,8 @@ delete/reverse/merge/admin-grant; self-registration stays inactive + non-admin.
 
 No patient profile page/route · no EHR modules (vitals/labs/meds/documents/allergies/phone/national-ID/DOB) · no React
 libraries · no full Arabic RTL mode or Arabic font · no CSP/security-header/backend work (that is `SECURITY-AUDIT.md`
-M1 — separate) · no re-touching the already-good tokens/fonts/dark-mode/charts beyond signature refinement.
+M1 — separate) · no re-touching the already-good tokens/fonts/dark-mode beyond signature refinement · no new routes,
+endpoints, data models, or business logic.
+
+> **Charts are explicitly IN scope** (owner-approved): improve, edit, re-type, and add charts per §3 Wave 4 — bounded
+> only by "presentational, fed from the existing cached payload, no new endpoints."
