@@ -135,15 +135,19 @@ node scripts/contrast.mjs
 Expected — the first three and the four "CURRENT status" rows are the load-bearing results:
 
 ```
-brand-500 on white                   #009ca6 on #ffffff    3.29:1  UI / large text only
+brand-500 on white                   #009ca6 on #ffffff    3.33:1  UI / large text only
 brand-700 on white                   #00727b on #ffffff    5.69:1  AA text
 brand-800 on white                   #00565e on #ffffff    8.42:1  AA text
 warning-500 on white                 #e69209 on #ffffff    2.48:1  FAIL
 warning-500 on warning-100           #e69209 on #fdedd2    2.15:1  FAIL
 danger-600 on danger-100             #c1302d on #fbdcdc    4.39:1  UI / large text only
 success-600 on success-100           #15803d on #d8f5e3    4.32:1  UI / large text only
-info-500 on info-100                 #2f7fe0 on #d7e9fb    3.46:1  UI / large text only
+info-500 on info-100                 #2f7fe0 on #d7e9fb    3.24:1  UI / large text only
 ```
+
+> *(Corrected 2026-07-08 against the script's real output: `brand-500` is **3.33**, not the 3.29 I
+> computed by hand, and `info-500 on info-100` is **3.24**, not 3.46. Verdict categories unchanged.
+> The script is the source of truth — that is the entire reason it runs first.)*
 
 Every `on-*` row must print **`AA text`**.
 
