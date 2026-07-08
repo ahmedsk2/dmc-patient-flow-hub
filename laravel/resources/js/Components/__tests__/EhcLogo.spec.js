@@ -39,4 +39,41 @@ describe('EhcLogo', () => {
         await w.setProps({ mono: true });
         expect(w.find('img').exists()).toBe(true);
     });
+
+    it('the mono medallion disc is a translucent wash; ring and dot stay opaque', async () => {
+        const w = mount(EhcLogo, { props: { mono: true } });
+        await w.find('img').trigger('error');
+        const circles = w.findAll('circle');
+        expect(circles).toHaveLength(2);
+        expect(circles[0].attributes('fill-opacity')).toBe('0.25');   // disc
+        expect(circles[0].attributes('stroke')).toBe('currentColor'); // ring: opaque, carries the form
+        expect(circles[1].attributes('fill-opacity')).toBeUndefined(); // inner dot: opaque
+    });
+
+    it('the fallback exposes an accessible name via role=img', async () => {
+        const w = mount(EhcLogo);
+        await w.find('img').trigger('error');
+        expect(w.find('svg').attributes('role')).toBe('img');
+    });
+
+    // Login.vue mounts two EhcLogo simultaneously (`hidden lg:flex` / `lg:hidden` — both in the DOM).
+    // They must be mounted in ONE app, as Login.vue does: useId's counter lives on the app context,
+    // so two separate mount() calls would each restart at "v-0" and mask a real duplicate-id bug.
+    it('gives each instance a unique gradient id, and each binds to its own', async () => {
+        const Host = { components: { EhcLogo }, template: '<div><EhcLogo /><EhcLogo /></div>' };
+        const w = mount(Host);
+
+        const imgs = w.findAll('img');
+        expect(imgs).toHaveLength(2);
+        await imgs[0].trigger('error');
+        await imgs[1].trigger('error');
+
+        const ids = w.findAll('linearGradient').map((g) => g.attributes('id'));
+        expect(ids).toHaveLength(2);
+        expect(ids[0]).not.toBe(ids[1]);
+
+        // Each petal group must reference its OWN gradient, not just any unique-looking id.
+        const fills = w.findAll('g').map((g) => g.attributes('fill'));
+        expect(fills).toEqual([`url(#${ids[0]})`, `url(#${ids[1]})`]);
+    });
 });
