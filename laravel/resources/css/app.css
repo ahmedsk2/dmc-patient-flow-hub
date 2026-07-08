@@ -288,17 +288,11 @@
     }
 }
 
-/* Semantic surface utilities backed by the theme-aware tokens (mechanical migration targets).
- * bg-card / bg-app. */
-@utility bg-card {
-    background-color: var(--color-card);
-}
-@utility bg-app {
-    background-color: var(--color-app);
-}
-
-/* `border-/ring-/divide-line` need no @utility — Tailwind auto-generates them from the
- * --color-line theme key, exactly as it does for the `-hairline` set below.
+/* The semantic surface utilities — `bg-card`, `bg-app`, `border-line`, `ring-line`, `divide-line`
+ * — need no @utility. Tailwind auto-generates each from its `--color-*` theme key, exactly as it
+ * does for the `-hairline` set below. That auto-generation is also the only thing that makes
+ * `bg-app/70` and `bg-card/80` work: a static @utility cannot take an opacity modifier, so hand-
+ * writing one buys nothing and silently forfeits the `/<alpha>` form.
  *
  * The hand-written `divide-line` that used to live here was a v3 leftover: it selected
  * `& > :not([hidden]) ~ :not([hidden])` (all-but-FIRST child), while v4's `divide-y` puts the
@@ -314,7 +308,7 @@
  */
 
 /* `bg-/text-/border-/ring-/divide-/outline-hairline` are auto-generated from the --color-hairline
- * theme key — no @utility needed. Same for the `-line` set above. */
+ * theme key — no @utility needed. Same for the semantic surface set above. */
 
 /* Custom properties inherit by default; without this a toned row would silently re-tone every
  * nested rail. `syntax: '*'` with no initial-value keeps the guaranteed-invalid initial value, so
