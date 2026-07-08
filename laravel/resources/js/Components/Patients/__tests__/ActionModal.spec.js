@@ -178,9 +178,13 @@ describe('ActionModal — medical-discharge button meets WCAG AA in both themes 
         expect(c).not.toContain('text-ink-900');     // 2.31:1 under .dark — the near-miss fix
     });
 
-    // The sibling branch: white on success-600 (#ffffff on #15803d) is 5.02:1 — it PASSES, so it is
-    // left exactly as it was. Locked so the migration above doesn't strip its label colour.
-    it('complete branch keeps white on success-600 (5.02:1 — already AA)', async () => {
+    // The sibling branch: white on success-600 (#ffffff on #15803d) is 5.02:1 AT REST, so the T3d
+    // migration left it alone. It is NOT fully AA: `hover:bg-success-700` is a no-op (that token is
+    // undeclared — task #142), so `hover:opacity-90` is the only hover effect, and it composites the
+    // whole button over the bg-card panel down to 4.17:1 in light mode — below AA. WCAG 1.4.3 exempts
+    // disabled controls, never hover. Tracked as task #143. This test locks the CURRENT classes so the
+    // migration above can't strip the label colour; it is EXPECTED to change when #143 lands.
+    it('complete branch keeps white on success-600 (5.02:1 at rest; 4.17:1 on hover — see #143)', async () => {
         const w = mountWith('medical');
         w.vm.mdForm.complete = true;
         await w.vm.$nextTick();
