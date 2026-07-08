@@ -1,8 +1,17 @@
 @import 'tailwindcss';
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-@source '../../storage/framework/views/*.php';
-@source './**/*.vue';
+/* Do NOT add an @source for storage/framework/views/*.php (the compiled Blade cache). It is
+ * gitignored and machine-local, so an explicit @source here would override Tailwind's
+ * gitignore-aware auto-detection and pull in whatever pages happen to be compiled on THIS
+ * machine — e.g. Laravel's debug exception-renderer, once compiled here after a local error,
+ * leaked ~194 of its own selectors (bg-rose-*, text-emerald-*, group-hover/exception:*, ...)
+ * into the shipped production bundle. resources/views/**\/*.blade.php is not gitignored, so
+ * auto-detection already covers it with no @source needed. The line below is an explicit
+ * @source for resources/js/**\/*.vue: auto-detection covers it too, but for a *committed,
+ * deployed* build artifact we'd rather be explicit than rely solely on implicit scanning
+ * (unlike storage/framework/views, this path is real app source, so pinning it down is safe). */
+@source '../js/**/*.vue';
 
 /* Class-based dark mode: `.dark` on <html> flips the variant (Tailwind v4 custom variant). */
 @custom-variant dark (&:where(.dark, .dark *));
