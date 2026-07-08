@@ -30,6 +30,12 @@ defineProps({
             <path stroke-linecap="round" stroke-linejoin="round" :d="iconPath" />
         </svg>
         {{ label }}
+        <!-- W0-T3e. `text-danger-200` was an undeclared step: the count chip rendered in the inherited
+             navy-200 and lost its danger tone entirely. This is the ONE place a FIXED `danger-200` is
+             right rather than the theme-aware `text-on-danger`: the sidebar is always navy in both
+             themes, so `on-danger` would flip to its light-mode value (#a82824, a dark red) and drop to
+             1.87:1 on the chip. Fixed #f4a6a4 reads 6.78:1 over the chip (bg-danger-600/20 composited
+             on navy-900, the lighter end of the gradient) and 7.68:1 at the navy-950 end. -->
         <span v-if="badge !== null" class="nums ml-auto rounded-full bg-danger-600/20 px-1.5 py-0.5 text-[11px] font-bold text-danger-200"
             :aria-label="`${badge} items`">{{ badge }}</span>
         <span v-else-if="active" class="ml-auto h-1.5 w-1.5 rounded-full bg-brand-400"></span>

@@ -36,7 +36,7 @@ const catTone = (cat) => ({
     phi_read: 'bg-warning-100 text-warning-500',
     admission: 'bg-brand-100 text-brand-700',
     consultation: 'bg-info-500/10 text-info-500',
-    patient: 'bg-accent-300/40 text-accent-600',
+    patient: 'bg-tint-accent text-on-accent',
     user: 'bg-danger-100 text-danger-600',
     settings: 'bg-ink-100 text-ink-500',
 }[cat] || 'bg-ink-100 text-ink-500');

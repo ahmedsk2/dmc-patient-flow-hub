@@ -91,7 +91,7 @@ const onEnter = () => { if (results.value[active.value]) go(results.value[active
                             <span v-if="r.consultant" class="hidden text-xs text-ink-400 sm:inline">{{ r.consultant }}</span>
                             <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
                                 :class="r.status === 'active' ? 'bg-success-100 text-success-600'
-                                    : r.status === 'unassigned' ? 'bg-accent-300/40 text-accent-600'
+                                    : r.status === 'unassigned' ? 'bg-tint-accent text-on-accent'
                                     : 'bg-ink-100 text-ink-500'">{{ r.status }}</span>
                         </button>
                     </li>

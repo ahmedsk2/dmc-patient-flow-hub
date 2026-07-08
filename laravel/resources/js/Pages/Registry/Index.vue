@@ -193,7 +193,7 @@ const toggleExpand = (id) => {
                         <td class="px-3 py-3"><span v-for="r in c.reasons" :key="r" class="mr-1 inline-block rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">{{ r }}</span></td>
                         <td class="px-3 py-3 text-ink-600">{{ c.consultant }}</td>
                         <td class="nums px-3 py-3 text-ink-500">{{ c.date || '—' }}</td>
-                        <td class="px-5 py-3"><span v-if="c.signoff" class="rounded-full bg-success-100 px-2.5 py-0.5 text-xs font-semibold text-success-600">Signed {{ c.signoff }}</span><span v-else class="rounded-full bg-accent-300/40 px-2.5 py-0.5 text-xs font-semibold text-accent-600">Active</span></td>
+                        <td class="px-5 py-3"><span v-if="c.signoff" class="rounded-full bg-success-100 px-2.5 py-0.5 text-xs font-semibold text-success-600">Signed {{ c.signoff }}</span><span v-else class="rounded-full bg-tint-accent px-2.5 py-0.5 text-xs font-semibold text-on-accent">Active</span></td>
                     </tr>
                     <tr v-if="!results.data.length"><td colspan="7" class="px-5 py-10 text-center text-ink-400">{{ hasSearched ? 'No consultations match the current filters.' : 'No consultations match.' }}</td></tr>
                 </tbody>
@@ -225,7 +225,7 @@ const toggleExpand = (id) => {
                                 <div v-if="r.is_tb || r.is_readmission || r.is_longterm || r.disch_still_in" class="mb-3 flex flex-wrap gap-1.5">
                                     <span v-if="r.is_tb" class="rounded-full bg-danger-100 px-2.5 py-0.5 text-xs font-semibold text-danger-600">TB</span>
                                     <span v-if="r.is_readmission" class="rounded-full bg-warning-100 px-2.5 py-0.5 text-xs font-semibold text-warning-500">≤{{ options.readmitWindow ?? 3 }}d readmit</span>
-                                    <span v-if="r.is_longterm" class="rounded-full bg-accent-300/40 px-2.5 py-0.5 text-xs font-semibold text-accent-600">Long-term</span>
+                                    <span v-if="r.is_longterm" class="rounded-full bg-tint-accent px-2.5 py-0.5 text-xs font-semibold text-on-accent">Long-term</span>
                                     <span v-if="r.disch_still_in" class="rounded-full bg-warning-100 px-2.5 py-0.5 text-xs font-semibold text-warning-500">Disch. still in</span>
                                 </div>
                                 <dl class="grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-4">

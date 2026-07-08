@@ -229,7 +229,7 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
         <div v-show="tab === 'reference'" class="grid gap-5 lg:grid-cols-2">
             <div class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <h3 class="mb-3 font-bold text-ink-800">Specialties</h3>
-                <div class="mb-4 flex max-h-48 flex-wrap gap-2 overflow-auto"><span v-for="s in specialties" :key="s.id" class="rounded-full px-3 py-1 text-sm" :class="s.is_external ? 'bg-accent-300/30 text-accent-600' : 'bg-app text-ink-600'">{{ s.name }}<span v-if="s.is_external" class="ml-1 text-[10px] font-semibold uppercase">ext</span></span></div>
+                <div class="mb-4 flex max-h-48 flex-wrap gap-2 overflow-auto"><span v-for="s in specialties" :key="s.id" class="rounded-full px-3 py-1 text-sm" :class="s.is_external ? 'bg-tint-accent text-on-accent' : 'bg-app text-ink-600'">{{ s.name }}<span v-if="s.is_external" class="ml-1 text-[10px] font-semibold uppercase">ext</span></span></div>
                 <form @submit.prevent="submitSpec" class="flex gap-2"><input v-model="specForm.name" :class="field" placeholder="New specialty" /><button :disabled="specForm.processing || !specForm.name" class="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Add</button></form>
                 <label class="mt-2 flex items-center gap-2 text-xs text-ink-500"><input type="checkbox" v-model="specForm.is_subspecialty" class="rounded text-brand-600" /> Subspecialty (uncheck for hospitalist)</label>
                 <label class="mt-1 flex items-center gap-2 text-xs text-ink-500"><input type="checkbox" v-model="specForm.is_external" class="rounded text-brand-600" /> External / allied service (transfer-out target only — not an internal specialty)</label>
@@ -247,7 +247,7 @@ const roleTone = (r) => r === 0 ? 'bg-danger-100 text-danger-600' : r === 3 ? 'b
                 <ul v-if="reportRecipients.length" class="mb-4 divide-y divide-line rounded-xl ring-1 ring-line">
                     <li v-for="r in reportRecipients" :key="r.id" class="flex items-center justify-between gap-2 px-4 py-2.5 text-sm">
                         <span class="text-ink-700">{{ r.email }}<span v-if="!r.active" class="ml-2 rounded-full bg-ink-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-ink-500">inactive</span></span>
-                        <button @click="removeRecipient(r)" class="rounded-lg px-3 py-1 text-xs font-semibold text-danger-600 hover:bg-danger-50">Remove</button>
+                        <button @click="removeRecipient(r)" class="rounded-lg px-3 py-1 text-xs font-semibold text-on-danger hover:bg-tint-danger">Remove</button>
                     </li>
                 </ul>
                 <p v-else class="mb-4 text-sm text-ink-300">No recipients yet — the scheduled email will send to no one.</p>

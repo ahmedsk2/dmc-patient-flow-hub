@@ -166,9 +166,15 @@ describe('ActionModal — HANDOVER GATE-THEN-RETRY (clinical safety control)', (
 // `text-ink-900` — the obvious dark label — is a TRAP: the ink scale INVERTS under `.dark`, so
 // ink-900 resolves to #f4f8f8 there and lands at 2.31:1 on the (theme-invariant) amber fill. It
 // fixes light and breaks dark. `text-navy-950` (#00252a) is a literal in @theme, never remapped by
-// `.dark`, and clears 6.53:1 against #e69209 in BOTH themes (6.25:1 / 4.82:1 even under the
-// button's own hover:opacity-90 composite).
-describe('ActionModal — medical-discharge button meets WCAG AA in both themes (W0-T3d)', () => {
+// `.dark`, and clears 6.53:1 against #e69209 in BOTH themes.
+//
+// W0-T3e/f. `hover:opacity-90` is GONE from these buttons. CSS `opacity` composites the WHOLE
+// element — fill *and* label — over its backdrop, so it silently degrades the label: white on
+// success-600 drops 5.02:1 -> 4.17:1 over the light `bg-card` panel (4.68:1 dark). WCAG 1.4.3
+// exempts `disabled` controls (hence `disabled:opacity-50` survives) but has NO hover exemption.
+// The `-600`/`-700` steps are now really declared, so every hover is a genuine darker FILL:
+//   white on success-700 #166534 = 7.13:1 · navy-950 on warning-600 #c87d06 = 4.92:1.
+describe('ActionModal — medical-discharge button meets WCAG AA in both themes (W0-T3d/e/f)', () => {
     const submitBtn = (w) => w.find('form button[type="submit"]');
 
     it('medical-only: amber fill with a theme-invariant dark label, never white-on-amber', () => {
@@ -178,19 +184,37 @@ describe('ActionModal — medical-discharge button meets WCAG AA in both themes 
         expect(c).not.toContain('text-ink-900');     // 2.31:1 under .dark — the near-miss fix
     });
 
-    // The sibling branch: white on success-600 (#ffffff on #15803d) is 5.02:1 AT REST, so the T3d
-    // migration left it alone. It is NOT fully AA: `hover:bg-success-700` is a no-op (that token is
-    // undeclared — task #142), so `hover:opacity-90` is the only hover effect, and it composites the
-    // whole button over the bg-card panel down to 4.17:1 in light mode — below AA. WCAG 1.4.3 exempts
-    // disabled controls, never hover. Tracked as task #143. This test locks the CURRENT classes so the
-    // migration above can't strip the label colour; it is EXPECTED to change when #143 lands.
-    it('complete branch keeps white on success-600 (5.02:1 at rest; 4.17:1 on hover — see #143)', async () => {
+    it('medical-only: hovers with a real darker amber fill, not a whole-element opacity fade', () => {
+        const c = submitBtn(mountWith('medical')).classes();
+        expect(c).toContain('hover:bg-warning-600');   // 4.92:1 under text-navy-950
+        expect(c).not.toContain('hover:opacity-90');   // composites the LABEL too — 1.4.3 has no hover exemption
+    });
+
+    // The sibling branch: white on success-600 (#ffffff on #15803d) is 5.02:1 at rest. Its hover is
+    // now a real success-700 fill (7.13:1) rather than the opacity fade that took it to 4.17:1.
+    it('complete branch keeps white on success-600 and hovers to a real success-700 fill', async () => {
         const w = mountWith('medical');
         w.vm.mdForm.complete = true;
         await w.vm.$nextTick();
         const c = submitBtn(w).classes();
-        expect(c).toEqual(expect.arrayContaining(['bg-success-600', 'text-white']));
+        expect(c).toEqual(expect.arrayContaining(['bg-success-600', 'text-white', 'hover:bg-success-700']));
         expect(c).not.toContain('bg-warning-500');
+        expect(c).not.toContain('hover:opacity-90');
+    });
+
+    // `disabled:opacity-50` is explicitly permitted by 1.4.3 (disabled controls are exempt) and is the
+    // only remaining opacity utility on these buttons. Lock that distinction so a future sweep for
+    // "opacity" doesn't remove the legitimate one — or reintroduce the illegitimate one.
+    it.each(['medical', 'complete', 'icu'])('%s submit button: disabled fade kept, hover fade gone', (mode) => {
+        const c = submitBtn(mountWith(mode)).classes();
+        expect(c).toContain('disabled:opacity-50');
+        expect(c.some((x) => x.startsWith('hover:opacity-'))).toBe(false);
+    });
+
+    it.each(['complete', 'icu'])('%s submit button hovers to success-700', (mode) => {
+        expect(submitBtn(mountWith(mode)).classes()).toEqual(
+            expect.arrayContaining(['bg-success-600', 'text-white', 'hover:bg-success-700']),
+        );
     });
 
     it('the label text is unchanged by the colour migration', async () => {

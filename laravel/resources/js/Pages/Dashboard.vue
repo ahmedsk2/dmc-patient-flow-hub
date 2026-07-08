@@ -303,12 +303,19 @@ onUnmounted(() => clearInterval(autoRefresh));
             </div>
         </section>
 
-        <!-- Threshold alert strip (Item 4): dismissible, severity-coloured, atop the dashboard -->
+        <!-- Threshold alert strip (Item 4): dismissible, severity-coloured, atop the dashboard.
+             W0-T3e: danger-700 / warning-600 AS TEXT were DEAD (undeclared steps → zero CSS), so
+             both branches rendered in the inherited body ink. Declaring those steps is not the fix:
+             they are dark fills, and on the theme-INVARIANT `*-100/80` strip they'd land at 3.93:1
+             (danger, dark) and 1.98:1 (warning, dark). Migrated to the FlowAlert vocabulary instead —
+             `bg-tint-*` + `text-on-*`, both theme-aware: 5.76/8.29:1 danger, 5.30/8.65:1 warning.
+             The LIGHT fill is byte-identical to before (tint-danger == danger-100), so this is a
+             dark-mode-only visual change. The rings are now live (warning-300 / danger-300). -->
         <div v-for="alert in visibleAlerts" :key="alert.key"
              class="no-print mb-4 flex items-start justify-between gap-3 rounded-2xl px-5 py-3 ring-1"
              :class="alert.severity === 'danger'
-                 ? 'bg-danger-100/80 ring-danger-300/60 text-danger-700'
-                 : 'bg-warning-100/80 ring-warning-300/60 text-warning-600'">
+                 ? 'bg-tint-danger/80 ring-danger-300/60 text-on-danger'
+                 : 'bg-tint-warning/80 ring-warning-300/60 text-on-warning'">
             <div class="flex items-center gap-3">
                 <svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.9" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
                 <span class="text-sm font-semibold">{{ alert.message }}</span>
@@ -350,7 +357,7 @@ onUnmounted(() => clearInterval(autoRefresh));
                 <div class="flex items-start justify-between">
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-wide text-ink-400">{{ c.label }}</p>
-                        <p class="font-display nums mt-2 text-3xl font-extrabold" :class="c.tone === 'warning' ? 'text-warning-600' : 'text-ink-900'">{{ c.value }}</p>
+                        <p class="font-display nums mt-2 text-3xl font-extrabold" :class="c.tone === 'warning' ? 'text-on-warning' : 'text-ink-900'">{{ c.value }}</p>
                         <p class="mt-1 text-xs text-ink-400">{{ c.sub }}</p>
                         <span v-if="chip(c)" class="mt-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold" :class="chip(c).cls">{{ chip(c).label }}</span>
                     </div>
@@ -367,7 +374,7 @@ onUnmounted(() => clearInterval(autoRefresh));
         <div v-if="boardingWorklist.length" class="mt-5 rounded-2xl bg-card p-5 shadow-card ring-1 ring-warning-300/60">
             <div class="mb-3 flex items-center justify-between">
                 <h3 class="font-semibold text-ink-700">Boarding patients
-                    <span class="nums ml-2 rounded-full bg-warning-100 px-2 py-0.5 text-xs font-bold text-warning-600">{{ boardingCount }}</span>
+                    <span class="nums ml-2 rounded-full bg-tint-warning px-2 py-0.5 text-xs font-bold text-on-warning">{{ boardingCount }}</span>
                 </h3>
                 <button @click="goHref('/patients?view=boarding')" class="text-xs font-semibold text-brand-600 hover:underline">View board →</button>
             </div>
@@ -378,11 +385,11 @@ onUnmounted(() => clearInterval(autoRefresh));
                         <th scope="col" class="px-2 py-2">Consultant</th><th scope="col" class="px-2 py-2 text-right">Delay (days)</th>
                     </tr></thead>
                     <tbody class="divide-y divide-line">
-                        <tr v-for="r in boardingWorklist" :key="r.id" class="cursor-pointer hover:bg-warning-50/40" @click="goHref('/patients?view=boarding')">
+                        <tr v-for="r in boardingWorklist" :key="r.id" class="cursor-pointer hover:bg-tint-warning/40" @click="goHref('/patients?view=boarding')">
                             <td class="px-2 py-2 font-semibold text-ink-700">{{ r.name }}</td>
                             <td class="nums px-2 py-2 text-ink-500">{{ r.mrn }}</td>
                             <td class="px-2 py-2 text-ink-600">{{ r.consultant }}</td>
-                            <td class="nums px-2 py-2 text-right font-bold text-warning-600">{{ r.delay_days }}</td>
+                            <td class="nums px-2 py-2 text-right font-bold text-on-warning">{{ r.delay_days }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -468,7 +475,7 @@ onUnmounted(() => clearInterval(autoRefresh));
                 <!-- load-spread summary + rebalance hint -->
                 <div v-if="overloaded || underloaded" class="mt-3 flex items-center gap-3 text-xs">
                     <span v-if="overloaded" class="font-semibold text-danger-600">{{ overloaded }} over max</span>
-                    <span v-if="underloaded" class="font-semibold text-warning-600">{{ underloaded }} below min</span>
+                    <span v-if="underloaded" class="font-semibold text-on-warning">{{ underloaded }} below min</span>
                     <button v-if="canShuffle" @click="goHref('/patients')" class="ml-auto font-semibold text-brand-600 hover:underline">
                         Rebalance (Shuffle / Reassign) →
                     </button>

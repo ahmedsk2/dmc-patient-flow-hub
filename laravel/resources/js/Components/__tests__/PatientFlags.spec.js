@@ -11,17 +11,27 @@ const only = (flag, extra = {}, props = {}) => mountFlags({ [flag]: true, ...ext
 // The raw status colours. Every one of these FAILS WCAG AA (4.5:1) as <=14px normal-weight text on
 // its own `*-100` tint — proven by scripts/contrast.mjs: warning-500/warning-100 = 2.15:1,
 // info-500/info-100 = 3.24:1, danger-600/danger-100 = 4.39:1. The negative assertions below are the
-// regression guard: they are what stops the pre-Wave-0 colours creeping back in. `accent` is
-// deliberately ABSENT from this list — it has no `on-*`/`tint-*` pair, so the Long-term badge is a
-// known, reported exception rather than a silently-tolerated one (see its own test).
+// regression guard: they are what stops the pre-Wave-0 colours creeping back in.
+//
+// W0-T3e: `accent` JOINED this list. It used to be the one deliberate exception (accent had no
+// on-*/tint-* pair), but the pair now exists — `--on-accent`/`--tint-accent`, theme-aware, 6.86:1 on
+// its tint + 8.05:1 on bg-card (light) and 9.00:1 / 10.30:1 (dark). The old pairing composited to
+// 2.90:1 (light) / 1.67:1 (dark) at 10px semibold.
+//
+// Every string below is a real Tailwind candidate, and Tailwind SCANS THIS FILE — so each one keeps
+// its (inert, call-site-less) rule alive in the shipped CSS. That is the price of the guard and it is
+// worth paying; it is also why the prose above spells tokens without their utility prefix. Only add
+// an entry that guards a colour a developer might plausibly reach for.
 const RAW_STATUS_TEXT = [
     'text-info-500', 'text-info-600', 'text-success-500', 'text-success-600',
     'text-warning-500', 'text-warning-600', 'text-danger-500', 'text-danger-600',
+    'text-accent-600',
 ];
 // `*-100` fills are theme-INVARIANT literals, so on a dark page they render a light peach/blue pill
 // on a near-black card (warning-100 vs the dark card = 14.53:1 — it screams). The `tint-*` fills are
 // theme-aware and settle to a subtle chip (1.21:1). Guard the fill as well as the text.
-const RAW_STATUS_FILL = ['bg-info-100', 'bg-success-100', 'bg-warning-100', 'bg-danger-100'];
+// `accent-300` is the same defect wearing a different number: a fixed pale gold at /40 alpha.
+const RAW_STATUS_FILL = ['bg-info-100', 'bg-success-100', 'bg-warning-100', 'bg-danger-100', 'bg-accent-300'];
 
 describe('PatientFlags (badge variant)', () => {
     it('renders the badges that are set', () => {
@@ -87,20 +97,35 @@ describe('PatientFlags — AA-safe colour tokens', () => {
         expect(c).toEqual(expect.arrayContaining(['bg-ink-100', 'text-ink-500']));
     });
 
-    // KNOWN, DELIBERATE EXCEPTION. `accent` has no on-*/tint-* pair, and inventing one is a design
-    // decision, not a mechanical migration. text-accent-600 on bg-accent-300/40 composites to
-    // 2.90:1 (light, over the white card) and 1.67:1 (dark, over #13201f) — it FAILS both. Left as
-    // found and reported upward. This test documents the exception so it cannot rot into an
-    // accident; delete it when an `on-accent` token lands.
-    it('Long-term keeps accent (no on-*/tint-* pair exists) — a reported, deliberate exception', () => {
+    // W0-T3e. The on-accent/tint-accent pair now exists, so Long-term is no longer an exception: it
+    // draws from the same AA-verified vocabulary as every sibling badge. The old pairing (accent-300
+    // at /40 behind accent-600 text) composited to 2.90:1 light / 1.67:1 dark at 10px semibold —
+    // a hard 1.4.3 failure in both themes. The new one is 6.86:1 / 9.00:1.
+    it('Long-term badge uses the on-accent + tint-accent AA-verified pair', () => {
         const c = only('is_longterm').get('span').classes();
-        expect(c).toEqual(expect.arrayContaining(['bg-accent-300/40', 'text-accent-600']));
+        expect(c).toEqual(expect.arrayContaining(['bg-tint-accent', 'text-on-accent']));
+    });
+
+    // The negative half: the exact classes that carried the failure must not survive anywhere in the
+    // rendered markup, in EITHER variant. `bg-accent-300` is matched as a prefix so `/40`, `/30` and
+    // any other alpha are caught too.
+    it.each(['badge', 'plain'])('%s variant: the failing accent pairing is gone', (variant) => {
+        const html = only('is_longterm', {}, { variant }).html();
+        expect(html).not.toContain('text-accent-600');
+        expect(html).not.toContain('bg-accent-300');
+    });
+
+    it('Long-term plain variant uses text-on-accent (no pill fill)', () => {
+        const c = only('is_longterm', {}, { variant: 'plain' }).get('span').classes();
+        expect(c).toContain('text-on-accent');
+        expect(c).not.toContain('bg-tint-accent');
     });
 
     it.each(['badge', 'plain'])('%s variant: plain-text flags use on-* tokens', (variant) => {
         expect(only('is_new', {}, { variant }).get('span').classes()).toContain('text-on-info');
         expect(only('is_readmission', {}, { variant }).get('span').classes()).toContain('text-on-warning');
         expect(only('is_tb', {}, { variant }).get('span').classes()).toContain('text-on-danger');
+        expect(only('is_longterm', {}, { variant }).get('span').classes()).toContain('text-on-accent');
     });
 
     // The regression guard. Mirrors FlowAlert.spec.js's `not.toContain('text-warning-500')`.
@@ -119,8 +144,10 @@ describe('PatientFlags — AA-safe colour tokens', () => {
     });
 
     // The theme-invariant `*-100` fills are what put a light peach pill on a dark card. Guard them.
+    // `is_longterm` MUST be raised here: without it the Long-term pill never renders and the
+    // `bg-accent-300` entry in RAW_STATUS_FILL guards nothing at all.
     it('badge variant: pill fills are theme-aware tints, not the invariant *-100 literals', () => {
-        const html = mountFlags({ is_new: true, is_readmission: true, is_tb: true, medically_discharged: true }).html();
+        const html = mountFlags({ is_new: true, is_readmission: true, is_longterm: true, is_tb: true, medically_discharged: true }).html();
         for (const cls of RAW_STATUS_FILL) expect(html).not.toContain(cls);
     });
 });

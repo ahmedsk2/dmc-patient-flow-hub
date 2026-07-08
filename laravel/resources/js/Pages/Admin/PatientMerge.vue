@@ -152,7 +152,10 @@ const btn = 'rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opac
                 </div>
             </div>
 
-            <p v-if="bothOpen" class="mt-4 rounded-xl bg-danger-50 px-4 py-3 text-sm font-semibold text-danger-600">
+            <!-- W0-T3e. danger-50 is an undeclared step → the callout shipped with NO fill, and
+                 danger-600 as text on the bare card is 2.97:1 in dark mode. `bg-tint-danger` +
+                 `text-on-danger` is 5.47:1 / 8.08:1 and theme-aware. -->
+            <p v-if="bothOpen" class="mt-4 rounded-xl bg-tint-danger px-4 py-3 text-sm font-semibold text-on-danger">
                 Both patients have an open admission — merging would leave two simultaneously-open episodes.
                 Discharge or transfer one of them before merging.
             </p>

@@ -116,7 +116,7 @@ defineExpose({
                     </ul>
                     <template v-if="staleRows.length">
                         <!-- Item 9: at-a-glance counter so the user sees how many still block the move -->
-                        <p class="mt-3 text-sm font-semibold text-warning-600">{{ staleRows.length }} of {{ preflight.rows.length }} patient(s) still need today's handover note.</p>
+                        <p class="mt-3 text-sm font-semibold text-on-warning">{{ staleRows.length }} of {{ preflight.rows.length }} patient(s) still need today's handover note.</p>
                         <div v-for="(r, i) in staleRows" :key="'h' + r.id" class="mt-2">
                             <p class="text-xs font-semibold text-ink-700">{{ r.name }} <span class="nums font-normal text-ink-400">MRN {{ r.mrn }}</span></p>
                             <textarea v-model="preflightBodies[r.id]" :data-stale-textarea="i === 0 ? '' : undefined" rows="2" maxlength="5000" :aria-label="`Handover for ${r.name}`" placeholder="Write today's handover…" class="mt-1 w-full rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>

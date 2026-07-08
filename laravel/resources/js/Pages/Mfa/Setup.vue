@@ -47,9 +47,9 @@ const copyCodes = () => navigator.clipboard?.writeText(props.recoveryCodes.join(
             </div>
 
             <!-- recovery codes -->
-            <section class="rounded-2xl border-2 border-dashed border-warning-300 bg-warning-50/50 p-6">
+            <section class="rounded-2xl border-2 border-dashed border-warning-300 bg-tint-warning/50 p-6">
                 <div class="mb-3 flex items-center justify-between">
-                    <h2 class="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-warning-600">
+                    <h2 class="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-on-warning">
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" /></svg>
                         Save your recovery codes
                     </h2>

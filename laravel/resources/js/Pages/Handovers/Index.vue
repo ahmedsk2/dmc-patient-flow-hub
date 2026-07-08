@@ -77,7 +77,15 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
                             <td class="nums px-3 py-3 text-ink-600">{{ s.bed || '—' }}</td>
                             <td class="px-3 py-3 text-ink-600">Dr. {{ s.from }}</td>
                             <td class="nums px-3 py-3 text-ink-500" :title="fmt(s.required_at)">{{ relTime(s.required_at) }}</td>
-                            <td class="px-5 py-3 text-right"><button @click.stop="sign(s)" class="rounded-lg bg-success-100 px-3 py-1.5 text-sm font-semibold text-success-600 hover:bg-success-200">Sign</button></td>
+                            <!-- W0-T3e. `hover:bg-success-200` was dead (undeclared) → no hover state.
+                                 It cannot be revived under a `text-success-600` label: that pair is
+                                 ALREADY 4.32:1 on success-100, so every darker mint is worse (Tailwind's
+                                 own green-200 gives 4.14:1). Moved to the theme-aware AA pair —
+                                 on-success on tint-success = 6.02:1 light / 8.98:1 dark — and
+                                 `--color-success-200` is likewise theme-aware, so the hover DARKENS on
+                                 light and BRIGHTENS on dark: 5.52:1 / 6.74:1. In light mode the rest
+                                 fill is byte-identical (tint-success == success-100). -->
+                            <td class="px-5 py-3 text-right"><button @click.stop="sign(s)" class="rounded-lg bg-tint-success px-3 py-1.5 text-sm font-semibold text-on-success hover:bg-success-200">Sign</button></td>
                         </tr>
                         <tr v-if="open === s.id" class="bg-app/60">
                             <td colspan="5" class="px-6 py-4">

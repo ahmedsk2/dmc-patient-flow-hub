@@ -156,21 +156,22 @@ defineExpose({
                      14px semibold label. The amber FILL stays (a fill is not text; the tone is the
                      signal); the label goes dark instead. NOT `text-ink-900`: the ink scale inverts
                      under `.dark`, so it would resolve to #f4f8f8 and sit at 2.31:1 on the
-                     theme-invariant amber — fixing light while breaking dark. And NOT a darker fill:
-                     `--color-warning-600/700` are undeclared, so Tailwind emits nothing and the
-                     button would ship transparent (see task #142). `text-navy-950` (#00252a) is a
-                     literal in @theme that `.dark` never remaps: 6.53:1 in both themes, and 5.35:1
-                     (light) / 5.53:1 (dark) once this button's own hover:opacity-90 composites the
-                     whole element over the bg-card panel.
+                     theme-invariant amber — fixing light while breaking dark. `text-navy-950`
+                     (#00252a) is a literal in @theme that `.dark` never remaps: 6.53:1 in both.
 
-                     KNOWN DEFECT, tracked as task #143 — the success branch is NOT fixed. At rest
-                     `#ffffff` on `#15803d` is 5.02:1, but `hover:bg-success-700` is a no-op (that
-                     token is undeclared too), so hover:opacity-90 is the only hover effect and it
-                     drops the label to 4.17:1 in light mode — below AA. WCAG 1.4.3 exempts disabled
-                     controls, never hover. Left as found rather than widening this commit; the real
-                     fix is to mint an `on-*` certified against the saturated FILL (not the tint),
-                     which retires text-navy-950 from status duty and repairs both branches at once. -->
-                <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mdForm.processing" class="rounded-xl px-5 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-50" :class="mdForm.complete ? 'bg-success-600 text-white hover:bg-success-700' : 'bg-warning-500 text-navy-950'">{{ mdForm.complete ? 'Discharge & close file' : 'Medical discharge' }}</button></div>
+                     W0-T3e/f. The `hover:opacity-*` fade is GONE from this button. (Wildcard on
+                     purpose: Tailwind's extractor reads COMMENTS, so spelling the real utility here
+                     would resurrect its rule in the shipped CSS.) CSS `opacity` composites the WHOLE
+                     element — the fill AND the label — over whatever is behind it, so it
+                     quietly degrades the label rather than just the fill. White on success-600 fell
+                     from 5.02:1 to 4.17:1 over the light bg-card panel (4.68:1 dark). 1.4.3 exempts
+                     `disabled` controls (so `disabled:opacity-50` stays) but has NO hover exemption.
+                     Both branches now hover on a real, darker FILL, which touches only the fill:
+                       success-700 #166534 under text-white     = 7.13:1
+                       warning-600 #c87d06 under text-navy-950  = 4.92:1
+                     Those steps were dead classes until W0-T3e declared them; see app.css for why
+                     warning-600 may never be used as TEXT (3.29:1 on the light card). -->
+                <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mdForm.processing" class="rounded-xl px-5 py-2 text-sm font-semibold disabled:opacity-50" :class="mdForm.complete ? 'bg-success-600 text-white hover:bg-success-700' : 'bg-warning-500 text-navy-950 hover:bg-warning-600'">{{ mdForm.complete ? 'Discharge & close file' : 'Medical discharge' }}</button></div>
             </form>
             <form v-else-if="mode === 'complete'" @submit.prevent="submitComplete" class="space-y-4">
                 <p class="text-sm text-ink-600">Close the file and free the bed.</p>
