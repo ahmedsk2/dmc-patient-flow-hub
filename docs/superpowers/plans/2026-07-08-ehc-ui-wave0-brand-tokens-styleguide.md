@@ -192,7 +192,9 @@ Replace it with:
      * Hairline: a teal-tinted separator that REPLACES drop-shadows as the depth cue. Distinct
      * from --color-line (neutral). Shadow is reserved for TRUE overlays only. */
     --color-hairline: var(--surface-hairline);
-    --shadow-overlay: 0 24px 60px -18px rgb(30 42 46 / 0.35);
+    /* Tailwind v4 INLINES --shadow-* at build time; only the COLOUR slot can indirect via a var.
+     * A `.dark { --shadow-overlay: ... }` override would be inert — hence --overlay-ink. */
+    --shadow-overlay: 0 24px 60px -18px var(--overlay-ink);
 
     /* Status callout surfaces + their AA-verified text colours. Theme-aware: the tint darkens
      * and the text lightens under .dark, while the HUE is held constant so a status never
@@ -224,8 +226,8 @@ Replace with:
 
     /* Signature hairline — brand teal at low alpha over the light surfaces. */
     --surface-hairline: rgb(0 156 166 / 0.16);
-    /* Density: rows consume --row-py; a .density-* container overrides it. */
-    --row-py: 0.5rem;
+    /* Overlay-shadow colour — the only part of a --shadow-* token that can indirect per theme. */
+    --overlay-ink: rgb(30 42 46 / 0.35);
 
     /* Status tints + AA-safe text (light). warning-500/info-500/etc. FAIL as text — see
      * scripts/contrast.mjs. These `on-*` values all clear 4.5:1 on their tint AND on white. */
@@ -256,7 +258,7 @@ Replace with:
 
     /* Signature hairline reads brighter against the dark page. */
     --surface-hairline: rgb(0 156 166 / 0.26);
-    --shadow-overlay: 0 24px 60px -18px rgb(0 0 0 / 0.7);
+    --overlay-ink: rgb(0 0 0 / 0.7);
 
     /* Status tints go deep + opaque (exact contrast maths, no alpha compositing); the `on-*`
      * text lightens. Hues held constant with the light theme. */
@@ -286,8 +288,9 @@ Find, inside `@layer base`:
 Add immediately after it (still inside `@layer base`):
 
 ```css
-    /* Density — a container sets the row rhythm; `row-pad` rows consume it. Persisted per
-     * user in Wave 2 (shared-workstation ergonomics: rounds laptop vs wide ward monitor). */
+    /* Density — a container sets the row rhythm; `row-pad` rows consume it. Wave 2 will migrate the
+     * EXISTING toggle (localStorage['dmc-density'] + the px/py ternaries in Pages/Patients/Index.vue)
+     * onto this mechanism — the values line up exactly. Do not build a second density system. */
     .density-comfortable { --row-py: 0.5rem; }
     .density-compact { --row-py: 0.25rem; }
 ```
@@ -312,22 +315,24 @@ Add immediately after it:
  * reserved for TRUE overlays (command palette, dialogs) via `shadow-overlay`. Every patient row
  * carries a 3px inset status rail — the app's fingerprint; the board reads as a stack of tickets.
  * Logical properties (border-inline-start) are used so a future RTL mode is a no-op (Wave 5).
+ *
+ * `bg-/text-/border-/ring-/divide-/outline-hairline` are AUTO-GENERATED from the --color-hairline
+ * theme key — no @utility needed. (The older `-line` set above duplicates this; harmless, and out
+ * of scope to remove here.)
  */
-@utility border-hairline {
-    border-color: var(--color-hairline);
-}
-@utility ring-hairline {
-    --tw-ring-color: var(--color-hairline);
-}
-@utility divide-hairline {
-    & > :not([hidden]) ~ :not([hidden]) {
-        border-color: var(--color-hairline);
-    }
+
+/* Custom properties inherit by default; without this a toned row would silently re-tone every
+ * NESTED rail (the board nests 3 deep), so an un-toned child would render critical red. `syntax: '*'`
+ * with no initial-value keeps the guaranteed-invalid initial value, so the var() fallback still fires. */
+@property --rail-color {
+    syntax: '*';
+    inherits: false;
 }
 
-/* The fingerprint. Pair with exactly one rail-* tone. */
+/* The fingerprint. Pair with exactly one rail-* tone. Tone names match the colour tokens they
+ * dereference (success/danger) — NOT alert vocabulary (ok/critical). */
 @utility status-rail {
-    border-inline-start: 3px solid var(--rail-color, var(--color-line));
+    border-inline-start: 3px solid var(--rail-color, var(--color-ink-200));
 }
 @utility rail-neutral {
     --rail-color: var(--color-ink-200);
@@ -335,17 +340,18 @@ Add immediately after it:
 @utility rail-info {
     --rail-color: var(--color-info-500);
 }
-@utility rail-ok {
+@utility rail-success {
     --rail-color: var(--color-success-500);
 }
 @utility rail-warning {
     --rail-color: var(--color-warning-500);
 }
-@utility rail-critical {
+@utility rail-danger {
     --rail-color: var(--color-danger-500);
 }
 
-/* Density-aware row padding. */
+/* Density-aware row padding. --row-py is deliberately NOT declared in :root — this fallback IS the
+ * default; a .density-* container overrides it. */
 @utility row-pad {
     padding-block: var(--row-py, 0.5rem);
 }
@@ -428,7 +434,7 @@ describe('FlowAlert', () => {
         expect(mountAlert({ tone: 'info' }).classes()).toContain('status-rail');
         expect(mountAlert({ tone: 'info' }).classes()).toContain('rail-info');
         expect(mountAlert({ tone: 'warning' }).classes()).toContain('rail-warning');
-        expect(mountAlert({ tone: 'critical' }).classes()).toContain('rail-critical');
+        expect(mountAlert({ tone: 'critical' }).classes()).toContain('rail-danger');
     });
 
     it('uses the AA-safe on-* text token, never the raw status-500 colour', () => {
@@ -487,7 +493,7 @@ const props = defineProps({
 });
 
 const PREFIX = { info: 'Information:', warning: 'Important:', critical: 'Action needed:' };
-const RAIL = { info: 'rail-info', warning: 'rail-warning', critical: 'rail-critical' };
+const RAIL = { info: 'rail-info', warning: 'rail-warning', critical: 'rail-danger' };
 const TINT = { info: 'bg-tint-info', warning: 'bg-tint-warning', critical: 'bg-tint-danger' };
 const TEXT = { info: 'text-on-info', warning: 'text-on-warning', critical: 'text-on-danger' };
 // 24x24 stroke paths: circled-i · triangle · solid triangle-alert. Distinct SHAPES, not just hues.
@@ -542,7 +548,7 @@ Run:
 ```bash
 npm run build
 grep -o "status-rail" public/build/assets/*.css | head -1
-grep -o "rail-critical" public/build/assets/*.css | head -1
+grep -o "rail-danger" public/build/assets/*.css | head -1
 ```
 Expected: each `grep` prints its class name once (Tailwind v4 only emits utilities it sees used in `@source`-scanned files — `FlowAlert.vue` is the first consumer).
 
@@ -990,7 +996,7 @@ describe('StyleGuide page', () => {
 
     it('documents every status-rail tone', () => {
         const page = w();
-        for (const tone of ['rail-neutral', 'rail-info', 'rail-ok', 'rail-warning', 'rail-critical']) {
+        for (const tone of ['rail-neutral', 'rail-info', 'rail-success', 'rail-warning', 'rail-danger']) {
             expect(page.find(`.${tone}`).exists()).toBe(true);
         }
     });
@@ -1042,9 +1048,9 @@ const BRAND = ['brand-200', 'brand-400', 'brand-500', 'brand-700', 'brand-800', 
 const STATUS = [
     { rail: 'rail-neutral', tint: 'bg-ink-100', text: 'text-ink-600', label: 'Neutral' },
     { rail: 'rail-info', tint: 'bg-tint-info', text: 'text-on-info', label: 'Info' },
-    { rail: 'rail-ok', tint: 'bg-tint-success', text: 'text-on-success', label: 'Stable' },
+    { rail: 'rail-success', tint: 'bg-tint-success', text: 'text-on-success', label: 'Stable' },
     { rail: 'rail-warning', tint: 'bg-tint-warning', text: 'text-on-warning', label: 'Boarding' },
-    { rail: 'rail-critical', tint: 'bg-tint-danger', text: 'text-on-danger', label: 'Critical' },
+    { rail: 'rail-danger', tint: 'bg-tint-danger', text: 'text-on-danger', label: 'Critical' },
 ];
 </script>
 
@@ -1197,12 +1203,12 @@ Run:
 ```bash
 npm run build
 ```
-Expected: build succeeds. `public/build/assets/*.css` now contains `status-rail`, `rail-critical`,
+Expected: build succeeds. `public/build/assets/*.css` now contains `status-rail`, `rail-danger`,
 `bg-tint-warning`, `text-on-warning`, and the six `bg-brand-*` swatches.
 
 Verify:
 ```bash
-for c in status-rail rail-critical bg-tint-warning text-on-warning bg-brand-950; do
+for c in status-rail rail-danger bg-tint-warning text-on-warning bg-brand-950; do
   grep -q "$c" public/build/assets/*.css && echo "OK  $c" || echo "MISSING  $c"
 done
 ```
@@ -1264,7 +1270,16 @@ git commit -m "docs(renovation): Wave 0 style-guide screenshots (light + dark)"
 - **Discovered scope, added:** the spec did not anticipate that the *existing* `warning-500` /
   `info-500` status colours fail AA as text. Task 2 adds the `tint-*` / `on-*` token pairs to fix
   it. This is required by the spec's own WCAG 2.2 AA acceptance bar.
-- **Naming consistency:** `status-rail` + `rail-{neutral,info,ok,warning,critical}` are used
+- **Naming consistency:** `status-rail` + `rail-{neutral,info,success,warning,danger}` are used
   identically in Task 2 (CSS), Task 3 (`FlowAlert`), and Task 7 (`StyleGuide`). `tint-*`/`on-*`
-  likewise. `--row-py` is defined in `:root` (Task 2 Step 2), overridden by `.density-*`
-  (Task 2 Step 4), and consumed by `row-pad` (Task 2 Step 5).
+  likewise. Rail tone names deliberately match the colour tokens they dereference
+  (`success`/`danger`), not alert vocabulary (`ok`/`critical`) — `FlowAlert`'s `critical` *prop*
+  maps to `rail-danger`. `--row-py` is NOT declared in `:root`; `row-pad`'s `var(--row-py, 0.5rem)`
+  fallback is the default, and `.density-*` (Task 2 Step 4) overrides it.
+- **Amended after the Task 2 code review (2026-07-08):** `--shadow-overlay` now indirects through
+  `--overlay-ink` at the colour slot, because Tailwind v4 *inlines* `--shadow-*` at build time and a
+  `.dark` override of the shadow token itself is inert. `@property --rail-color { inherits: false }`
+  was added so a toned row cannot silently re-tone nested rails. Both were proven by compiling the
+  real stylesheet through Tailwind's own API. The identical inert-dark-shadow bug in the pre-existing
+  `--shadow-card`/`--shadow-card-lg` is documented in-file but deliberately NOT fixed here: a correct
+  fix unifies per-theme shadow geometry and belongs in its own reviewed commit.
