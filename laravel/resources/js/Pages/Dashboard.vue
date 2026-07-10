@@ -170,7 +170,8 @@ const boardSections = computed(() => {
 // rest deliberately have no spark (no invented data).
 const kpiCards = computed(() => [
     { label: 'Active Census', value: props.kpis.census, sub: `${props.kpis.ward} ward · ${props.kpis.icu} ICU`, icon: 'bed', tone: 'brand', href: '/patients', polarity: 'neutral' },
-    { label: 'Admissions Today', value: props.kpis.admissionsToday, sub: `${props.kpis.dischargesToday} discharged today · vs 7d avg`, icon: 'in', tone: 'blue', deltaKey: 'admissions', polarity: 'neutral', spark: props.trend.admissions },
+    { label: 'Admissions Today', value: props.kpis.admissionsToday, sub: 'vs 7d avg', icon: 'in', tone: 'blue', deltaKey: 'admissions', polarity: 'neutral', spark: props.trend.admissions },
+    { label: 'Discharges Today', value: props.kpis.dischargesToday, sub: 'vs 7d avg · non-ICU', icon: 'out', tone: 'teal', deltaKey: 'discharges', polarity: 'good', spark: props.trend.discharges, href: '/recent' },
     { label: 'Active Consultations', value: props.kpis.activeConsults, sub: 'awaiting sign-off', icon: 'chat', tone: 'gold', href: '/consultations', polarity: 'neutral', spark: props.consults.new },
     { label: 'Bed Occupancy', value: props.kpis.occupancy + '%', sub: `of ${props.kpis.wardBeds} ward beds · vs 1w ago`, icon: 'gauge', tone: 'teal', deltaKey: 'occupancy', polarity: 'bad' },
     { label: 'Avg LOS (month)', value: props.kpis.avgLosMonth, sub: 'days · non-ICU discharges', icon: 'clock', tone: 'navy', polarity: 'bad' },
@@ -185,6 +186,7 @@ const toneClass = {
 const kpiIcons = {
     bed: 'M3 7.5h13.5a3 3 0 0 1 3 3V18M3 7.5V18m0-10.5V6m18 12H3',
     in: 'M3 12h13.5m0 0-4.5-4.5M16.5 12 12 16.5M21 4.5v15',
+    out: 'M21 12H7.5m0 0 4.5-4.5M7.5 12l4.5 4.5M3 4.5v15',
     chat: 'M8.25 8.25h7.5m-7.5 3.75h4.5m4.94 4.06a8.25 8.25 0 1 0-3.32 2.0L21 21Z',
     gauge: 'M12 3a9 9 0 1 0 9 9M12 12l4.5-4.5M21 12h-2M5 12H3m9-7v2',
     clock: 'M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
@@ -439,7 +441,7 @@ onUnmounted(() => clearInterval(autoRefresh));
 
         <!-- KPI hero row (data-tour anchor for the onboarding tour, Item 10) -->
         <h2 class="sr-only">Key performance indicators</h2>
-        <div data-tour="dashboard-hero" class="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-7">
+        <div data-tour="dashboard-hero" class="grid grid-cols-2 gap-4 sm:grid-cols-4 xl:grid-cols-8">
             <!-- W4 triad: label → big tabular numeral → (delta chip + inline sparkline) row, brand icon tile kept -->
             <component :is="c.href ? 'button' : 'div'" v-for="c in kpiCards" :key="c.label" type="button"
                 :data-kpi="c.label"

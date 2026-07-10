@@ -173,9 +173,7 @@ describe('Dashboard — "My unit today" tiles (W0-T3i)', () => {
 // KPI's own polarity (a rise in a 'bad' KPI is red; a rise in a 'good' KPI is green; a 'neutral' KPI
 // is always ink), NOT the raw number — proven both on the pure helper and on the rendered cards.
 describe('Dashboard — KPI triad, polarity & sparklines (W4)', () => {
-    // The pure token map (lib/ui.js). This is where the 'good' path is asserted: no rendered KPI card
-    // carries 'good' polarity today (discharges — the archetypal 'good' KPI — is sub-text, not a card),
-    // so the good→success mapping is proven here on the single source of truth the cards consume.
+    // The pure token map (lib/ui.js) — the single source of truth the cards consume.
     it('deltaChipClass: bad+up → danger, good+up → success, neutral/flat → ink', () => {
         expect(deltaChipClass('bad', 'up')).toBe('bg-tint-danger text-on-danger');
         expect(deltaChipClass('good', 'up')).toBe('bg-tint-success text-on-success');
@@ -191,8 +189,17 @@ describe('Dashboard — KPI triad, polarity & sparklines (W4)', () => {
             deathsMonth: { delta: 2, direction: 'up' },   // Mortality is a 'bad' KPI
             admissions: { delta: 1, direction: 'up' },     // Admissions is 'neutral'
             occupancy: { delta: 3, direction: 'up' },      // Occupancy is 'bad' (good_up was null in the payload)
+            discharges: { delta: 4, direction: 'up' },     // Discharges is the rendered 'good' KPI
         },
         ...over,
+    });
+
+    it('renders the success token chip for the good-polarity Discharges card on an up delta', () => {
+        const chip = chipOf(withDeltas(), 'Discharges Today');
+        expect(chip.exists()).toBe(true);
+        expect(chip.classes()).toContain('bg-tint-success');
+        expect(chip.classes()).toContain('text-on-success');
+        expect(chip.text()).toContain('▲');
     });
 
     it('renders the danger token chip for a bad-polarity KPI with a positive (up) delta', () => {
