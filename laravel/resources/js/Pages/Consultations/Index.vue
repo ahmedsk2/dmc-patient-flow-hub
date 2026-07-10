@@ -6,7 +6,7 @@ import BaseModal from '@/Components/BaseModal.vue';
 import ErrorSummary from '@/Components/ErrorSummary.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
-import { localToday, vFocus, guardSubmit } from '@/lib/ui.js';
+import { localToday, vFocus, guardSubmit, formatDate } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
 
@@ -123,14 +123,14 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
     <AppLayout title="Consultations">
         <div class="mb-5 flex flex-wrap items-center gap-3">
             <div class="flex gap-2">
-                <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Active <span class="nums ml-1 text-on-accent">{{ stats.active }}</span></span>
-                <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Total <span class="nums ml-1 text-ink-600">{{ stats.total }}</span></span>
+                <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Active <span class="nums ms-1 text-on-accent">{{ stats.active }}</span></span>
+                <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Total <span class="nums ms-1 text-ink-600">{{ stats.total }}</span></span>
                 <!-- personal counter for consultant viewers (K1-13): own active out of total active -->
-                <span v-if="me.role === 3" class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Mine <span class="nums ml-1 text-brand-700">{{ stats.mine_active }} of {{ stats.active }} active</span></span>
+                <span v-if="me.role === 3" class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Mine <span class="nums ms-1 text-brand-700">{{ stats.mine_active }} of {{ stats.active }} active</span></span>
             </div>
-            <div class="relative ml-auto">
-                <svg class="pointer-events-none absolute left-3 top-2.5 h-5 w-5 text-ink-400" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" /></svg>
-                <input v-model="search" v-focus aria-label="Search consultations by name or MRN" placeholder="Search name or MRN…" autocomplete="off" class="w-64 rounded-xl border border-ink-200 bg-card py-2 pl-10 pr-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+            <div class="relative ms-auto">
+                <svg class="pointer-events-none absolute start-3 top-2.5 h-5 w-5 text-ink-400" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" /></svg>
+                <input v-model="search" v-focus aria-label="Search consultations by name or MRN" placeholder="Search name or MRN…" autocomplete="off" class="w-64 rounded-xl border border-ink-200 bg-card py-2 ps-10 pe-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
             </div>
             <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line">
                 <button v-for="s in [['active','Active'],['signed','Signed off'],['all','All']]" :key="s[0]" @click="setStatus(s[0])"
@@ -147,7 +147,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
           <div class="overflow-x-auto">
             <table class="min-w-[640px] w-full text-sm">
                 <thead>
-                    <tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
+                    <tr class="border-b border-line text-start text-xs font-semibold uppercase tracking-wide text-ink-400">
                         <th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Location</th>
                         <th scope="col" class="px-3 py-3">From → To</th><th scope="col" class="px-3 py-3">Indication</th>
                         <th scope="col" class="px-3 py-3">Consultant</th><th scope="col" class="px-3 py-3">Date</th><th scope="col" class="px-5 py-3">Status</th>
@@ -169,10 +169,10 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                             </div>
                         </td>
                         <td class="px-3 py-3 text-ink-600">{{ c.consultant }}</td>
-                        <td class="nums px-3 py-3 text-ink-500">{{ c.date || '—' }}</td>
+                        <td class="nums px-3 py-3 text-ink-500">{{ formatDate(c.date) || '—' }}</td>
                         <td class="px-5 py-3">
                             <div class="flex items-center gap-2">
-                                <span v-if="c.signoff" class="rounded-full bg-tint-success px-2.5 py-0.5 text-xs font-semibold text-on-success">Signed {{ c.signoff }}</span>
+                                <span v-if="c.signoff" class="rounded-full bg-tint-success px-2.5 py-0.5 text-xs font-semibold text-on-success">Signed {{ formatDate(c.signoff) }}</span>
                                 <span v-else class="rounded-full bg-tint-accent px-2.5 py-0.5 text-xs font-semibold text-on-accent">Active</span>
                                 <button v-if="!c.signoff && canSignoff(c)" @click="signoff(c)" title="Sign off" class="rounded-lg px-2 py-1 text-xs font-semibold text-on-success hover:bg-tint-success">Sign off</button>
                                 <button v-if="canEdit(c)" @click="openEdit(c)" title="Edit" class="rounded-lg px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50">Edit</button>

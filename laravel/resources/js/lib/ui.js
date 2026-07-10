@@ -19,6 +19,33 @@ export function localToday() {
 }
 
 /**
+ * Wave 5, Item 3: consistent "DD MMM YYYY" date rendering (e.g. "08 Jul 2026") for the raw
+ * YYYY-MM-DD/ISO-datetime strings the server sends. Several pages echoed those raw strings directly
+ * (Dashboard's recent-admissions date, patient-card "Admitted" lines) — inconsistent with the rest of
+ * the app's formatted dates and not locale-friendly. Null/invalid-safe: never throws, never renders
+ * "Invalid Date" — returns '' so a template can fall back to its own placeholder (e.g. `|| '—'`).
+ *
+ * Parses the 'YYYY-MM-DD[...]' shape with a plain string split rather than `new Date(str)` — the
+ * latter treats a bare 'YYYY-MM-DD' as UTC midnight and would print the PREVIOUS day in negative-UTC
+ * zones, the exact bug localToday() above exists to dodge. A full ISO datetime (with a 'T') keeps
+ * only its date portion, so the same UTC-shift risk never applies to the calendar digits.
+ *
+ * @param {string|null|undefined} value  'YYYY-MM-DD' or an ISO datetime string
+ * @returns {string} 'DD MMM YYYY', or '' when value is empty/null/unparseable.
+ */
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export function formatDate(value) {
+    if (!value) return '';
+    const datePart = String(value).slice(0, 10);
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(datePart);
+    if (!m) return '';
+    const [, y, mo, d] = m;
+    const year = Number(y), month = Number(mo), day = Number(d);
+    if (year === 0 || month < 1 || month > 12 || day < 1 || day > 31) return '';   // rejects 0000-00-00 etc.
+    return `${String(day).padStart(2, '0')} ${MONTHS[month - 1]} ${year}`;
+}
+
+/**
  * Autofocus directive — focuses the element on mount. Used on search-page inputs (Item 6) so a
  * clinician can type immediately without a click. Previously redeclared inline in Patients/Index;
  * exported here so Patients / Consultations / Registry share ONE definition.

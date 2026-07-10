@@ -140,3 +140,30 @@ describe('Item 8 — standardized verb wording', () => {
         expect(html).not.toContain('Change consultant');
     });
 });
+
+// Wave 5, Item 1 (a11y): the board summary table's per-consultant row was a click-only <tr> (no
+// keyboard path to toggle expand/collapse). Now a real role="button" + tabindex="0" +
+// keydown.enter/space row — verify all three ways in, and that it isn't just a div-with-@click.
+describe('Wave 5 — board summary row is keyboard-operable', () => {
+    it('the summary row carries tabindex="0" and role="button", not a bare div/tr-with-@click', () => {
+        const w = renderWith(consultant(), { groups: groups([5]) });
+        const row = w.find('tr[role="button"]');
+        expect(row.exists()).toBe(true);
+        expect(row.attributes('tabindex')).toBe('0');
+        expect(row.attributes('aria-label')).toContain('Dr. Dr 5');
+    });
+
+    it('Enter toggles expand/collapse, same as a click', async () => {
+        const w = renderWith(consultant(), { groups: groups([5]) });
+        expect(w.vm.open.has(5)).toBe(false);   // collapsed by default (not filtering)
+        await w.find('tr[role="button"]').trigger('keydown.enter');
+        expect(w.vm.open.has(5)).toBe(true);
+    });
+
+    it('Space toggles expand/collapse and does not scroll the page (space.prevent)', async () => {
+        const w = renderWith(consultant(), { groups: groups([5]) });
+        expect(w.vm.open.has(5)).toBe(false);
+        await w.find('tr[role="button"]').trigger('keydown.space');
+        expect(w.vm.open.has(5)).toBe(true);
+    });
+});

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
     localToday, vFocus, xsrf, locTone, consultantOptions, FIELD,
-    ADMIT_FROM_OPTIONS, DISCHARGE_DESTINATIONS, OUTCOME_STATUSES, guardSubmit,
+    ADMIT_FROM_OPTIONS, DISCHARGE_DESTINATIONS, OUTCOME_STATUSES, guardSubmit, formatDate,
 } from '@/lib/ui.js';
 
 afterEach(() => { vi.useRealTimers(); });
@@ -90,6 +90,31 @@ describe('consultantOptions()', () => {
     });
     it('tolerates a null/undefined list', () => {
         expect(consultantOptions(undefined)).toEqual([]);
+    });
+});
+
+// Wave 5, Item 3: consistent DD MMM YYYY date rendering (null/invalid-safe — never throws, never
+// prints "Invalid Date"). Parses the 'YYYY-MM-DD' shape the server sends directly (no Date() parsing
+// of the plain date string, which would apply the BROWSER's timezone and can roll the day backward —
+// same class of bug localToday() above exists to avoid).
+describe('formatDate()', () => {
+    it('formats an ISO YYYY-MM-DD date as DD MMM YYYY', () => {
+        expect(formatDate('2026-07-08')).toBe('08 Jul 2026');
+    });
+    it('formats an ISO datetime (date + time) the same way', () => {
+        expect(formatDate('2026-01-05T14:30:00Z')).toBe('05 Jan 2026');
+    });
+    it('pads single-digit days', () => {
+        expect(formatDate('2026-12-01')).toBe('01 Dec 2026');
+    });
+    it('returns an empty string for null/undefined/empty input', () => {
+        expect(formatDate(null)).toBe('');
+        expect(formatDate(undefined)).toBe('');
+        expect(formatDate('')).toBe('');
+    });
+    it('returns an empty string for an unparseable value (never "Invalid Date")', () => {
+        expect(formatDate('not-a-date')).toBe('');
+        expect(formatDate('0000-00-00')).toBe('');   // legacy MySQL zero-date
     });
 });
 

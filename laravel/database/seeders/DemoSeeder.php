@@ -178,7 +178,7 @@ class DemoSeeder extends Seeder
             $userRows[] = [
                 'username' => 'demo_consultant_' . ($i + 1),
                 'name' => $full,
-                'full_name' => 'Dr. ' . $full,
+                'full_name' => $full,   // the board/consultant UI prepends the "Dr." honorific itself; seeding it here doubled it ("Dr. Dr. …")
                 'role' => 3,                                   // ROLE_CONSULTANT
                 'specialty_id' => $specialtyId,
                 'active' => 1,

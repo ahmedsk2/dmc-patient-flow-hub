@@ -40,6 +40,7 @@ import Dashboard from '@/Pages/Dashboard.vue';
 import AdminBandCard from '@/Components/AdminBandCard.vue';
 import Sparkline from '@/Components/Sparkline.vue';
 import { deltaChipClass } from '@/lib/ui.js';
+import { router } from '@inertiajs/vue3';
 
 const emptyKpis = { census: 0, ward: 0, icu: 0, admissionsToday: 0, dischargesToday: 0, activeConsults: 0, deathsMonth: 0, avgLosMonth: 0, occupancy: 0, occupancyGauge: 0, wardBeds: 50, icuBeds: 8 };
 const baseProps = (over = {}) => ({
@@ -253,5 +254,40 @@ describe('Dashboard — alert dismiss ✕ (W0-T3j)', () => {
         // A wash behind the glyph reduces its contrast (light on-warning 5.20 -> 4.16, sub-AA). Forbid it.
         expect(c).not.toContain('hover:bg-black/10');
         expect(c).not.toContain('dark:hover:bg-white/10');
+    });
+});
+
+// Wave 5, Item 1 (a11y): the boarding-worklist row and the per-consultant breakdown row were
+// click-only <tr>s (no keyboard path). Now real role="button" + tabindex="0" rows with Enter/Space
+// handlers wired to the SAME navigation the click already used (goHref / drillTo -> router.visit).
+describe('Wave 5 — dashboard rows are keyboard-operable', () => {
+    it('the boarding-worklist row is a role="button" tabindex="0" row, and Enter fires the same navigation as a click', async () => {
+        router.visit.mockClear();
+        const w = mountAs({ role: 0, is_admin: true }, {
+            boardingCount: 1,
+            boardingWorklist: [{ id: 1, name: 'Jane Doe', mrn: '12345', consultant: 'Dr Smith', delay_days: 9 }],
+        });
+        const row = w.find('tr[role="button"]');
+        expect(row.exists()).toBe(true);
+        expect(row.attributes('tabindex')).toBe('0');
+        expect(row.attributes('aria-label')).toContain('Jane Doe');
+        expect(row.attributes('aria-label')).toContain('12345');
+
+        await row.trigger('keydown.enter');
+        expect(router.visit).toHaveBeenCalledWith('/patients', { data: { view: 'boarding' } });
+    });
+
+    it('the per-consultant breakdown row is keyboard-operable and Space drills into that consultant', async () => {
+        router.visit.mockClear();
+        const w = mountAs({ role: 0, is_admin: true }, {
+            consultantBoard: [{ name: 'Ahmed', id: 9, old: 1, new: 0, active: 2, ward: 2, icu: 0, tb: 0 }],
+        });
+        const rows = w.findAll('tr[role="button"]');
+        const row = rows.find((r) => r.text().includes('Ahmed'));
+        expect(row).toBeTruthy();
+        expect(row.attributes('tabindex')).toBe('0');
+
+        await row.trigger('keydown.space');
+        expect(router.visit).toHaveBeenCalledWith('/patients', { data: { consultant_id: 9 } });
     });
 });

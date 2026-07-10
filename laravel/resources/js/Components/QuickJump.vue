@@ -216,7 +216,7 @@ const chipStatus = (row) => (row.deceased ? 'deceased' : (row.status || ''));
         <!-- compact trigger so touch users can reach the palette below the sm breakpoint -->
         <button type="button" data-qj-trigger-mobile @click="focusInput"
             aria-label="Search patients and commands (Ctrl+K)" title="Search patients & commands (Ctrl+K)"
-            class="grid h-9 w-9 place-items-center rounded-full text-ink-400 transition hover:bg-ink-50 hover:text-ink-700 sm:hidden">
+            class="grid h-9 w-9 coarse:h-10 coarse:w-10 place-items-center rounded-full text-ink-400 transition hover:bg-ink-50 hover:text-ink-700 sm:hidden">
             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" />
             </svg>

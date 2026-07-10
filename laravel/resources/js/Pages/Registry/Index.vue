@@ -11,7 +11,7 @@ import BaseModal from '@/Components/BaseModal.vue';
 import PatientForm from '@/Components/PatientForm.vue';
 import { usePatientEdit } from '@/composables/usePatientEdit';
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
-import { localToday, vFocus, xsrf } from '@/lib/ui.js';
+import { localToday, vFocus, xsrf, formatDate } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
 
@@ -190,22 +190,22 @@ const toggleExpand = (id) => {
             <div v-if="mode === 'admissions'" class="space-y-3">
                 <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
                     <input v-model="f.search" v-focus @keyup.enter="apply" :class="fld" aria-label="Search admissions by name or MRN" placeholder="Name or MRN" autocomplete="off" />
-                    <select v-model="f.consultant_id" :class="fld"><option value="">Any consultant</option><option v-for="c in options.consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select>
-                    <select v-model="f.gender" :class="fld"><option value="">Any gender</option><option>Male</option><option>Female</option></select>
-                    <input v-model="f.nationality" :class="fld" list="natlist" placeholder="Nationality" /><datalist id="natlist"><option v-for="c in options.countries" :key="c" :value="c" /></datalist>
-                    <select v-model="f.location" :class="fld"><option value="">Any location</option><option v-for="l in options.locations" :key="l">{{ l }}</option></select>
-                    <select v-model="f.outcome" :class="fld"><option value="">Any outcome</option><option v-for="o in options.outcomes" :key="o">{{ o }}</option></select>
-                    <select v-model="f.admitted_from" :class="fld"><option value="">Any source</option><option v-for="a in options.admittedFrom" :key="a">{{ a }}</option></select>
-                    <select v-model="f.discharged_to" :class="fld"><option value="">Any discharged-to</option><option v-for="d in options.dischargedTo" :key="d">{{ d }}</option></select>
-                    <select v-model="f.delay" :class="fld"><option value="">Any delay reason</option><option v-for="d in options.delays" :key="d">{{ d }}</option></select>
-                    <div class="flex gap-2"><input v-model="f.age_from" :class="fld" placeholder="Age ≥" inputmode="numeric" /><input v-model="f.age_to" :class="fld" placeholder="Age ≤" inputmode="numeric" /></div>
-                    <div><label class="text-xs text-ink-400">Admitted from</label><input v-model="f.from" type="date" :class="fld" /></div>
-                    <div><label class="text-xs text-ink-400">to</label><input v-model="f.to" type="date" :class="fld" /></div>
+                    <select v-model="f.consultant_id" :class="fld" aria-label="Filter by consultant"><option value="">Any consultant</option><option v-for="c in options.consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select>
+                    <select v-model="f.gender" :class="fld" aria-label="Filter by gender"><option value="">Any gender</option><option>Male</option><option>Female</option></select>
+                    <input v-model="f.nationality" :class="fld" list="natlist" placeholder="Nationality" aria-label="Filter by nationality" /><datalist id="natlist"><option v-for="c in options.countries" :key="c" :value="c" /></datalist>
+                    <select v-model="f.location" :class="fld" aria-label="Filter by location"><option value="">Any location</option><option v-for="l in options.locations" :key="l">{{ l }}</option></select>
+                    <select v-model="f.outcome" :class="fld" aria-label="Filter by outcome"><option value="">Any outcome</option><option v-for="o in options.outcomes" :key="o">{{ o }}</option></select>
+                    <select v-model="f.admitted_from" :class="fld" aria-label="Filter by admission source"><option value="">Any source</option><option v-for="a in options.admittedFrom" :key="a">{{ a }}</option></select>
+                    <select v-model="f.discharged_to" :class="fld" aria-label="Filter by discharge destination"><option value="">Any discharged-to</option><option v-for="d in options.dischargedTo" :key="d">{{ d }}</option></select>
+                    <select v-model="f.delay" :class="fld" aria-label="Filter by delay reason"><option value="">Any delay reason</option><option v-for="d in options.delays" :key="d">{{ d }}</option></select>
+                    <div class="flex gap-2"><input v-model="f.age_from" :class="fld" placeholder="Age ≥" inputmode="numeric" aria-label="Minimum age" /><input v-model="f.age_to" :class="fld" placeholder="Age ≤" inputmode="numeric" aria-label="Maximum age" /></div>
+                    <div><label class="text-xs text-ink-400">Admitted from</label><input v-model="f.from" type="date" :class="fld" aria-label="From date" /></div>
+                    <div><label class="text-xs text-ink-400">to</label><input v-model="f.to" type="date" :class="fld" aria-label="To date" /></div>
                 </div>
                 <IcdTypeahead :input-class="fld" placeholder="Add diagnosis filter (ICD-10)…" @select="addDx" />
                 <div v-if="selectedDx.length" class="flex flex-wrap items-center gap-2">
                     <span v-for="d in selectedDx" :key="d.code" class="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700"><span class="nums">{{ d.code }}</span> <button type="button" @click="removeDx(d.code)" class="text-brand-700 hover:text-on-danger">✕</button></span>
-                    <label class="ml-2 flex items-center gap-1 text-xs text-ink-500"><input type="radio" value="or" v-model="f.dx_match" /> any</label>
+                    <label class="ms-2 flex items-center gap-1 text-xs text-ink-500"><input type="radio" value="or" v-model="f.dx_match" /> any</label>
                     <label class="flex items-center gap-1 text-xs text-ink-500"><input type="radio" value="and" v-model="f.dx_match" /> all</label>
                 </div>
                 <div class="flex flex-wrap items-center gap-4">
@@ -213,7 +213,7 @@ const toggleExpand = (id) => {
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.discharged" class="rounded text-brand-600" /> Discharged only</label>
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.tb" class="rounded text-brand-600" /> TB</label>
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.readmit72" class="rounded text-brand-600" /> {{ options.readmitWindow ?? 3 }}-day readmissions</label>
-                    <button @click="apply" class="ml-auto rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">Search</button>
+                    <button @click="apply" class="ms-auto rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">Search</button>
                     <button @click="reset" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 hover:text-ink-700">Reset</button>
                     <template v-if="hasTerm">
                         <button type="button" @click="postExport('/registry/export-xlsx')" @mouseenter="loadMatchCount" @focus="loadMatchCount" class="rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</button>
@@ -229,23 +229,23 @@ const toggleExpand = (id) => {
             <div v-else-if="mode === 'consultations'" class="space-y-3">
                 <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
                     <input v-model="f.search" v-focus @keyup.enter="apply" :class="fld" aria-label="Search consultations by name or MRN" placeholder="Name or MRN" autocomplete="off" />
-                    <select v-model="f.consultant_id" :class="fld"><option value="">Any consultant</option><option v-for="c in options.consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select>
-                    <input v-model="f.consultation_from" :class="fld" placeholder="From service" />
-                    <input v-model="f.to_service" :class="fld" placeholder="To service" />
-                    <div class="flex gap-2"><input v-model="f.age_from" :class="fld" placeholder="Age ≥" inputmode="numeric" /><input v-model="f.age_to" :class="fld" placeholder="Age ≤" inputmode="numeric" /></div>
-                    <div><label class="text-xs text-ink-400">From</label><input v-model="f.from" type="date" :class="fld" /></div>
-                    <div><label class="text-xs text-ink-400">to</label><input v-model="f.to" type="date" :class="fld" /></div>
+                    <select v-model="f.consultant_id" :class="fld" aria-label="Filter by consultant"><option value="">Any consultant</option><option v-for="c in options.consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select>
+                    <input v-model="f.consultation_from" :class="fld" placeholder="From service" aria-label="Filter by referring service" />
+                    <input v-model="f.to_service" :class="fld" placeholder="To service" aria-label="Filter by consulted service" />
+                    <div class="flex gap-2"><input v-model="f.age_from" :class="fld" placeholder="Age ≥" inputmode="numeric" aria-label="Minimum age" /><input v-model="f.age_to" :class="fld" placeholder="Age ≤" inputmode="numeric" aria-label="Maximum age" /></div>
+                    <div><label class="text-xs text-ink-400">From</label><input v-model="f.from" type="date" :class="fld" aria-label="From date" /></div>
+                    <div><label class="text-xs text-ink-400">to</label><input v-model="f.to" type="date" :class="fld" aria-label="To date" /></div>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                     <label v-for="r in options.reasons" :key="r.id" class="cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold transition" :class="f.indication.includes(r.id) ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'"><input type="checkbox" class="hidden" :checked="f.indication.includes(r.id)" @change="toggleInd(r.id)" /> {{ r.name }}</label>
                     <template v-if="f.indication.length">
-                        <label class="ml-2 flex items-center gap-1 text-xs text-ink-500"><input type="radio" value="or" v-model="f.ind_match" /> any</label>
+                        <label class="ms-2 flex items-center gap-1 text-xs text-ink-500"><input type="radio" value="or" v-model="f.ind_match" /> any</label>
                         <label class="flex items-center gap-1 text-xs text-ink-500"><input type="radio" value="and" v-model="f.ind_match" /> all</label>
                     </template>
                 </div>
                 <div class="flex items-center gap-4">
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.signed_only" class="rounded text-brand-600" /> Signed off only</label>
-                    <button @click="apply" class="ml-auto rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">Search</button>
+                    <button @click="apply" class="ms-auto rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">Search</button>
                     <button @click="reset" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 hover:text-ink-700">Reset</button>
                     <template v-if="hasTerm">
                         <button type="button" @click="postExport('/registry/export-xlsx')" @mouseenter="loadMatchCount" @focus="loadMatchCount" class="rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</button>
@@ -260,8 +260,8 @@ const toggleExpand = (id) => {
             <!-- DIAGNOSIS -->
             <div v-else class="flex flex-wrap items-end gap-3">
                 <div class="grow"><label class="text-xs text-ink-400">Diagnosis keyword</label><input v-model="f.keyword" v-focus @keyup.enter="apply" :class="[fld, 'w-full']" aria-label="Diagnosis keyword search" placeholder="e.g. pneumonia, sepsis…" autocomplete="off" /></div>
-                <div><label class="text-xs text-ink-400">Admitted from</label><input v-model="f.from" type="date" :class="fld" /></div>
-                <div><label class="text-xs text-ink-400">to</label><input v-model="f.to" type="date" :class="fld" /></div>
+                <div><label class="text-xs text-ink-400">Admitted from</label><input v-model="f.from" type="date" :class="fld" aria-label="From date" /></div>
+                <div><label class="text-xs text-ink-400">to</label><input v-model="f.to" type="date" :class="fld" aria-label="To date" /></div>
                 <button @click="apply" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">Search</button>
                 <button @click="reset" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 hover:text-ink-700">Reset</button>
                 <template v-if="hasTerm">
@@ -283,7 +283,7 @@ const toggleExpand = (id) => {
                  under its OWN key so it never collides with the board's density preference. -->
             <button type="button" @click="setDensity(density === 'compact' ? 'comfortable' : 'compact')"
                 :aria-pressed="density === 'compact'" title="Toggle compact row spacing"
-                class="ml-auto rounded-lg px-3 py-1.5 text-xs font-semibold ring-1 ring-line transition hover:bg-ink-50"
+                class="ms-auto rounded-lg px-3 py-1.5 text-xs font-semibold ring-1 ring-line transition hover:bg-ink-50"
                 :class="density === 'compact' ? 'bg-brand-600 text-white ring-brand-600' : 'bg-card text-ink-500'">
                 Compact rows
             </button>
@@ -301,7 +301,7 @@ const toggleExpand = (id) => {
         <div class="rounded-2xl bg-card shadow-card ring-1 ring-line" :class="density === 'compact' ? 'density-compact' : 'density-comfortable'">
             <table v-if="mode === 'consultations'" class="w-full text-sm">
                 <thead>
-                    <tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
+                    <tr class="border-b border-line text-start text-xs font-semibold uppercase tracking-wide text-ink-400">
                         <SortableTh label="Patient" sort-key="name" :current="sortState.state" class="sticky top-16 z-10 bg-card px-5 py-3" @sort="onSort" />
                         <th scope="col" class="sticky top-16 z-10 bg-card px-3 py-3">Location</th>
                         <th scope="col" class="sticky top-16 z-10 bg-card px-3 py-3">From → To</th>
@@ -316,7 +316,7 @@ const toggleExpand = (id) => {
                         <td class="status-rail row-pad px-5" :class="consultRail(c.signoff)"><div class="font-semibold text-ink-800">{{ c.name }}</div><div class="nums text-xs text-ink-400">MRN {{ c.mrn }} · {{ c.age ?? '—' }}y</div></td>
                         <td class="row-pad px-3 text-ink-600">{{ c.location || '—' }}</td>
                         <td class="row-pad px-3 text-ink-600">{{ c.from || '—' }} <span class="text-ink-300">→</span> {{ c.to || '—' }}</td>
-                        <td class="row-pad px-3"><span v-for="r in c.reasons" :key="r" class="mr-1 inline-block rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">{{ r }}</span></td>
+                        <td class="row-pad px-3"><span v-for="r in c.reasons" :key="r" class="me-1 inline-block rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">{{ r }}</span></td>
                         <td class="row-pad px-3 text-ink-600">{{ c.consultant }}</td>
                         <td class="nums row-pad px-3 text-ink-500">{{ c.date || '—' }}</td>
                         <td class="row-pad px-5"><span v-if="c.signoff" class="rounded-full bg-tint-success px-2.5 py-0.5 text-xs font-semibold text-on-success">Signed {{ c.signoff }}</span><span v-else class="rounded-full bg-tint-accent px-2.5 py-0.5 text-xs font-semibold text-on-accent">Active</span></td>
@@ -326,7 +326,7 @@ const toggleExpand = (id) => {
             </table>
             <table v-else class="w-full text-sm">
                 <thead>
-                    <tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
+                    <tr class="border-b border-line text-start text-xs font-semibold uppercase tracking-wide text-ink-400">
                         <th v-if="mode === 'admissions'" scope="col" class="sticky top-16 z-10 w-10 bg-card px-2 py-3"><span class="sr-only">Details</span></th>
                         <SortableTh label="Patient" sort-key="name" :current="sortState.state" class="sticky top-16 z-10 bg-card px-5 py-3" @sort="onSort" />
                         <th scope="col" class="sticky top-16 z-10 bg-card px-3 py-3">Age/Sex</th>
@@ -336,14 +336,14 @@ const toggleExpand = (id) => {
                         <SortableTh label="Discharged" sort-key="discharge_date" :current="sortState.state" class="sticky top-16 z-10 bg-card px-3 py-3" @sort="onSort" />
                         <SortableTh label="LOS" sort-key="los" :current="sortState.state" class="sticky top-16 z-10 bg-card px-3 py-3" @sort="onSort" />
                         <SortableTh label="Outcome" sort-key="outcome" :current="sortState.state" class="sticky top-16 z-10 bg-card px-3 py-3" @sort="onSort" />
-                        <th scope="col" class="sticky top-16 z-10 bg-card px-5 py-3 text-right">Edit</th>
+                        <th scope="col" class="sticky top-16 z-10 bg-card px-5 py-3 text-end">Edit</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-line">
                     <template v-for="r in results.data" :key="r.id">
                         <tr class="transition-row hover:bg-tint-accent">
                             <td v-if="mode === 'admissions'" class="status-rail row-pad px-2" :class="outcomeRail(r.outcome)">
-                                <button @click="toggleExpand(r.id)" :aria-expanded="expanded.has(r.id) ? 'true' : 'false'" :aria-label="`Toggle details for ${r.name}`" class="grid h-7 w-7 place-items-center rounded-lg text-ink-400 ring-1 ring-line transition hover:bg-brand-50 hover:text-brand-700">
+                                <button @click="toggleExpand(r.id)" :aria-expanded="expanded.has(r.id) ? 'true' : 'false'" :aria-label="`Toggle details for ${r.name}`" class="grid h-7 w-7 coarse:h-10 coarse:w-10 place-items-center rounded-lg text-ink-400 ring-1 ring-line transition hover:bg-brand-50 hover:text-brand-700">
                                     <svg class="h-4 w-4 transition-transform" :class="expanded.has(r.id) && 'rotate-90'" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
                                 </button>
                             </td>
@@ -351,11 +351,11 @@ const toggleExpand = (id) => {
                             <td class="nums row-pad px-3 text-ink-600">{{ r.age ?? '—' }} · {{ (r.gender||'—').slice(0,1) }}</td>
                             <td class="row-pad px-3 text-ink-600">{{ r.location || '—' }}</td>
                             <td class="row-pad px-3 text-ink-600">{{ r.consultant }}</td>
-                            <td class="nums row-pad px-3 text-ink-500">{{ r.admit_date || '—' }}</td>
-                            <td class="nums row-pad px-3 text-ink-500">{{ r.discharge_date || '—' }}</td>
+                            <td class="nums row-pad px-3 text-ink-500">{{ formatDate(r.admit_date) || '—' }}</td>
+                            <td class="nums row-pad px-3 text-ink-500">{{ formatDate(r.discharge_date) || '—' }}</td>
                             <td class="nums row-pad px-3"><span v-if="r.los !== null" class="rounded-full px-2 py-0.5 text-xs font-bold" :class="losTone(r.los_band)">{{ r.los }}d</span><span v-else class="text-ink-300">—</span></td>
                             <td class="row-pad px-3"><span v-if="r.outcome" class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="outcomeTone(r.outcome)">{{ r.outcome }}</span><span v-else class="text-ink-300">—</span></td>
-                            <td class="row-pad px-5 text-right"><button v-if="canModify" @click="openEdit(r.id)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50">Edit</button></td>
+                            <td class="row-pad px-5 text-end"><button v-if="canModify" @click="openEdit(r.id)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50">Edit</button></td>
                         </tr>
                         <!-- expandable detail panel (admissions mode) -->
                         <tr v-if="mode === 'admissions' && expanded.has(r.id)" class="bg-app/60">
@@ -372,7 +372,7 @@ const toggleExpand = (id) => {
                                         <dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Diagnoses</dt>
                                         <dd class="mt-1">
                                             <ul v-if="r.diagnoses?.length" class="space-y-0.5">
-                                                <li v-for="d in r.diagnoses" :key="d.code" class="text-ink-700"><span class="nums mr-2 font-semibold text-brand-700">{{ d.code }}</span>{{ d.name }}</li>
+                                                <li v-for="d in r.diagnoses" :key="d.code" class="text-ink-700"><span class="nums me-2 font-semibold text-brand-700">{{ d.code }}</span>{{ d.name }}</li>
                                             </ul>
                                             <span v-else class="text-ink-300">—</span>
                                         </dd>
@@ -383,8 +383,8 @@ const toggleExpand = (id) => {
                                     <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Discharged by</dt><dd class="mt-0.5 text-ink-700">{{ r.discharged_by || '—' }}</dd></div>
                                     <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Admitted from</dt><dd class="mt-0.5 text-ink-700">{{ r.admitted_from || '—' }}</dd></div>
                                     <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Discharged to</dt><dd class="mt-0.5 text-ink-700">{{ r.discharge_to || '—' }}</dd></div>
-                                    <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Clinical discharge</dt><dd class="nums mt-0.5 text-ink-700">{{ r.medical_discharge_date || '—' }}</dd></div>
-                                    <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Physical discharge</dt><dd class="nums mt-0.5 text-ink-700">{{ r.discharge_date || '—' }}</dd></div>
+                                    <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Clinical discharge</dt><dd class="nums mt-0.5 text-ink-700">{{ formatDate(r.medical_discharge_date) || '—' }}</dd></div>
+                                    <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Physical discharge</dt><dd class="nums mt-0.5 text-ink-700">{{ formatDate(r.discharge_date) || '—' }}</dd></div>
                                     <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Delay reason</dt><dd class="mt-0.5 text-ink-700">{{ r.delay_reason || '—' }}</dd></div>
                                     <div v-if="r.transfer_label"><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Transfer</dt><dd class="mt-0.5"><span class="rounded-full bg-tint-info px-2.5 py-0.5 text-xs font-semibold text-on-info">{{ r.transfer_label }}</span></dd></div>
                                 </dl>
@@ -400,7 +400,7 @@ const toggleExpand = (id) => {
             <span class="nums">Showing {{ results.from }}–{{ results.to }} of {{ results.total }}</span>
             <!-- SPC-TM-011: page changes route through goPage() — with a term active the POST body
                  re-carries it (the links themselves are term-less GET URLs from the paginator) -->
-            <div class="flex gap-1"><component :is="l.url ? 'button' : 'span'" v-for="l in results.links" :key="l.label" :type="l.url ? 'button' : undefined" @click="l.url && goPage(l.url)" class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold transition" :class="l.active ? 'bg-brand-600 text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" /></div>
+            <div class="flex gap-1"><component :is="l.url ? 'button' : 'span'" v-for="l in results.links" :key="l.label" :type="l.url ? 'button' : undefined" @click="l.url && goPage(l.url)" class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold transition" :class="l.active ? 'bg-brand-600 text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-500')" v-html="l.label" /></div>
         </div>
 
         <!-- edit modal (canonical PatientForm — resolves the old free-text-nationality drift) -->

@@ -41,7 +41,9 @@ describe('AppLayout — logout clears the palette recents', () => {
         expect(recentIds()).toEqual([12, 11]);
 
         const w = mount(AppLayout, { props: { title: 'X' }, global: { stubs: { Transition: false, Teleport: true } } });
-        await w.get('button[aria-label="Sign out"]').trigger('click');
+        // Wave 5, Item 4: this button doubles as the nav "Lock" affordance (still a plain sign-out
+        // under the hood — see AppLayout's logout()); the label now says so explicitly.
+        await w.get('button[aria-label="Sign out (lock this workstation)"]').trigger('click');
 
         expect(recentIds()).toEqual([]);
         expect(routerMock.post).toHaveBeenCalledWith('/logout');

@@ -7,13 +7,20 @@ import NavLink from '@/Components/NavLink.vue';
 import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import QuickJump from '@/Components/QuickJump.vue';
 import { useTour } from '@/composables/useTour';
+import { useSessionTimeout } from '@/composables/useSessionTimeout';
 import { xsrf } from '@/lib/ui.js';
 import { clearRecents } from '@/lib/recentPatients';
 
+// Wave 5, Item 4: sessionStorage anchor for the ABSOLUTE session-timeout countdown (see the composable
+// block below) — declared up top so both `logout()` and the mount hook can reach it.
+const SESSION_START_KEY = 'dmc-session-started-at';
+
 // Wave 1 (EHC UI): signing out also forgets the command palette's recent-patient ids (module
 // memory) — shared clinical workstations must never carry one user's recents into the next
-// session. Used by BOTH the header sign-out button and the idle auto-logout below.
-const logout = () => { clearRecents(); router.post('/logout'); };
+// session. Used by BOTH the header sign-out button (= the nav "Lock" affordance) and the
+// idle/absolute auto-logout below. Also clears the absolute-session anchor so the NEXT login starts
+// its own fresh absolute clock rather than inheriting this one's.
+const logout = () => { clearRecents(); sessionStorage.removeItem(SESSION_START_KEY); router.post('/logout'); };
 
 // Wave 2, Item 10: onboarding tour. maybeAutoStart() fires once on first authenticated load when
 // auth.user.tour_completed_at is null and the route isn't excluded; the header "?" replays it
@@ -279,45 +286,70 @@ const relTime = (iso) => {
     return `${Math.round(mins / (60 * 24))}d ago`;
 };
 
-// ---- Phase 4 — Item 2: idle session-timeout warning ------------------------------------------
-// The SERVER middleware (SessionTimeout) is the authoritative enforcer. This client overlay is a
-// UX convenience that warns 60s before the idle limit and auto-logs-out at the limit, avoiding the
-// abrupt 419-on-next-request experience. activity events reset a JS-local last-activity timestamp.
+// ---- Wave 5, Item 4 (Security P1): idle + absolute session-timeout warning --------------------
+// App\Http\Middleware\SessionTimeout is the AUTHORITATIVE enforcer for BOTH limits — this client
+// overlay is a UX convenience that warns before whichever limit fires SOONER (useSessionTimeout does
+// that "which one binds" arithmetic; see resources/js/__tests__/useSessionTimeout.test.js) and
+// auto-logs-out at the limit, avoiding an abrupt 419-on-next-request. Activity events reset the IDLE
+// clock only — the ABSOLUTE clock is deliberately never reset by activity (that's the point of an
+// absolute cap), matching the server's own `session_started_at` (stamped once, at login).
+//
+// The server does not currently share `session_started_at` to Inertia props (only the two *_Minutes
+// LIFETIMES are shared — see HandleInertiaRequests). Rather than add a new shared prop for this UX-only
+// convenience, the absolute anchor is approximated client-side: seeded once into sessionStorage the
+// first time it's observed missing (i.e. shortly after login) and read back on every subsequent mount
+// — AppLayout is not a persistent Inertia layout, so it fully remounts on every navigation, and a
+// plain component-local timestamp would incorrectly restart the absolute clock on every page view.
+// sessionStorage survives that remount (same tab) and is cleared on sign-out (see `logout()` above)
+// so the next login starts its own anchor. This is an approximation of the true login time, not the
+// authoritative value — acceptable because the SERVER enforces the real limit regardless of what this
+// overlay displays.
 const idleMinutes = computed(() => Number(page.props.idleTimeoutMinutes || 0));
+const absMinutes = computed(() => Number(page.props.absTimeoutMinutes || 0));
+const sessionTimeout = useSessionTimeout({ idleMinutes: idleMinutes.value, absMinutes: absMinutes.value, warnBeforeSeconds: 60 });
+
 const showIdleWarning = ref(false);
 const idleSecondsLeft = ref(60);
-let idleLastActivity = Date.now();
+const idleReason = ref('idle');   // 'idle' | 'absolute' — which limit is currently driving the countdown
 let idleTimer = null;
 
 const resetIdle = () => {
-    idleLastActivity = Date.now();
-    if (showIdleWarning.value) showIdleWarning.value = false;   // any activity dismisses the warning
+    sessionTimeout.markActivity();
+    // only an IDLE warning is dismissed by activity — an absolute warning stays up (activity can't
+    // extend the absolute cap, so hiding it would be misleading)
+    if (showIdleWarning.value && idleReason.value === 'idle') showIdleWarning.value = false;
 };
 const staySignedIn = () => {
     resetIdle();
-    // a cheap authenticated request re-stamps the server's last_activity_at too
+    // A cheap authenticated request — reloads the CURRENT page's Inertia props with `only: []`, i.e.
+    // fetches nothing, but still round-trips through the `auth` middleware group, so
+    // App\Http\Middleware\SessionTimeout re-stamps `last_activity_at` server-side. Deliberately NOT a
+    // new endpoint. This cannot and does not extend an absolute-timeout warning (see reason above).
     router.reload({ only: [] });
 };
+// Nav "Lock" affordance + the timeout panel's own escape hatch — both just sign out now.
+const lockNow = () => { showIdleWarning.value = false; logout(); };
 const idleTick = () => {
-    const mins = idleMinutes.value;
-    if (!mins) return;
-    const elapsed = (Date.now() - idleLastActivity) / 1000;
-    const limit = mins * 60;
-    if (elapsed >= limit) {
+    const state = sessionTimeout.tick();
+    if (state.secondsRemaining === null) { showIdleWarning.value = false; return; }
+    if (state.expired) {
         showIdleWarning.value = false;
         logout();   // clears palette recents too — same path as the manual sign-out
         return;
     }
-    if (elapsed >= limit - 60) {
-        showIdleWarning.value = true;
-        idleSecondsLeft.value = Math.max(0, Math.ceil(limit - elapsed));
-    } else if (showIdleWarning.value) {
-        showIdleWarning.value = false;
-    }
+    idleReason.value = state.reason;
+    idleSecondsLeft.value = state.secondsRemaining;
+    showIdleWarning.value = state.warn;
 };
 const idleEvents = ['mousemove', 'keydown', 'click', 'scroll'];
 onMounted(() => {
-    if (!idleMinutes.value) return;
+    if (!idleMinutes.value && !absMinutes.value) return;
+    // restore (or seed) the absolute-session anchor described above
+    const stored = Number(sessionStorage.getItem(SESSION_START_KEY)) || null;
+    const start = stored || Date.now();
+    if (!stored) sessionStorage.setItem(SESSION_START_KEY, String(start));
+    sessionTimeout.setSessionStart(start);
+
     idleEvents.forEach((e) => window.addEventListener(e, resetIdle, { passive: true }));
     idleTimer = setInterval(idleTick, 1000);
 });
@@ -332,7 +364,7 @@ onUnmounted(() => {
     <Head :title="documentTitle" />
     <div class="min-h-full">
         <!-- Skip to content (keyboard users) — visually hidden until focused -->
-        <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:rounded-xl focus:bg-brand-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white">
+        <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:start-2 focus:z-[100] focus:rounded-xl focus:bg-brand-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white">
             Skip to content
         </a>
         <!-- Sidebar -->
@@ -359,7 +391,7 @@ onUnmounted(() => {
                     :aria-expanded="!sidebarCollapsed" aria-controls="app-sidebar"
                     :aria-label="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
                     :title="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
-                    class="grid h-8 w-8 place-items-center rounded-lg text-navy-300 transition hover:bg-white/10 hover:text-white">
+                    class="grid h-8 w-8 coarse:h-10 coarse:w-10 place-items-center rounded-lg text-navy-300 transition hover:bg-white/10 hover:text-white">
                     <svg class="h-4 w-4 transition-transform" :class="{ 'rotate-180': sidebarCollapsed }" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
                     </svg>
@@ -393,7 +425,7 @@ onUnmounted(() => {
             <div class="absolute bottom-0 left-0 right-0 p-4" :class="{ 'lg:hidden': sidebarCollapsed }">
                 <div class="rounded-2xl bg-white/5 p-4 text-center">
                     <p class="text-[11px] text-navy-300">Eastern Health Cluster</p>
-                    <p class="text-[11px] font-semibold text-brand-300">تجمع الشرقية الصحي</p>
+                    <p lang="ar" dir="rtl" class="text-[11px] font-semibold text-brand-300">تجمع الشرقية الصحي</p>
                 </div>
             </div>
         </aside>
@@ -404,7 +436,7 @@ onUnmounted(() => {
         <!-- Main -->
         <div :class="mainPadClass">
             <header class="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-line bg-card/80 px-5 backdrop-blur">
-                <button ref="hamburger" class="lg:hidden text-ink-500" @click="openDrawer" aria-label="Open navigation menu" :aria-expanded="sidebarOpen" aria-controls="app-sidebar">
+                <button ref="hamburger" class="grid h-9 w-9 coarse:h-10 coarse:w-10 place-items-center rounded-full text-ink-500 transition hover:bg-ink-50 lg:hidden" @click="openDrawer" aria-label="Open navigation menu" :aria-expanded="sidebarOpen" aria-controls="app-sidebar">
                     <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" /></svg>
                 </button>
                 <div class="min-w-0">
@@ -412,7 +444,7 @@ onUnmounted(() => {
                     <!-- Wave 1, Item 5: optional breadcrumb trail (renders only with 2+ crumbs) -->
                     <Breadcrumbs :crumbs="breadcrumbs" />
                 </div>
-                <div class="ml-auto flex items-center gap-3">
+                <div class="ms-auto flex items-center gap-3">
                     <!-- Wave 2, Item 2: global patient quick-jump (press /) -->
                     <QuickJump />
                     <div class="hidden items-center gap-2 rounded-full bg-tint-success px-3 py-1 text-xs font-semibold text-on-success sm:flex">
@@ -421,29 +453,29 @@ onUnmounted(() => {
                     </div>
                     <!-- Wave 2, Item 10: replay the onboarding tour (never sets the "seen" flag) -->
                     <button @click="replayTour" aria-label="Replay the guided tour" title="Guided tour"
-                        class="grid h-9 w-9 place-items-center rounded-full text-ink-400 transition hover:bg-ink-50 hover:text-ink-700">
+                        class="grid h-9 w-9 coarse:h-10 coarse:w-10 place-items-center rounded-full text-ink-400 transition hover:bg-ink-50 hover:text-ink-700">
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" /></svg>
                     </button>
                     <!-- theme toggle (light / dark / system) -->
                     <button @click="cycleTheme"
                         :aria-label="`Theme: ${themePref}. Switch theme.`"
                         :title="`Theme: ${themePref} (click to change)`"
-                        class="relative grid h-9 w-9 place-items-center rounded-full text-ink-400 transition hover:bg-ink-50 hover:text-ink-700">
+                        class="relative grid h-9 w-9 coarse:h-10 coarse:w-10 place-items-center rounded-full text-ink-400 transition hover:bg-ink-50 hover:text-ink-700">
                         <!-- sun (light/system-light) -->
                         <svg v-if="!isDark" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>
                         <!-- moon (dark) -->
                         <svg v-else class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" /></svg>
                         <!-- tiny "system" indicator dot when following OS -->
-                        <span v-if="themePref === 'system'" class="absolute -bottom-0.5 right-1.5 h-1.5 w-1.5 rounded-full bg-brand-400"></span>
+                        <span v-if="themePref === 'system'" class="absolute -bottom-0.5 end-1.5 h-1.5 w-1.5 rounded-full bg-brand-400"></span>
                     </button>
                     <!-- notification bell -->
                     <div class="relative" data-tour="bell">
-                        <button @click="toggleBell" aria-label="Notifications" title="Notifications" :aria-expanded="bellOpen" aria-controls="notifications-panel" aria-haspopup="dialog" class="relative grid h-9 w-9 place-items-center rounded-full text-ink-400 transition hover:bg-ink-50 hover:text-ink-700">
+                        <button @click="toggleBell" aria-label="Notifications" title="Notifications" :aria-expanded="bellOpen" aria-controls="notifications-panel" aria-haspopup="dialog" class="relative grid h-9 w-9 coarse:h-10 coarse:w-10 place-items-center rounded-full text-ink-400 transition hover:bg-ink-50 hover:text-ink-700">
                             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" /></svg>
-                            <span v-if="unread > 0" class="nums absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-danger-600 px-1 text-[10px] font-bold leading-none text-white">{{ unread > 9 ? '9+' : unread }}</span>
+                            <span v-if="unread > 0" class="nums absolute -end-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-danger-600 px-1 text-[10px] font-bold leading-none text-white">{{ unread > 9 ? '9+' : unread }}</span>
                         </button>
                         <div v-if="bellOpen" class="fixed inset-0 z-40" @click="bellOpen = false"></div>
-                        <div v-if="bellOpen" id="notifications-panel" role="dialog" aria-label="Notifications" :ref="focusFirstBell" @keydown.esc="bellOpen = false" class="absolute right-0 top-11 z-50 w-80 overflow-hidden rounded-2xl bg-card shadow-2xl ring-1 ring-line">
+                        <div v-if="bellOpen" id="notifications-panel" role="dialog" aria-label="Notifications" :ref="focusFirstBell" @keydown.esc="bellOpen = false" class="absolute end-0 top-11 z-50 w-80 overflow-hidden rounded-2xl bg-card shadow-2xl ring-1 ring-line">
                             <div class="flex items-center justify-between border-b border-line px-4 py-2.5">
                                 <span class="text-sm font-bold text-ink-800">Notifications</span>
                                 <button @click="goInbox" class="text-xs font-semibold text-brand-600 hover:underline">Handover inbox →</button>
@@ -451,7 +483,7 @@ onUnmounted(() => {
                             <div v-if="bellLoading" class="px-4 py-6 text-center text-sm text-ink-400">Loading…</div>
                             <ul v-else-if="notifications.length" class="max-h-80 divide-y divide-line overflow-auto">
                                 <li v-for="n in notifications" :key="n.id">
-                                    <button @click="goInbox" class="w-full px-4 py-3 text-left transition hover:bg-brand-50/40" :class="{ 'bg-brand-50/30': !n.read_at }">
+                                    <button @click="goInbox" class="w-full px-4 py-3 text-start transition hover:bg-brand-50/40" :class="{ 'bg-brand-50/30': !n.read_at }">
                                         <p class="text-sm leading-snug text-ink-700">{{ notifText(n) }}</p>
                                         <p class="nums mt-0.5 text-xs text-ink-400">{{ relTime(n.created_at) }}</p>
                                     </button>
@@ -460,9 +492,15 @@ onUnmounted(() => {
                             <div v-else class="px-4 py-6 text-center text-sm text-ink-400">No notifications yet.</div>
                         </div>
                     </div>
-                    <div class="flex items-center gap-3 border-l border-line pl-3">
+                    <div class="flex items-center gap-3 border-s border-line ps-3">
                         <Link href="/profile" class="flex items-center gap-3 rounded-xl px-1 py-1 transition hover:bg-ink-50">
-                            <div class="grid h-9 w-9 place-items-center rounded-full bg-brand-600 text-sm font-semibold text-white">
+                            <!-- Wave 5 residual (measured, not assumed): bg-brand-600/text-white measures 4.31:1
+                                 in LIGHT (fails the 4.5 AA-normal-text bar for this 14px label) and 2.09:1 in
+                                 DARK (brand-600 is deliberately LIGHTENED there for text-on-dark-card legibility
+                                 — see the ".dark { --color-brand-600 }" comment in app.css — which is wrong for a
+                                 fill holding white text). navy-700 is the theme-INVARIANT deep-teal chrome colour
+                                 (no .dark override) — white on it is 8.42:1 in both themes. See scripts/contrast.mjs. -->
+                            <div class="grid h-9 w-9 place-items-center rounded-full bg-navy-700 text-sm font-semibold text-white">
                                 {{ (page.props.auth?.user?.name || 'DMC').slice(0, 2).toUpperCase() }}
                             </div>
                             <div class="hidden leading-tight sm:block">
@@ -470,7 +508,7 @@ onUnmounted(() => {
                                 <div class="text-xs text-ink-400">{{ page.props.auth?.user?.role_label || 'Internal Medicine' }}</div>
                             </div>
                         </Link>
-                        <button @click="logout" title="Sign out" aria-label="Sign out" class="ml-1 grid h-9 w-9 place-items-center rounded-full text-ink-400 transition hover:bg-danger-100 hover:text-danger-600">
+                        <button @click="logout" title="Sign out (lock this workstation)" aria-label="Sign out (lock this workstation)" class="ms-1 grid h-9 w-9 coarse:h-10 coarse:w-10 place-items-center rounded-full text-ink-400 transition hover:bg-danger-100 hover:text-danger-600">
                             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" /></svg>
                         </button>
                     </div>
@@ -488,7 +526,7 @@ onUnmounted(() => {
                 :role="toast.type === 'error' ? 'alert' : 'status'"
                 :aria-live="toast.type === 'error' ? 'assertive' : 'polite'"
                 aria-atomic="true"
-                class="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl px-5 py-3.5 text-sm font-semibold text-white shadow-2xl"
+                class="fixed bottom-6 end-6 z-50 flex items-center gap-3 rounded-2xl px-5 py-3.5 text-sm font-semibold text-white shadow-2xl"
                 :class="toast.type === 'error' ? 'bg-danger-600' : 'bg-success-600'">
                 <svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
                     <path v-if="toast.type === 'error'" stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0 3.75h.008M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
@@ -498,15 +536,28 @@ onUnmounted(() => {
             </div>
         </Transition>
 
-        <!-- Phase 4 — Item 2: idle session-timeout warning (60s countdown) -->
+        <!-- Wave 5, Item 4: idle/absolute session-timeout warning. The countdown is its own
+             role="timer" + aria-live="polite" region (updates once a second) rather than assertive —
+             an assertive live region re-interrupting a screen-reader user every single second was
+             judged too chatty; role="timer" already signals "this updates on its own" to AT, and
+             polite announcements queue instead of barging in. -->
         <div v-if="showIdleWarning" class="fixed inset-0 z-[90] grid place-items-center bg-navy-950/50 p-4" role="alertdialog" aria-modal="true" aria-labelledby="idle-title">
             <div class="w-full max-w-sm rounded-2xl bg-card p-6 text-center shadow-2xl ring-1 ring-line">
                 <div class="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-tint-warning text-on-warning">
                     <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
                 </div>
                 <h2 id="idle-title" class="font-display text-lg font-bold text-ink-900">Session expiring</h2>
-                <p class="mt-1 text-sm text-ink-500">You'll be signed out in <span class="nums font-bold text-ink-800">{{ idleSecondsLeft }}</span> second{{ idleSecondsLeft === 1 ? '' : 's' }} due to inactivity.</p>
-                <button @click="staySignedIn" class="mt-4 w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">Stay signed in</button>
+                <p class="mt-1 text-sm text-ink-500">
+                    You'll be signed out in
+                    <span role="timer" aria-live="polite" class="nums font-bold text-ink-800">{{ idleSecondsLeft }} second{{ idleSecondsLeft === 1 ? '' : 's' }}</span>
+                    {{ idleReason === 'absolute' ? '— your session has reached its maximum length.' : 'due to inactivity.' }}
+                </p>
+                <div class="mt-4 flex gap-2">
+                    <!-- "Stay signed in" only extends the IDLE clock (see staySignedIn()'s comment) — withheld
+                         for an absolute-timeout warning so it never promises something it can't do. -->
+                    <button v-if="idleReason !== 'absolute'" @click="staySignedIn" class="flex-1 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">Stay signed in</button>
+                    <button @click="lockNow" class="flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-ink-600 ring-1 ring-line transition hover:bg-ink-50">Lock now</button>
+                </div>
             </div>
         </div>
 

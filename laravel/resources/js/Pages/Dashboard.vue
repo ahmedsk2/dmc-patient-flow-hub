@@ -8,7 +8,7 @@ import ChartFigure from '@/Components/ChartFigure.vue';
 import Sparkline from '@/Components/Sparkline.vue';
 import { useChartTheme } from '@/composables/useChartTheme';
 import { useReducedMotion, chartAnimations } from '@/composables/useReducedMotion';
-import { locTone, deltaChipClass } from '@/lib/ui.js';
+import { locTone, deltaChipClass, formatDate } from '@/lib/ui.js';
 
 // theme-aware chart colors (grid/axis read CSS tokens; donut gaps match the card)
 const { gridColor, axisColor, strokeColor, series } = useChartTheme();
@@ -406,7 +406,7 @@ onUnmounted(() => clearInterval(autoRefresh));
             <div class="flex items-center gap-3">
                 <svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.9" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
                 <span class="text-sm font-semibold">{{ alert.message }}</span>
-                <button v-if="alert.link" @click="goHref(alert.link)" class="ml-2 text-xs font-bold underline hover:no-underline">View →</button>
+                <button v-if="alert.link" @click="goHref(alert.link)" class="ms-2 text-xs font-bold underline hover:no-underline">View →</button>
             </div>
             <!-- W0-T3j. Hover affordance is drawn on the button's border (see the class), NOT via
                  `opacity` and NOT via a background wash. `opacity` composites the whole glyph toward the
@@ -427,7 +427,7 @@ onUnmounted(() => clearInterval(autoRefresh));
             </div>
             <div class="grid grid-cols-3 gap-3 sm:grid-cols-6">
                 <button v-for="[label, value, tone, link] in myUnitCards" :key="label" type="button"
-                        class="rounded-xl p-3 text-left ring-1 ring-line transition" :class="[tone, link ? 'cursor-pointer hover:ring-brand-300' : 'cursor-default']"
+                        class="rounded-xl p-3 text-start ring-1 ring-line transition" :class="[tone, link ? 'cursor-pointer hover:ring-brand-300' : 'cursor-default']"
                         @click="link && goHref(link)">
                     <p class="nums text-2xl font-extrabold text-ink-900">{{ value }}</p>
                     <p class="text-xs text-ink-400">{{ label }}</p>
@@ -478,22 +478,22 @@ onUnmounted(() => clearInterval(autoRefresh));
         <div v-if="boardingWorklist.length" class="mt-5 rounded-2xl bg-card p-5 shadow-card ring-1 ring-warning-300/60">
             <div class="mb-3 flex items-center justify-between">
                 <h2 class="font-semibold text-ink-700">Boarding patients
-                    <span class="nums ml-2 rounded-full bg-tint-warning px-2 py-0.5 text-xs font-bold text-on-warning">{{ boardingCount }}</span>
+                    <span class="nums ms-2 rounded-full bg-tint-warning px-2 py-0.5 text-xs font-bold text-on-warning">{{ boardingCount }}</span>
                 </h2>
                 <button @click="goHref('/patients?view=boarding')" class="text-xs font-semibold text-brand-600 hover:underline">View board →</button>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
-                    <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
+                    <thead><tr class="border-b border-line text-start text-xs font-semibold uppercase tracking-wide text-ink-400">
                         <th scope="col" class="px-2 py-2">Name</th><th scope="col" class="px-2 py-2">MRN</th>
-                        <th scope="col" class="px-2 py-2">Consultant</th><th scope="col" class="px-2 py-2 text-right">Delay (days)</th>
+                        <th scope="col" class="px-2 py-2">Consultant</th><th scope="col" class="px-2 py-2 text-end">Delay (days)</th>
                     </tr></thead>
                     <tbody class="divide-y divide-line">
-                        <tr v-for="r in boardingWorklist" :key="r.id" class="cursor-pointer hover:bg-tint-warning/40" @click="goHref('/patients?view=boarding')">
+                        <tr v-for="r in boardingWorklist" :key="r.id" class="cursor-pointer hover:bg-tint-warning/40" tabindex="0" role="button" :aria-label="`${r.name}, MRN ${r.mrn} — open the boarding board`" @click="goHref('/patients?view=boarding')" @keydown.enter="goHref('/patients?view=boarding')" @keydown.space.prevent="goHref('/patients?view=boarding')">
                             <td class="px-2 py-2 font-semibold text-ink-700">{{ r.name }}</td>
                             <td class="nums px-2 py-2 text-ink-500">{{ r.mrn }}</td>
                             <td class="px-2 py-2 text-ink-600">{{ r.consultant }}</td>
-                            <td class="nums px-2 py-2 text-right font-bold text-on-warning">{{ r.delay_days }}</td>
+                            <td class="nums px-2 py-2 text-end font-bold text-on-warning">{{ r.delay_days }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -503,7 +503,10 @@ onUnmounted(() => clearInterval(autoRefresh));
         <!-- YTD counter strip -->
         <div class="mt-5 rounded-2xl bg-card px-5 py-4 shadow-card ring-1 ring-line">
             <div class="flex flex-wrap items-center gap-x-8 gap-y-3">
-                <span class="text-xs font-semibold uppercase tracking-wide text-ink-400">Year to date<span class="block text-[10px] font-normal normal-case text-ink-300">adm / disch non-ICU</span></span>
+                <!-- Wave 5 residual (measured): text-ink-300 on bg-card was 2.16:1 light / 3.24:1 dark — both
+                     below the 4.5 AA-normal-text bar for this 10px caption. ink-400 still fails light (3.57:1);
+                     ink-500 is the lightest step that clears 4.5 in BOTH themes (5.63:1 light / 8.36:1 dark). -->
+                <span class="text-xs font-semibold uppercase tracking-wide text-ink-400">Year to date<span class="block text-[10px] font-normal normal-case text-ink-500">adm / disch non-ICU</span></span>
                 <div v-for="[label, value] in ytdCards" :key="label" class="flex items-baseline gap-2">
                     <span class="font-display nums text-2xl font-extrabold text-brand-700">{{ (value ?? 0).toLocaleString() }}</span>
                     <span class="text-xs font-semibold text-ink-500">{{ label }}</span>
@@ -583,7 +586,7 @@ onUnmounted(() => clearInterval(autoRefresh));
                             <!-- actual load, coloured below-min / in-band / above-max -->
                             <div class="relative h-full rounded-full bg-gradient-to-r" :class="barTone(c)" :style="{ width: (c.c / consultantMax * 100) + '%' }"></div>
                         </div>
-                        <div class="nums w-8 text-right text-sm font-bold text-ink-800">{{ c.c }}</div>
+                        <div class="nums w-8 text-end text-sm font-bold text-ink-800">{{ c.c }}</div>
                     </div>
                     <p v-if="!perConsultant.length" class="text-sm text-ink-400">No active patients assigned.</p>
                 </div>
@@ -591,7 +594,7 @@ onUnmounted(() => clearInterval(autoRefresh));
                 <div v-if="overloaded || underloaded" class="mt-3 flex items-center gap-3 text-xs">
                     <span v-if="overloaded" class="font-semibold text-on-danger">{{ overloaded }} over max</span>
                     <span v-if="underloaded" class="font-semibold text-on-warning">{{ underloaded }} below min</span>
-                    <button v-if="canShuffle" @click="goHref('/patients')" class="ml-auto font-semibold text-brand-600 hover:underline">
+                    <button v-if="canShuffle" @click="goHref('/patients')" class="ms-auto font-semibold text-brand-600 hover:underline">
                         Rebalance (Shuffle / Reassign) →
                     </button>
                 </div>
@@ -611,7 +614,7 @@ onUnmounted(() => clearInterval(autoRefresh));
                             <p class="nums truncate text-xs text-ink-400">MRN {{ r.mrn }} · {{ r.consultant || 'Unassigned' }}</p>
                         </div>
                         <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="locTone(r.loc)">{{ r.loc || '—' }}</span>
-                        <span class="nums hidden text-xs text-ink-400 sm:block">{{ r.admitted }}</span>
+                        <span class="nums hidden text-xs text-ink-400 sm:block">{{ formatDate(r.admitted) }}</span>
                     </button>
                     <p v-if="!recent.length" class="py-2 text-sm text-ink-400">No recent admissions.</p>
                 </div>
@@ -645,13 +648,13 @@ onUnmounted(() => clearInterval(autoRefresh));
             <div class="border-b border-line px-5 py-3"><h2 class="font-semibold text-ink-700">Patient count per consultant</h2></div>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
-                    <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
+                    <thead><tr class="border-b border-line text-start text-xs font-semibold uppercase tracking-wide text-ink-400">
                         <th scope="col" class="px-5 py-2.5">Consultant</th><th scope="col" class="px-3 py-2.5 text-center">Old</th><th scope="col" class="px-3 py-2.5 text-center">New</th><th scope="col" class="px-3 py-2.5 text-center">Active</th><th scope="col" class="px-3 py-2.5 text-center">Ward</th><th scope="col" class="px-3 py-2.5 text-center">ICU</th><th scope="col" class="px-3 py-2.5 text-center">TB</th>
                     </tr></thead>
                     <tbody class="divide-y divide-line">
                         <template v-for="sec in boardSections" :key="sec.key">
                             <tr class="bg-app/70"><td colspan="7" class="px-5 py-1.5 text-xs font-bold uppercase tracking-wide text-ink-500">{{ sec.label }}</td></tr>
-                            <tr v-for="c in sec.rows" :key="c.name" class="cursor-pointer hover:bg-brand-50/40" @click="drillTo({ consultant_id: c.id })">
+                            <tr v-for="c in sec.rows" :key="c.name" class="cursor-pointer hover:bg-brand-50/40" tabindex="0" role="button" :aria-label="`Filter the board to Dr. ${c.name}`" @click="drillTo({ consultant_id: c.id })" @keydown.enter="drillTo({ consultant_id: c.id })" @keydown.space.prevent="drillTo({ consultant_id: c.id })">
                                 <td class="px-5 py-2 font-semibold text-ink-700">Dr. {{ c.name }}</td>
                                 <td class="nums px-3 py-2 text-center text-ink-600">{{ c.old || '' }}</td>
                                 <td class="nums px-3 py-2 text-center text-on-info">{{ c.new || '' }}</td>

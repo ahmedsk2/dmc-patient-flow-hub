@@ -12,7 +12,7 @@ import HandoverModal from '@/Components/Patients/HandoverModal.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { usePatientEdit } from '@/composables/usePatientEdit';
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
-import { localToday, vFocus, locTone } from '@/lib/ui.js';
+import { localToday, vFocus, locTone, formatDate } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
 
@@ -225,9 +225,9 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
         </span>
         <!-- toolbar -->
         <div class="mb-4 flex flex-wrap items-center gap-2">
-            <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Census <span class="nums ml-1 text-brand-700">{{ stats.total }}</span></span>
-            <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Ward (non-ICU) <span class="nums ml-1 text-brand-700">{{ stats.ward }}</span></span>
-            <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">ICU <span class="nums ml-1 text-on-danger">{{ stats.icu }}</span></span>
+            <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Census <span class="nums ms-1 text-brand-700">{{ stats.total }}</span></span>
+            <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Ward (non-ICU) <span class="nums ms-1 text-brand-700">{{ stats.ward }}</span></span>
+            <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">ICU <span class="nums ms-1 text-on-danger">{{ stats.icu }}</span></span>
             <!-- observers don't get the queue link — the page behind it is clinical-role only (J2-12) -->
             <!-- W0-T3e. Was accent-300 at /30 behind accent-600 text, hovering to /50 — 2.99:1 (light)
                  / 2.22:1 (dark) at rest, 1.26:1 (dark) on hover. Both fills were theme-invariant gold
@@ -249,9 +249,9 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
                 {{ stats.unassigned }} awaiting assignment →
             </Link>
 
-            <div class="relative ml-auto">
-                <svg class="pointer-events-none absolute left-3 top-2.5 h-5 w-5 text-ink-400" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" /></svg>
-                <input v-model="search" v-focus aria-label="Search patients by name or MRN" placeholder="Search name or MRN…" autocomplete="off" class="w-56 rounded-xl border border-ink-200 bg-card py-2 pl-10 pr-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+            <div class="relative ms-auto">
+                <svg class="pointer-events-none absolute start-3 top-2.5 h-5 w-5 text-ink-400" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" /></svg>
+                <input v-model="search" v-focus aria-label="Search patients by name or MRN" placeholder="Search name or MRN…" autocomplete="off" class="w-56 rounded-xl border border-ink-200 bg-card py-2 ps-10 pe-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
             </div>
             <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line">
                 <button v-for="l in ['Ward','ICU','ER']" :key="l" @click="setLocation(l)" class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="location === l ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ l }}</button>
@@ -289,7 +289,7 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
           <div class="overflow-x-auto">
             <table class="min-w-[540px] w-full text-sm">
                 <thead>
-                    <tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
+                    <tr class="border-b border-line text-start text-xs font-semibold uppercase tracking-wide text-ink-400">
                         <th scope="col" class="px-5 py-2.5">Consultant</th><th scope="col" class="px-3 py-2.5 text-center">Old</th><th scope="col" class="px-3 py-2.5 text-center">New</th><th scope="col" class="px-3 py-2.5 text-center">Active</th>
                         <th scope="col" class="px-3 py-2.5 text-center">Ward</th><th scope="col" class="px-3 py-2.5 text-center">ICU</th><th scope="col" class="px-3 py-2.5 text-center">TB</th>
                     </tr>
@@ -297,9 +297,9 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
                 <tbody class="divide-y divide-line">
                     <template v-for="sec in sections" :key="sec.key">
                         <tr v-if="sec.rows.length" class="bg-app/70"><td colspan="7" class="px-5 py-1.5 text-xs font-bold uppercase tracking-wide text-ink-500">{{ sec.label }}</td></tr>
-                        <tr v-for="g in sec.rows" :key="g.id" class="cursor-pointer transition hover:bg-brand-50/40" @click="toggle(g.id)">
+                        <tr v-for="g in sec.rows" :key="g.id" class="cursor-pointer transition hover:bg-brand-50/40" tabindex="0" role="button" :aria-expanded="open.has(g.id)" :aria-label="`Dr. ${g.name} — ${open.has(g.id) ? 'hide' : 'show'} patient list`" @click="toggle(g.id)" @keydown.enter="toggle(g.id)" @keydown.space.prevent="toggle(g.id)">
                             <td class="px-5 py-2 font-semibold text-ink-700">
-                                <svg class="mr-1.5 inline h-4 w-4 text-ink-300" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" :d="open.has(g.id) ? 'm4.5 15.75 7.5-7.5 7.5 7.5' : 'm19.5 8.25-7.5 7.5-7.5-7.5'" /></svg> Dr. {{ g.name }}
+                                <svg class="me-1.5 inline h-4 w-4 text-ink-300" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" :d="open.has(g.id) ? 'm4.5 15.75 7.5-7.5 7.5 7.5' : 'm19.5 8.25-7.5 7.5-7.5-7.5'" /></svg> Dr. {{ g.name }}
                             </td>
                             <td class="nums px-3 py-2 text-center text-ink-600">{{ g.counts.old || '' }}</td>
                             <td class="nums px-3 py-2 text-center text-on-info">{{ g.counts.new || '' }}</td>
@@ -342,7 +342,10 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
         <!-- per-consultant patient cards (Item 7: visibleGroups honours "my group only") -->
         <div v-for="g in visibleGroups" :key="g.id" v-show="open.has(g.id)" class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line" :class="compact ? 'mb-2.5' : 'mb-4'">
             <div class="flex items-center justify-between border-b border-line px-5 py-3">
-                <h3 class="font-bold text-ink-800">Dr. {{ g.name }} <span class="ml-1 text-sm font-normal text-ink-400">· {{ g.counts.total }} patient(s)</span></h3>
+                <!-- Wave 5 a11y fix: was <h3> with no <h2> anywhere on the page (only AppLayout's own
+                     <h1> precedes it) — an h1->h3 skip. This is the first/only in-page heading level,
+                     so it belongs at h2 (mirrors Dashboard.vue's per-card h2 siblings). -->
+                <h2 class="font-bold text-ink-800">Dr. {{ g.name }} <span class="ms-1 text-sm font-normal text-ink-400">· {{ g.counts.total }} patient(s)</span></h2>
                 <span class="flex items-center gap-2">
                     <!-- opens the bulk-reassign modal pre-filled with from=this consultant (J2-11).
                          Wave 2, Item 8 — canonical verb table (one verb per concept):
@@ -378,7 +381,7 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
                     <div :class="compact ? 'px-2.5 py-1.5' : 'px-3 py-2'">
                         <div class="font-semibold text-ink-800">{{ p.name }}</div>
                         <div class="nums text-xs text-ink-400">MRN {{ p.mrn }} · {{ p.age ?? '—' }}y · {{ (p.gender||'—').slice(0,1) }}</div>
-                        <div class="nums text-xs text-ink-400">Admitted {{ p.admit_date || '—' }}</div>
+                        <div class="nums text-xs text-ink-400">Admitted {{ formatDate(p.admit_date) || '—' }}</div>
                         <!-- refined badge set (owner-approved, supersedes the loud legacy hex; J2-10):
                              token-based so the .dark remap covers both themes. Semantics kept:
                              New=info(blue), Readmit=warning(amber), Long-term=accent(gold subtle),
@@ -405,13 +408,13 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
                         <button @click="longterm(p)" :title="p.is_longterm ? 'Remove long-term' : 'Mark long-term'" :aria-label="p.is_longterm ? 'Remove long-term' : 'Mark long-term'" class="grid h-7 w-7 coarse:hidden place-items-center rounded-lg hover:bg-tint-accent" :class="p.is_longterm ? 'text-on-accent' : 'text-ink-400 hover:text-on-accent'"><svg class="h-4 w-4" :fill="p.is_longterm ? 'currentColor' : 'none'" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5m-9-6h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm0 2.25h.008v.008H12v-.008ZM9.75 15h.008v.008H9.75V15Zm0 2.25h.008v.008H9.75v-.008ZM7.5 15h.008v.008H7.5V15Zm0 2.25h.008v.008H7.5v-.008Zm6.75-4.5h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V15Zm0 2.25h.008v.008h-.008v-.008Zm2.25-4.5h.008v.008H16.5v-.008Zm0 2.25h.008v.008H16.5V15Z" /></svg></button>
                         <button v-if="canManage(p)" @click="openModal('transfer', p)" title="Transfer" aria-label="Transfer" class="grid h-7 w-7 coarse:h-10 coarse:w-10 place-items-center rounded-lg text-ink-400 hover:bg-brand-100 hover:text-brand-700"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg></button>
                         <template v-if="canManage(p)">
-                            <button v-if="p.location === 'ICU'" @click="openModal('icu', p)" title="ICU discharge" aria-label="ICU discharge" class="ml-auto grid h-7 w-7 coarse:h-10 coarse:w-10 place-items-center rounded-lg text-ink-400 hover:bg-success-100 hover:text-success-600"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg></button>
+                            <button v-if="p.location === 'ICU'" @click="openModal('icu', p)" title="ICU discharge" aria-label="ICU discharge" class="ms-auto grid h-7 w-7 coarse:h-10 coarse:w-10 place-items-center rounded-lg text-ink-400 hover:bg-success-100 hover:text-success-600"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg></button>
                             <template v-else-if="p.medically_discharged">
-                                <button @click="openModal('complete', p)" title="Complete discharge" aria-label="Complete discharge" class="ml-auto grid h-7 w-7 coarse:h-10 coarse:w-10 place-items-center rounded-lg text-success-600 hover:bg-success-100"><svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm13.36-1.814a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l3.75-5.25Z" clip-rule="evenodd" /></svg></button>
+                                <button @click="openModal('complete', p)" title="Complete discharge" aria-label="Complete discharge" class="ms-auto grid h-7 w-7 coarse:h-10 coarse:w-10 place-items-center rounded-lg text-success-600 hover:bg-success-100"><svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm13.36-1.814a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l3.75-5.25Z" clip-rule="evenodd" /></svg></button>
                                 <!-- undo medical: rare action — hidden on touch (kebab) -->
                                 <button @click="undoMedical(p)" title="Undo medical discharge" aria-label="Undo medical discharge" class="grid h-7 w-7 coarse:hidden place-items-center rounded-lg text-ink-400 hover:bg-danger-100 hover:text-danger-600"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" /></svg></button>
                             </template>
-                            <button v-else @click="openModal('medical', p)" title="Discharge" aria-label="Discharge" class="ml-auto grid h-7 w-7 coarse:h-10 coarse:w-10 place-items-center rounded-lg text-ink-400 hover:bg-success-100 hover:text-success-600"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M11.35 3.836c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m8.9-4.414c.376.023.75.05 1.124.08 1.131.094 1.976 1.057 1.976 2.192V16.5A2.25 2.25 0 0 1 18 18.75h-2.25m-7.5-10.5H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V18.75m-7.5-10.5h6.375c.621 0 1.125.504 1.125 1.125v9.375m-8.25-3 1.5 1.5 3-3.75" /></svg></button>
+                            <button v-else @click="openModal('medical', p)" title="Discharge" aria-label="Discharge" class="ms-auto grid h-7 w-7 coarse:h-10 coarse:w-10 place-items-center rounded-lg text-ink-400 hover:bg-success-100 hover:text-success-600"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M11.35 3.836c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m8.9-4.414c.376.023.75.05 1.124.08 1.131.094 1.976 1.057 1.976 2.192V16.5A2.25 2.25 0 0 1 18 18.75h-2.25m-7.5-10.5H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V18.75m-7.5-10.5h6.375c.621 0 1.125.504 1.125 1.125v9.375m-8.25-3 1.5 1.5 3-3.75" /></svg></button>
                         </template>
                         <!-- delete: rare action — hidden on touch (kebab) -->
                         <button v-if="me.is_admin" @click="destroyAdmission(p)" title="Delete admission" aria-label="Delete admission" class="grid h-7 w-7 coarse:hidden place-items-center rounded-lg text-ink-400 hover:bg-danger-100 hover:text-danger-600"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg></button>
@@ -420,10 +423,10 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
                             <button type="button" @click="toggleKebab(p.id)" :aria-expanded="kebabOpen === p.id" aria-haspopup="menu" title="More actions" aria-label="More actions" class="grid h-10 w-10 place-items-center rounded-lg text-ink-400 hover:bg-ink-50 hover:text-ink-700"><svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.75a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm0 6.75a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm0 6.75a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" /></svg></button>
                             <!-- transparent backdrop closes the menu on outside tap -->
                             <div v-if="kebabOpen === p.id" class="fixed inset-0 z-0" @click="closeKebab"></div>
-                            <div v-if="kebabOpen === p.id" role="menu" class="absolute right-0 bottom-12 z-10 w-44 overflow-hidden rounded-xl bg-card py-1 shadow-lg ring-1 ring-line" @keydown.esc="closeKebab">
-                                <button type="button" role="menuitem" @click="longterm(p); closeKebab()" class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-ink-700 hover:bg-ink-50">{{ p.is_longterm ? 'Remove long-term' : 'Mark long-term' }}</button>
-                                <button v-if="canManage(p) && p.medically_discharged && p.location !== 'ICU'" type="button" role="menuitem" @click="undoMedical(p); closeKebab()" class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-on-danger hover:bg-tint-danger">Undo medical discharge</button>
-                                <button v-if="me.is_admin" type="button" role="menuitem" @click="destroyAdmission(p); closeKebab()" class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-on-danger hover:bg-tint-danger">Delete admission</button>
+                            <div v-if="kebabOpen === p.id" role="menu" class="absolute end-0 bottom-12 z-10 w-44 overflow-hidden rounded-xl bg-card py-1 shadow-lg ring-1 ring-line" @keydown.esc="closeKebab">
+                                <button type="button" role="menuitem" @click="longterm(p); closeKebab()" class="flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm font-medium text-ink-700 hover:bg-ink-50">{{ p.is_longterm ? 'Remove long-term' : 'Mark long-term' }}</button>
+                                <button v-if="canManage(p) && p.medically_discharged && p.location !== 'ICU'" type="button" role="menuitem" @click="undoMedical(p); closeKebab()" class="flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm font-medium text-on-danger hover:bg-tint-danger">Undo medical discharge</button>
+                                <button v-if="me.is_admin" type="button" role="menuitem" @click="destroyAdmission(p); closeKebab()" class="flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm font-medium text-on-danger hover:bg-tint-danger">Delete admission</button>
                             </div>
                         </div>
                     </div>

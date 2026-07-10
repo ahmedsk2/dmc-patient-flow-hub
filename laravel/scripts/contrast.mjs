@@ -137,6 +137,16 @@ const PAIRS = [
     // --- body text ---
     ['ink-700 on app', '#344145', '#f1f6f6'],
     ['brand-400 on dark card', '#38b4ba', '#13201f'],
+    // --- Wave 5 residuals ---
+    // Nav avatar initials (AppLayout.vue): bg-brand-600/text-white measured 4.31:1 light / 2.09:1 dark
+    // (brand-600 LIGHTENS on dark for text-on-card legibility — wrong direction for a fill under white
+    // text). Moved to navy-700, the theme-INVARIANT chrome teal (no .dark override) — one row covers
+    // both themes since the hex never changes.
+    ['white on navy-700 (nav avatar initials, both themes)', '#ffffff', '#00565e'],
+    // Dashboard YTD strip micro-caption ("adm / disch non-ICU"): text-ink-300 measured 2.16:1 light /
+    // 3.24:1 dark — both fail 4.5 at 10px. ink-500 is the lightest step clearing 4.5 in BOTH themes.
+    ['ink-500 on card (YTD micro-caption, light)', '#5b6a6e', '#ffffff'],
+    ['ink-500 on card (YTD micro-caption, dark)', '#a7bbbd', '#13201f'],
 ];
 
 // --- PERCEPTUAL DISTANCE ------------------------------------------------------------------------
