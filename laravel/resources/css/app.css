@@ -29,9 +29,13 @@
  *     from the bundle; the reduction is captured in scripts/check-source-allowlist.mjs's snapshot.
  *     The glob stays — app.blade.php still needs it. The errors/, mail/ and reports/ blades are
  *     deliberately Vite-free and carry their own <style>: they contribute zero.
- *  4. The vendored pagination views live under vendor/, which IS gitignored — auto-detection could
- *     never reach them, and source(none) does not change that. This @source has always been the
- *     only thing making pagination render.
+ *  4. REMOVED (CI round-2 fix): an @source for vendor/laravel/framework's Blade paginator views.
+ *     No Blade template calls links()/render() — every paginator in this Inertia app is rendered
+ *     Vue-side with its own classes — so its 44 gray-step and -ml-px selectors were dead weight. Worse,
+ *     they made the build NON-DETERMINISTIC across machines: CI's frontend job has no vendor/
+ *     directory (it never runs composer), so the same commit emitted 639 classes there vs 683
+ *     locally and the allow-list gate could never pass both. Sources must never reach into
+ *     composer-managed paths.
  *
  * NOT NEEDED ANY MORE: `@source not '../../public/build'`. public/build is committed (it is the
  * deployed artifact), so auto-detection used to re-read the PREVIOUS build's own `assets/*.js` and
@@ -52,7 +56,6 @@
 @source '../js/**/*.{vue,js}';
 @source not '../js/**/__tests__';
 @source '../views/**/*.blade.php';
-@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 
 /* Class-based dark mode: `.dark` on <html> flips the variant (Tailwind v4 custom variant). */
 @custom-variant dark (&:where(.dark, .dark *));

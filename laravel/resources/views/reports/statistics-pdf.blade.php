@@ -21,7 +21,7 @@
     .kpis { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
     .kpis td { width: 12.5%; text-align: center; padding: 8px 4px; background: #f1f6f6; border: 2px solid #fff; }
     .kpis .label { font-size: 8px; text-transform: uppercase; letter-spacing: 0.5px; color: #5b6a6e; }
-    .kpis .val { font-size: 15px; font-weight: bold; color: #009ca6; }
+    .kpis .val { font-size: 15px; font-weight: bold; color: #00727b; }
     h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: #00565e; margin: 12px 0 5px; }
     table.data { width: 100%; border-collapse: collapse; }
     table.data th { background: #00565e; color: #fff; text-align: left; padding: 4px 5px; font-size: 8px; text-transform: uppercase; }

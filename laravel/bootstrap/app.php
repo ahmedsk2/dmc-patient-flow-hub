@@ -24,6 +24,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             \App\Http\Middleware\HandleInertiaRequests::class,
         ]);
+        // Browsers POST CSP violation reports with neither credentials nor a CSRF token —
+        // the sink route (throttled, log-only) must be exempt or every report 419s.
+        $middleware->validateCsrfTokens(except: ['csp-report']);
         $middleware->alias([
             'admin' => \App\Http\Middleware\EnsureAdmin::class,
             'mfa.enroll' => \App\Http\Middleware\EnsureMfaEnrolled::class,

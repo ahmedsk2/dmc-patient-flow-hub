@@ -107,4 +107,41 @@ class SecurityHeadersTest extends TestCase
         $this->assertNull($response->headers->get('Content-Security-Policy-Report-Only'));
         $response->assertHeader('X-Frame-Options', 'DENY');
     }
+
+    public function test_policy_points_violation_reports_at_the_sink(): void
+    {
+        $response = $this->actingAs($this->admin())->get('/');
+
+        $csp = (string) $response->headers->get('Content-Security-Policy');
+        $this->assertStringContainsString('report-uri /csp-report', $csp);
+        $this->assertStringContainsString('report-to csp-endpoint', $csp);
+        $response->assertHeader('Reporting-Endpoints', 'csp-endpoint="/csp-report"');
+    }
+
+    public function test_csp_report_sink_accepts_a_browser_report_without_csrf_and_logs_it(): void
+    {
+        \Illuminate\Support\Facades\Log::shouldReceive('warning')
+            ->once()
+            ->withArgs(fn ($message, $context) => $message === 'CSP violation reported'
+                && ($context['violated-directive'] ?? null) === 'script-src'
+                && ($context['blocked-uri'] ?? null) === 'https://evil.example/x.js');
+
+        // raw JSON body, legacy report-uri envelope, NO CSRF token, NO auth — exactly as a browser posts it
+        $response = $this->call('POST', '/csp-report', [], [], [], ['CONTENT_TYPE' => 'application/csp-report'], json_encode([
+            'csp-report' => [
+                'document-uri' => 'http://localhost/patients',
+                'violated-directive' => 'script-src',
+                'blocked-uri' => 'https://evil.example/x.js',
+            ],
+        ]));
+
+        $response->assertNoContent();
+    }
+
+    public function test_csp_report_sink_never_errors_on_garbage(): void
+    {
+        $response = $this->call('POST', '/csp-report', [], [], [], ['CONTENT_TYPE' => 'application/csp-report'], 'not json at all {{{');
+
+        $response->assertNoContent();
+    }
 }

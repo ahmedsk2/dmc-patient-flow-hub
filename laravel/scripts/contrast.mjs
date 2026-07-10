@@ -40,11 +40,16 @@ const PAIRS = [
     // --- brand on the light page surfaces ---
     // The status/brand-as-text sweep migrated every brand TEXT/GLYPH use to the theme-aware brand-700
     // (the ✕ diagnosis-chip glyph — DxChips/Admissions·Create/Registry — now uses it), so brand-500 no
-    // longer ships as text in the Vue app (a11y-status-text.spec.js enforces it). It DOES still ship in
-    // the dompdf PRINT templates (annual/statistics-pdf KPI numerals, #009ca6 15px bold on the #f1f6f6
-    // cell = 3.05:1) — a print-only fail kept KNOWN pending a dedicated PDF-template a11y pass.
+    // longer ships as text in the Vue app (a11y-status-text.spec.js enforces it). It ALSO used to ship
+    // in the dompdf PRINT templates (annual-pdf.blade.php / statistics-pdf.blade.php `.kpis .val` KPI
+    // numerals: #009ca6 15px bold on the #f1f6f6 cell = 3.05:1 — a print-only fail, since 15px bold does
+    // not clear WCAG 1.4.3's large-text bar of 18.66px bold). The dedicated PDF-template a11y pass
+    // (this row's pending item) darkened both templates' `.kpis .val` to brand-700 (5.2:1, see the row
+    // below) — nothing ships the brand-500 pairing any more, so it is now an `info` baseline like the
+    // DxChips row above it, kept so the old defect still reads as a number.
     ['brand-500 on brand-100 (ex DxChips ✕ glyph — now brand-700)', '#009ca6', '#d4f0ef', { info: true }],
-    ['brand-500 on #f1f6f6 (PDF KPI numerals, 15px bold — still ships in print)', '#009ca6', '#f1f6f6', { known: 'print-only (dompdf): 15px bold ≠ large text; 3.05:1 on the report cell. Pending a PDF-template a11y pass.' }],
+    ['brand-500 on #f1f6f6 (PDF KPI numerals, 15px bold — PRE-FIX baseline; nothing ships this now)', '#009ca6', '#f1f6f6', { info: true }],
+    ['brand-700 on #f1f6f6 (PDF KPI numerals, annual/statistics-pdf `.kpis .val`, 15px bold — fixed)', '#00727b', '#f1f6f6'],
     ['brand-700 on white', '#00727b', '#ffffff'],
     ['brand-800 on white', '#00565e', '#ffffff'],
     // --- status colours as TEXT: the sweep routed every text/badge use through bg-tint-X + text-on-X

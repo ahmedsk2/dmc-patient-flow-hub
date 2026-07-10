@@ -61,6 +61,12 @@ Route::middleware('guest')->group(function () {
     Route::post('/reset-password', [PasswordResetController::class, 'update'])->name('password.update');
 });
 
+// CSP violation-report sink (SecurityHeaders adds `report-uri /csp-report` to the policy).
+// Unauthenticated by design — browsers post reports without credentials; CSRF-exempted in
+// bootstrap/app.php; throttled hard since it is an open write endpoint (log-only, no storage).
+Route::post('/csp-report', [\App\Http\Controllers\CspReportController::class, 'store'])
+    ->middleware('throttle:30,1')->name('csp.report');
+
 // MFA login challenge — reached after password but BEFORE the session is authenticated
 // (identity held in the session, not the auth guard).
 Route::get('/mfa/challenge', [MfaController::class, 'challenge'])->name('mfa.challenge');
