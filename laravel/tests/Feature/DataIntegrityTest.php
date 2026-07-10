@@ -6,6 +6,7 @@ use App\Models\Admission;
 use App\Models\AdmissionDiagnosis;
 use App\Models\Patient;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -23,6 +24,7 @@ class DataIntegrityTest extends TestCase
         return User::create([
             'username' => 'di_' . substr(md5(uniqid('', true)), 0, 8),
             'name' => 'DI Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
     }
 

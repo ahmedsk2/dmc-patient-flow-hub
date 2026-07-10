@@ -7,6 +7,7 @@ use App\Models\Admission;
 use App\Models\Country;
 use App\Models\Patient;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -29,6 +30,7 @@ class Icd10ValidationTest extends TestCase
             'username' => 'i10_' . substr(md5(uniqid('', true)), 0, 8),
             'name' => 'I10 Admin', 'role' => User::ROLE_ADMIN, 'active' => 1, 'password' => 'secret12345',
             'can_add' => 1, 'can_modify' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
     }
 

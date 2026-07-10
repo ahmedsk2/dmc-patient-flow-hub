@@ -8,6 +8,7 @@ use App\Models\Consultation;
 use App\Models\Patient;
 use App\Models\Specialty;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
@@ -32,6 +33,7 @@ class FinalSweepG1Test extends TestCase
         return User::create(array_merge([
             'username' => 'g1_' . substr(md5(uniqid('', true)), 0, 10),
             'name' => 'G1 User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
     }
 

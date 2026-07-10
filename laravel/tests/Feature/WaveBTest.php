@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Admission;
 use App\Models\Patient;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
@@ -22,6 +23,7 @@ class WaveBTest extends TestCase
         return User::create([
             'username' => 'wb_' . substr(md5(uniqid('', true)), 0, 8),
             'name' => 'WB Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
     }
 

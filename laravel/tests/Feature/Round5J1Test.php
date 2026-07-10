@@ -9,6 +9,7 @@ use App\Models\Icd10;
 use App\Models\Patient;
 use App\Models\TbDiagnosis;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
@@ -40,6 +41,7 @@ class Round5J1Test extends TestCase
         return User::create(array_merge([
             'username' => 'j1_' . substr(md5(uniqid('', true)), 0, 10),
             'name' => 'J1 User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
     }
 

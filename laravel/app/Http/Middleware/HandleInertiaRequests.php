@@ -30,6 +30,9 @@ class HandleInertiaRequests extends Middleware
                     'is_admin' => $user->isAdmin(),
                     // Phase 4 — Item 4: drives the optional TOTP field on the step-up form
                     'mfa_enrolled' => $user->mfaEnabled(),
+                    // 2026-07-11 auth-hardening: lets the client reason about verification state;
+                    // the middleware gate (email.verify) is authoritative, this is informational only
+                    'email_verified' => $user->email_verified_at !== null,
                     // Wave 2, Item 10: first-login tour gate. NULL → the tour auto-starts; the "?"
                     // replay never touches this. ISO string (or null) so the client can compare.
                     'tour_completed_at' => optional($user->tour_completed_at)->toIso8601String(),

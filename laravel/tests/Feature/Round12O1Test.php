@@ -10,6 +10,7 @@ use App\Models\HandoverSignature;
 use App\Models\Patient;
 use App\Models\Specialty;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -25,13 +26,15 @@ class Round12O1Test extends TestCase
     private function admin(): User
     {
         return User::create(['username' => 'o1_'.substr(md5(uniqid('', true)), 0, 8), 'name' => 'O1 Admin',
-            'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1]);
+            'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }
 
     private function consultant(string $name = 'O1 Cons'): User
     {
         return User::create(['username' => 'o1c_'.substr(md5(uniqid('', true)), 0, 8), 'name' => $name,
-            'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1]);
+            'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }
 
     private function admission(array $o = []): Admission
@@ -105,12 +108,14 @@ class Round12O1Test extends TestCase
     public function test_edit_json_denies_observer_with_can_modify(): void
     {
         $obs = User::create(['username' => 'o1_obs', 'name' => 'Obs', 'password' => 'secret12345',
-            'role' => User::ROLE_OBSERVER, 'active' => 1, 'can_modify' => 1]);
+            'role' => User::ROLE_OBSERVER, 'active' => 1, 'can_modify' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
         $a = $this->admission(['current_location' => 'Ward']);
         $this->actingAs($obs)->get("/admissions/{$a->id}/edit")->assertForbidden();
 
         $modifier = User::create(['username' => 'o1_mod', 'name' => 'Mod', 'password' => 'secret12345',
-            'role' => User::ROLE_RESIDENT, 'active' => 1, 'can_modify' => 1]);
+            'role' => User::ROLE_RESIDENT, 'active' => 1, 'can_modify' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
         $this->actingAs($modifier)->get("/admissions/{$a->id}/edit")->assertOk();
     }
 

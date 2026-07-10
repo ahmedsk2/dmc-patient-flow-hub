@@ -3,7 +3,9 @@ import { computed } from 'vue';
 import { Head, useForm, Link, usePage } from '@inertiajs/vue3';
 import EhcLogo from '@/Components/EhcLogo.vue';
 
-const form = useForm({ username: '', password: '', remember: false });
+// 2026-07-11 auth-hardening: no "remember me" — a persistent recaller cookie would auto-authenticate
+// past the now-mandatory MFA challenge. Every session re-authenticates with the second factor.
+const form = useForm({ username: '', password: '' });
 const submit = () => form.post('/login', { onFinish: () => form.reset('password') });
 
 // guest-side flash (e.g. "sign-in expired" / "too many codes" from a rejected MFA challenge)
@@ -67,10 +69,6 @@ const flash = computed(() => usePage().props.flash);
                             :class="{ 'border-danger-500': form.errors.password }" placeholder="••••••••" />
                         <p v-if="form.errors.password" class="mt-1 text-xs text-on-danger">{{ form.errors.password }}</p>
                     </div>
-                    <label class="flex items-center gap-2 text-sm text-ink-600">
-                        <input v-model="form.remember" type="checkbox" class="rounded border-ink-300 text-brand-600 focus:ring-brand-500/30" />
-                        Keep me signed in
-                    </label>
                     <button type="submit" :disabled="form.processing"
                         class="w-full rounded-xl bg-gradient-to-r from-brand-500 to-brand-700 px-4 py-3 font-semibold text-white shadow-lg shadow-brand-900/20 transition hover:from-brand-600 hover:to-brand-800 disabled:opacity-60">
                         <span v-if="!form.processing">Sign in</span>

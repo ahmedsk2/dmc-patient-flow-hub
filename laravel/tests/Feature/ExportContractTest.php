@@ -7,6 +7,7 @@ use App\Models\AdmissionDiagnosis;
 use App\Models\Icd10;
 use App\Models\Patient;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use OpenSpout\Reader\XLSX\Reader as XlsxReader;
 use Tests\TestCase;
@@ -22,7 +23,8 @@ class ExportContractTest extends TestCase
     private function admin(): User
     {
         return User::create(['username' => 'ec_admin_' . substr(md5(uniqid('', true)), 0, 6),
-            'name' => 'EC Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1]);
+            'name' => 'EC Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }
 
     private function seedAdmission(): void

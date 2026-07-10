@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Notification;
 use App\Models\Setting;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -90,7 +91,7 @@ class LoginAnomalyTest extends TestCase
 
     public function test_security_panel_accessible_to_admin(): void
     {
-        $admin = $this->user(User::ROLE_ADMIN);
+        $admin = $this->user(User::ROLE_ADMIN, ['mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
 
         $this->actingAs($admin)->get('/security')
             ->assertOk()
@@ -100,6 +101,7 @@ class LoginAnomalyTest extends TestCase
 
     public function test_security_panel_denied_to_non_admin(): void
     {
-        $this->actingAs($this->user(User::ROLE_CONSULTANT))->get('/security')->assertForbidden();
+        $this->actingAs($this->user(User::ROLE_CONSULTANT, ['mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]))
+            ->get('/security')->assertForbidden();
     }
 }

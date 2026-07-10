@@ -3,6 +3,7 @@
 use App\Http\Controllers\AdmissionsController;
 use App\Http\Controllers\AuditController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\ConsultationsController;
@@ -54,7 +55,14 @@ Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'show'])->name('login');
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:auth');   // brute-force guard (username+IP key)
     Route::get('/register', [RegisterController::class, 'show'])->name('register');
-    Route::post('/register', [RegisterController::class, 'store']);
+    // 2026-07-11 auth-hardening: multi-step signup — email must be verified (mailed code) and a
+    // TOTP authenticator confirmed, BOTH tracked server-side against session('reg.token'), before
+    // the hardened store() will create an account. All steps throttled (guest, no stable identity).
+    Route::post('/register/email/send', [RegisterController::class, 'sendEmailCode'])->name('register.email.send')->middleware('throttle:register');
+    Route::post('/register/email/verify', [RegisterController::class, 'verifyEmailCode'])->name('register.email.verify')->middleware('throttle:register');
+    Route::post('/register/mfa/provision', [RegisterController::class, 'provisionMfa'])->name('register.mfa.provision')->middleware('throttle:register');
+    Route::post('/register/mfa/confirm', [RegisterController::class, 'confirmMfa'])->name('register.mfa.confirm')->middleware('throttle:register');
+    Route::post('/register', [RegisterController::class, 'store'])->name('register.store')->middleware('throttle:register');
     Route::get('/forgot-password', [PasswordResetController::class, 'request'])->name('password.request');
     Route::post('/forgot-password', [PasswordResetController::class, 'email'])->name('password.email')->middleware('throttle:auth');
     Route::get('/reset-password/{token}', [PasswordResetController::class, 'reset'])->name('password.reset');
@@ -73,11 +81,19 @@ Route::get('/mfa/challenge', [MfaController::class, 'challenge'])->name('mfa.cha
 Route::post('/mfa/challenge', [MfaController::class, 'verifyChallenge'])->middleware('throttle:auth');   // brute-force guard on the 6-digit code (pending-user+IP key)
 
 // Authenticated. session.timeout (Phase 4 — Item 2) runs first so an idle/expired session is
-// bounced to login before any page work; the MFA/pwd gates follow.
-Route::middleware(['auth', 'session.timeout', 'mfa.enroll', 'pwd'])->group(function () {
+// bounced to login before any page work; then email-verify, then MFA enrollment (2026-07-11
+// auth-hardening: email first, then MFA), then the password-expiry gate.
+Route::middleware(['auth', 'session.timeout', 'email.verify', 'mfa.enroll', 'pwd'])->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard.alt');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
+    // 2026-07-11 auth-hardening: existing-user email verification. Sits INSIDE this group (like
+    // mfa.setup/mfa.confirm below) — the email.verify middleware itself exempts these three route
+    // names so the gated user can actually reach and complete the check.
+    Route::get('/email/verify', [EmailVerificationController::class, 'show'])->name('email.verify.show');
+    Route::post('/email/verify/send', [EmailVerificationController::class, 'send'])->name('email.verify.send')->middleware('throttle:email-verify');
+    Route::post('/email/verify/confirm', [EmailVerificationController::class, 'confirm'])->name('email.verify.confirm')->middleware('throttle:email-verify');
 
     Route::get('/patients', [PatientsController::class, 'index'])->name('patients.index');
     // Wave 1 (EHC UI) — SPC-TM-011: the board's free-text term (patient name/MRN) travels in a POST

@@ -50,6 +50,7 @@ class Round9L1Test extends TestCase
         return User::create(array_merge([
             'username' => 'l1_' . substr(md5(uniqid('', true)), 0, 10),
             'name' => 'L1 User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
     }
 
@@ -98,28 +99,41 @@ class Round9L1Test extends TestCase
 
     // ---- 3. EnsureMfaEnrolled enforcement matrix -------------------------------------------------
 
-    public function test_mfa_policy_off_unenrolled_users_pass(): void
+    // 2026-07-11 auth-hardening: MFA is MANDATORY for everyone — the mfa_enforcement setting can no
+    // longer switch it off. An unenrolled user of any role is redirected to enrol even with the
+    // (now-inert) setting at 0. (Was test_mfa_policy_off_unenrolled_users_pass, which asserted the
+    // old "off lets unenrolled through" behaviour.)
+    public function test_mfa_mandatory_redirects_unenrolled_regardless_of_setting(): void
     {
         Setting::current()->update(['mfa_enforcement' => 0]);
 
-        $this->actingAs($this->user())->get('/patients')->assertOk();
-        $this->actingAs($this->admin())->get('/')->assertOk();
+        $this->actingAs($this->user(User::ROLE_CONSULTANT, ['mfa_secret' => null, 'mfa_enrolled_at' => null]))
+            ->get('/patients')->assertRedirect(route('mfa.setup'));
+        $this->actingAs($this->user(User::ROLE_ADMIN, ['mfa_secret' => null, 'mfa_enrolled_at' => null]))
+            ->get('/')->assertRedirect(route('mfa.setup'));
     }
 
-    public function test_mfa_policy_admins_redirects_unenrolled_admin_but_not_consultant(): void
+    // 2026-07-11 auth-hardening: even a non-admin (consultant) unenrolled user is now redirected —
+    // the old "admins-only" tier (enforcement=1) no longer exempts anyone. (Was
+    // test_mfa_policy_admins_redirects_unenrolled_admin_but_not_consultant.)
+    public function test_mfa_mandatory_redirects_unenrolled_non_admin_too(): void
     {
         Setting::current()->update(['mfa_enforcement' => 1]);
 
-        $this->actingAs($this->admin())->get('/')->assertRedirect(route('mfa.setup'));
-        $this->actingAs($this->user())->get('/patients')->assertOk();
+        $this->actingAs($this->user(User::ROLE_ADMIN, ['mfa_secret' => null, 'mfa_enrolled_at' => null]))
+            ->get('/')->assertRedirect(route('mfa.setup'));
+        $this->actingAs($this->user(User::ROLE_CONSULTANT, ['mfa_secret' => null, 'mfa_enrolled_at' => null]))
+            ->get('/patients')->assertRedirect(route('mfa.setup'));
     }
 
     public function test_mfa_policy_everyone_redirects_any_unenrolled_user(): void
     {
         Setting::current()->update(['mfa_enforcement' => 2]);
 
-        $this->actingAs($this->user())->get('/patients')->assertRedirect(route('mfa.setup'));
-        $this->actingAs($this->admin())->get('/')->assertRedirect(route('mfa.setup'));
+        $this->actingAs($this->user(User::ROLE_CONSULTANT, ['mfa_secret' => null, 'mfa_enrolled_at' => null]))
+            ->get('/patients')->assertRedirect(route('mfa.setup'));
+        $this->actingAs($this->user(User::ROLE_ADMIN, ['mfa_secret' => null, 'mfa_enrolled_at' => null]))
+            ->get('/')->assertRedirect(route('mfa.setup'));
     }
 
     public function test_mfa_policy_enrolled_users_pass_under_full_enforcement(): void
@@ -136,7 +150,7 @@ class Round9L1Test extends TestCase
     public function test_mfa_exempt_routes_reachable_while_unenrolled(): void
     {
         Setting::current()->update(['mfa_enforcement' => 2]);
-        $u = $this->user();
+        $u = $this->user(User::ROLE_CONSULTANT, ['mfa_secret' => null, 'mfa_enrolled_at' => null]);
 
         // setup page renders (the funnel target itself must not loop)
         $this->actingAs($u)->get('/mfa/setup')->assertOk();
@@ -150,7 +164,8 @@ class Round9L1Test extends TestCase
             ->assertSessionHasErrors('code');
 
         // logout works — an unenrolled user must be able to leave
-        $this->actingAs($this->user())->post('/logout')->assertRedirect();
+        $this->actingAs($this->user(User::ROLE_CONSULTANT, ['mfa_secret' => null, 'mfa_enrolled_at' => null]))
+            ->post('/logout')->assertRedirect();
         $this->assertGuest();
     }
 
@@ -347,7 +362,7 @@ class Round9L1Test extends TestCase
 
     public function test_mfa_confirm_rejects_wrong_code_and_does_not_enroll(): void
     {
-        $u = $this->user();
+        $u = $this->user(User::ROLE_CONSULTANT, ['mfa_secret' => null, 'mfa_enrolled_at' => null]);
         $secret = Totp::secret();
 
         $this->actingAs($u)

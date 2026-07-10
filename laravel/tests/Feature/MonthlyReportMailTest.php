@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Support\Totp;
+
 use App\Jobs\GenerateMonthlyReport;
 use App\Mail\MonthlyReportMail;
 use App\Models\ReportRecipient;
@@ -20,13 +22,13 @@ class MonthlyReportMailTest extends TestCase
     private function admin(): User
     {
         return User::create(['username' => 'mr_admin_' . substr(md5(uniqid('', true)), 0, 6),
-            'name' => 'MR Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1]);
+            'name' => 'MR Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }
 
     private function nonAdmin(): User
     {
         return User::create(['username' => 'mr_cons_' . substr(md5(uniqid('', true)), 0, 6),
-            'name' => 'MR Cons', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1]);
+            'name' => 'MR Cons', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }
 
     public function test_job_dispatches_to_active_recipients_only(): void

@@ -2,12 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Mail\RegistrationCodeMail;
 use App\Models\Admission;
 use App\Models\Patient;
 use App\Models\TbDiagnosis;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
@@ -34,6 +37,11 @@ class Round10M1Test extends TestCase
         return User::create(array_merge([
             'username' => 'm1_' . substr(md5(uniqid('', true)), 0, 10),
             'name' => 'M1 User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
+            // 2026-07-11 auth-hardening: MFA is now mandatory for every user, always, and an
+            // on-file-but-unverified email is now ALSO gated — default the fixture past both so
+            // these tests keep exercising their OWN concern rather than the new gates ($extra can
+            // still override either to test a gate specifically).
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(), 'email_verified_at' => now(),
         ], $extra));
     }
 
@@ -130,19 +138,48 @@ class Round10M1Test extends TestCase
 
     // ---- 4. registration requires an email --------------------------------------------------------
 
+    /**
+     * 2026-07-11 auth-hardening: registration is now multi-step — email must be verified (mailed
+     * code) and a TOTP authenticator confirmed, both tracked against session('reg.token'), before
+     * the hardened store() will create anything. Drives the full flow (see RegistrationFlowTest for
+     * the step-by-step coverage); this test just re-confirms the M1 "email required" + happy-path
+     * outcome now that a bare POST /register can no longer succeed on its own.
+     */
     public function test_registration_requires_an_email(): void
     {
+        // a bare store POST (no pending row at all) still fails — same externally-visible outcome
+        // as the old single-step behavior, now for a different underlying reason
         $this->post('/register', [
             'username' => 'm1_newuser', 'full_name' => 'New User', 'role' => 4,
             'password' => 'Password123', 'password_confirmation' => 'Password123',
         ])->assertSessionHasErrors('email');
         $this->assertNull(User::where('username', 'm1_newuser')->first(), 'no account without an email');
 
-        $this->post('/register', [
-            'username' => 'm1_newuser', 'full_name' => 'New User', 'email' => 'new@example.test',
-            'role' => 4, 'password' => 'Password123', 'password_confirmation' => 'Password123',
+        $this->registerThroughFullFlow('new@example.test', [
+            'username' => 'm1_newuser', 'full_name' => 'New User', 'role' => 4,
+            'password' => 'Password123', 'password_confirmation' => 'Password123',
         ])->assertRedirect(route('login'))->assertSessionHasNoErrors();
         $this->assertSame('new@example.test', User::where('username', 'm1_newuser')->first()?->email);
+    }
+
+    /**
+     * Drives the full email-verify + TOTP-confirm flow, then submits the given store payload with
+     * $email attached. Shared by any test in this file that still needs a real self-registered user.
+     */
+    private function registerThroughFullFlow(string $email, array $storePayload): \Illuminate\Testing\TestResponse
+    {
+        Mail::fake();
+        $this->post('/register/email/send', ['email' => $email])->assertOk();
+        $sent = Mail::sent(RegistrationCodeMail::class)->first();
+        $this->post('/register/email/verify', ['code' => $sent->code])->assertOk();
+
+        $secret = $this->post('/register/mfa/provision')->assertOk()->json('secret');
+        $m = new \ReflectionMethod(Totp::class, 'code');
+        $m->setAccessible(true);
+        $code = $m->invoke(null, $secret, intdiv(time(), 30));
+        $this->post('/register/mfa/confirm', ['code' => $code])->assertOk();
+
+        return $this->post('/register', array_merge($storePayload, ['email' => $email]));
     }
 
     // ---- 5. dashboard census-donut headline = the donut's own population ---------------------------

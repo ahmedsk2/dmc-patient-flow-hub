@@ -37,6 +37,10 @@ class ControlController extends Controller
 
         return Inertia::render('Control/Index', [
             'settings' => Setting::current(),
+            // 2026-07-11 auth-hardening: MFA enrollment is now mandatory for every user, always —
+            // the mfa_enforcement setting below is inert (kept in-schema); the UI should annotate
+            // the control as a no-op rather than implying it still switches enrollment off.
+            'mfaMandatory' => true,
             'users' => $users,
             'filters' => ['q' => $request->query('q', '')],
             'roles' => User::ROLE_LABELS,

@@ -64,7 +64,12 @@ class AuthController extends Controller
             return redirect()->route('mfa.challenge');
         }
 
-        Auth::login($user, $request->boolean('remember'));
+        // 2026-07-11 auth-hardening: remember-me is DISABLED (always false) now that MFA is mandatory
+        // for everyone. A recaller cookie auto-authenticates via Laravel's SessionGuard WITHOUT ever
+        // hitting this controller or the MFA challenge — so a persistent-login cookie set in the brief
+        // pre-enrolment grace window would let an (now-enrolled) user skip the second factor entirely.
+        // Never issuing a recaller closes that bypass; the request's `remember` flag is ignored.
+        Auth::login($user, false);
         $request->session()->regenerate();
         // Phase 4 — Item 2: stamp the session-start clock for the absolute-timeout check
         $request->session()->put('session_started_at', now()->getTimestamp());

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
@@ -21,6 +22,7 @@ class TourTest extends TestCase
         return User::create(array_merge([
             'username' => 'tour_' . substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Tour User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
     }
 

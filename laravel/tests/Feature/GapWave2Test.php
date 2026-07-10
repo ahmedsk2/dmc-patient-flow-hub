@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Support\Totp;
+
 use App\Models\Admission;
 use App\Models\Patient;
 use App\Models\User;
@@ -37,7 +39,7 @@ class GapWave2Test extends TestCase
     {
         return User::create([
             'username' => 'g2_' . substr(md5(uniqid('', true)), 0, 8),
-            'name' => 'G2 Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
+            'name' => 'G2 Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
     }
 
@@ -47,7 +49,7 @@ class GapWave2Test extends TestCase
         // LOS chart series with a zero (legacy chart covers ALL active consultants)
         User::create([
             'username' => 'g2_cons', 'name' => 'g2cons', 'full_name' => 'Dr Zero',
-            'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
+            'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
 
         $p1 = Patient::create(['mrn' => '71000001', 'name' => 'G2 One']);

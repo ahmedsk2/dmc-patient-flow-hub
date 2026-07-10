@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\Patient;
 use App\Models\Specialty;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
@@ -25,6 +26,7 @@ class GapWave4aTest extends TestCase
         return User::create(array_merge([
             'username' => 'g4_' . substr(md5(uniqid('', true)), 0, 8),
             'name' => 'G4 User', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $overrides));
     }
 

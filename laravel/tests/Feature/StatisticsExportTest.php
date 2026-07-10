@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Support\Totp;
+
 use App\Models\Admission;
 use App\Models\Patient;
 use App\Models\User;
@@ -19,13 +21,13 @@ class StatisticsExportTest extends TestCase
     private function admin(): User
     {
         return User::create(['username' => 'se_admin_' . substr(md5(uniqid('', true)), 0, 6),
-            'name' => 'SE Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1]);
+            'name' => 'SE Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }
 
     private function nonAdmin(): User
     {
         return User::create(['username' => 'se_cons_' . substr(md5(uniqid('', true)), 0, 6),
-            'name' => 'SE Cons', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1]);
+            'name' => 'SE Cons', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }
 
     private function seedJune(): void

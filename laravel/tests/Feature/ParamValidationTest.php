@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Support\Totp;
+
 use App\Models\Admission;
 use App\Models\Patient;
 use App\Models\User;
@@ -18,7 +20,7 @@ class ParamValidationTest extends TestCase
     private function admin(): User
     {
         return User::create(['username' => 'pv_admin_' . substr(md5(uniqid('', true)), 0, 6),
-            'name' => 'PV Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1]);
+            'name' => 'PV Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }
 
     private function admit(string $mrn, string $date): void

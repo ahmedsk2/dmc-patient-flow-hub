@@ -8,6 +8,7 @@ use App\Models\Consultation;
 use App\Models\ConsultationReason;
 use App\Models\Patient;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
@@ -30,6 +31,7 @@ class ResidualR3Test extends TestCase
         return User::create(array_merge([
             'username' => 'r3_' . substr(md5(uniqid('', true)), 0, 10),
             'name' => 'R3 User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
     }
 

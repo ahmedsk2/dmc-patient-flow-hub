@@ -7,6 +7,7 @@ use App\Models\Notification;
 use App\Models\Patient;
 use App\Models\Setting;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
@@ -25,6 +26,7 @@ class DataQualityTest extends TestCase
         return User::create([
             'username' => 'dq_' . substr(md5(uniqid('', true)), 0, 8),
             'name' => 'DQ Admin', 'role' => User::ROLE_ADMIN, 'active' => 1, 'password' => 'secret12345',
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
     }
 
@@ -116,7 +118,8 @@ class DataQualityTest extends TestCase
     public function test_data_quality_denied_to_non_admin(): void
     {
         $consultant = User::create(['username' => 'dqc_' . substr(md5(uniqid('', true)), 0, 6),
-            'name' => 'DQ Cons', 'role' => User::ROLE_CONSULTANT, 'active' => 1, 'password' => 'secret12345']);
+            'name' => 'DQ Cons', 'role' => User::ROLE_CONSULTANT, 'active' => 1, 'password' => 'secret12345',
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
         $this->actingAs($consultant)->get('/data-quality')->assertForbidden();
     }
 

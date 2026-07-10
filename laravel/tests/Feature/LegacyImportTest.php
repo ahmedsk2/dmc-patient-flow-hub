@@ -241,6 +241,7 @@ class LegacyImportTest extends TestCase
         return \App\Models\User::create([
             'username' => 'imp_' . substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Import Admin', 'role' => \App\Models\User::ROLE_ADMIN, 'active' => 1, 'password' => 'secret12345',
+            'mfa_secret' => \App\Support\Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
     }
 

@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Support\Totp;
+
 use App\Models\Admission;
 use App\Models\Patient;
 use App\Models\User;
@@ -17,13 +19,13 @@ class ConsultantScorecardTest extends TestCase
     private function admin(): User
     {
         return User::create(['username' => 'sc_admin_' . substr(md5(uniqid('', true)), 0, 6),
-            'name' => 'SC Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1]);
+            'name' => 'SC Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }
 
     private function consultant(): User
     {
         return User::create(['username' => 'sc_cons_' . substr(md5(uniqid('', true)), 0, 6),
-            'name' => 'Dr Cons', 'full_name' => 'Dr Consultant', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1]);
+            'name' => 'Dr Cons', 'full_name' => 'Dr Consultant', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }
 
     public function test_consultant_scorecard_pdf_requires_admin(): void

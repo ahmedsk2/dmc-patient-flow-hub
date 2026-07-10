@@ -9,6 +9,7 @@ use App\Models\Patient;
 use App\Models\Setting;
 use App\Models\User;
 use App\Support\DashboardCache;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -34,6 +35,7 @@ class Phase1DashboardValueTest extends TestCase
         return User::create([
             'username' => 'p1_' . substr(md5(uniqid('', true)), 0, 10),
             'name' => 'P1 Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
     }
 
@@ -43,6 +45,7 @@ class Phase1DashboardValueTest extends TestCase
             'username' => 'p1c_' . substr(md5(uniqid('', true)), 0, 10),
             'name' => 'P1 Consultant', 'full_name' => 'Dr P1', 'password' => 'secret12345',
             'role' => User::ROLE_CONSULTANT, 'active' => 1, 'on_service' => 1, 'specialty_id' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $overrides));
     }
 

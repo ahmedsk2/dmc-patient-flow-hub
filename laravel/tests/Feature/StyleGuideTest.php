@@ -4,6 +4,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
@@ -26,6 +27,8 @@ class StyleGuideTest extends TestCase
             'password' => 'secret12345',
             'role' => $role,
             'active' => 1,
+            'mfa_secret' => Totp::secret(),
+            'mfa_enrolled_at' => now(),
         ]);
     }
 

@@ -6,6 +6,7 @@ use App\Models\Admission;
 use App\Models\Consultation;
 use App\Models\Patient;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
@@ -26,6 +27,7 @@ class TermOutOfUrlTest extends TestCase
         return User::create(array_merge([
             'username' => 'tu_' . $role . '_' . substr(md5(uniqid('', true)), 0, 8),
             'name' => 'TU User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
     }
 

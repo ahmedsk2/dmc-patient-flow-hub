@@ -7,6 +7,7 @@ use App\Models\Consultation;
 use App\Models\HandoverSignature;
 use App\Models\Patient;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
@@ -25,6 +26,7 @@ class DashboardAdminBandTest extends TestCase
         return User::create([
             'username' => 'band_' . $role . '_' . substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Band User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
     }
 

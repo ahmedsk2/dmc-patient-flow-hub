@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Support\Totp;
+
 use App\Jobs\GenerateMonthlyPdf;
 use App\Models\Admission;
 use App\Models\Patient;
@@ -19,13 +21,13 @@ class ReliabilityTest extends TestCase
     private function admin(): User
     {
         return User::create(['username' => 'rl_admin_' . substr(md5(uniqid('', true)), 0, 6),
-            'name' => 'RL Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1]);
+            'name' => 'RL Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }
 
     private function nonAdmin(): User
     {
         return User::create(['username' => 'rl_cons_' . substr(md5(uniqid('', true)), 0, 6),
-            'name' => 'RL Cons', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1]);
+            'name' => 'RL Cons', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }
 
     public function test_registry_match_count_requires_admin(): void

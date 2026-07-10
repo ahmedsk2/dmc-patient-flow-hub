@@ -6,6 +6,7 @@ use App\Models\Admission;
 use App\Models\Patient;
 use App\Models\Setting;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
@@ -25,6 +26,7 @@ class ClinicalFlowTest extends TestCase
         return User::create([
             'username' => 'cf_' . substr(md5(uniqid('', true)), 0, 8),
             'name' => 'CF Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
     }
 

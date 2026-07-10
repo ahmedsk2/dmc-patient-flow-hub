@@ -174,3 +174,28 @@ on it server-side (middleware is authoritative).
   remove it entirely (bigger migration + Control-UI change).
 - Prod email delivery must be live (real SMTP) before this helps real users — it's already a
   deploy blocker; in dev the code is in `storage/logs`.
+
+## Post-implementation adversarial security review (2026-07-11)
+
+Three skeptics probed the flow. Registration-bypass and OTP/secret-handling **HELD**
+(no path to an account without both factors; codes hashed + expiring + attempt-capped +
+throttled; TOTP secret encrypted; nothing leaked/replayable across sessions). One
+**CRITICAL** finding, now FIXED:
+
+- **Remember-me defeated mandatory MFA.** A not-yet-enrolled user logging in with "remember
+  me" got a 30-day recaller cookie (login skips the challenge because they aren't enrolled
+  *yet*); after enrolling, the recaller was never rotated, so on a later request with no
+  session cookie Laravel's SessionGuard auto-authenticated from the recaller **without the
+  TOTP challenge**. **Fix:** remember-me is DISABLED — `AuthController` always
+  `Auth::login($user, false)` (a forged `remember=true` is ignored), the Login checkbox is
+  removed, and MFA enrollment rotates `remember_token` to kill any recaller set before this
+  deploy. Verified: full suite + a live check (login with `remember=1` issues no
+  `remember_web` cookie) + two new tests.
+
+**Minor, non-exploitable (pended, not blocking):** email-verify code not cleared on the
+registration path after use → now cleared (fixed); a resend-cooldown reset when the target
+email is changed mid-flow allows an email-bomb bounded by `throttle:register` (10/min) — worth
+tightening; the `users.email` DB UNIQUE index was dropped by an earlier migration so
+uniqueness rests on the app rule + a pending-row collision check — recommend restoring a
+partial unique index as defense-in-depth; a non-atomic attempt-counter read (throttle-bounded
+TOCTOU) and idempotent `provisionMfa` secret re-return (same session only) — both immaterial.

@@ -6,6 +6,7 @@ use App\Models\Admission;
 use App\Models\Patient;
 use App\Models\Setting;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
@@ -35,6 +36,7 @@ class StatisticsValueTest extends TestCase
         return User::create([
             'username' => 'sv_' . substr(md5(uniqid('', true)), 0, 8),
             'name' => 'SV Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
     }
 

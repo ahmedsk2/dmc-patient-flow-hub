@@ -34,5 +34,22 @@ class AppServiceProvider extends ServiceProvider
 
             return Limit::perMinute(5)->by($identity . '|' . $request->ip());
         });
+
+        // 2026-07-11 auth-hardening — registration step endpoints (guest, multi-step, no stable
+        // identity yet). Keyed by SESSION id (stable per browser across the multi-step POSTs) + IP,
+        // NOT by username/email alone — the whole hospital can sit behind one NAT (see the 'auth'
+        // limiter's comment above), and here there isn't even a confirmed identity to key on.
+        RateLimiter::for('register', function (Request $request) {
+            $session = $request->hasSession() ? $request->session()->getId() : '';
+
+            return Limit::perMinute(10)->by($session . '|' . $request->ip());
+        });
+
+        // Existing-user email-verify gate (authenticated) — keyed by the confirmed user id + IP.
+        RateLimiter::for('email-verify', function (Request $request) {
+            $id = $request->user()?->id ?? ($request->hasSession() ? $request->session()->getId() : '');
+
+            return Limit::perMinute(10)->by($id . '|' . $request->ip());
+        });
     }
 }

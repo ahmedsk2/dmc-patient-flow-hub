@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\Patient;
 use App\Models\Setting;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Testing\AssertableInertia;
@@ -30,6 +31,7 @@ class AuditViewerTest extends TestCase
             'username' => 'av_' . substr(md5(uniqid('', true)), 0, 8),
             'name' => 'AV Admin', 'full_name' => 'AV Admin', 'password' => 'secret12345',
             'role' => User::ROLE_ADMIN, 'active' => 1, 'can_modify' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
     }
 
@@ -38,6 +40,7 @@ class AuditViewerTest extends TestCase
         return User::create([
             'username' => 'cons_' . substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Cons', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
     }
 

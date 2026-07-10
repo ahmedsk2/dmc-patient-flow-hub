@@ -29,6 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: ['csp-report']);
         $middleware->alias([
             'admin' => \App\Http\Middleware\EnsureAdmin::class,
+            'email.verify' => \App\Http\Middleware\EnsureEmailVerified::class, // 2026-07-11 auth-hardening
             'mfa.enroll' => \App\Http\Middleware\EnsureMfaEnrolled::class,
             'pwd' => \App\Http\Middleware\EnsurePasswordNotExpired::class,
             'session.timeout' => \App\Http\Middleware\SessionTimeout::class,   // Phase 4 — Item 2

@@ -56,6 +56,12 @@ class MfaController extends Controller
             'mfa_enrolled_at' => now(),
             'mfa_last_counter' => $counter,   // the enrollment code can't be replayed as the first challenge
         ]);
+        // 2026-07-11 auth-hardening: rotate the remember_token so ANY recaller cookie this user set
+        // before enrolling (in the pre-MFA grace window) is invalidated — otherwise it would
+        // auto-authenticate them on a future request WITHOUT the MFA challenge, defeating the second
+        // factor. New logins never issue a recaller (AuthController), so this only clears stale ones.
+        $user->setRememberToken(\Illuminate\Support\Str::random(60));
+        $user->save();
         $request->session()->forget(['mfa.setup.secret', 'mfa.setup.codes']);
         $this->audit($user, 'mfa.enable');
 

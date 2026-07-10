@@ -9,6 +9,7 @@ use App\Models\Consultation;
 use App\Models\Patient;
 use App\Models\User;
 use App\Support\AuditDiff;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -27,6 +28,7 @@ class AuditDiffTest extends TestCase
             'username' => 'ad_' . substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Diff Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
             'can_modify' => 1, 'can_manage' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
     }
 

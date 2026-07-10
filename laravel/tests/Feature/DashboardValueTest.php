@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Consultation;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Inertia\Testing\AssertableInertia;
@@ -24,6 +25,7 @@ class DashboardValueTest extends TestCase
         return User::create([
             'username' => 'dv_' . substr(md5(uniqid('', true)), 0, 10),
             'name' => 'DV Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
     }
 

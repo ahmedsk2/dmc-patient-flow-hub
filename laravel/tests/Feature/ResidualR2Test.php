@@ -8,6 +8,7 @@ use App\Models\Consultation;
 use App\Models\Icd10;
 use App\Models\Patient;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
@@ -31,6 +32,7 @@ class ResidualR2Test extends TestCase
         return User::create(array_merge([
             'username' => 'r2_' . substr(md5(uniqid('', true)), 0, 10),
             'name' => 'R2 User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
     }
 

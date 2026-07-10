@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Support\Totp;
+
 use App\Models\Admission;
 use App\Models\Patient;
 use App\Models\User;
@@ -22,7 +24,7 @@ class AuthorizationTest extends TestCase
     {
         return User::create(array_merge([
             'username' => 'test_' . $role . '_' . substr(md5(uniqid('', true)), 0, 8),
-            'name' => 'Test User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
+            'name' => 'Test User', 'password' => 'secret12345', 'role' => $role, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
     }
 

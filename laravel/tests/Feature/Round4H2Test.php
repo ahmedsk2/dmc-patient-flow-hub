@@ -10,6 +10,7 @@ use App\Models\Patient;
 use App\Models\TbDiagnosis;
 use App\Models\User;
 use App\Services\ShuffleService;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
@@ -49,6 +50,7 @@ class Round4H2Test extends TestCase
         return User::create(array_merge([
             'username' => 'h2_' . substr(md5(uniqid('', true)), 0, 10),
             'name' => 'H2 User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
     }
 
@@ -423,21 +425,45 @@ class Round4H2Test extends TestCase
                     && collect($g)->pluck('name')->contains('Dr Me')));
     }
 
-    // ---- C1: remember-me 30 days ----------------------------------------------------------------------
+    // ---- C1: remember-me is DISABLED (2026-07-11 auth-hardening) ---------------------------------------
 
-    public function test_remember_me_cookie_lives_thirty_days(): void
+    public function test_remember_me_is_disabled_no_recaller_cookie_even_when_requested(): void
     {
-        $this->assertSame(43200, config('auth.guards.web.remember'), '30-day recaller TTL must be configured');
-
-        $u = $this->user(User::ROLE_CONSULTANT);
+        // A recaller cookie auto-authenticates via SessionGuard WITHOUT the MFA challenge — under
+        // mandatory MFA that is a second-factor bypass. AuthController hardcodes Auth::login(.., false),
+        // so even a forged remember=true yields NO recaller cookie.
+        $u = $this->user(User::ROLE_CONSULTANT, ['mfa_secret' => null, 'mfa_enrolled_at' => null]);
         $res = $this->post('/login', ['username' => $u->username, 'password' => 'secret12345', 'remember' => true]);
         $res->assertRedirect();
 
         $cookie = collect($res->headers->getCookies())
             ->first(fn ($c) => str_starts_with($c->getName(), 'remember_web_'));
-        $this->assertNotNull($cookie, 'remember login must queue the recaller cookie');
-        $this->assertEqualsWithDelta(now()->addMinutes(43200)->getTimestamp(), $cookie->getExpiresTime(), 300,
-            'recaller cookie must expire in ~30 days (legacy parity), not the framework 400-day default');
+        $this->assertNull($cookie, 'no recaller cookie may be issued — remember-me is disabled under mandatory MFA');
+    }
+
+    public function test_enrolling_mfa_rotates_the_remember_token_to_kill_any_stale_recaller(): void
+    {
+        // A user could have set a recaller BEFORE this deploy / before enrolling; enrolling MFA must
+        // invalidate it by rotating remember_token, so the old cookie can never auto-auth past the challenge.
+        $u = $this->user(User::ROLE_CONSULTANT, ['mfa_secret' => null, 'mfa_enrolled_at' => null, 'remember_token' => 'stale-preexisting-token']);
+        $secret = \App\Support\Totp::secret();
+        $this->withSession(['mfa.setup.secret' => $secret, 'mfa.setup.codes' => \App\Support\Totp::recoveryCodes()])
+            ->actingAs($u)
+            ->post('/mfa/confirm', ['code' => $this->totpCode($secret)])
+            ->assertRedirect();
+
+        $u->refresh();
+        $this->assertNotNull($u->mfa_enrolled_at, 'enrolment must have succeeded');
+        $this->assertNotSame('stale-preexisting-token', $u->remember_token, 'remember_token must be rotated on enrolment');
+    }
+
+    /** Current valid TOTP for a secret, via the app's own engine (private code() by reflection). */
+    private function totpCode(string $secret): string
+    {
+        $m = new \ReflectionMethod(\App\Support\Totp::class, 'code');
+        $m->setAccessible(true);
+
+        return (string) $m->invoke(null, $secret, intdiv(now()->getTimestamp(), 30));
     }
 
     // ---- C2: NULL pass_exp_date = expired ----------------------------------------------------------------

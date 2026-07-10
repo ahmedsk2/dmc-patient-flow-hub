@@ -6,6 +6,7 @@ use App\Models\Admission;
 use App\Models\AuditLog;
 use App\Models\Patient;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -23,7 +24,17 @@ class StepUpTest extends TestCase
         return User::create(array_merge([
             'username' => 'su_' . substr(md5(uniqid('', true)), 0, 8),
             'name' => 'SU Admin', 'role' => User::ROLE_ADMIN, 'active' => 1, 'password' => 'secret12345',
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
+    }
+
+    /** Current valid 6-digit TOTP for a secret, via the private Totp::code (verifier accepts it). */
+    private function totpFor(string $secret): string
+    {
+        $reflect = new \ReflectionMethod(Totp::class, 'code');
+        $reflect->setAccessible(true);
+
+        return $reflect->invoke(null, $secret, intdiv(time(), 30));
     }
 
     private function admission(array $a = []): Admission
@@ -64,9 +75,14 @@ class StepUpTest extends TestCase
 
     public function test_stepup_verify_correct_password_stamps_session(): void
     {
+        // 2026-07-11 auth-hardening: every admin is now MFA-enrolled by default (admin()'s
+        // defaults), so the "correct password" path must also supply a valid current TOTP code —
+        // this is still exercising "correct credentials stamp the session", just with both factors.
         $admin = $this->admin();
 
-        $this->actingAs($admin)->post('/stepup', ['password' => 'secret12345'])->assertRedirect();
+        $this->actingAs($admin)->post('/stepup', [
+            'password' => 'secret12345', 'code' => $this->totpFor($admin->mfa_secret),
+        ])->assertRedirect();
 
         $this->assertNotNull(session('stepup.verified_at'));
         $this->assertTrue(now()->getTimestamp() - (int) session('stepup.verified_at') <= 5);
