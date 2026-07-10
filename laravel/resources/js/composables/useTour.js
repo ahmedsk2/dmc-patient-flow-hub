@@ -12,6 +12,8 @@ import { buildSteps } from '@/lib/tourSteps.js';
 // session-scoped guard so an in-progress / just-finished auto tour doesn't re-fire on the next
 // Inertia visit within the same page life. Module-level (one per loaded app instance).
 let suppressed = false;
+// the pending auto-start delay timer (module-level: at most one auto-start is ever pending)
+let autoStartTimer = null;
 
 const xsrf = () =>
     decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/) || [])[1] || '');
@@ -55,13 +57,25 @@ export function useTour() {
     // Called on AppLayout mount. Start the auto-tour iff: not already suppressed this session, the
     // server flag is null (never seen), and the current route isn't excluded. The short paint delay
     // lets data-tour anchors mount before driver.js measures them.
+    //
+    // The delay timer is tracked + cancellable: without that, a layout (or a jsdom test file)
+    // unmounting inside the 400ms window leaks a pending callback that later drives driver.js
+    // against a torn-down document — the exact "document is not defined after teardown" unhandled
+    // error the first CI run surfaced. The callback re-checks the environment as a backstop.
     const maybeAutoStart = (user, path) => {
         if (suppressed) return false;
         if (!user || user.tour_completed_at != null) return false;
         if (isExcludedRoute(path)) return false;
-        setTimeout(() => { if (!suppressed) startTour(user, { auto: true }); }, 400);
+        clearTimeout(autoStartTimer);
+        autoStartTimer = setTimeout(() => {
+            if (suppressed || typeof document === 'undefined') return;
+            startTour(user, { auto: true });
+        }, 400);
         return true;
     };
 
-    return { startTour, completeTour, maybeAutoStart };
+    // For the mounting layout's unmount hook — cancels an auto-start still in its delay window.
+    const cancelAutoStart = () => { clearTimeout(autoStartTimer); autoStartTimer = null; };
+
+    return { startTour, completeTour, maybeAutoStart, cancelAutoStart };
 }

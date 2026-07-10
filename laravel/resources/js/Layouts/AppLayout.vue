@@ -26,7 +26,7 @@ const logout = () => { clearRecents(); sessionStorage.removeItem(SESSION_START_K
 // auth.user.tour_completed_at is null and the route isn't excluded; the header "?" replays it
 // (replay never sets the flag). data-tour anchors live on the nav sections / quick-jump / bell here
 // and on the board + dashboard hero in their pages.
-const { startTour, maybeAutoStart } = useTour();
+const { startTour, maybeAutoStart, cancelAutoStart } = useTour();
 const replayTour = () => startTour(usePage().props.auth?.user || {}, { auto: false });
 
 // ---- theme toggle (light / dark / system) -----------------------------------------------------
@@ -356,6 +356,9 @@ onMounted(() => {
 onUnmounted(() => {
     idleEvents.forEach((e) => window.removeEventListener(e, resetIdle));
     if (idleTimer) clearInterval(idleTimer);
+    // cancel a first-login tour auto-start still inside its 400ms paint delay — unmounting within
+    // that window otherwise leaks a callback that drives driver.js against a gone document
+    cancelAutoStart();
 });
 </script>
 
