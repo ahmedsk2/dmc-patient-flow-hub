@@ -53,11 +53,11 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
         </span>
         <div class="mb-5 flex flex-wrap items-center gap-3">
             <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line w-fit">
-                <button @click="tab = 'awaiting'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="tab === 'awaiting' ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">Awaiting my signature ({{ awaiting.length }})</button>
-                <button @click="tab = 'outgoing'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="tab === 'outgoing' ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">My outgoing ({{ outgoing.length }})</button>
+                <button @click="tab = 'awaiting'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="tab === 'awaiting' ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">Awaiting my signature ({{ awaiting.length }})</button>
+                <button @click="tab = 'outgoing'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="tab === 'outgoing' ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">My outgoing ({{ outgoing.length }})</button>
             </div>
             <span class="text-sm text-ink-400">{{ tab === 'awaiting' ? 'patients handed over to you — review and sign' : 'patients you handed over in the last 7 days' }}</span>
-            <button v-if="tab === 'awaiting' && awaiting.length > 1" @click="signAll" class="ml-auto rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Sign all ({{ awaiting.length }})</button>
+            <button v-if="tab === 'awaiting' && awaiting.length > 1" @click="signAll" class="ml-auto rounded-xl bg-brand-solid px-4 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover">Sign all ({{ awaiting.length }})</button>
         </div>
 
         <!-- awaiting my signature -->
@@ -117,7 +117,7 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
                                 <p v-if="eForm.errors.body" class="mt-1 text-xs text-on-danger">{{ eForm.errors.body }}</p>
                                 <div class="mt-1.5 flex justify-end gap-2">
                                     <button @click="editing = null" class="rounded-lg px-3 py-1.5 text-xs font-semibold text-ink-500">Cancel</button>
-                                    <button @click="saveEdit(s)" :disabled="eForm.processing || !eForm.body.trim()" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save</button>
+                                    <button @click="saveEdit(s)" :disabled="eForm.processing || !eForm.body.trim()" class="rounded-lg bg-brand-solid px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Save</button>
                                 </div>
                             </template>
                             <template v-else>

@@ -68,7 +68,7 @@ defineExpose({ data, hForm, editing, histOpen, submitHandover });
                     <p v-if="hForm.errors.body" class="mt-1 text-xs text-on-danger">{{ hForm.errors.body }}</p>
                     <div class="mt-3 flex justify-end gap-2">
                         <button type="button" @click="editing = false" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
-                        <button type="button" @click="submitHandover" :disabled="hForm.processing || !hForm.body.trim()" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save</button>
+                        <button type="button" @click="submitHandover" :disabled="hForm.processing || !hForm.body.trim()" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Save</button>
                     </div>
                 </template>
                 <template v-else>
@@ -76,7 +76,7 @@ defineExpose({ data, hForm, editing, histOpen, submitHandover });
                     <div class="mt-3 flex items-center justify-between">
                         <button v-if="data.revisions?.length" type="button" @click="histOpen = !histOpen" :aria-expanded="histOpen" class="text-xs font-semibold text-brand-600 hover:underline">{{ histOpen ? 'Hide history' : `History (${data.revisions.length})` }}</button>
                         <span v-else class="text-xs text-ink-400">No history yet.</span>
-                        <button v-if="canManage && !isObserver" type="button" @click="editing = true" class="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Edit</button>
+                        <button v-if="canManage && !isObserver" type="button" @click="editing = true" class="rounded-xl bg-brand-solid px-4 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover">Edit</button>
                     </div>
                     <ul v-if="histOpen" class="mt-3 max-h-56 space-y-2 overflow-auto">
                         <li v-for="(r, i) in data.revisions" :key="i" class="rounded-xl ring-1 ring-line">

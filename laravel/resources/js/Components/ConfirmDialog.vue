@@ -16,7 +16,7 @@ const danger = computed(() => tone.value === 'danger');
 const headerClass = computed(() => danger.value ? 'bg-tint-danger text-on-danger' : 'bg-ink-50 text-ink-700');
 const confirmClass = computed(() => danger.value
     ? 'bg-danger-600 hover:bg-danger-700 text-white focus-visible:ring-danger-500'
-    : 'bg-brand-600 hover:bg-brand-700 text-white focus-visible:ring-brand-500');
+    : 'bg-brand-solid hover:bg-brand-solid-hover text-white focus-visible:ring-brand-500');
 
 const panel = ref(null);
 const cancelBtn = ref(null);

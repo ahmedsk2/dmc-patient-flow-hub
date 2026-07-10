@@ -41,7 +41,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outli
                 </label>
 
                 <button type="submit" :disabled="form.processing"
-                    class="w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">
+                    class="w-full rounded-xl bg-brand-solid px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">
                     Confirm
                 </button>
                 <Link href="/" class="block text-center text-sm text-ink-400 hover:text-ink-600">Cancel</Link>

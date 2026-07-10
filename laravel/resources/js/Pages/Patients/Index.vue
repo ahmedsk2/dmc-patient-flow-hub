@@ -254,7 +254,7 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
                 <input v-model="search" v-focus aria-label="Search patients by name or MRN" placeholder="Search name or MRN…" autocomplete="off" class="w-56 rounded-xl border border-ink-200 bg-card py-2 ps-10 pe-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
             </div>
             <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line">
-                <button v-for="l in ['Ward','ICU','ER']" :key="l" @click="setLocation(l)" class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="location === l ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ l }}</button>
+                <button v-for="l in ['Ward','ICU','ER']" :key="l" @click="setLocation(l)" class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="location === l ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">{{ l }}</button>
                 <button v-for="v in [['longterm','Long-term'],['tb','TB'],['boarding','Boarding']]" :key="v[0]" @click="setView(v[0])" class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="view === v[0] ? 'bg-accent-500 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ v[1] }}</button>
             </div>
             <!-- a dashboard drill-through (consultant/specialty) or any filter shows a Clear chip -->
@@ -271,7 +271,7 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
             <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line" role="group" aria-label="Board density">
                 <button v-for="d in [['comfortable','Comfortable'],['compact','Compact']]" :key="d[0]" @click="setDensity(d[0])"
                     :aria-pressed="density === d[0]" :title="`${d[1]} board density`"
-                    class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="density === d[0] ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ d[1] }}</button>
+                    class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="density === d[0] ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">{{ d[1] }}</button>
             </div>
             <a href="/active-list" target="_blank" title="Print board" aria-label="Print board (opens in a new tab)" class="grid h-9 w-9 place-items-center rounded-xl bg-card text-ink-500 shadow-sm ring-1 ring-line transition hover:bg-ink-50">
                 <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.4 42.4 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.32 0H6.34m11.32 0 .55-6.171M6.34 18l-.55-6.171m0 0a42.4 42.4 0 0 1 12.42 0M5.79 11.829V6.75A2.25 2.25 0 0 1 8.04 4.5h7.92a2.25 2.25 0 0 1 2.25 2.25v5.079" /></svg>
@@ -458,7 +458,7 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
                         <summary class="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-ink-700">Activity <span class="nums font-normal text-ink-400">({{ mActivity.length }})</span></summary>
                         <div class="px-3 pb-3"><ActivityPanel :items="mActivity" /></div>
                     </details>
-                    <div class="flex justify-end gap-2 pt-1"><button type="button" @click="closeModify" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save changes</button></div>
+                    <div class="flex justify-end gap-2 pt-1"><button type="button" @click="closeModify" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mForm.processing" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Save changes</button></div>
                 </form>
         </BaseModal>
     </AppLayout>

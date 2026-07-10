@@ -124,7 +124,7 @@ const btn = 'rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opac
         </div>
 
         <div class="mt-4 flex items-center gap-3">
-            <button :class="[btn, 'bg-brand-600 text-white hover:bg-brand-700']"
+            <button :class="[btn, 'bg-brand-solid text-white hover:bg-brand-solid-hover']"
                 :disabled="!source || !target || sameSelected" @click="loadPreview">Preview merge</button>
             <span v-if="sameSelected" class="text-sm text-on-danger">Source and target must be different patients.</span>
             <span v-if="previewError" class="text-sm text-on-danger">{{ previewError }}</span>

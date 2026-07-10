@@ -26,7 +26,7 @@ const generateAsync = () => router.get('/reports/monthly/pdf', { year: year.valu
             <select v-model="year" @change="change" class="rounded-xl border border-ink-200 bg-card px-4 py-2 text-sm font-semibold outline-none focus:border-brand-500">
                 <option v-for="y in availableYears" :key="y" :value="y">{{ y }}</option>
             </select>
-            <a :href="`/reports/monthly/pdf?year=${year}&month=${month}`" class="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-700">Download PDF</a>
+            <a :href="`/reports/monthly/pdf?year=${year}&month=${month}`" class="inline-flex items-center gap-2 rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-solid-hover">Download PDF</a>
             <!-- §3.6: queue the heavy full-year booklet and get notified when ready -->
             <button v-if="heavyBooklet" @click="generateAsync" class="inline-flex items-center gap-2 rounded-xl bg-card px-4 py-2 text-sm font-semibold text-brand-700 shadow ring-1 ring-brand-200 transition hover:bg-brand-50" title="Generate the full-year booklet in the background and notify when ready">Generate in background</button>
             <button @click="print" class="inline-flex items-center gap-2 rounded-xl bg-card px-4 py-2 text-sm font-semibold text-ink-600 shadow ring-1 ring-ink-200 transition hover:bg-ink-50">Print</button>

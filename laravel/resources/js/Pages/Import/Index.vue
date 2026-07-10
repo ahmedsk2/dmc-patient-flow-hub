@@ -146,7 +146,7 @@ const cell = 'w-full min-w-16 rounded-lg border border-ink-200 bg-card px-1.5 py
                 <p v-else class="mt-2 text-xs text-ink-400">Cells are editable — fix typos here, then confirm. Every row is re-validated on import; statuses shown reflect the last preview.</p>
                 <div class="mt-4 flex items-center justify-end gap-3">
                     <span class="mr-auto text-xs text-ink-400">Invalid rows are skipped automatically.</span>
-                    <button @click="doImport" :disabled="form.processing || (editable ? !editRows.length : !preview.valid)" class="rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-brand-700 disabled:opacity-50">
+                    <button @click="doImport" :disabled="form.processing || (editable ? !editRows.length : !preview.valid)" class="rounded-xl bg-brand-solid px-6 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-brand-solid-hover disabled:opacity-50">
                         {{ form.processing ? 'Importing…' : (editable ? `Confirm import (${editRows.length} row${editRows.length === 1 ? '' : 's'})` : `Confirm import (${preview.valid})`) }}
                     </button>
                 </div>

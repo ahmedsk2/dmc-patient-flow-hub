@@ -181,7 +181,7 @@ const toggleExpand = (id) => {
         { label: 'Registry' },
     ]">
         <div class="mb-4 flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line w-fit">
-            <button v-for="m in modes" :key="m[0]" @click="setMode(m[0])" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="mode === m[0] ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ m[1] }}</button>
+            <button v-for="m in modes" :key="m[0]" @click="setMode(m[0])" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="mode === m[0] ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">{{ m[1] }}</button>
         </div>
 
         <!-- filters -->
@@ -199,8 +199,8 @@ const toggleExpand = (id) => {
                     <select v-model="f.discharged_to" :class="fld" aria-label="Filter by discharge destination"><option value="">Any discharged-to</option><option v-for="d in options.dischargedTo" :key="d">{{ d }}</option></select>
                     <select v-model="f.delay" :class="fld" aria-label="Filter by delay reason"><option value="">Any delay reason</option><option v-for="d in options.delays" :key="d">{{ d }}</option></select>
                     <div class="flex gap-2"><input v-model="f.age_from" :class="fld" placeholder="Age ≥" inputmode="numeric" aria-label="Minimum age" /><input v-model="f.age_to" :class="fld" placeholder="Age ≤" inputmode="numeric" aria-label="Maximum age" /></div>
-                    <div><label class="text-xs text-ink-400">Admitted from</label><input v-model="f.from" type="date" :class="fld" aria-label="From date" /></div>
-                    <div><label class="text-xs text-ink-400">to</label><input v-model="f.to" type="date" :class="fld" aria-label="To date" /></div>
+                    <div><label for="reg-adm-from" class="text-xs text-ink-400">Admitted from</label><input id="reg-adm-from" v-model="f.from" type="date" :class="fld" /></div>
+                    <div><label for="reg-adm-to" class="text-xs text-ink-400">to</label><input id="reg-adm-to" v-model="f.to" type="date" :class="fld" /></div>
                 </div>
                 <IcdTypeahead :input-class="fld" placeholder="Add diagnosis filter (ICD-10)…" @select="addDx" />
                 <div v-if="selectedDx.length" class="flex flex-wrap items-center gap-2">
@@ -213,7 +213,7 @@ const toggleExpand = (id) => {
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.discharged" class="rounded text-brand-600" /> Discharged only</label>
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.tb" class="rounded text-brand-600" /> TB</label>
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.readmit72" class="rounded text-brand-600" /> {{ options.readmitWindow ?? 3 }}-day readmissions</label>
-                    <button @click="apply" class="ms-auto rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">Search</button>
+                    <button @click="apply" class="ms-auto rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover">Search</button>
                     <button @click="reset" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 hover:text-ink-700">Reset</button>
                     <template v-if="hasTerm">
                         <button type="button" @click="postExport('/registry/export-xlsx')" @mouseenter="loadMatchCount" @focus="loadMatchCount" class="rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</button>
@@ -233,8 +233,8 @@ const toggleExpand = (id) => {
                     <input v-model="f.consultation_from" :class="fld" placeholder="From service" aria-label="Filter by referring service" />
                     <input v-model="f.to_service" :class="fld" placeholder="To service" aria-label="Filter by consulted service" />
                     <div class="flex gap-2"><input v-model="f.age_from" :class="fld" placeholder="Age ≥" inputmode="numeric" aria-label="Minimum age" /><input v-model="f.age_to" :class="fld" placeholder="Age ≤" inputmode="numeric" aria-label="Maximum age" /></div>
-                    <div><label class="text-xs text-ink-400">From</label><input v-model="f.from" type="date" :class="fld" aria-label="From date" /></div>
-                    <div><label class="text-xs text-ink-400">to</label><input v-model="f.to" type="date" :class="fld" aria-label="To date" /></div>
+                    <div><label for="reg-con-from" class="text-xs text-ink-400">From</label><input id="reg-con-from" v-model="f.from" type="date" :class="fld" /></div>
+                    <div><label for="reg-con-to" class="text-xs text-ink-400">to</label><input id="reg-con-to" v-model="f.to" type="date" :class="fld" /></div>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                     <label v-for="r in options.reasons" :key="r.id" class="cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold transition" :class="f.indication.includes(r.id) ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'"><input type="checkbox" class="hidden" :checked="f.indication.includes(r.id)" @change="toggleInd(r.id)" /> {{ r.name }}</label>
@@ -245,7 +245,7 @@ const toggleExpand = (id) => {
                 </div>
                 <div class="flex items-center gap-4">
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.signed_only" class="rounded text-brand-600" /> Signed off only</label>
-                    <button @click="apply" class="ms-auto rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">Search</button>
+                    <button @click="apply" class="ms-auto rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover">Search</button>
                     <button @click="reset" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 hover:text-ink-700">Reset</button>
                     <template v-if="hasTerm">
                         <button type="button" @click="postExport('/registry/export-xlsx')" @mouseenter="loadMatchCount" @focus="loadMatchCount" class="rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</button>
@@ -260,9 +260,9 @@ const toggleExpand = (id) => {
             <!-- DIAGNOSIS -->
             <div v-else class="flex flex-wrap items-end gap-3">
                 <div class="grow"><label class="text-xs text-ink-400">Diagnosis keyword</label><input v-model="f.keyword" v-focus @keyup.enter="apply" :class="[fld, 'w-full']" aria-label="Diagnosis keyword search" placeholder="e.g. pneumonia, sepsis…" autocomplete="off" /></div>
-                <div><label class="text-xs text-ink-400">Admitted from</label><input v-model="f.from" type="date" :class="fld" aria-label="From date" /></div>
-                <div><label class="text-xs text-ink-400">to</label><input v-model="f.to" type="date" :class="fld" aria-label="To date" /></div>
-                <button @click="apply" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">Search</button>
+                <div><label for="reg-dx-from" class="text-xs text-ink-400">Admitted from</label><input id="reg-dx-from" v-model="f.from" type="date" :class="fld" /></div>
+                <div><label for="reg-dx-to" class="text-xs text-ink-400">to</label><input id="reg-dx-to" v-model="f.to" type="date" :class="fld" /></div>
+                <button @click="apply" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover">Search</button>
                 <button @click="reset" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 hover:text-ink-700">Reset</button>
                 <template v-if="hasTerm">
                     <button type="button" @click="postExport('/registry/export-xlsx')" @mouseenter="loadMatchCount" @focus="loadMatchCount" class="rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</button>
@@ -284,7 +284,7 @@ const toggleExpand = (id) => {
             <button type="button" @click="setDensity(density === 'compact' ? 'comfortable' : 'compact')"
                 :aria-pressed="density === 'compact'" title="Toggle compact row spacing"
                 class="ms-auto rounded-lg px-3 py-1.5 text-xs font-semibold ring-1 ring-line transition hover:bg-ink-50"
-                :class="density === 'compact' ? 'bg-brand-600 text-white ring-brand-600' : 'bg-card text-ink-500'">
+                :class="density === 'compact' ? 'bg-brand-solid text-white ring-brand-600' : 'bg-card text-ink-500'">
                 Compact rows
             </button>
         </div>
@@ -400,7 +400,7 @@ const toggleExpand = (id) => {
             <span class="nums">Showing {{ results.from }}–{{ results.to }} of {{ results.total }}</span>
             <!-- SPC-TM-011: page changes route through goPage() — with a term active the POST body
                  re-carries it (the links themselves are term-less GET URLs from the paginator) -->
-            <div class="flex gap-1"><component :is="l.url ? 'button' : 'span'" v-for="l in results.links" :key="l.label" :type="l.url ? 'button' : undefined" @click="l.url && goPage(l.url)" class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold transition" :class="l.active ? 'bg-brand-600 text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-500')" v-html="l.label" /></div>
+            <div class="flex gap-1"><component :is="l.url ? 'button' : 'span'" v-for="l in results.links" :key="l.label" :type="l.url ? 'button' : undefined" @click="l.url && goPage(l.url)" class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold transition" :class="l.active ? 'bg-brand-solid text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-500')" v-html="l.label" /></div>
         </div>
 
         <!-- edit modal (canonical PatientForm — resolves the old free-text-nationality drift) -->
@@ -412,7 +412,7 @@ const toggleExpand = (id) => {
                         <summary class="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-ink-700">Activity <span class="nums font-normal text-ink-400">({{ mActivity.length }})</span></summary>
                         <div class="px-3 pb-3"><ActivityPanel :items="mActivity" /></div>
                     </details>
-                    <div class="flex justify-end gap-2 pt-1"><button type="button" @click="closeEdit" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save changes</button></div>
+                    <div class="flex justify-end gap-2 pt-1"><button type="button" @click="closeEdit" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mForm.processing" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Save changes</button></div>
                 </form>
         </BaseModal>
     </AppLayout>

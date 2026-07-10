@@ -1,99 +1,137 @@
-name: laravel-ci
+name: CI
+
+# CI for the Laravel re-platform (`laravel/`). The monorepo root also holds the legacy PHP
+# app, which has its own separate pipeline at .github/workflows/ci.yml — do not merge them.
+#
+# Two independent jobs:
+#  - frontend : npm ci, Vitest, production build, the allow-list + contrast style gates, and a
+#               build-reproducibility check (public/build is committed and must be exactly what
+#               `npm run build` regenerates from source).
+#  - backend  : Composer install against a real MySQL 8 service (phpunit.xml runs RefreshDatabase
+#               against MySQL so the actual SQL dialect — DATEDIFF/DATE_FORMAT/JSON — is exercised),
+#               then the project's established two-pass PHPUnit run (the `pdf` group is isolated in
+#               its own process — dompdf's native font-compression state segfaults PHP if run in the
+#               same long-lived process as the rest of the suite).
+#
+# Neither job hard-codes a test count or snapshot value — the gates themselves are the assertion.
 
 on:
   push:
+    branches: [main, laravel-replatform]
     paths: ['laravel/**', '.github/workflows/laravel-ci.yml']
   pull_request:
+    branches: [main, laravel-replatform]
     paths: ['laravel/**', '.github/workflows/laravel-ci.yml']
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  frontend:
+    name: Frontend (Vitest, build, style gates)
     runs-on: ubuntu-latest
-    services:
-      mysql:
-        image: mysql:8.4
-        env:
-          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
-          MYSQL_DATABASE: dmc_test
-        ports: ['3306:3306']
-        options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1"
-          --health-interval=10s --health-timeout=5s --health-retries=10
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: laravel
     steps:
       - uses: actions/checkout@v4
 
-      - uses: shivammathur/setup-php@v2
+      - uses: actions/setup-node@v4
         with:
-          php-version: '8.3'
-          extensions: pdo_mysql, mbstring, bcmath, zip, gd
-
-      - name: Install Composer dependencies
-        run: composer install --no-interaction --prefer-dist --no-progress
-
-      - name: Prepare environment
-        run: |
-          cat > .env <<'EOF'
-          APP_NAME="DMC Internal Medicine"
-          APP_ENV=testing
-          APP_KEY=
-          APP_DEBUG=true
-          APP_URL=http://localhost
-          DB_CONNECTION=mysql
-          DB_HOST=127.0.0.1
-          DB_PORT=3306
-          DB_DATABASE=dmc_test
-          DB_USERNAME=root
-          DB_PASSWORD=
-          SESSION_DRIVER=array
-          CACHE_STORE=array
-          QUEUE_CONNECTION=sync
-          MAIL_MAILER=array
-          EOF
-          php artisan key:generate
-
-      - name: Run test suite (PHPUnit, MySQL) — two passes
-        # The dompdf PDF-rendering tests (@group pdf) accumulate native font-compression state
-        # that segfaults the PHP process when run in one long pass alongside the whole suite
-        # ("Premature end of PHP process" inside gzcompress). Split into two fresh processes so
-        # neither accumulates past the crash threshold. (A single pass via ParaTest would also
-        # fix it, but that needs Composer, which the offline build env lacks.)
-        run: |
-          php artisan test --exclude-group pdf
-          php artisan test --group pdf
-
-      - name: Dependency advisories (composer)
-        # advisory-only for now (won't block on an as-yet-unvetted CVE); promote to a hard gate
-        # once a clean run is confirmed.
-        run: composer audit --no-interaction || true
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
           cache-dependency-path: laravel/package-lock.json
 
-      - name: Build front-end (catches Vue/Inertia build breakage)
-        run: npm ci && npm run build
+      - name: Install npm dependencies
+        run: npm ci
 
-      - name: Front-end unit tests (Vitest)
-        run: npm run test
+      # moderate+ blocks; low-severity advisories don't fail the build (the lockfile currently
+      # carries one low esbuild advisory — bump it, then consider tightening the level).
+      - name: Dependency advisories (npm, production)
+        run: npm audit --omit=dev --audit-level=moderate
 
-      - name: Accessibility contrast + perceptual-distance gate (CIEDE2000)
-        # scripts/contrast.mjs process.exit(1)s on any non-KNOWN WCAG contrast failure, any
-        # non-KNOWN CIEDE2000 perceptual-distance failure, or a broken CIEDE2000 implementation
-        # (it self-validates against the Sharma-Wu-Dalal 2005 reference dataset first). Required,
-        # not advisory: this is the only thing standing between a colour-token edit and a repeat of
-        # the warm-gold accent incident (AA-compliant, indistinguishable from the badge next to it).
-        run: npm run contrast
+      - name: Unit tests (Vitest)
+        run: npx vitest run
+
+      - name: Build front-end assets
+        run: npm run build
 
       - name: Class allow-list drift guard
-        # Fails if the set of classes app.css's `@source` allow-list can see drifts from the
-        # committed snapshot — silently, either direction (see scripts/check-source-allowlist.mjs).
         run: npm run check-allowlist
 
-      - name: Dependency advisories (npm, production)
-        run: npm audit --omit=dev
+      - name: Accessibility contrast + perceptual-distance gate
+        run: node scripts/contrast.mjs
+
+      - name: Verify public/build is reproducible from source
+        # public/build is committed so the app can be deployed without a Node toolchain on the
+        # server. If it drifts from what `npm run build` produces (modified OR new/untracked
+        # files), the committed bundle no longer matches source — fail loudly.
+        run: |
+          echo "git status for public/build after 'npm run build':"
+          git status --porcelain -- public/build
+          if [ -n "$(git status --porcelain -- public/build)" ]; then
+            echo "::error::public/build differs from source. Run 'npm run build' locally and commit the result."
+            exit 1
+          fi
+
+  backend:
+    name: Backend (PHPUnit, MySQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: laravel
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: dmc_test
+          # phpunit.xml sets DB_DATABASE=dmc_test but not DB_HOST/PORT/USERNAME/PASSWORD, so those
+          # come from .env (copied from .env.example below): host 127.0.0.1, port 3306, user root,
+          # empty password. Mirror that here rather than editing phpunit.xml.
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_mysql, gd, zip, intl, bcmath
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      # Advisory only for now (|| true) — tighten to blocking once a clean baseline run is confirmed.
+      - name: Dependency advisories (composer)
+        run: composer audit --no-interaction || true
+
+      - name: Prepare environment file
+        run: cp .env.example .env
+
+      - name: Generate application key
+        run: php artisan key:generate
+
+      - name: Wait for MySQL to accept connections
+        run: |
+          until mysqladmin ping -h127.0.0.1 --silent; do
+            sleep 1
+          done
+
+      - name: Test suite — pass 1 (exclude pdf group)
+        run: php artisan test --exclude-group pdf
+
+      - name: Test suite — pass 2 (pdf group, isolated process)
+        # dompdf's native font-compression state accumulates across tests and segfaults PHP
+        # ("Premature end of PHP process" inside gzcompress) if run in the same long pass as the
+        # rest of the suite — a fresh process per pass avoids crossing that threshold.
+        run: php artisan test --group pdf

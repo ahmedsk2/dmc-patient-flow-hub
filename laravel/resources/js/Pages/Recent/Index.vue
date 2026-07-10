@@ -39,8 +39,8 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
     <AppLayout title="Recent Activity">
         <div class="mb-5 flex items-center gap-3">
             <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line w-fit">
-                <button @click="tab = 'discharges'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="tab === 'discharges' ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">Discharges ({{ discharges.length }})</button>
-                <button @click="tab = 'signoffs'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="tab === 'signoffs' ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">Sign-offs ({{ signoffs.length }})</button>
+                <button @click="tab = 'discharges'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="tab === 'discharges' ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">Discharges ({{ discharges.length }})</button>
+                <button @click="tab = 'signoffs'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="tab === 'signoffs' ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">Sign-offs ({{ signoffs.length }})</button>
             </div>
             <span class="text-sm text-ink-400">yesterday + today (since {{ since }}) · undo is admin-only, same-day only</span>
         </div>

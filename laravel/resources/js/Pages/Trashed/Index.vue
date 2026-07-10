@@ -28,7 +28,7 @@ const when = (iso) => (iso ? iso.slice(0, 16).replace('T', ' ') : '—');
 const card = 'overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line';
 const th = 'px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-ink-400';
 const td = 'px-5 py-3 text-sm text-ink-700';
-const btn = 'rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700';
+const btn = 'rounded-lg bg-brand-solid px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-solid-hover';
 </script>
 
 <template>

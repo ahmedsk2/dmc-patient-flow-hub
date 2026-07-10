@@ -134,10 +134,10 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
             </div>
             <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line">
                 <button v-for="s in [['active','Active'],['signed','Signed off'],['all','All']]" :key="s[0]" @click="setStatus(s[0])"
-                    class="rounded-lg px-3 py-1.5 text-sm font-semibold transition" :class="status === s[0] ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ s[1] }}</button>
+                    class="rounded-lg px-3 py-1.5 text-sm font-semibold transition" :class="status === s[0] ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">{{ s[1] }}</button>
             </div>
             <button v-if="isConsultant" @click="toggleMine" class="rounded-xl px-3 py-2 text-sm font-semibold shadow-sm ring-1 transition" :class="scope === 'mine' ? 'bg-accent-500 text-white ring-accent-500' : 'bg-card text-ink-500 ring-line hover:bg-ink-50'">My consultations</button>
-            <button v-if="canAdd" @click="openAdd" class="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-700">
+            <button v-if="canAdd" @click="openAdd" class="inline-flex items-center gap-2 rounded-xl bg-brand-solid px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-solid-hover">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                 New Consultation
             </button>
@@ -196,7 +196,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
             <div class="flex gap-1">
                 <component :is="l.url ? 'button' : 'span'" v-for="l in consultations.links" :key="l.label" :type="l.url ? 'button' : undefined" @click="l.url && goPage(l.url)"
                     class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold transition"
-                    :class="l.active ? 'bg-brand-600 text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" />
+                    :class="l.active ? 'bg-brand-solid text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" />
             </div>
         </div>
         <!-- edit consultation modal -->
@@ -225,7 +225,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                         <input :id="efid('other_indication')" v-model="eForm.other_indication" :aria-describedby="eForm.errors.other_indication ? efid('other_indication') + '-err' : undefined" :class="[field, 'mt-2', eForm.errors.other_indication && 'border-danger-500']" placeholder="Other indication (required when 'Other' is selected)" />
                         <p v-if="eForm.errors.other_indication" :id="efid('other_indication') + '-err'" class="mt-1 text-xs text-on-danger">{{ eForm.errors.other_indication }}</p>
                     </div>
-                    <div class="flex justify-end gap-2"><button type="button" @click="closeEdit" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="eForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Update consultation</button></div>
+                    <div class="flex justify-end gap-2"><button type="button" @click="closeEdit" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="eForm.processing" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Update consultation</button></div>
                 </form>
         </BaseModal>
 
@@ -264,7 +264,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                     </div>
                     <div class="flex justify-end gap-2">
                         <button type="button" @click="closeAdd" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
-                        <button type="submit" :disabled="cForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Create consultation</button>
+                        <button type="submit" :disabled="cForm.processing" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Create consultation</button>
                     </div>
                 </form>
         </BaseModal>

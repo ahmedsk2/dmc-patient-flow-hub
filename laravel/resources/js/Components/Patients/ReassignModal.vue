@@ -138,7 +138,7 @@ defineExpose({
                         <div class="mt-2 flex justify-end gap-2">
                             <!-- Item 9: skip note-writing for stale rows by dropping them from the move set -->
                             <button type="button" @click="uncheckAllStale" class="rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-50">Uncheck all stale ({{ staleRows.length }})</button>
-                            <button type="button" @click="saveAllStale" :disabled="savingAll || !allStaleFilled" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50">{{ savingAll ? 'Saving…' : 'Save all handovers' }}</button>
+                            <button type="button" @click="saveAllStale" :disabled="savingAll || !allStaleFilled" class="rounded-lg bg-brand-solid px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">{{ savingAll ? 'Saving…' : 'Save all handovers' }}</button>
                         </div>
                     </template>
                     <p v-else-if="selectedIds.size" class="mt-2 flex items-center gap-1.5 text-xs font-semibold text-on-success">
@@ -152,7 +152,7 @@ defineExpose({
             <p v-if="rForm.errors.handover" class="text-xs font-semibold text-on-danger">{{ rForm.errors.handover }}</p>
             <p v-if="rForm.errors.admission_ids" class="text-xs font-semibold text-on-danger">{{ rForm.errors.admission_ids }}</p>
 
-            <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="rForm.processing || !rForm.from_consultant_id || !rForm.to_consultant_id || !preflightReady" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Reassign {{ selectedIds.size || '' }} selected</button></div>
+            <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="rForm.processing || !rForm.from_consultant_id || !rForm.to_consultant_id || !preflightReady" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Reassign {{ selectedIds.size || '' }} selected</button></div>
         </form>
     </BaseModal>
 </template>

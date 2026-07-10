@@ -364,7 +364,7 @@ onUnmounted(() => {
     <Head :title="documentTitle" />
     <div class="min-h-full">
         <!-- Skip to content (keyboard users) — visually hidden until focused -->
-        <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:start-2 focus:z-[100] focus:rounded-xl focus:bg-brand-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white">
+        <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:start-2 focus:z-[100] focus:rounded-xl focus:bg-brand-solid focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white">
             Skip to content
         </a>
         <!-- Sidebar -->
@@ -557,7 +557,7 @@ onUnmounted(() => {
                 <div class="mt-4 flex gap-2">
                     <!-- "Stay signed in" only extends the IDLE clock (see staySignedIn()'s comment) — withheld
                          for an absolute-timeout warning so it never promises something it can't do. -->
-                    <button v-if="idleReason !== 'absolute'" @click="staySignedIn" class="flex-1 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">Stay signed in</button>
+                    <button v-if="idleReason !== 'absolute'" @click="staySignedIn" class="flex-1 rounded-xl bg-brand-solid px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-solid-hover">Stay signed in</button>
                     <button @click="lockNow" class="flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-ink-600 ring-1 ring-line transition hover:bg-ink-50">Lock now</button>
                 </div>
             </div>

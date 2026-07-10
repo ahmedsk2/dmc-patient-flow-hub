@@ -34,6 +34,11 @@ export function localToday() {
  * @returns {string} 'DD MMM YYYY', or '' when value is empty/null/unparseable.
  */
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+// Pure-arithmetic leap-year rule (no Date object involved) — same reasoning as localToday() above:
+// a Date-based check runs in the BROWSER's timezone and can silently roll the calendar date.
+const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+const daysInMonth = (y, month) => (month === 2 && isLeapYear(y)) ? 29 : DAYS_IN_MONTH[month - 1];
 export function formatDate(value) {
     if (!value) return '';
     const datePart = String(value).slice(0, 10);
@@ -42,6 +47,7 @@ export function formatDate(value) {
     const [, y, mo, d] = m;
     const year = Number(y), month = Number(mo), day = Number(d);
     if (year === 0 || month < 1 || month > 12 || day < 1 || day > 31) return '';   // rejects 0000-00-00 etc.
+    if (day > daysInMonth(year, month)) return '';   // rejects e.g. 2026-02-31, 2023-02-29 (non-leap)
     return `${String(day).padStart(2, '0')} ${MONTHS[month - 1]} ${year}`;
 }
 

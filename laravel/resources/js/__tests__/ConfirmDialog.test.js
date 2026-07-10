@@ -142,12 +142,12 @@ describe('ConfirmDialog.vue', () => {
         expect(c).not.toContain('hover:bg-danger-600');   // a no-op hover: rest and hover identical
     });
 
-    it('neutral confirm: brand-600 fill hovering to brand-700, never the danger fill', async () => {
+    it('neutral confirm: theme-stable brand-solid fill hovering to brand-solid-hover, never the danger fill', async () => {
         const { ask } = useConfirm();
         ask('Proceed', 'body', 'neutral');
         await wrapper.vm.$nextTick();
         const c = confirmClasses();
-        expect(c).toEqual(expect.arrayContaining(['bg-brand-600', 'text-white', 'hover:bg-brand-700']));
+        expect(c).toEqual(expect.arrayContaining(['bg-brand-solid', 'text-white', 'hover:bg-brand-solid-hover']));
         expect(c).not.toContain('hover:bg-danger-700');
         expect(c.some((x) => x.startsWith('hover:opacity-'))).toBe(false);
     });

@@ -116,6 +116,19 @@ describe('formatDate()', () => {
         expect(formatDate('not-a-date')).toBe('');
         expect(formatDate('0000-00-00')).toBe('');   // legacy MySQL zero-date
     });
+    // Prod-readiness fix: days-in-month is now validated (leap-year aware), not just the crude 1-31
+    // range check above. Pure arithmetic — no `new Date()` — per the same reasoning as localToday():
+    // a Date-based check would run in the BROWSER's timezone and could roll the parsed calendar date.
+    it('rejects an impossible day for the given month (30/31-day months)', () => {
+        expect(formatDate('2026-02-31')).toBe('');   // Feb never has 31 days
+        expect(formatDate('2026-04-31')).toBe('');   // Apr has 30 days
+    });
+    it('accepts Feb 29 in a leap year', () => {
+        expect(formatDate('2024-02-29')).toBe('29 Feb 2024');   // 2024 % 4 == 0, % 100 != 0
+    });
+    it('rejects Feb 29 in a non-leap year', () => {
+        expect(formatDate('2023-02-29')).toBe('');
+    });
 });
 
 // Wave 3, Item 5: double-submit guard. `:disabled="form.processing"` is the primary UI guard;

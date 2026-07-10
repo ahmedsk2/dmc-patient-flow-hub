@@ -12,6 +12,15 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Prod-readiness closeout, Item 1: CSP + static security headers on every web response.
+        // PREPENDED (outermost web slice), not appended: error responses produced by inner
+        // middleware — e.g. the 419 a CSRF token-mismatch renders at the ValidateCsrfToken
+        // slice — travel back OUT through earlier slices only, so only an outermost
+        // SecurityHeaders sees and stamps them. (Router-level 404s never enter the group at
+        // all; those static error pages carry no scripts or PHI.)
+        $middleware->web(prepend: [
+            \App\Http\Middleware\SecurityHeaders::class,
+        ]);
         $middleware->web(append: [
             \App\Http\Middleware\HandleInertiaRequests::class,
         ]);

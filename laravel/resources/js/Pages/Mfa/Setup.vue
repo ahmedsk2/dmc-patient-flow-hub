@@ -39,7 +39,7 @@ const copyCodes = () => navigator.clipboard?.writeText(props.recoveryCodes.join(
                             class="w-full rounded-xl border border-ink-200 px-4 py-3 text-center text-2xl font-bold tracking-[0.3em] outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                             :class="{ 'border-danger-500': form.errors.code }" />
                         <p v-if="form.errors.code" class="mt-2 text-xs text-on-danger">{{ form.errors.code }}</p>
-                        <button type="submit" :disabled="form.processing" class="mt-4 w-full rounded-xl bg-brand-600 px-4 py-3 font-semibold text-white shadow transition hover:bg-brand-700 disabled:opacity-60">
+                        <button type="submit" :disabled="form.processing" class="mt-4 w-full rounded-xl bg-brand-solid px-4 py-3 font-semibold text-white shadow transition hover:bg-brand-solid-hover disabled:opacity-60">
                             {{ form.processing ? 'Verifying…' : 'Enable two-factor' }}
                         </button>
                     </form>

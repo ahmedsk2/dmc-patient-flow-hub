@@ -97,7 +97,7 @@ const destroyAdmission = async (p) => {
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m12.75 15 3-3m0 0-3-3m3 3h-7.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
                     Admission from ICU <span class="nums text-on-danger">{{ icuPatients.length }}</span>
                 </button>
-                <Link v-if="canAdd" href="/admissions/create" class="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-700">
+                <Link v-if="canAdd" href="/admissions/create" class="inline-flex items-center gap-1.5 rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-solid-hover">
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                     Admit patient
                 </Link>
@@ -140,7 +140,7 @@ const destroyAdmission = async (p) => {
                     <div class="mt-3 flex items-center gap-2 border-t border-ink-50 pt-3">
                         <button v-if="canModify" @click="openModify(p)" title="Edit details" class="grid h-7 w-8 shrink-0 place-items-center rounded-lg text-ink-500 ring-1 ring-ink-200 hover:bg-ink-50"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" /></svg></button>
                         <button v-if="me.is_admin" @click="destroyAdmission(p)" title="Delete admission" aria-label="Delete admission" class="grid h-7 w-8 shrink-0 place-items-center rounded-lg text-ink-500 ring-1 ring-ink-200 hover:bg-danger-100 hover:text-danger-600"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg></button>
-                        <button v-if="canAssign" @click="openAssign(p)" class="flex-1 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">Assign to primary</button>
+                        <button v-if="canAssign" @click="openAssign(p)" class="flex-1 rounded-lg bg-brand-solid px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-solid-hover">Assign to primary</button>
                         <button v-if="canSelfAssign" @click="assignToMe(p)" class="flex-1 rounded-lg bg-card px-3 py-1.5 text-xs font-semibold text-brand-700 ring-1 ring-brand-200 hover:bg-brand-50">Assign to me</button>
                         <span v-if="!canAssign && !canSelfAssign && !canModify" class="text-xs text-ink-300">awaiting assignment</span>
                     </div>
@@ -158,7 +158,7 @@ const destroyAdmission = async (p) => {
                 <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="aForm.mark_new" class="rounded text-brand-600" /> Mark as new patient <span class="text-xs text-ink-400">(check to show the “New” badge)</span></label>
                 <div class="flex justify-end gap-2">
                     <button type="button" @click="closeAssign" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
-                    <button type="submit" :disabled="aForm.processing || !aForm.consultant_id" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Assign</button>
+                    <button type="submit" :disabled="aForm.processing || !aForm.consultant_id" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Assign</button>
                 </div>
             </form>
         </BaseModal>
@@ -174,7 +174,7 @@ const destroyAdmission = async (p) => {
                         <td class="px-3 py-2 font-semibold text-ink-800">{{ p.name }}</td>
                         <td class="px-3 py-2 text-ink-600">{{ p.bed || '—' }}</td>
                         <td class="px-3 py-2 text-ink-600">{{ p.consultant }}</td>
-                        <td class="px-3 py-2 text-right"><button @click="fromIcu(p)" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">To ward</button></td>
+                        <td class="px-3 py-2 text-right"><button @click="fromIcu(p)" class="rounded-lg bg-brand-solid px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-solid-hover">To ward</button></td>
                     </tr>
                     <tr v-if="!icuPatients.length"><td colspan="5" class="px-3 py-6 text-center text-ink-400">No ICU patients.</td></tr>
                 </tbody>
@@ -185,7 +185,7 @@ const destroyAdmission = async (p) => {
         <BaseModal :open="!!editing" title="Edit patient" size="lg" tall @close="closeModify">
                 <form @submit.prevent="submitModify" class="space-y-3">
                     <PatientForm :form="mForm" :selected-dx="mDx" :countries="countries" :consultants="consultants" :today="today" :field-class="fld" @add-dx="mAdd" @remove-dx="mRemove" />
-                    <div class="flex justify-end gap-2 pt-1"><button type="button" @click="closeModify" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save changes</button></div>
+                    <div class="flex justify-end gap-2 pt-1"><button type="button" @click="closeModify" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mForm.processing" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Save changes</button></div>
                 </form>
         </BaseModal>
     </AppLayout>

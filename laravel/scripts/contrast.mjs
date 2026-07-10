@@ -147,6 +147,17 @@ const PAIRS = [
     // 3.24:1 dark — both fail 4.5 at 10px. ink-500 is the lightest step clearing 4.5 in BOTH themes.
     ['ink-500 on card (YTD micro-caption, light)', '#5b6a6e', '#ffffff'],
     ['ink-500 on card (YTD micro-caption, dark)', '#a7bbbd', '#13201f'],
+    // --- Prod-readiness brand-solid CTA sweep ---
+    // The app-wide primary-button fill (Save/Assign/Search/"Stay signed in", active-pagination pills,
+    // active-tab pills, the skip-link, toast/CTA fills — ~62 elements across 24 files) moved off the
+    // stepped bg-brand-600 (which INVERTS on dark for text-on-card legibility — see the nav-avatar
+    // residual note above: 4.31:1 light / 2.09:1 dark, a real AA fail) onto the flat, theme-INVARIANT
+    // brand-solid/-hover pair in app.css. ONE row each covers BOTH themes, since neither hex changes
+    // under `.dark`. brand-solid (#00727b) is byte-identical to brand-700, and brand-solid-hover
+    // (#00565e) to brand-800/navy-700 — so these ratios are the same numbers as the 'brand-700 on
+    // white' / 'brand-800 on white' rows above, just fg/bg swapped (the ratio function is symmetric).
+    ['white on brand-solid (CTA fill, both themes)', '#ffffff', '#00727b'],
+    ['white on brand-solid-hover (CTA hover fill, both themes)', '#ffffff', '#00565e'],
 ];
 
 // --- PERCEPTUAL DISTANCE ------------------------------------------------------------------------

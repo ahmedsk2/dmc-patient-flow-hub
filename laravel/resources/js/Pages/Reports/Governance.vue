@@ -33,7 +33,7 @@ const fld = 'rounded-xl border border-ink-200 bg-card px-4 py-2 text-sm font-sem
 
             <div class="mt-6 space-y-5">
                 <div class="flex gap-2 rounded-xl bg-app p-1 ring-1 ring-line w-fit">
-                    <label v-for="t in [['month','Month'],['quarter','Quarter']]" :key="t[0]" class="cursor-pointer rounded-lg px-4 py-1.5 text-sm font-semibold transition" :class="periodType === t[0] ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">
+                    <label v-for="t in [['month','Month'],['quarter','Quarter']]" :key="t[0]" class="cursor-pointer rounded-lg px-4 py-1.5 text-sm font-semibold transition" :class="periodType === t[0] ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">
                         <input type="radio" class="hidden" :value="t[0]" v-model="periodType" /> {{ t[1] }}
                     </label>
                 </div>
@@ -51,7 +51,7 @@ const fld = 'rounded-xl border border-ink-200 bg-card px-4 py-2 text-sm font-sem
                         <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-400">Quarter</label>
                         <select v-model="quarter" :class="fld"><option v-for="q in [1,2,3,4]" :key="q" :value="q">Q{{ q }}</option></select>
                     </div>
-                    <a :href="href" class="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-700">
+                    <a :href="href" class="inline-flex items-center gap-2 rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-solid-hover">
                         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m.75 12 3 3m0 0 3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
                         Download M&amp;M pack PDF
                     </a>

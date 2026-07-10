@@ -182,7 +182,7 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
             </div>
 
             <div class="mt-5 flex items-center gap-3">
-                <button @click="saveSettings" :disabled="sForm.processing" class="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save settings</button>
+                <button @click="saveSettings" :disabled="sForm.processing" class="rounded-xl bg-brand-solid px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Save settings</button>
                 <span v-if="sForm.recentlySuccessful" class="text-sm font-semibold text-on-success">Saved ✓</span>
             </div>
         </div>
@@ -238,7 +238,7 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
             </div>
             <div v-if="users.last_page > 1" class="mt-4 flex justify-end gap-1">
                 <component :is="l.url ? Link : 'span'" v-for="l in users.links" :key="l.label" :href="l.url || undefined" preserve-scroll
-                    class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold" :class="l.active ? 'bg-brand-600 text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" />
+                    class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold" :class="l.active ? 'bg-brand-solid text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" />
             </div>
         </div>
 
@@ -247,14 +247,14 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
             <div class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <h3 class="mb-3 font-bold text-ink-800">Specialties</h3>
                 <div class="mb-4 flex max-h-48 flex-wrap gap-2 overflow-auto"><span v-for="s in specialties" :key="s.id" class="rounded-full px-3 py-1 text-sm" :class="s.is_external ? 'bg-tint-accent text-on-accent' : 'bg-app text-ink-600'">{{ s.name }}<span v-if="s.is_external" class="ml-1 text-[10px] font-semibold uppercase">ext</span></span></div>
-                <form @submit.prevent="submitSpec" class="flex gap-2"><input v-model="specForm.name" :class="field" placeholder="New specialty" /><button :disabled="specForm.processing || !specForm.name" class="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Add</button></form>
+                <form @submit.prevent="submitSpec" class="flex gap-2"><input v-model="specForm.name" :class="field" placeholder="New specialty" /><button :disabled="specForm.processing || !specForm.name" class="rounded-xl bg-brand-solid px-4 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Add</button></form>
                 <label class="mt-2 flex items-center gap-2 text-xs text-ink-500"><input type="checkbox" v-model="specForm.is_subspecialty" class="rounded text-brand-600" /> Subspecialty (uncheck for hospitalist)</label>
                 <label class="mt-1 flex items-center gap-2 text-xs text-ink-500"><input type="checkbox" v-model="specForm.is_external" class="rounded text-brand-600" /> External / allied service (transfer-out target only — not an internal specialty)</label>
             </div>
             <div class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <h3 class="mb-3 font-bold text-ink-800">Consultation indications</h3>
                 <div class="mb-4 flex max-h-48 flex-wrap gap-2 overflow-auto"><span v-for="r in reasons" :key="r.id" class="rounded-full bg-app px-3 py-1 text-sm text-ink-600">{{ r.name }}</span></div>
-                <form @submit.prevent="submitReason" class="flex gap-2"><input v-model="reasonForm.name" :class="field" placeholder="New indication" /><button :disabled="reasonForm.processing || !reasonForm.name" class="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Add</button></form>
+                <form @submit.prevent="submitReason" class="flex gap-2"><input v-model="reasonForm.name" :class="field" placeholder="New indication" /><button :disabled="reasonForm.processing || !reasonForm.name" class="rounded-xl bg-brand-solid px-4 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Add</button></form>
             </div>
 
             <!-- §3.3: monthly-report email recipients -->
@@ -270,7 +270,7 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
                 <p v-else class="mb-4 text-sm text-ink-300">No recipients yet — the scheduled email will send to no one.</p>
                 <form @submit.prevent="submitRecipient" class="flex gap-2">
                     <input v-model="recipientForm.email" type="email" :class="field" placeholder="name@dmc-im.com" />
-                    <button :disabled="recipientForm.processing || !recipientForm.email" class="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Add</button>
+                    <button :disabled="recipientForm.processing || !recipientForm.email" class="rounded-xl bg-brand-solid px-4 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Add</button>
                 </form>
                 <p v-if="recipientForm.errors.email" class="mt-1 text-xs text-on-danger">{{ recipientForm.errors.email }}</p>
             </div>
@@ -319,7 +319,7 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
                     <button v-if="editing.mfa" @click="resetMfa(editing)" class="rounded-xl px-3 py-2 text-sm font-semibold text-on-danger hover:bg-tint-danger">Reset MFA</button>
                     <button @click="deleteUser(editing)" class="mr-auto rounded-xl px-3 py-2 text-sm font-semibold text-on-danger hover:bg-tint-danger">Delete</button>
                     <button @click="closeEditUser" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
-                    <button @click="saveUser" :disabled="uForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save</button>
+                    <button @click="saveUser" :disabled="uForm.processing" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Save</button>
                 </div>
         </BaseModal>
     </AppLayout>

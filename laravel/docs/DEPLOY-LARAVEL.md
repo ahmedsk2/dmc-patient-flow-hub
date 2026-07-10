@@ -88,3 +88,32 @@ Pick **one**:
 The previous system (legacy PHP app) remains deployable from the repo root per [`DEPLOY.md`](../../DEPLOY.md);
 both apps read the same kind of MySQL backup. Rollback = repoint the web server + restore the pre-deploy
 DB backup.
+
+## CI
+
+`.github/workflows/laravel-ci.yml` (workflow name **CI**) gates every push/PR to `main` and
+`laravel-replatform`. It is intentionally a separate file from the legacy app's own
+`.github/workflows/ci.yml` at the repo root — the two apps have independent pipelines; do not merge
+them. Two independent jobs:
+
+- **frontend** — `npm ci` → Vitest → `npm run build` → the class allow-list drift guard →
+  the contrast/perceptual-distance gate → a **build-reproducibility check**.
+- **backend** — Composer install against a real MySQL 8 service container (mirrors `phpunit.xml`,
+  which runs `RefreshDatabase` against MySQL so the actual SQL dialect is exercised), then the
+  project's established **two-pass** `php artisan test` (the `pdf` group runs in its own process —
+  dompdf's native font-compression state segfaults PHP if it shares a long-lived process with the
+  rest of the suite).
+
+**Build-reproducibility invariant:** `public/build/` is committed (so the app can be deployed
+without a Node toolchain on the server — see §0/§1 above). CI rebuilds it from source and fails if
+`git status --porcelain -- public/build` is non-empty afterwards — that covers both a modified
+committed asset *and* a stray new/untracked one. If this step is red, someone edited a `.vue`/CSS/JS
+source file and forgot to rebuild-and-commit `public/build`; the fix is `npm run build` locally,
+then commit the resulting diff.
+
+**A red build otherwise** means one of: a genuine test regression, an accessibility contrast
+regression (a colour token no longer clears WCAG or is perceptually indistinguishable from a
+neighbour — see `scripts/contrast.mjs`), or allow-list drift (the set of Tailwind classes
+`app.css`'s `@source` allow-list can see changed without updating the committed snapshot — see
+`scripts/check-source-allowlist.mjs`). None of these are neutral logging on the current gate — the
+gates are the assertion; no test count or snapshot value is hard-coded into the workflow itself.

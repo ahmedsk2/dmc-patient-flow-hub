@@ -99,7 +99,7 @@ const pretty = (details) => JSON.stringify(details ?? {}, null, 2);
                 <div><label class="text-xs text-ink-400">To</label><input v-model="f.to" type="date" :class="fld" /></div>
             </div>
             <div class="mt-3 flex flex-wrap items-center gap-2">
-                <button @click="apply" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">Apply</button>
+                <button @click="apply" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover">Apply</button>
                 <button @click="reset" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 hover:text-ink-700">Reset</button>
                 <a :href="`/audit/export-xlsx?${qs}`" class="ml-auto rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</a>
                 <a :href="`/audit/export?${qs}`" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50">CSV</a>
@@ -158,7 +158,7 @@ const pretty = (details) => JSON.stringify(details ?? {}, null, 2);
 
         <div v-if="logs.last_page > 1" class="mt-4 flex items-center justify-between text-sm text-ink-500">
             <span class="nums">Showing {{ logs.from }}–{{ logs.to }} of {{ logs.total }}</span>
-            <div class="flex gap-1"><component :is="l.url ? Link : 'span'" v-for="l in logs.links" :key="l.label" :href="l.url || undefined" preserve-scroll class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold transition" :class="l.active ? 'bg-brand-600 text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" /></div>
+            <div class="flex gap-1"><component :is="l.url ? Link : 'span'" v-for="l in logs.links" :key="l.label" :href="l.url || undefined" preserve-scroll class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold transition" :class="l.active ? 'bg-brand-solid text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" /></div>
         </div>
     </AppLayout>
 </template>

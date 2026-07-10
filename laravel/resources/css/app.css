@@ -103,6 +103,16 @@
     --color-brand-900: #004249;
     --color-brand-950: #002b30;
 
+    /* Theme-STABLE CTA fill (prod-readiness brand-solid sweep). The stepped brand-600/700 pair
+     * above INVERTS on dark (see the ".dark { --color-brand-600 }" override below: dark brand-600
+     * LIGHTENS to #5cc3c4 for text-on-card legibility, which is the wrong direction for a fill
+     * carrying WHITE text — measured 4.31:1 light / 2.09:1 dark, the latter a real AA fail). No
+     * stepped brand class can pass AA-as-a-white-fill in both themes at once, so this pair is a
+     * flat literal with NO `.dark` override — that absence is the point, not an oversight.
+     * white on brand-solid = 5.69:1 · white on brand-solid-hover = 8.42:1 (scripts/contrast.mjs). */
+    --color-brand-solid: #00727b;
+    --color-brand-solid-hover: #00565e;
+
     /* Chrome — EHC deep teal (kept under the "navy-*" names the layout already uses) */
     --color-navy-50: #e8f3f3;
     --color-navy-100: #cfe9e7;
@@ -584,7 +594,10 @@
 }
 .driver-popover.dmc-tour .driver-popover-next-btn,
 .driver-popover.dmc-tour .driver-popover-footer button.driver-popover-next-btn {
-    background-color: var(--color-brand-600);
+    /* brand-solid, not brand-600: the stepped teal inverts on dark (#5cc3c4 → 2.09:1 under
+       white text) — the same defect the Vue-side CTA sweep fixed; this driver.js button is
+       styled in plain CSS so the class-level sweep could not reach it. */
+    background-color: var(--color-brand-solid);
     color: #fff;
     border: none;
 }

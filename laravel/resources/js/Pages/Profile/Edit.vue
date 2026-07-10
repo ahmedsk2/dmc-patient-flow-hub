@@ -50,7 +50,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm out
                     </div>
                 </div>
                 <div class="mt-4 flex items-center gap-3">
-                    <button @click="saveProfile" :disabled="pForm.processing" class="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save profile</button>
+                    <button @click="saveProfile" :disabled="pForm.processing" class="rounded-xl bg-brand-solid px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Save profile</button>
                     <span v-if="pForm.recentlySuccessful" class="text-sm font-semibold text-on-success">Saved ✓</span>
                 </div>
             </section>
@@ -81,7 +81,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm out
                         </h3>
                         <p class="mt-1 max-w-md text-sm text-ink-400">Protect your account with a time-based code from an authenticator app, in addition to your password.</p>
                     </div>
-                    <Link v-if="!profile.mfa_enabled" href="/mfa/setup" class="shrink-0 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-brand-700">Enable</Link>
+                    <Link v-if="!profile.mfa_enabled" href="/mfa/setup" class="shrink-0 rounded-xl bg-brand-solid px-5 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-brand-solid-hover">Enable</Link>
                 </div>
                 <p v-if="profile.mfa_enabled" class="mt-4 border-t border-line pt-4 text-sm text-ink-400">
                     Two-factor can only be reset by an administrator — contact one if you lose your authenticator.

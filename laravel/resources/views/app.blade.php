@@ -13,11 +13,11 @@
          other page is Vue `@click`-style handlers, which compile to addEventListener() and are
          already CSP-safe with no `unsafe-inline`. This one block is the sole exception because it
          MUST run before Vite's bundle loads (avoiding a light-mode flash for dark-theme users), so it
-         cannot be an external/deferred file. When a CSP header is introduced (an ops/deploy task, not
-         done here), this is the one script that needs a per-request nonce (or a `sha256-` hash pinned
-         to its exact contents) added to `script-src` — do not add a second inline <script> anywhere
-         else without updating this note. --}}
-    <script>
+         cannot be an external/deferred file. Prod-readiness closeout, Item 1: the nonce is now LIVE —
+         App\Http\Middleware\SecurityHeaders shares a fresh per-request nonce as $cspNonce and pins the
+         same value into the `script-src` directive, so this tag must keep the nonce attribute below.
+         Do not add a second inline <script> anywhere else without updating this note. --}}
+    <script nonce="{{ $cspNonce ?? '' }}">
         (function () {
             try {
                 var t = localStorage.getItem('dmc-theme') || 'system';

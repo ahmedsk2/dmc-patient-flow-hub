@@ -235,7 +235,7 @@ const reasonsOptions = computed(() => barChart(props.reasons.labels, series.valu
             </div>
             <div class="flex items-end gap-1">
                 <div class="flex gap-1 rounded-xl bg-app p-1 ring-1 ring-line">
-                    <button v-for="iv in [['day','Daily'],['month','Monthly'],['quarter','Quarterly']]" :key="iv[0]" @click="setInterval2(iv[0])" class="rounded-lg px-3 py-1.5 text-sm font-semibold transition" :class="interval === iv[0] ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ iv[1] }}</button>
+                    <button v-for="iv in [['day','Daily'],['month','Monthly'],['quarter','Quarterly']]" :key="iv[0]" @click="setInterval2(iv[0])" class="rounded-lg px-3 py-1.5 text-sm font-semibold transition" :class="interval === iv[0] ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">{{ iv[1] }}</button>
                 </div>
             </div>
             <!-- §3.5: year-over-year / prior-period comparison overlay -->
@@ -244,7 +244,7 @@ const reasonsOptions = computed(() => barChart(props.reasons.labels, series.valu
                 <option value="prior_year">vs prior year</option>
                 <option value="prior_period">vs prior period</option>
             </select>
-            <button @click="apply" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-700">Apply</button>
+            <button @click="apply" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-solid-hover">Apply</button>
             <!-- §3.4: export the currently-filtered statistics -->
             <a :href="exportHref" class="inline-flex items-center gap-2 rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-success-700">Excel</a>
             <a :href="exportPdfHref" class="inline-flex items-center gap-2 rounded-xl bg-card px-4 py-2 text-sm font-semibold text-ink-600 shadow-sm ring-1 ring-line transition hover:bg-ink-50">Export PDF</a>
@@ -320,7 +320,7 @@ const reasonsOptions = computed(() => barChart(props.reasons.labels, series.valu
                 <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
                     <h3 class="font-bold text-ink-800">By consultant</h3>
                     <div class="flex gap-1 rounded-xl bg-app p-1 ring-1 ring-line">
-                        <button v-for="m in consModes" :key="m[0]" @click="consMode = m[0]" class="rounded-lg px-3 py-1.5 text-xs font-semibold transition" :class="consMode === m[0] ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ m[1] }}</button>
+                        <button v-for="m in consModes" :key="m[0]" @click="consMode = m[0]" class="rounded-lg px-3 py-1.5 text-xs font-semibold transition" :class="consMode === m[0] ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">{{ m[1] }}</button>
                     </div>
                 </div>
                 <apexchart role="img" aria-label="Statistics chart (data also shown in the period table below)" type="bar" :height="consHeight" :options="consOptions" :series="consSeries" />
@@ -343,7 +343,7 @@ const reasonsOptions = computed(() => barChart(props.reasons.labels, series.valu
                         </div>
                     </div>
                     <!-- §3.1: per-consultant scorecard PDF over the current range -->
-                    <a :href="`/reports/consultant/${physician.id}/pdf?from=${from}&to=${to}`" class="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-700">
+                    <a :href="`/reports/consultant/${physician.id}/pdf?from=${from}&to=${to}`" class="inline-flex items-center gap-2 rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-solid-hover">
                         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m.75 12 3 3m0 0 3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
                         Download scorecard PDF
                     </a>

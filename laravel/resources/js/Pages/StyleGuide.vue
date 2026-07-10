@@ -269,7 +269,7 @@ import FlowAlert from '@/Components/FlowAlert.vue';
             </div>
 
             <div class="mt-6 flex flex-wrap items-center gap-3">
-                <button type="button" class="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-700">
+                <button type="button" class="inline-flex items-center gap-2 rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-solid-hover">
                     Admit patient
                 </button>
                 <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-line bg-card px-5 py-2 text-sm font-semibold text-ink-600 shadow-sm transition hover:border-brand-300 hover:text-brand-700">

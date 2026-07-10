@@ -165,9 +165,9 @@ defineExpose({
                 <div v-if="aForm.errors.handover" class="rounded-xl bg-tint-warning/60 p-3 ring-1 ring-warning-500/30">
                     <p class="text-xs font-semibold text-on-warning">{{ aForm.errors.handover }}</p>
                     <textarea v-model="gateBody" rows="3" maxlength="5000" placeholder="Write today's handover for this patient…" aria-label="Handover text" class="mt-2 w-full rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
-                    <div class="mt-2 flex justify-end"><button type="button" @click="saveGateThen(submitAssign)" :disabled="gateBusy || !gateBody.trim()" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save handover & assign</button></div>
+                    <div class="mt-2 flex justify-end"><button type="button" @click="saveGateThen(submitAssign)" :disabled="gateBusy || !gateBody.trim()" class="rounded-lg bg-brand-solid px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Save handover & assign</button></div>
                 </div>
-                <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="aForm.processing || !aForm.consultant_id" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Assign</button></div>
+                <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="aForm.processing || !aForm.consultant_id" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Assign</button></div>
             </form>
             <form v-else-if="mode === 'medical'" @submit.prevent="submitMedical" class="space-y-4">
                 <!-- record-review step (J1-15c): legacy discharge embedded the admission record
@@ -274,7 +274,7 @@ defineExpose({
                     <div v-if="tForm.errors.handover" class="rounded-xl bg-tint-warning/60 p-3 ring-1 ring-warning-500/30">
                         <p class="text-xs font-semibold text-on-warning">{{ tForm.errors.handover }}</p>
                         <textarea v-model="gateBody" rows="3" maxlength="5000" placeholder="Write today's handover for this patient…" aria-label="Handover text" class="mt-2 w-full rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
-                        <div class="mt-2 flex justify-end"><button type="button" @click="saveGateThen(submitTransfer)" :disabled="gateBusy || !gateBody.trim()" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save handover & transfer</button></div>
+                        <div class="mt-2 flex justify-end"><button type="button" @click="saveGateThen(submitTransfer)" :disabled="gateBusy || !gateBody.trim()" class="rounded-lg bg-brand-solid px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Save handover & transfer</button></div>
                     </div>
                 </template>
                 <template v-else>
@@ -283,7 +283,7 @@ defineExpose({
                         <p v-if="tForm.errors.service" :id="fid('service') + '-err'" class="mt-1 text-xs text-on-danger">{{ tForm.errors.service }}</p></div>
                     <p class="text-xs text-ink-400">Closes this episode — the patient leaves the department (no new episode).</p>
                 </template>
-                <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="tForm.processing || !transferReady" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Transfer</button></div>
+                <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="tForm.processing || !transferReady" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Transfer</button></div>
             </form>
         </template>
     </BaseModal>

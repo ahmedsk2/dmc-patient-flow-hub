@@ -116,3 +116,20 @@ verification Workflow over all three deliverables → commit → push `laravel-r
 - The chosen `brand-solid` hue (#00727b teal) is my judgment call — flag if you want the
   navy family or a different tint instead; it's a two-line token change to adjust.
 - CI provider assumed GitHub Actions (repo is on github.com). Say if you use something else.
+
+## Post-implementation corrections (2026-07-10, same session)
+
+- **Wrong premise:** "no `.github/workflows` exists on this branch" was false — the check had run
+  inside `laravel/`, but workflows live at the repo root. `ci.yml` there is the legacy PHP app's
+  live CI (left untouched); the pre-existing partial `laravel-ci.yml` was rewritten in place
+  instead, with its original `paths` scoping and npm/composer audit steps preserved.
+- **Wrong number:** white on `brand-solid` measures **5.69:1** (per `scripts/contrast.mjs`), not
+  the 5.87:1 stated above.
+- **Adversarial pass findings, all fixed before commit:** blocking `npm audit` failed on a current
+  low-severity esbuild advisory → `--audit-level=moderate`; the driver.js tour Next button (plain
+  CSS, unreachable by the class sweep) still used inverted `--color-brand-600` → `--color-brand-solid`;
+  SecurityHeaders moved from append to **prepend** so 419/CSRF error pages carry headers (curl-
+  verified); CSP auto-relaxes when Vite's gitignored `public/hot` sentinel exists (dev HMR).
+- **Noted, not addressed:** `report` mode has no report-uri (console-only observability); Octane-
+  style long-lived workers would need the `view()->share` nonce pattern revisited (not the current
+  runtime).
