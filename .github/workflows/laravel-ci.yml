@@ -17,10 +17,10 @@ name: CI
 
 on:
   push:
-    branches: [main, laravel-replatform]
+    branches: [main]
     paths: ['laravel/**', '.github/workflows/laravel-ci.yml']
   pull_request:
-    branches: [main, laravel-replatform]
+    branches: [main]
     paths: ['laravel/**', '.github/workflows/laravel-ci.yml']
 
 concurrency:
