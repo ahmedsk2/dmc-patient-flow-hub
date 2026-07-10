@@ -9,10 +9,17 @@ name: CI
 #                    a4.php vs YearlyReport implementations, which only agree on dense real data;
 #                    it is validated locally against the prod copy.)
 
+# paths-ignore: this pipeline guards the LEGACY app (repo root). The Laravel re-platform under
+# laravel/ has its own pipeline (laravel-ci.yml); Laravel-only pushes to main were tripping the
+# legacy E2E job against a stale legacy snapshot (chronically red since 2026-07-08, "could not
+# scrape login CSRF token" — the legacy app's canonical, passing lineage is the `renovation`
+# branch). Any push that actually touches legacy files still runs this pipeline in full.
 on:
   push:
     branches: [ main, master, renovation ]
+    paths-ignore: [ 'laravel/**', '.github/workflows/laravel-ci.yml', 'docs/superpowers/**' ]
   pull_request:
+    paths-ignore: [ 'laravel/**', '.github/workflows/laravel-ci.yml', 'docs/superpowers/**' ]
 
 jobs:
   lint-and-test:
