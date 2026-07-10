@@ -17,9 +17,9 @@ name: CI
 on:
   push:
     branches: [ main, master, renovation ]
-    paths-ignore: [ 'laravel/**', '.github/workflows/laravel-ci.yml', 'docs/superpowers/**' ]
+    paths-ignore: [ 'laravel/**', '.github/workflows/laravel-ci.yml', 'docs/superpowers/**', 'README.md' ]
   pull_request:
-    paths-ignore: [ 'laravel/**', '.github/workflows/laravel-ci.yml', 'docs/superpowers/**' ]
+    paths-ignore: [ 'laravel/**', '.github/workflows/laravel-ci.yml', 'docs/superpowers/**', 'README.md' ]
 
 jobs:
   lint-and-test:

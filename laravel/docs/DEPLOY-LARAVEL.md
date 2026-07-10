@@ -1,6 +1,6 @@
 ﻿# Laravel app â€” production deployment runbook
 
-> Ordered checklist for putting the **Laravel re-platform** (`laravel/` on branch `laravel-replatform`)
+> Ordered checklist for putting the **Laravel re-platform** (`laravel/` on branch `main`)
 > into production. The legacy PHP app has its own runbook at the repo root ([`DEPLOY.md`](../../DEPLOY.md));
 > this one is for the new system. Treat the first deploy as a supervised change with a tested rollback.
 
@@ -17,7 +17,7 @@
 ## 1. Code
 
 ```bash
-git clone -b laravel-replatform https://github.com/ahmedsk2/dmc-patient-flow-hub.git
+git clone -b main https://github.com/ahmedsk2/dmc-patient-flow-hub.git
 cd dmc-patient-flow-hub/laravel
 composer install --no-dev --optimize-autoloader
 npm ci && npm run build          # or upload a locally-built public/build/
@@ -92,7 +92,7 @@ DB backup.
 ## CI
 
 `.github/workflows/laravel-ci.yml` (workflow name **CI**) gates every push/PR to `main` and
-`laravel-replatform`. It is intentionally a separate file from the legacy app's own
+`main` (formerly `laravel-replatform`, consolidated 2026-07-10). It is intentionally a separate file from the legacy app's own
 `.github/workflows/ci.yml` at the repo root — the two apps have independent pipelines; do not merge
 them. Two independent jobs:
 

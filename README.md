@@ -8,7 +8,7 @@ printable/PDF reports).
 
 | | Where | Branch | Status |
 |---|---|---|---|
-| **Laravel re-platform** (go-forward) | [`laravel/`](laravel/) | `laravel-replatform` | Full feature parity, tested (22 tests + CI), reconciled row-for-row against the live data |
+| **Laravel re-platform** (go-forward) | [`laravel/`](laravel/) | `main` | Full feature parity, tested (22 tests + CI), reconciled row-for-row against the live data |
 | **Renovated legacy PHP app** | repo root (`*.php`) | `renovation` (also present here) | The original procedural app, security-hardened; kept guarded and deployable as fallback |
 
 Start here:
@@ -24,7 +24,7 @@ Start here:
 ## Quick start (Laravel app)
 
 ```bash
-git clone -b laravel-replatform https://github.com/ahmedsk2/dmc-patient-flow-hub.git
+git clone -b main https://github.com/ahmedsk2/dmc-patient-flow-hub.git
 cd dmc-patient-flow-hub/laravel
 composer install && npm install
 cp .env.example .env && php artisan key:generate    # set DB_* in .env
