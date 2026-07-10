@@ -371,7 +371,7 @@ onUnmounted(() => {
         <aside
             id="app-sidebar"
             ref="aside"
-            class="fixed inset-y-0 left-0 z-40 w-64 -translate-x-full bg-gradient-to-b from-navy-900 to-navy-950 text-navy-100 transition-[width,transform] lg:translate-x-0"
+            class="fixed inset-y-0 left-0 z-40 flex flex-col w-64 -translate-x-full bg-gradient-to-b from-navy-900 to-navy-950 text-navy-100 transition-[width,transform] lg:translate-x-0"
             :class="{ 'translate-x-0': sidebarOpen, 'lg:w-16': sidebarCollapsed }"
             :aria-hidden="sidebarOpen ? undefined : (mobileViewport ? 'true' : undefined)"
             @keydown="sidebarOpen && onDrawerKeydown($event)"
@@ -398,7 +398,7 @@ onUnmounted(() => {
                 </button>
             </div>
 
-            <nav class="px-3 py-5 space-y-1">
+            <nav class="flex-1 min-h-0 overflow-y-auto px-3 py-5 space-y-1">
                 <!-- Wave 2, Item 2: Overview / Clinical / Operations, each a labelled bucket (same
                      header style as the admin sections below). data-tour anchor kept on the WRAPPING
                      block (Item 10's tour highlights the whole clinical nav area, not one label). -->
@@ -422,7 +422,9 @@ onUnmounted(() => {
                 </template>
             </nav>
 
-            <div class="absolute bottom-0 left-0 right-0 p-4" :class="{ 'lg:hidden': sidebarCollapsed }">
+            <!-- pinned in normal flow at the column's foot (nav above flexes + scrolls); previously
+                 absolute bottom-0, which overlapped the last nav items when the nav ran tall. -->
+            <div class="shrink-0 p-4" :class="{ 'lg:hidden': sidebarCollapsed }">
                 <div class="rounded-2xl bg-white/5 p-4 text-center">
                     <p class="text-[11px] text-navy-300">Eastern Health Cluster</p>
                     <p lang="ar" dir="rtl" class="text-[11px] font-semibold text-brand-300">تجمع الشرقية الصحي</p>

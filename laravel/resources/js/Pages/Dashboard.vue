@@ -444,7 +444,9 @@ onUnmounted(() => clearInterval(autoRefresh));
 
         <!-- KPI hero row (data-tour anchor for the onboarding tour, Item 10) -->
         <h2 class="sr-only">Key performance indicators</h2>
-        <div data-tour="dashboard-hero" class="grid grid-cols-2 gap-4 sm:grid-cols-4 xl:grid-cols-8">
+        <!-- 8 KPI cards: 4-across on desktop (two even rows) so each card has room for its label +
+             icon tile + numeral + spark; 8-across packed them to ~130px and the label ran under the icon. -->
+        <div data-tour="dashboard-hero" class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
             <!-- W4 triad: label → big tabular numeral → (delta chip + inline sparkline) row, brand icon tile kept -->
             <component :is="c.href ? 'button' : 'div'" v-for="c in kpiCards" :key="c.label" type="button"
                 :data-kpi="c.label"
