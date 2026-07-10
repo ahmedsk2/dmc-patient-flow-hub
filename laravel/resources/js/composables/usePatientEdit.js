@@ -1,11 +1,26 @@
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useForm } from '@inertiajs/vue3';
+
+// The fields Modify actually edits — used both to build the initial-snapshot comparison for
+// isDirty and (implicitly) as the shape open() populates. Kept as a literal list rather than
+// Object.keys(form) so adding an unrelated form field never silently joins the dirty check.
+const TRACKED_FIELDS = [
+    'mrn', 'name', 'age', 'gender', 'nationality', 'bed',
+    'admit_date', 'admitted_from', 'current_location', 'consultant_id', 'diagnoses',
+];
 
 /**
  * Patient Modify (full edit) composable (Wave 3, Item 3). The Modify form was triplicated
  * near-verbatim across Patients/Index, Admissions/Index, and Registry/Index (which had drifted to a
  * free-text nationality). This owns the ONE form + fetch-on-open + addDx/removeDx + identity-confirm
  * submit; PatientForm.vue renders the grid v-model'd to `form`.
+ *
+ * isDirty (Wave 3, Item 3): a plain snapshot comparison, NOT Inertia's own form.isDirty — snapshot
+ * comparison is deliberate here because open() re-populates every field with FETCHED data well
+ * after the form's constructor defaults were set, so Inertia's built-in isDirty (which compares
+ * against those original empty defaults) would read dirty=true the instant a record loads, before
+ * the user has touched anything. takeSnapshot() re-anchors the baseline every time open() loads a
+ * record, so isDirty only reflects an actual edit made in this session.
  *
  * Uses Inertia's useForm + router-style .post() (the existing pattern — NOT a raw fetch with a
  * method-override) so validation errors and `processing` flow exactly as before. All three callers
@@ -30,6 +45,11 @@ export function usePatientEdit({ ask, onSuccess = () => {}, editEndpoint, submit
     const selectedDx = ref([]);      // [{ code, name }] chips
     const activity = ref([]);        // per-patient audit trail (rendered as <ActivityPanel> by the host)
 
+    const snapshot = ref(null);      // JSON string baseline taken by takeSnapshot() — null until open() loads
+    const takeSnapshot = () => { snapshot.value = JSON.stringify(TRACKED_FIELDS.map((k) => form[k])); };
+    const isDirty = computed(() => snapshot.value !== null
+        && snapshot.value !== JSON.stringify(TRACKED_FIELDS.map((k) => form[k])));
+
     async function open(p) {
         const d = await (await fetch(editUrl(p.id), { headers: { Accept: 'application/json' } })).json();
         activity.value = d.activity || [];
@@ -42,6 +62,7 @@ export function usePatientEdit({ ask, onSuccess = () => {}, editEndpoint, submit
         form.consultant_id = d.consultant_id || '';   // QUIET reassignment, legacy Modify semantics (J2-13)
         selectedDx.value = d.diagnoses || [];
         form.diagnoses = selectedDx.value.map((x) => x.code);
+        takeSnapshot();   // fresh baseline for THIS loaded record — isDirty starts false
     }
 
     function addDx(d) {
@@ -56,7 +77,10 @@ export function usePatientEdit({ ask, onSuccess = () => {}, editEndpoint, submit
     const identityUnchanged = (loaded, mrn, name) =>
         String(mrn) === String(loaded.mrn) && String(name) === String(loaded.name);
 
+    // Wave 3, Item 5: double-submit guard — belt-and-suspenders alongside whatever `:disabled`
+    // binding the host page's Save button uses (usePatientEdit does not own that button).
     async function submit() {
+        if (form.processing) return;
         const loaded = editing.value;
         if (!identityUnchanged(loaded, form.mrn, form.name)
             && !(await ask('Change patient identity',
@@ -64,5 +88,5 @@ export function usePatientEdit({ ask, onSuccess = () => {}, editEndpoint, submit
         form.post(submitUrl(loaded.id), { preserveScroll: true, onSuccess: () => onSuccess() });
     }
 
-    return { form, editing, selectedDx, activity, open, addDx, removeDx, submit, identityUnchanged };
+    return { form, editing, selectedDx, activity, isDirty, open, addDx, removeDx, submit, identityUnchanged };
 }

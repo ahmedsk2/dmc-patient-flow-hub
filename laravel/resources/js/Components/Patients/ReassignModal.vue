@@ -4,7 +4,9 @@ import { useForm } from '@inertiajs/vue3';
 import BaseModal from '@/Components/BaseModal.vue';
 import IdentityChip from '@/Components/IdentityChip.vue';
 import { useHandover } from '@/composables/useHandover';
-import { consultantOptions } from '@/lib/ui.js';
+import { useConfirm } from '@/composables/useConfirm';
+import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
+import { consultantOptions, guardSubmit } from '@/lib/ui.js';
 
 /**
  * Bulk-reassign modal (Wave 3, Item 4) — extracted verbatim from Patients/Index.vue. Owns the rForm,
@@ -19,6 +21,13 @@ import { consultantOptions } from '@/lib/ui.js';
  *
  * Open/close + a11y from BaseModal; group-header opens it pre-filled (from=this consultant), the
  * toolbar opens it blank — both via openModal(fromId?). On success emits `saved` (Index reloads).
+ *
+ * Unsaved-changes guard (Wave 3, Item 1/2): `modalDirty` reads rForm.isDirty (real Inertia
+ * tracking); passed to BaseModal as `:dirty` and reused for the Cancel button via the SAME
+ * useUnsavedGuard instance, so Esc/backdrop/X/Cancel all behave identically.
+ *
+ * Double-submit guard (Item 5): submitReassign is wrapped in guardSubmit() alongside the existing
+ * `:disabled="rForm.processing || …"` binding.
  */
 const props = defineProps({
     open: { type: Boolean, required: true },
@@ -77,22 +86,26 @@ const saveAllStale = async () => {
     } finally { savingAll.value = false; }
 };
 
-const close = () => emit('close');
-const submitReassign = () => {
+const { ask } = useConfirm();
+const modalDirty = computed(() => !!rForm.isDirty);
+const { guardedClose } = useUnsavedGuard(modalDirty, ask);
+const doClose = () => emit('close');
+const close = () => guardedClose(doClose);
+const submitReassign = guardSubmit(rForm, () => {
     if (!preflightReady.value) return;   // mirror the disabled-button gate (e.g. a keyboard Enter): never move while a selected patient's handover is still stale
     rForm.admission_ids = [...selectedIds.value];   // SUBSET move: only the checked patients travel
     rForm.post('/admissions/reassign', { preserveScroll: true, onSuccess: () => { emit('saved'); rForm.reset(); selectedIds.value = new Set(); } });
-};
+});
 
 defineExpose({
     rForm, onServiceConsultants, openModal, preflight, preflightBodies, selectedIds,
     toggleSelected, loadPreflight, uncheckAllStale, staleRows, preflightReady, allStaleFilled,
-    savingAll, saveAllStale, submitReassign,
+    savingAll, saveAllStale, submitReassign, modalDirty,
 });
 </script>
 
 <template>
-    <BaseModal :open="open" title="Reassign a consultant's patients" subtitle="Moves the selected active patients from one consultant to another." size="md" tall field-first :closable="false" @close="close">
+    <BaseModal :open="open" title="Reassign a consultant's patients" subtitle="Moves the selected active patients from one consultant to another." size="md" tall field-first :closable="false" :dirty="modalDirty" @close="close">
         <form @submit.prevent="submitReassign" class="space-y-4">
             <div><label class="mb-1 block text-sm font-semibold text-ink-700">From</label><select v-model="rForm.from_consultant_id" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select…</option><option v-for="c in consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
             <div><label class="mb-1 block text-sm font-semibold text-ink-700">To <span class="font-normal text-ink-400">(on-service only)</span></label><select v-model="rForm.to_consultant_id" title="On-service consultants only" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select…</option><option v-for="c in onServiceConsultants" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>

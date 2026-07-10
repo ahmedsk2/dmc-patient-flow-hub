@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
     localToday, vFocus, xsrf, locTone, consultantOptions, FIELD,
-    ADMIT_FROM_OPTIONS, DISCHARGE_DESTINATIONS, OUTCOME_STATUSES,
+    ADMIT_FROM_OPTIONS, DISCHARGE_DESTINATIONS, OUTCOME_STATUSES, guardSubmit,
 } from '@/lib/ui.js';
 
 afterEach(() => { vi.useRealTimers(); });
@@ -90,5 +90,34 @@ describe('consultantOptions()', () => {
     });
     it('tolerates a null/undefined list', () => {
         expect(consultantOptions(undefined)).toEqual([]);
+    });
+});
+
+// Wave 3, Item 5: double-submit guard. `:disabled="form.processing"` is the primary UI guard;
+// guardSubmit is the belt-and-suspenders backstop for a race where a keyboard Enter (or a second
+// click before Vue re-renders the disabled attribute) fires the handler again while the first
+// request is still in flight.
+describe('guardSubmit()', () => {
+    it('calls fn when the form is not processing', () => {
+        const form = { processing: false };
+        const fn = vi.fn();
+        guardSubmit(form, fn)('a', 'b');
+        expect(fn).toHaveBeenCalledWith('a', 'b');
+    });
+
+    it('no-ops when the form is already processing', () => {
+        const form = { processing: true };
+        const fn = vi.fn();
+        guardSubmit(form, fn)();
+        expect(fn).not.toHaveBeenCalled();
+    });
+
+    it('checks processing at CALL time, not at wrap time', () => {
+        const form = { processing: false };
+        const fn = vi.fn();
+        const guarded = guardSubmit(form, fn);
+        form.processing = true;   // flips after wrapping, before calling
+        guarded();
+        expect(fn).not.toHaveBeenCalled();
     });
 });

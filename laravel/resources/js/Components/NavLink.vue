@@ -14,22 +14,31 @@ defineProps({
     active: { type: Boolean, default: false },
     indent: { type: Boolean, default: false },   // M&M nesting under Reports (Item 2)
     badge: { type: Number, default: null },        // optional count chip (e.g. pending items)
+    // Wave 2, Item 1: desktop icon-only mode. Every class this drives is `lg:`-scoped below,
+    // so a stale/true value NEVER visually collapses the mobile drawer — that overlay reuses this
+    // SAME component and must always show full labels regardless of the desktop preference
+    // (AppLayout.vue's sidebarCollapsed only toggles at the lg breakpoint).
+    collapsed: { type: Boolean, default: false },
 });
 </script>
 
 <template>
     <Link :href="href"
+        :title="collapsed ? label : undefined"
         class="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition"
         :class="[
             indent ? 'ml-5' : '',
+            collapsed ? 'lg:ml-0 lg:w-10 lg:justify-center lg:px-0 lg:mx-auto' : '',
             active ? 'bg-white/10 text-white shadow-inner' : 'text-navy-200 hover:bg-white/5 hover:text-white',
         ]"
         :aria-current="active ? 'page' : undefined">
-        <svg class="h-5 w-5 shrink-0" :class="active ? 'text-brand-300' : 'text-navy-400 group-hover:text-brand-300'"
+        <svg class="h-5 w-5 shrink-0" :class="[active ? 'text-brand-300' : 'text-navy-400 group-hover:text-brand-300', collapsed ? 'lg:h-6 lg:w-6' : '']"
             fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" :d="iconPath" />
         </svg>
-        {{ label }}
+        <!-- Collapsed (lg only): the label stays in the a11y tree (sr-only, not display:none) so
+             the link keeps its accessible name — the `title` above covers the sighted-mouse case. -->
+        <span :class="collapsed ? 'lg:sr-only' : ''">{{ label }}</span>
         <!-- W0-T3e. `text-danger-200` was an undeclared step: the count chip rendered in the inherited
              navy-200 and lost its danger tone entirely. This is the ONE place a FIXED `danger-200` is
              right rather than the theme-aware `text-on-danger`: the sidebar is always navy in both
@@ -37,7 +46,8 @@ defineProps({
              1.87:1 on the chip. Fixed #f4a6a4 reads 6.78:1 over the chip (bg-danger-600/20 composited
              on navy-900, the lighter end of the gradient) and 7.68:1 at the navy-950 end. -->
         <span v-if="badge !== null" class="nums ml-auto rounded-full bg-danger-600/20 px-1.5 py-0.5 text-[11px] font-bold text-danger-200"
+            :class="collapsed ? 'lg:hidden' : ''"
             :aria-label="`${badge} items`">{{ badge }}</span>
-        <span v-else-if="active" class="ml-auto h-1.5 w-1.5 rounded-full bg-brand-400"></span>
+        <span v-else-if="active" class="ml-auto h-1.5 w-1.5 rounded-full bg-brand-400" :class="collapsed ? 'lg:hidden' : ''"></span>
     </Link>
 </template>

@@ -1,6 +1,8 @@
 <script setup>
 import { watch, onMounted, onUnmounted, useId } from 'vue';
 import { useModalA11y } from '@/composables/useModalA11y';
+import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
+import { useConfirm } from '@/composables/useConfirm';
 
 /**
  * Single modal scaffold (Wave 3, Item 2). Replaces the ~10 hand-rolled modal divs that had drifted
@@ -20,6 +22,14 @@ import { useModalA11y } from '@/composables/useModalA11y';
  * shell (rounded-2xl bg-card p-6 shadow-2xl) the previous modals used. `size` maps to the exact
  * max-width / scroll classes those modals had; `tall` adds the max-h-[90vh] overflow-auto used by
  * the bigger forms.
+ *
+ * Unsaved-changes guard (Wave 3, Item 2): the OPTIONAL `dirty` prop (default false — fully
+ * backward compatible; every existing caller that never passes it keeps today's exact behavior,
+ * no ask() ever called). When `dirty` is true, the three built-in close triggers this component
+ * owns — Escape, backdrop click, and the header X button — all funnel through the ONE internal
+ * close() below, which routes through useUnsavedGuard's discard-confirm (the same useConfirm()
+ * singleton every other destructive action in the app uses) before emitting `close`. Declining
+ * the confirm leaves the modal open — no `close` is emitted.
  */
 const props = defineProps({
     open: { type: Boolean, required: true },
@@ -33,10 +43,14 @@ const props = defineProps({
     fieldFirst: { type: Boolean, default: false },
     // some modals omit the header close-X (toolbar-style); default shows it
     closable: { type: Boolean, default: true },
+    // OPTIONAL unsaved-changes guard — see the class-doc comment above. Default false = unchanged.
+    dirty: { type: Boolean, default: false },
 });
 const emit = defineEmits(['close']);
 
 const { trapRef, onOpen, onClose, onKeydown } = useModalA11y();
+const { ask } = useConfirm();
+const { guardedClose } = useUnsavedGuard(() => props.dirty, ask);
 const titleId = `modal-title-${useId()}`;
 
 const sizeClass = { md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-2xl', '2xl': 'max-w-2xl' };
@@ -49,7 +63,9 @@ watch(
     },
 );
 
-function close() { emit('close'); }
+// dirty=false (the default): emits close synchronously, exactly as before this guard existed.
+// dirty=true: guardedClose() awaits the discard-confirm and only emits close on "yes, discard".
+function close() { guardedClose(() => emit('close')); }
 
 // Esc — owned once here, scoped to window like the page dispatchers it replaces, cleaned up on unmount.
 function onKey(e) { if (e.key === 'Escape' && props.open) close(); }

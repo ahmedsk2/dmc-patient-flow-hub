@@ -24,8 +24,11 @@ vi.mock('@inertiajs/vue3', async () => {
 // useHandover.preflight returns the rows; saveHandover records each stale save.
 const { preflight, saveHandover } = vi.hoisted(() => ({ preflight: vi.fn(), saveHandover: vi.fn(() => Promise.resolve(true)) }));
 vi.mock('@/composables/useHandover', () => ({ useHandover: () => ({ preflight, saveHandover, fetchHandover: vi.fn() }) }));
+// the unsaved-changes guard's ask() — controllable per test (Wave 3, Item 1/2).
+const { ask } = vi.hoisted(() => ({ ask: vi.fn() }));
+vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => ({ ask }) }));
 vi.mock('@/Components/BaseModal.vue', () => ({
-    default: { props: ['open', 'title', 'subtitle', 'size', 'tall', 'fieldFirst', 'closable'], template: '<div><slot /></div>' },
+    default: { props: ['open', 'title', 'subtitle', 'size', 'tall', 'fieldFirst', 'closable', 'dirty'], template: '<div><slot /></div>' },
 }));
 
 import ReassignModal from '@/Components/Patients/ReassignModal.vue';
@@ -43,7 +46,7 @@ const rows = [
     { id: 2, name: 'B', mrn: '2', handover_today: true, body: 'ok' },
 ];
 
-beforeEach(() => { posts.length = 0; preflight.mockReset(); saveHandover.mockClear(); saveHandover.mockResolvedValue(true); });
+beforeEach(() => { posts.length = 0; preflight.mockReset(); saveHandover.mockClear(); saveHandover.mockResolvedValue(true); ask.mockReset(); });
 
 describe('ReassignModal — open / from-prefill', () => {
     it('openModal(fromId) sets from_consultant_id and opens, blank when none', () => {
@@ -137,5 +140,54 @@ describe('ReassignModal — confirm submit (SUBSET move)', () => {
         await w.vm.$nextTick();
         w.vm.submitReassign();
         expect(posts.length).toBe(0);        // guard blocked the move
+    });
+
+    it('double-submit guard: submitReassign no-ops while rForm.processing is true', async () => {
+        preflight.mockResolvedValue(rows);
+        const w = mountWith();
+        await w.vm.loadPreflight(5);
+        await w.vm.$nextTick();
+        w.vm.uncheckAllStale();
+        w.vm.rForm.to_consultant_id = 6;
+        w.vm.rForm.processing = true;
+        await w.vm.$nextTick();
+        w.vm.submitReassign();
+        expect(posts.length).toBe(0);
+    });
+});
+
+// Wave 3, Item 1/2: unsaved-changes guard, keyed off rForm.isDirty, shared by BaseModal's :dirty
+// prop and the Cancel button via the same useUnsavedGuard instance.
+describe('ReassignModal — unsaved-changes guard', () => {
+    it('clean form: Cancel closes immediately without asking', async () => {
+        const w = mountWith();
+        expect(w.vm.modalDirty).toBe(false);
+        w.vm.close();
+        await w.vm.$nextTick();
+        expect(ask).not.toHaveBeenCalled();
+        expect(w.emitted('close')).toBeTruthy();
+    });
+
+    it('dirty form: Cancel asks (danger) before closing', async () => {
+        ask.mockResolvedValue(true);
+        const w = mountWith();
+        w.vm.rForm.isDirty = true;
+        await w.vm.$nextTick();
+        expect(w.vm.modalDirty).toBe(true);
+        w.vm.close();
+        await w.vm.$nextTick(); await w.vm.$nextTick();
+        expect(ask).toHaveBeenCalledTimes(1);
+        expect(ask.mock.calls[0][2]).toBe('danger');
+        expect(w.emitted('close')).toBeTruthy();
+    });
+
+    it('dirty form: declining keeps the modal open', async () => {
+        ask.mockResolvedValue(false);
+        const w = mountWith();
+        w.vm.rForm.isDirty = true;
+        await w.vm.$nextTick();
+        w.vm.close();
+        await w.vm.$nextTick(); await w.vm.$nextTick();
+        expect(w.emitted('close')).toBeFalsy();
     });
 });

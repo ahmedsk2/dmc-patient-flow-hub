@@ -67,3 +67,33 @@ describe('PatientForm', () => {
         expect(w.emitted('remove-dx')[0]).toEqual(['A00']);
     });
 });
+
+// Wave 3, Item 4: every field carries a stable id + matching <label for>, and an aria-describedby
+// pointing at its own error message when one is present. ErrorSummary sits at the top, built from
+// the SAME form.errors map, so a save-failure focus-jumps straight to the field.
+describe('PatientForm — ids, aria-describedby, and the ErrorSummary wiring', () => {
+    it('every labelled field has a matching id/for pair', () => {
+        const w = mountForm();
+        for (const label of w.findAll('label')) {
+            const forId = label.attributes('for');
+            if (!forId) continue;   // the Diagnoses label has no target input of its own
+            expect(w.find(`#${forId}`).exists()).toBe(true);
+        }
+    });
+
+    it('renders no ErrorSummary when form.errors is empty', () => {
+        const w = mountForm();
+        expect(w.find('[role="alert"]').exists()).toBe(false);
+    });
+
+    it('renders the ErrorSummary mapped onto the SAME ids as the field-level errors, wired via aria-describedby', () => {
+        const w = mountForm({ form: makeForm({ errors: { mrn: 'Enter an MRN using digits only' } }) });
+        const alert = w.get('[role="alert"]');
+        const link = alert.get('a');
+        const href = link.attributes('href').slice(1);   // strip '#'
+        const target = w.get(`#${href}`);
+        expect(target.attributes('inputmode')).toBe('numeric');   // resolves to the MRN input
+        expect(target.attributes('aria-describedby')).toBe(`${href}-err`);
+        expect(w.find(`#${href}-err`).text()).toBe('Enter an MRN using digits only');
+    });
+});

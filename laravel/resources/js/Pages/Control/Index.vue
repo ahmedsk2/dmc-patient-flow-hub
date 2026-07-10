@@ -3,7 +3,10 @@ import { ref, computed, watch } from 'vue';
 import { Link, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BaseModal from '@/Components/BaseModal.vue';
+import Tabs from '@/Components/Tabs.vue';
 import { useConfirm } from '@/composables/useConfirm';
+import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
+import { guardSubmit } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
 
@@ -22,6 +25,15 @@ const fieldLabels = {
 };
 
 const tab = ref('overview');
+// Wave 3, Item 7: the Settings tab carries a dirty badge (a warning dot + "(unsaved changes)"
+// aria-label, from the committed Tabs.vue) whenever the settings form has unsaved edits — Inertia's
+// own useForm.isDirty, since sForm is never re-populated past its constructor defaults.
+const controlTabs = computed(() => [
+    { id: 'overview', label: 'Overview' },
+    { id: 'settings', label: 'Settings', badge: !!sForm.isDirty },
+    { id: 'users', label: 'Users' },
+    { id: 'reference', label: 'Reference' },
+]);
 
 const sForm = useForm({
     min_hospitalist: props.settings.min_hospitalist, max_hospitalist: props.settings.max_hospitalist,
@@ -40,7 +52,7 @@ const sForm = useForm({
     failed_login_notify_threshold: props.settings.failed_login_notify_threshold ?? 5,
     dq_los_multiplier: props.settings.dq_los_multiplier ?? 2,
 });
-const saveSettings = () => sForm.put('/control/settings', { preserveScroll: true });
+const saveSettings = guardSubmit(sForm, () => sForm.put('/control/settings', { preserveScroll: true }));
 
 const q = ref(props.filters.q || '');
 let timer = null;
@@ -60,30 +72,36 @@ const sortedUsers = computed(() => {
 
 const editing = ref(null);
 const uForm = useForm({ username: '', full_name: '', email: '', role: 5, active: true, on_service: false, specialty_id: '', can_assign: false, can_add: false, can_manage: false, can_modify: false });
+// Wave 3, Item 1/2: unsaved-changes guard on the edit-user modal. defaults() re-anchors Inertia's
+// own isDirty baseline to the JUST-LOADED user, same idea as Consultations' edit form.
+const { guardedClose: guardedCloseEditUser } = useUnsavedGuard(() => uForm.isDirty, ask);
+const doCloseEditUser = () => { editing.value = null; };
+const closeEditUser = () => guardedCloseEditUser(doCloseEditUser);
 const editUser = (u) => {
     editing.value = u;
     uForm.clearErrors();
     uForm.username = u.username || ''; uForm.full_name = u.full_name || ''; uForm.email = u.email || '';
     uForm.role = u.role; uForm.active = u.active; uForm.on_service = u.on_service; uForm.specialty_id = u.specialty_id || '';
     uForm.can_assign = u.can.assign; uForm.can_add = u.can.add; uForm.can_manage = u.can.manage; uForm.can_modify = u.can.modify;
+    uForm.defaults?.();
 };
-const saveUser = () => uForm.put(`/control/users/${editing.value.id}`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
+const saveUser = guardSubmit(uForm, () => uForm.put(`/control/users/${editing.value.id}`, { preserveScroll: true, onSuccess: doCloseEditUser }));
 const resetMfa = async (u) => { if (await ask('Reset two-factor', `Reset two-factor for ${u.username}. They'll re-enrol on next login.`, 'neutral')) router.post(`/control/users/${u.id}/reset-mfa`, {}, { preserveScroll: true }); };
 const sendReset = (u) => router.post(`/control/users/${u.id}/send-reset`, {}, { preserveScroll: true });
 const deleteUser = async (u) => {
     if (await ask('Delete user', `Permanently delete ${u.username}. Their historical admissions/consultations are kept (attribution cleared). This cannot be undone.`, 'danger'))
-        router.delete(`/control/users/${u.id}`, { preserveScroll: true, onSuccess: () => (editing.value = null) });
+        router.delete(`/control/users/${u.id}`, { preserveScroll: true, onSuccess: doCloseEditUser });
 };
 
 // reference data
 const specForm = useForm({ name: '', is_subspecialty: true, is_external: false });
-const submitSpec = () => specForm.post('/control/specialties', { preserveScroll: true, onSuccess: () => specForm.reset() });
+const submitSpec = guardSubmit(specForm, () => specForm.post('/control/specialties', { preserveScroll: true, onSuccess: () => specForm.reset() }));
 const reasonForm = useForm({ name: '' });
-const submitReason = () => reasonForm.post('/control/reasons', { preserveScroll: true, onSuccess: () => reasonForm.reset() });
+const submitReason = guardSubmit(reasonForm, () => reasonForm.post('/control/reasons', { preserveScroll: true, onSuccess: () => reasonForm.reset() }));
 
 // §3.3: monthly-report email recipients
 const recipientForm = useForm({ email: '' });
-const submitRecipient = () => recipientForm.post('/control/report-recipients', { preserveScroll: true, onSuccess: () => recipientForm.reset() });
+const submitRecipient = guardSubmit(recipientForm, () => recipientForm.post('/control/report-recipients', { preserveScroll: true, onSuccess: () => recipientForm.reset() }));
 const removeRecipient = async (r) => { if (await ask('Remove recipient', `Stop sending the monthly report to ${r.email}?`, 'neutral')) router.delete(`/control/report-recipients/${r.id}`, { preserveScroll: true }); };
 
 const countCards = [
@@ -101,10 +119,6 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
         { label: 'Control Panel' },
     ]">
         <div class="mb-5 flex flex-wrap items-center gap-3">
-            <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line w-fit">
-                <button v-for="t in ['overview','settings','users','reference']" :key="t" @click="tab = t"
-                    class="rounded-lg px-4 py-2 text-sm font-semibold capitalize transition" :class="tab === t ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ t }}</button>
-            </div>
             <!-- Phase 4 — Item 1: opens the soft-delete "Recently Deleted" view -->
             <button @click="router.visit('/trashed')"
                 class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500 ring-1 ring-line transition hover:bg-ink-50">
@@ -112,8 +126,11 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
             </button>
         </div>
 
+        <Tabs :tabs="controlTabs" v-model="tab">
+        <template #default="{ active }">
+
         <!-- Overview -->
-        <div v-show="tab === 'overview'" class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <div v-show="active === 'overview'" class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             <div v-for="[label, key] in countCards" :key="key" class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-400">{{ label }}</div>
                 <div class="nums mt-1 text-3xl font-bold text-brand-700">{{ counts[key].toLocaleString() }}</div>
@@ -121,7 +138,7 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
         </div>
 
         <!-- Settings -->
-        <div v-show="tab === 'settings'" class="max-w-2xl">
+        <div v-show="active === 'settings'" class="max-w-2xl">
         <div class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
             <h3 class="mb-1 font-bold text-ink-800">Operational thresholds</h3>
             <p class="mb-5 text-sm text-ink-400">Drive the shuffle/assignment balance and LOS bands across the app.</p>
@@ -188,7 +205,7 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
         </div>
 
         <!-- Users -->
-        <div v-show="tab === 'users'">
+        <div v-show="active === 'users'">
             <div class="mb-3"><input v-model="q" :class="[field, 'max-w-sm']" placeholder="Search users…" /></div>
             <div class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
                 <table class="w-full text-sm">
@@ -226,7 +243,7 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
         </div>
 
         <!-- Reference data -->
-        <div v-show="tab === 'reference'" class="grid gap-5 lg:grid-cols-2">
+        <div v-show="active === 'reference'" class="grid gap-5 lg:grid-cols-2">
             <div class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <h3 class="mb-3 font-bold text-ink-800">Specialties</h3>
                 <div class="mb-4 flex max-h-48 flex-wrap gap-2 overflow-auto"><span v-for="s in specialties" :key="s.id" class="rounded-full px-3 py-1 text-sm" :class="s.is_external ? 'bg-tint-accent text-on-accent' : 'bg-app text-ink-600'">{{ s.name }}<span v-if="s.is_external" class="ml-1 text-[10px] font-semibold uppercase">ext</span></span></div>
@@ -259,8 +276,11 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
             </div>
         </div>
 
+        </template>
+        </Tabs>
+
         <!-- edit user modal -->
-        <BaseModal :open="!!editing" :title="editing ? editing.name : ''" :subtitle="editing ? editing.username : ''" size="md" :closable="false" @close="editing = null">
+        <BaseModal :open="!!editing" :title="editing ? editing.name : ''" :subtitle="editing ? editing.username : ''" size="md" :closable="false" :dirty="!!uForm.isDirty" @close="closeEditUser">
                 <div class="space-y-4">
                     <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Username</span>
                         <input v-model="uForm.username" :class="field" placeholder="login name" />
@@ -298,7 +318,7 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
                     <button v-if="editing.email" @click="sendReset(editing)" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-600 hover:bg-ink-50">Send reset email</button>
                     <button v-if="editing.mfa" @click="resetMfa(editing)" class="rounded-xl px-3 py-2 text-sm font-semibold text-on-danger hover:bg-tint-danger">Reset MFA</button>
                     <button @click="deleteUser(editing)" class="mr-auto rounded-xl px-3 py-2 text-sm font-semibold text-on-danger hover:bg-tint-danger">Delete</button>
-                    <button @click="editing = null" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
+                    <button @click="closeEditUser" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
                     <button @click="saveUser" :disabled="uForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save</button>
                 </div>
         </BaseModal>

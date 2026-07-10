@@ -11,6 +11,7 @@ import ReassignModal from '@/Components/Patients/ReassignModal.vue';
 import HandoverModal from '@/Components/Patients/HandoverModal.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { usePatientEdit } from '@/composables/usePatientEdit';
+import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
 import { localToday, vFocus, locTone } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
@@ -195,9 +196,13 @@ const undoMedical = (row) => router.post(`/admissions/${row.id}/undo-medical-dis
 // modify (full edit) — canonical PatientForm + usePatientEdit (fetch-on-open + identity-confirm).
 // The Modify modal is a BaseModal (owns its own focus-trap + Esc), so a11yModify is gone.
 const canModify = computed(() => me.value.is_admin || me.value.can.modify);
-const { form: mForm, editing, selectedDx, activity: mActivity, open: openModify, addDx, removeDx, submit: submitModify } =
+const { form: mForm, editing, selectedDx, activity: mActivity, open: openModify, addDx, removeDx, submit: submitModify, isDirty: mIsDirty } =
     usePatientEdit({ ask, onSuccess: () => (editing.value = null) });
-const closeModify = () => { editing.value = null; };
+// Wave 3, Item 1: closing Modify with unsaved edits (Esc/backdrop/X via @close, or the footer
+// Cancel) routes through the shared discard-confirm; a clean form closes with no prompt. Kept as
+// one guarded handler on both paths so there is a single prompt on every close route.
+const { guardedClose: guardModify } = useUnsavedGuard(mIsDirty, ask);
+const closeModify = () => guardModify(() => { editing.value = null; });
 
 // Esc handling now lives in BaseModal (each modal owns a window-level Escape listener, matching the
 // old page dispatcher's scope — so the IcdTypeahead's first-Esc dropdown swallow still works).

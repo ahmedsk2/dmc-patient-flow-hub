@@ -86,6 +86,20 @@ export function deltaChipClass(polarity, direction) {
 }
 
 /**
+ * guardSubmit — double-submit backstop (Wave 3, Item 5). `:disabled="form.processing"` on the
+ * submit button is the PRIMARY guard; this wraps the submit handler itself so a race (a keyboard
+ * Enter, or a second click landing before Vue re-renders the disabled attribute) still can't fire
+ * the request twice. Checks `form.processing` at CALL time, not at wrap time, so it stays correct
+ * across the form's whole lifetime.
+ *
+ * @param {{ processing: boolean }} form   an Inertia useForm() instance (or anything processing-shaped)
+ * @param {Function} fn                    the real submit handler
+ */
+export function guardSubmit(form, fn) {
+    return (...args) => { if (form.processing) return; return fn(...args); };
+}
+
+/**
  * Returns a filtered consultant list for a dropdown — names the "on-service, plus keep the current
  * assignee even when off-service, optionally narrow by specialty" rule that was re-expressed across
  * Patients / Admissions / Registry. PRESERVES the existing (unsorted) order of the source list so

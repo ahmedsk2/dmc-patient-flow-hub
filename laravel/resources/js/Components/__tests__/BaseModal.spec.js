@@ -1,6 +1,14 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
+
+// useConfirm mocked so the dirty-guard tests control ask() directly, without needing the real
+// ConfirmDialog UI (which lives outside BaseModal, in AppLayout).
+const { ask } = vi.hoisted(() => ({ ask: vi.fn() }));
+vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => ({ ask }) }));
+
 import BaseModal from '@/Components/BaseModal.vue';
+
+beforeEach(() => { ask.mockReset(); });
 
 const mountModal = (props = {}, slots = {}) =>
     mount(BaseModal, {
@@ -77,6 +85,74 @@ describe('BaseModal', () => {
     it('maps size → max-width class', () => {
         const w = mountModal({ size: '2xl' });
         expect(w.find('[role="dialog"]').classes()).toContain('max-w-2xl');
+        w.unmount();
+    });
+});
+
+// Wave 3, Item 2: an optional `dirty` prop gates Esc / backdrop-click / the X-close button behind
+// the SAME useConfirm() discard-confirm every other destructive action uses. Backward compatible:
+// a caller that never passes `dirty` (default false) gets EXACTLY today's behavior — no ask() call,
+// no behavior change — proven by the pre-existing tests above (which never pass `dirty`).
+describe('BaseModal — dirty prop (unsaved-changes guard)', () => {
+    it('clean modal (dirty=false, the default): closes on Escape WITHOUT asking', async () => {
+        const w = mountModal();
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+        await Promise.resolve();
+        expect(ask).not.toHaveBeenCalled();
+        expect(w.emitted('close')).toBeTruthy();
+        w.unmount();
+    });
+
+    it('dirty modal: Escape asks before closing, and does NOT close until the promise resolves', async () => {
+        let resolveAsk;
+        ask.mockReturnValue(new Promise((r) => { resolveAsk = r; }));
+        const w = mountModal({ dirty: true });
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+        await Promise.resolve();
+        expect(ask).toHaveBeenCalledTimes(1);
+        expect(ask.mock.calls[0][2]).toBe('danger');
+        expect(w.emitted('close')).toBeFalsy();   // still pending — no premature close
+        resolveAsk(true);
+        await Promise.resolve(); await Promise.resolve();
+        expect(w.emitted('close')).toBeTruthy();
+        w.unmount();
+    });
+
+    it('dirty modal: declining the confirm keeps the modal open (no close emitted)', async () => {
+        ask.mockResolvedValue(false);
+        const w = mountModal({ dirty: true });
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+        await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+        expect(ask).toHaveBeenCalledTimes(1);
+        expect(w.emitted('close')).toBeFalsy();
+        w.unmount();
+    });
+
+    it('dirty modal: backdrop click also routes through the confirm', async () => {
+        ask.mockResolvedValue(true);
+        const w = mountModal({ dirty: true });
+        await w.find('.fixed.inset-0').trigger('click');
+        await Promise.resolve(); await Promise.resolve();
+        expect(ask).toHaveBeenCalledTimes(1);
+        expect(w.emitted('close')).toBeTruthy();
+        w.unmount();
+    });
+
+    it('dirty modal: the X close button also routes through the confirm', async () => {
+        ask.mockResolvedValue(true);
+        const w = mountModal({ dirty: true });
+        await w.get('button[aria-label="Close"]').trigger('click');
+        await Promise.resolve(); await Promise.resolve();
+        expect(ask).toHaveBeenCalledTimes(1);
+        expect(w.emitted('close')).toBeTruthy();
+        w.unmount();
+    });
+
+    it('clean modal: backdrop click and X-button close silently, no ask() at all', async () => {
+        const w = mountModal({ dirty: false });
+        await w.find('.fixed.inset-0').trigger('click');
+        expect(ask).not.toHaveBeenCalled();
+        expect(w.emitted('close')).toBeTruthy();
         w.unmount();
     });
 });

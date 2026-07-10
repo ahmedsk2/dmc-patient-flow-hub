@@ -7,6 +7,7 @@ use App\Models\Consultation;
 use App\Models\ConsultationReason;
 use App\Models\Country;
 use App\Models\Icd10;
+use App\Models\Patient;
 use App\Models\Setting;
 use App\Models\User;
 use App\Support\Audit;
@@ -45,6 +46,10 @@ class RegistryController extends Controller
         ]);
 
         $mode = $this->mode($request);
+        // Wave 2 — Item 6: resolve once here (for the Inertia prop that drives SortableTh's initial
+        // aria-sort) — the *Query() builders below independently re-resolve the SAME deterministic
+        // function when they build/apply the actual `ORDER BY` (see applySort()).
+        $sort = $this->resolveSort($request, $mode);
 
         $results = match ($mode) {
             'consultations' => $this->consultationResults($request),
@@ -64,6 +69,9 @@ class RegistryController extends Controller
         return Inertia::render('Registry/Index', [
             'mode' => $mode,
             'results' => $results,
+            // Wave 2 — Item 6: the ACTUALLY-applied sort (null/null when unsorted or the requested
+            // key/dir was off-whitelist) — SortableTh renders its aria-sort from this on first load.
+            'sort' => ['sort' => $sort['key'], 'dir' => $sort['dir']],
             'filters' => $request->only(['search', 'from', 'to', 'outcome', 'location', 'gender', 'nationality',
                 'age_from', 'age_to', 'admitted_from', 'discharged_to', 'delay', 'consultant_id', 'longterm',
                 'discharged', 'tb', 'readmit72',
@@ -156,12 +164,77 @@ class RegistryController extends Controller
         return array_map(fn ($code) => ['code' => $code, 'name' => $names[$code] ?? $code], $codes);
     }
 
+    /* ---------- Wave 2, Item 6: server-side sort ---------- */
+
+    /**
+     * UI sort key => whitelist, per mode ('diagnosis' shares the admissions set — it queries the
+     * SAME Admission rows through the same result table in Registry/Index.vue). Anything NOT in
+     * this list is rejected outright by resolveSort() — the request's `sort` value is NEVER
+     * interpolated into SQL; it only ever selects which hardcoded column/expression to use (see
+     * applySort()'s match arms).
+     */
+    private const SORTABLE_COLUMNS = [
+        'admissions' => ['name', 'admit_date', 'discharge_date', 'los', 'outcome'],
+        'consultations' => ['name', 'date', 'status'],
+    ];
+
+    /**
+     * Validate the request's `sort` + `dir` against the per-mode whitelist. Returns the key/dir to
+     * actually apply (both null when absent/invalid) — a single deterministic function called both
+     * for the Inertia `sort` prop (so SortableTh's aria-sort is correct on first load) and, via
+     * applySort(), for the real ORDER BY.
+     */
+    private function resolveSort(Request $request, string $mode): array
+    {
+        $group = $mode === 'diagnosis' ? 'admissions' : $mode;
+        $key = $request->input('sort');
+        $dirIn = strtolower((string) $request->input('dir'));
+        $dir = in_array($dirIn, ['asc', 'desc'], true) ? $dirIn : null;
+        $valid = $dir !== null && is_string($key) && in_array($key, self::SORTABLE_COLUMNS[$group] ?? [], true);
+
+        return ['key' => $valid ? $key : null, 'dir' => $valid ? $dir : null, 'group' => $group];
+    }
+
+    /**
+     * Apply the resolved sort to $query, or fall back to the pre-existing legacy default order
+     * (newest admission/consultation first, id desc as a stable tiebreaker) when no valid sort was
+     * requested — every consumer of the *Query() builders (results/export/count) shares this, so an
+     * unsorted request behaves EXACTLY as it did before Wave 2.
+     */
+    private function applySort($query, Request $request, string $mode): void
+    {
+        ['key' => $key, 'dir' => $dir, 'group' => $group] = $this->resolveSort($request, $mode);
+
+        if ($key === null) {
+            $group === 'consultations'
+                ? $query->orderByDesc('consultation_date')->orderByDesc('id')
+                : $query->orderByDesc('admit_date')->orderByDesc('id');
+
+            return;
+        }
+
+        if ($group === 'admissions' && $key === 'name') {
+            // patient name lives on `patients`, not `admissions` — order by a scalar subquery
+            // rather than joining (joining would risk ambiguous/duplicated columns downstream).
+            $query->orderBy(Patient::select('name')->whereColumn('patients.id', 'admissions.patient_id')->limit(1), $dir);
+        } elseif ($group === 'admissions' && $key === 'los') {
+            // mirrors Admission::lengthOfStay(): open admissions count through today, same as the
+            // legacy DATEDIFF pattern already used across Dashboard/Reports/Recent controllers.
+            $query->orderByRaw("DATEDIFF(COALESCE(discharge_date, CURDATE()), admit_date) {$dir}");
+        } elseif ($group === 'admissions') {
+            $query->orderBy(['admit_date' => 'admit_date', 'discharge_date' => 'discharge_date', 'outcome' => 'outcome'][$key], $dir);
+        } else {
+            $query->orderBy(['name' => 'patient_name', 'date' => 'consultation_date', 'status' => 'signoff_date'][$key], $dir);
+        }
+        $query->orderBy('id', $dir);   // stable tiebreaker in the same direction
+    }
+
     /* ---------- Admissions ---------- */
 
     private function admissionQuery(Request $request)
     {
         $dx = array_filter((array) $request->input('dx', []));
-        return Admission::query()
+        $query = Admission::query()
             ->with(['patient:id,mrn,name,gender,age,nationality', 'consultant:id,full_name,name'])
             ->when($request->input('search'), fn ($q, $s) => $q->whereHas('patient', fn ($p) => $p->where('name', 'like', "%{$s}%")->orWhere('mrn', 'like', "%{$s}%")))
             ->when($request->input('from'), fn ($q, $d) => $q->whereDate('admit_date', '>=', $d))
@@ -199,8 +272,10 @@ class RegistryController extends Controller
                     $q->whereExists(fn ($s) => $s->selectRaw('1')->from('admission_diagnoses as adx')
                         ->whereColumn('adx.admission_id', 'admissions.id')->whereIn('adx.icd10_code', $dx));
                 }
-            })
-            ->orderByDesc('admit_date')->orderByDesc('id');
+            });
+        $this->applySort($query, $request, 'admissions');
+
+        return $query;
     }
 
     /** transfer_type -> human transfer label (real discharges get NO label). */
@@ -269,7 +344,7 @@ class RegistryController extends Controller
     {
         $indication = array_filter((array) $request->input('indication', []));
 
-        return Consultation::query()->with('consultant:id,full_name,name')
+        $query = Consultation::query()->with('consultant:id,full_name,name')
             ->when($request->input('search'), fn ($q, $s) => $q->where(fn ($w) => $w->where('patient_name', 'like', "%{$s}%")->orWhere('mrn', 'like', "%{$s}%")))
             ->when($request->input('from'), fn ($q, $d) => $q->whereDate('consultation_date', '>=', $d))
             ->when($request->input('to'), fn ($q, $d) => $q->whereDate('consultation_date', '<=', $d))
@@ -293,8 +368,10 @@ class RegistryController extends Controller
                         foreach ($indication as $id) { $w->orWhere(fn ($x) => $both($x, $id)); }
                     });
                 }
-            })
-            ->orderByDesc('consultation_date')->orderByDesc('id');
+            });
+        $this->applySort($query, $request, 'consultations');
+
+        return $query;
     }
 
     private function consultationResults(Request $request)
@@ -323,12 +400,14 @@ class RegistryController extends Controller
         // dropped admissions from the page AND the export
         $codes = Icd10::where('name', 'like', "%{$kw}%")->pluck('code');
 
-        return Admission::query()->with(['patient:id,mrn,name,gender,age,nationality', 'consultant:id,full_name,name'])
+        $query = Admission::query()->with(['patient:id,mrn,name,gender,age,nationality', 'consultant:id,full_name,name'])
             ->whereExists(fn ($s) => $s->selectRaw('1')->from('admission_diagnoses as adx')
                 ->whereColumn('adx.admission_id', 'admissions.id')->whereIn('adx.icd10_code', $codes))
             ->when($request->input('from'), fn ($q, $d) => $q->whereDate('admit_date', '>=', $d))
-            ->when($request->input('to'), fn ($q, $d) => $q->whereDate('admit_date', '<=', $d))
-            ->orderByDesc('admit_date')->orderByDesc('id');
+            ->when($request->input('to'), fn ($q, $d) => $q->whereDate('admit_date', '<=', $d));
+        $this->applySort($query, $request, 'diagnosis');
+
+        return $query;
     }
 
     private function diagnosisResults(Request $request)

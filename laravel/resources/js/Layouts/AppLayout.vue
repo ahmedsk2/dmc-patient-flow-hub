@@ -50,6 +50,8 @@ onMounted(() => {
     lgMql?.addEventListener('change', (e) => { mobileViewport.value = e.matches; });
     // Wave 2, Item 10: first-login onboarding tour (auto-start once when never seen + route allowed)
     maybeAutoStart(page.props.auth?.user, page.url);
+    // Wave 2, Item 1: restore the desktop sidebar's icon-only-mode preference
+    sidebarCollapsed.value = localStorage.getItem('dmc-sidebar-collapsed') === '1';
 });
 
 const props = defineProps({
@@ -78,12 +80,29 @@ const aside = ref(null);
 // to the mobile drawer only — the always-visible desktop sidebar must NOT be hidden from AT.
 const lgMql = typeof window !== 'undefined' ? window.matchMedia('(max-width: 1023px)') : null;
 const mobileViewport = ref(lgMql?.matches ?? false);
-const focusableIn = (el) => [...(el?.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])') ?? [])];
+// Wave 2 fix: drop display:none controls (the `hidden lg:flex` desktop icon-mode toggle added below)
+// from the set so they never pollute the mobile drawer's focus-trap — getClientRects() is empty for a
+// display:none element, so it can never be items[0] (broke focus-into-drawer) nor the backward-wrap edge.
+const focusableIn = (el) => [...(el?.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])') ?? [])]
+    .filter((n) => n.getClientRects().length);
 const openDrawer = () => {
     sidebarOpen.value = true;
     nextTick(() => focusableIn(aside.value)[0]?.focus());
 };
 const closeDrawer = () => { sidebarOpen.value = false; nextTick(() => hamburger.value?.focus()); };
+
+// ---- Wave 2, Item 1: desktop icon-only sidebar mode (persisted) --------------------------------
+// Collapses the ALWAYS-VISIBLE `lg:` rail from w-64 to w-16 (icons only); the mobile drawer is a
+// SEPARATE affordance (hamburger open/close) and is intentionally untouched — every class this
+// state drives (in the template below + NavLink.vue) is `lg:`-scoped, so a persisted collapsed=true
+// never shrinks the drawer. The main content's `lg:pl-*` offset tracks it via mainPadClass so the
+// page body never sits under (expanded) or floats away from (collapsed) the rail.
+const sidebarCollapsed = ref(false);
+const toggleSidebarCollapse = () => {
+    sidebarCollapsed.value = !sidebarCollapsed.value;
+    localStorage.setItem('dmc-sidebar-collapsed', sidebarCollapsed.value ? '1' : '0');
+};
+const mainPadClass = computed(() => (sidebarCollapsed.value ? 'lg:pl-16' : 'lg:pl-64'));
 const onDrawerKeydown = (e) => {
     if (e.key === 'Escape') { closeDrawer(); return; }
     if (e.key !== 'Tab') return;
@@ -101,27 +120,39 @@ watch(() => page.props.flash, (f) => {
     if (f && f.message) { toast.value = f; clearTimeout(toastTimer); toastTimer = setTimeout(() => (toast.value = null), 4500); }
 }, { immediate: true, deep: true });
 
-// ---- Wave 1, Items 3+4: clinical nav (role/capability-aware) -----------------------------------
+// ---- Wave 1, Items 3+4 / Wave 2, Item 2: clinical nav (role/capability-aware, IA-grouped) -------
 // Each item carries an optional `can` boolean (default true). Items whose `can` is false are
 // filtered out — purely COSMETIC: server-side authz is unchanged and remains the real gate
-// (HandleInertiaRequests exposes is_admin + can.{add,assign,manage,modify}).
+// (HandleInertiaRequests exposes is_admin + can.{add,assign,manage,modify}). Every filter below is
+// byte-for-byte the same as Wave 1's flat list — Wave 2 only REGROUPS the same items into three
+// labelled buckets (Overview / Clinical / Operations), matching the admin section header style.
 //   • New Admissions is hidden without can_add (Item 4).
 //   • Recent Activity moved here from Administration (Item 3): the VIEW is read-only and visible to
 //     all clinical roles incl. Observer; the same-day UNDO actions stay admin-only server-side.
 //   • Observers (role 5) are read-only: the admissions queue + consultations workspace are
 //     clinical-role pages (403 server-side) — drop their entries (J2-12).
-const clinicalNavItems = computed(() => {
+// A bucket that filters down to zero items renders nothing (no orphaned empty section heading).
+const clinicalNavSections = computed(() => {
     const user = page.props.auth?.user;
     const observer = user?.role === 5;
     const can = user?.can || {};
-    return [
-        { label: 'Dashboard', href: '/', icon: 'grid', can: true },
-        { label: 'New Admissions', href: '/admissions', icon: 'plus', can: !!can.add && !observer },
-        { label: 'Patients', href: '/patients', icon: 'bed', can: true },
-        { label: 'Handovers', href: '/handovers', icon: 'clipboard', can: true },
-        { label: 'Consultations', href: '/consultations', icon: 'chat', can: !observer },
-        { label: 'Recent Activity', href: '/recent', icon: 'clock', can: true },
-    ].filter((i) => i.can);
+    const sections = [
+        { section: 'Overview', items: [
+            { label: 'Dashboard', href: '/', icon: 'grid', can: true },
+        ] },
+        { section: 'Clinical', items: [
+            { label: 'New Admissions', href: '/admissions', icon: 'plus', can: !!can.add && !observer },
+            { label: 'Patients', href: '/patients', icon: 'bed', can: true },
+            { label: 'Consultations', href: '/consultations', icon: 'chat', can: !observer },
+        ] },
+        { section: 'Operations', items: [
+            { label: 'Handovers', href: '/handovers', icon: 'clipboard', can: true },
+            { label: 'Recent Activity', href: '/recent', icon: 'clock', can: true },
+        ] },
+    ];
+    return sections
+        .map((s) => ({ ...s, items: s.items.filter((i) => i.can) }))
+        .filter((s) => s.items.length > 0);
 });
 
 // ---- Wave 1, Items 1+2: Administration grouped into labelled sub-sections ----------------------
@@ -308,38 +339,58 @@ onUnmounted(() => {
         <aside
             id="app-sidebar"
             ref="aside"
-            class="fixed inset-y-0 left-0 z-40 w-64 -translate-x-full bg-gradient-to-b from-navy-900 to-navy-950 text-navy-100 transition-transform lg:translate-x-0"
-            :class="{ 'translate-x-0': sidebarOpen }"
+            class="fixed inset-y-0 left-0 z-40 w-64 -translate-x-full bg-gradient-to-b from-navy-900 to-navy-950 text-navy-100 transition-[width,transform] lg:translate-x-0"
+            :class="{ 'translate-x-0': sidebarOpen, 'lg:w-16': sidebarCollapsed }"
             :aria-hidden="sidebarOpen ? undefined : (mobileViewport ? 'true' : undefined)"
             @keydown="sidebarOpen && onDrawerKeydown($event)"
         >
-            <div class="flex h-16 items-center gap-3 px-5 border-b border-white/5">
-                <div class="grid h-9 w-9 place-items-center rounded-xl bg-card p-1 shadow-lg shadow-brand-950/40"><EhcLogo class="h-7 w-7" /></div>
-                <div class="leading-tight">
+            <div class="flex h-16 items-center gap-3 px-5 border-b border-white/5" :class="{ 'lg:justify-center lg:px-2': sidebarCollapsed }">
+                <div class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-card p-1 shadow-lg shadow-brand-950/40"><EhcLogo class="h-7 w-7" /></div>
+                <div class="leading-tight" :class="{ 'lg:hidden': sidebarCollapsed }">
                     <div class="font-display text-sm font-bold text-white tracking-wide">DMC <span class="text-brand-300">IM</span></div>
                     <div class="text-[10px] uppercase tracking-[0.18em] text-navy-400">Patient Flow</div>
                 </div>
             </div>
 
+            <!-- Wave 2, Item 1: desktop-only icon-mode toggle. The mobile drawer never shows this —
+                 it already has the hamburger/backdrop for open/close and always renders full labels. -->
+            <div class="hidden border-b border-white/5 px-3 py-2 lg:flex" :class="sidebarCollapsed ? 'justify-center' : 'justify-end'">
+                <button type="button" @click="toggleSidebarCollapse"
+                    :aria-expanded="!sidebarCollapsed" aria-controls="app-sidebar"
+                    :aria-label="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+                    :title="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+                    class="grid h-8 w-8 place-items-center rounded-lg text-navy-300 transition hover:bg-white/10 hover:text-white">
+                    <svg class="h-4 w-4 transition-transform" :class="{ 'rotate-180': sidebarCollapsed }" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                    </svg>
+                </button>
+            </div>
+
             <nav class="px-3 py-5 space-y-1">
-                <!-- data-tour anchors for the onboarding tour (Item 10) -->
-                <p data-tour="nav-clinical" class="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-navy-400">Clinical</p>
-                <NavLink v-for="item in clinicalNavItems" :key="item.href"
-                    :href="item.href" :icon-path="iconPath(item.icon)" :label="item.label" :active="isActive(item.href)" />
+                <!-- Wave 2, Item 2: Overview / Clinical / Operations, each a labelled bucket (same
+                     header style as the admin sections below). data-tour anchor kept on the WRAPPING
+                     block (Item 10's tour highlights the whole clinical nav area, not one label). -->
+                <div data-tour="nav-clinical" class="space-y-1">
+                    <template v-for="section in clinicalNavSections" :key="section.section">
+                        <p class="px-3 pb-2 pt-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-navy-400 first:pt-0" :class="{ 'lg:sr-only': sidebarCollapsed }">{{ section.section }}</p>
+                        <NavLink v-for="item in section.items" :key="item.href"
+                            :href="item.href" :icon-path="iconPath(item.icon)" :label="item.label" :active="isActive(item.href)" :collapsed="sidebarCollapsed" />
+                    </template>
+                </div>
 
                 <template v-if="page.props.auth?.user?.is_admin">
                     <template v-for="(section, si) in adminNavSections" :key="section.section">
-                        <p :data-tour="si === 0 ? 'nav-admin' : undefined" class="px-3 pt-5 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-navy-400">{{ section.section }}</p>
+                        <p :data-tour="si === 0 ? 'nav-admin' : undefined" class="px-3 pt-5 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-navy-400" :class="{ 'lg:sr-only': sidebarCollapsed }">{{ section.section }}</p>
                         <template v-for="item in section.items" :key="item.href">
-                            <NavLink :href="item.href" :icon-path="iconPath(item.icon)" :label="item.label" :active="isActive(item.href)" />
+                            <NavLink :href="item.href" :icon-path="iconPath(item.icon)" :label="item.label" :active="isActive(item.href)" :collapsed="sidebarCollapsed" />
                             <NavLink v-for="child in (item.children || [])" :key="child.href"
-                                :href="child.href" :icon-path="iconPath(child.icon)" :label="child.label" :active="isActive(child.href)" :indent="true" />
+                                :href="child.href" :icon-path="iconPath(child.icon)" :label="child.label" :active="isActive(child.href)" :indent="true" :collapsed="sidebarCollapsed" />
                         </template>
                     </template>
                 </template>
             </nav>
 
-            <div class="absolute bottom-0 left-0 right-0 p-4">
+            <div class="absolute bottom-0 left-0 right-0 p-4" :class="{ 'lg:hidden': sidebarCollapsed }">
                 <div class="rounded-2xl bg-white/5 p-4 text-center">
                     <p class="text-[11px] text-navy-300">Eastern Health Cluster</p>
                     <p class="text-[11px] font-semibold text-brand-300">تجمع الشرقية الصحي</p>
@@ -351,7 +402,7 @@ onUnmounted(() => {
         <div v-if="sidebarOpen" class="fixed inset-0 z-30 bg-navy-950/50 lg:hidden" @click="closeDrawer"></div>
 
         <!-- Main -->
-        <div class="lg:pl-64">
+        <div :class="mainPadClass">
             <header class="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-line bg-card/80 px-5 backdrop-blur">
                 <button ref="hamburger" class="lg:hidden text-ink-500" @click="openDrawer" aria-label="Open navigation menu" :aria-expanded="sidebarOpen" aria-controls="app-sidebar">
                     <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" /></svg>

@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { reactive } from 'vue';
 
-// useForm is stubbed to a plain reactive-ish object exposing the bits usePatientEdit touches.
+// useForm is stubbed to a REACTIVE object (matches the real Inertia useForm, and the convention
+// already used by ActionModal.spec.js / ReassignModal.spec.js) so isDirty's computed() correctly
+// re-evaluates when a test mutates a form field directly.
 const post = vi.fn();
 vi.mock('@inertiajs/vue3', () => ({
-    useForm: (obj) => ({ ...obj, post, clearErrors: vi.fn(), errors: {}, processing: false }),
+    useForm: (obj) => reactive({ ...obj, post, clearErrors: vi.fn(), errors: {}, processing: false }),
 }));
 
 import { usePatientEdit } from '@/composables/usePatientEdit';
@@ -64,6 +67,17 @@ describe('usePatientEdit', () => {
         expect(post).not.toHaveBeenCalled();   // declined → no post
     });
 
+    it('submit() no-ops (double-submit guard) while form.processing is true', async () => {
+        global.fetch.mockResolvedValue({ json: () => Promise.resolve(detail) });
+        const ask = vi.fn();
+        const pe = usePatientEdit({ ask });
+        await pe.open({ id: 42 });
+        pe.form.processing = true;
+        await pe.submit();
+        expect(ask).not.toHaveBeenCalled();
+        expect(post).not.toHaveBeenCalled();
+    });
+
     it('respects custom edit/submit endpoints', async () => {
         global.fetch.mockResolvedValue({ json: () => Promise.resolve(detail) });
         const pe = usePatientEdit({ ask: vi.fn(), editEndpoint: (id) => `/x/${id}/e`, submitEndpoint: (id) => `/x/${id}/s` });
@@ -71,5 +85,48 @@ describe('usePatientEdit', () => {
         expect(global.fetch.mock.calls[0][0]).toBe('/x/5/e');
         await pe.submit();
         expect(post).toHaveBeenCalledWith('/x/5/s', expect.anything());
+    });
+});
+
+// Wave 3, Item 3: isDirty tracks an initial SNAPSHOT taken when open() populates the form, so
+// BaseModal's `:dirty` guard only fires on a genuine unsaved edit — not merely because a fetched
+// record differs from the form's empty constructor defaults.
+describe('usePatientEdit — isDirty (snapshot vs current)', () => {
+    it('is false immediately after open() populates the form', async () => {
+        global.fetch.mockResolvedValue({ json: () => Promise.resolve(detail) });
+        const pe = usePatientEdit({ ask: vi.fn() });
+        await pe.open({ id: 42 });
+        expect(pe.isDirty.value).toBe(false);
+    });
+
+    it('flips true when a tracked field is edited', async () => {
+        global.fetch.mockResolvedValue({ json: () => Promise.resolve(detail) });
+        const pe = usePatientEdit({ ask: vi.fn() });
+        await pe.open({ id: 42 });
+        pe.form.mrn = '999';
+        expect(pe.isDirty.value).toBe(true);
+        pe.form.mrn = '111';   // restored to the loaded value
+        expect(pe.isDirty.value).toBe(false);
+    });
+
+    it('flips true when the diagnosis list changes (addDx/removeDx)', async () => {
+        global.fetch.mockResolvedValue({ json: () => Promise.resolve(detail) });
+        const pe = usePatientEdit({ ask: vi.fn() });
+        await pe.open({ id: 42 });
+        expect(pe.isDirty.value).toBe(false);
+        pe.addDx({ code: 'B01', name: 'Varicella' });
+        expect(pe.isDirty.value).toBe(true);
+        pe.removeDx('B01');
+        expect(pe.isDirty.value).toBe(false);
+    });
+
+    it('re-opening (e.g. a different patient) takes a fresh snapshot — isDirty resets to false', async () => {
+        global.fetch.mockResolvedValue({ json: () => Promise.resolve(detail) });
+        const pe = usePatientEdit({ ask: vi.fn() });
+        await pe.open({ id: 42 });
+        pe.form.mrn = '999';
+        expect(pe.isDirty.value).toBe(true);
+        await pe.open({ id: 43 });   // reload — fresh baseline
+        expect(pe.isDirty.value).toBe(false);
     });
 });

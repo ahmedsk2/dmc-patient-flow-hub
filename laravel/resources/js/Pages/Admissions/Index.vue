@@ -6,6 +6,7 @@ import BaseModal from '@/Components/BaseModal.vue';
 import PatientForm from '@/Components/PatientForm.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { usePatientEdit } from '@/composables/usePatientEdit';
+import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
 import { localToday, locTone, consultantOptions, FIELD } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
@@ -64,9 +65,11 @@ const fromIcu = (p) => router.post(`/admissions/${p.id}/icu-pull`, {}, { preserv
 
 // modify a queued (unassigned) patient — reuses the canonical PatientForm + usePatientEdit
 const today = localToday();
-const { form: mForm, editing, selectedDx: mDx, open: openModify, addDx: mAdd, removeDx: mRemove, submit: submitModify } =
+const { form: mForm, editing, selectedDx: mDx, open: openModify, addDx: mAdd, removeDx: mRemove, submit: submitModify, isDirty: mIsDirty } =
     usePatientEdit({ ask, onSuccess: () => (editing.value = null) });
-const closeModify = () => { editing.value = null; };
+// Wave 3, Item 1: unsaved-edit guard on both close routes (@close and the footer Cancel).
+const { guardedClose: guardModify } = useUnsavedGuard(mIsDirty, ask);
+const closeModify = () => guardModify(() => { editing.value = null; });
 const fld = FIELD;
 
 // hard delete (admin only — server re-checks)

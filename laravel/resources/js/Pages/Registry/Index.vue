@@ -1,18 +1,26 @@
 <script setup>
-import { ref, reactive, computed, watch } from 'vue';
+import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
 import ActivityPanel from '@/Components/ActivityPanel.vue';
+import SortableTh from '@/Components/SortableTh.vue';
 import { useConfirm } from '@/composables/useConfirm';
+import { useServerTable } from '@/composables/useServerTable';
 import BaseModal from '@/Components/BaseModal.vue';
 import PatientForm from '@/Components/PatientForm.vue';
 import { usePatientEdit } from '@/composables/usePatientEdit';
+import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
 import { localToday, vFocus, xsrf } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
 
-const props = defineProps({ mode: String, results: Object, filters: Object, options: Object });
+const props = defineProps({
+    mode: String, results: Object, filters: Object, options: Object,
+    // Wave 2, Item 6: the sort ACTUALLY applied server-side ({sort: key|null, dir: 'asc'|'desc'|null})
+    // — seeds useServerTable so SortableTh's aria-sort is correct on first load / reload / bookmark.
+    sort: { type: Object, default: () => ({ sort: null, dir: null }) },
+});
 
 const page = usePage();
 const me = computed(() => page.props.auth.user);
@@ -36,10 +44,11 @@ f.indication = Array.isArray(f.indication) ? f.indication.map(Number) : (f.indic
 const term = computed(() => (props.mode === 'diagnosis' ? String(f.keyword || '') : String(f.search || '')).trim());
 const hasTerm = computed(() => term.value !== '');
 const termBody = () => (props.mode === 'diagnosis' ? { keyword: f.keyword } : { search: f.search });
-// the shareable (term-less) filter payload for GET visits
+// the shareable (term-less) filter payload for GET visits — sort/dir ride alongside the other
+// non-PII filters (Wave 2, Item 6) so a bookmark/reload/pagination link keeps the active sort.
 const publicFilters = () => {
     const { search, keyword, ...rest } = { ...f };
-    return { mode: props.mode, ...rest };
+    return { mode: props.mode, ...rest, sort: sortState.state.dir ? sortState.state.key : '', dir: sortState.state.dir || '' };
 };
 
 const setMode = (m) => router.get('/registry', { mode: m }, { preserveState: false });
@@ -47,6 +56,15 @@ const apply = () => hasTerm.value
     ? router.post(`/registry?${qs.value}`, termBody(), { preserveState: true, preserveScroll: true })
     : router.get('/registry', publicFilters(), { preserveState: true, preserveScroll: true });
 const reset = () => router.get('/registry', { mode: props.mode }, { preserveState: false });
+
+// ---- Wave 2, Item 6: server-side sort ------------------------------------------------------
+// useServerTable owns the {key, dir} cycle (mirrors SortableTh.vue's own cycle); the actual
+// visit is delegated to `apply()` — the SAME POST-vs-GET decision the Search button and every
+// other filter change already goes through, so a sort click can NEVER leak the search term into
+// the URL (SPC-TM-011). `apply()` reads `qs`/`publicFilters()` below, which read `sortState.state`
+// directly — by the time `apply()` runs, toggle() has already updated the state synchronously.
+const sortState = useServerTable({ key: props.sort?.sort ?? null, dir: props.sort?.dir ?? null, navigate: () => apply() });
+const onSort = ({ key }) => sortState.toggle(key);
 
 // paginator links are plain GET URLs carrying only the non-PII query; with a term active the page
 // change must re-send the term in a POST body (the paginator reads `page` from the URL either way)
@@ -56,9 +74,10 @@ const goPage = (url) => {
     else router.visit(url, { preserveScroll: true });
 };
 
-// term-LESS by construction: search/keyword never enter a URL (SPC-TM-011)
+// term-LESS by construction: search/keyword never enter a URL (SPC-TM-011). sort/dir included so
+// pagination + exports + the match-count probe all respect the active sort.
 const qs = computed(() => new URLSearchParams(
-    Object.entries({ mode: props.mode, ...f }).flatMap(([k, v]) =>
+    Object.entries({ mode: props.mode, ...f, sort: sortState.state.dir ? sortState.state.key : '', dir: sortState.state.dir || '' }).flatMap(([k, v]) =>
         k === 'search' || k === 'keyword' ? [] :
         Array.isArray(v) ? v.map((x) => [`${k}[]`, x]) : (v === '' || v === false ? [] : [[k, v]]))
 ).toString());
@@ -117,15 +136,34 @@ const toggleInd = (id) => { f.indication.includes(id) ? (f.indication = f.indica
 // current_location (ModifyAdmissionRequest requires them). The Registry's old free-text nationality
 // drift is resolved here: PatientForm renders the canonical select-with-legacy-option (Item 3).
 const today = localToday();
-const { form: mForm, editing, selectedDx: mDx, activity: mActivity, open: openEditForm, addDx: mAdd, removeDx: mRemove, submit: submitEdit } =
+const { form: mForm, editing, selectedDx: mDx, activity: mActivity, open: openEditForm, addDx: mAdd, removeDx: mRemove, submit: submitEdit, isDirty: mIsDirty } =
     usePatientEdit({ ask, onSuccess: () => (editing.value = null) });
 const openEdit = (id) => openEditForm({ id });
+// Wave 3, Item 1: unsaved-edit guard shared by @close (Esc/backdrop/X) and the footer Cancel.
+const { guardedClose: guardEdit } = useUnsavedGuard(mIsDirty, ask);
+const closeEdit = () => guardEdit(() => { editing.value = null; });
 
 const fld = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20';
 const outcomeTone = (o) => o === 'Dead' ? 'bg-tint-danger text-on-danger' : o === 'Alive' ? 'bg-tint-success text-on-success' : 'bg-ink-100 text-ink-500';
 // same short/long LOS band colors as the board cards (J2-7)
 const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b === 'long' ? 'bg-tint-danger text-on-danger' : 'bg-tint-warning text-on-warning';
 const modes = [['admissions', 'Admissions'], ['consultations', 'Consultations'], ['diagnosis', 'Diagnosis (free text)']];
+
+// Wave 2, Item 5: status-rail rows — the app's "Census Board" fingerprint (app.css's
+// status-rail/rail-* utilities), reusing the SAME outcome vocabulary as outcomeTone above so the
+// rail colour and the Outcome badge never disagree. An open/undischarged row gets rail-neutral.
+const outcomeRail = (o) => o === 'Dead' ? 'rail-danger' : o === 'Alive' ? 'rail-success' : 'rail-neutral';
+const consultRail = (signoff) => signoff ? 'rail-success' : 'rail-info';
+
+// Density toggle — Comfortable/Compact row padding (app.css's density-comfortable/-compact +
+// row-pad, the SAME mechanism the board's own density toggle is slated to migrate onto). Persisted
+// per-browser under its OWN key so Registry's preference doesn't collide with the board's.
+const density = ref('comfortable');
+const setDensity = (d) => { density.value = d; localStorage.setItem('dmc-registry-density', d); };
+onMounted(() => {
+    const d = localStorage.getItem('dmc-registry-density');
+    if (d === 'compact' || d === 'comfortable') density.value = d;
+});
 
 // expandable row detail (admissions mode) — fresh Set per toggle so Vue picks up the change
 const expanded = ref(new Set());
@@ -241,6 +279,14 @@ const toggleExpand = (id) => {
             <span><span class="nums font-semibold text-ink-600">{{ results.total }}</span> result(s)</span>
             <!-- §3.6: pre-export matched-row count (loaded on hover/focus of the export buttons) -->
             <span v-if="matchCount !== null" class="nums text-xs">· export contains {{ matchCount.toLocaleString() }} rows</span>
+            <!-- Wave 2, Item 5: density toggle (Comfortable/Compact row padding), persisted per-browser
+                 under its OWN key so it never collides with the board's density preference. -->
+            <button type="button" @click="setDensity(density === 'compact' ? 'comfortable' : 'compact')"
+                :aria-pressed="density === 'compact'" title="Toggle compact row spacing"
+                class="ml-auto rounded-lg px-3 py-1.5 text-xs font-semibold ring-1 ring-line transition hover:bg-ink-50"
+                :class="density === 'compact' ? 'bg-brand-600 text-white ring-brand-600' : 'bg-card text-ink-500'">
+                Compact rows
+            </button>
         </div>
         <!-- §3.6: advisory banner for very large exports -->
         <div v-if="matchCount !== null && matchCount > 20000" class="mb-3 flex items-start gap-2 rounded-xl bg-tint-warning px-4 py-3 text-sm font-medium text-on-warning ring-1 ring-warning-500/20" role="alert">
@@ -248,42 +294,68 @@ const toggleExpand = (id) => {
             <span>This export contains {{ matchCount.toLocaleString() }} rows and may take several minutes. Consider narrowing the filters.</span>
         </div>
 
-        <!-- results -->
-        <div class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
+        <!-- results. NOTE: no `overflow-hidden` here (Wave 2, Item 5) — a clipping ancestor between a
+             `position: sticky` header and the viewport defeats the stickiness (the sticky element's
+             scrolling context becomes this box instead of the page), so the rounded-2xl top corners
+             are a deliberate, minor trade-off for a working sticky thead. -->
+        <div class="rounded-2xl bg-card shadow-card ring-1 ring-line" :class="density === 'compact' ? 'density-compact' : 'density-comfortable'">
             <table v-if="mode === 'consultations'" class="w-full text-sm">
-                <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400"><th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Location</th><th scope="col" class="px-3 py-3">From → To</th><th scope="col" class="px-3 py-3">Indication</th><th scope="col" class="px-3 py-3">Consultant</th><th scope="col" class="px-3 py-3">Date</th><th scope="col" class="px-5 py-3">Status</th></tr></thead>
+                <thead>
+                    <tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
+                        <SortableTh label="Patient" sort-key="name" :current="sortState.state" class="sticky top-16 z-10 bg-card px-5 py-3" @sort="onSort" />
+                        <th scope="col" class="sticky top-16 z-10 bg-card px-3 py-3">Location</th>
+                        <th scope="col" class="sticky top-16 z-10 bg-card px-3 py-3">From → To</th>
+                        <th scope="col" class="sticky top-16 z-10 bg-card px-3 py-3">Indication</th>
+                        <th scope="col" class="sticky top-16 z-10 bg-card px-3 py-3">Consultant</th>
+                        <SortableTh label="Date" sort-key="date" :current="sortState.state" class="sticky top-16 z-10 bg-card px-3 py-3" @sort="onSort" />
+                        <SortableTh label="Status" sort-key="status" :current="sortState.state" class="sticky top-16 z-10 bg-card px-5 py-3" @sort="onSort" />
+                    </tr>
+                </thead>
                 <tbody class="divide-y divide-line">
-                    <tr v-for="c in results.data" :key="c.id" class="hover:bg-brand-50/40">
-                        <td class="px-5 py-3"><div class="font-semibold text-ink-800">{{ c.name }}</div><div class="nums text-xs text-ink-400">MRN {{ c.mrn }} · {{ c.age ?? '—' }}y</div></td>
-                        <td class="px-3 py-3 text-ink-600">{{ c.location || '—' }}</td>
-                        <td class="px-3 py-3 text-ink-600">{{ c.from || '—' }} <span class="text-ink-300">→</span> {{ c.to || '—' }}</td>
-                        <td class="px-3 py-3"><span v-for="r in c.reasons" :key="r" class="mr-1 inline-block rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">{{ r }}</span></td>
-                        <td class="px-3 py-3 text-ink-600">{{ c.consultant }}</td>
-                        <td class="nums px-3 py-3 text-ink-500">{{ c.date || '—' }}</td>
-                        <td class="px-5 py-3"><span v-if="c.signoff" class="rounded-full bg-tint-success px-2.5 py-0.5 text-xs font-semibold text-on-success">Signed {{ c.signoff }}</span><span v-else class="rounded-full bg-tint-accent px-2.5 py-0.5 text-xs font-semibold text-on-accent">Active</span></td>
+                    <tr v-for="c in results.data" :key="c.id" class="transition-row hover:bg-tint-accent">
+                        <td class="status-rail row-pad px-5" :class="consultRail(c.signoff)"><div class="font-semibold text-ink-800">{{ c.name }}</div><div class="nums text-xs text-ink-400">MRN {{ c.mrn }} · {{ c.age ?? '—' }}y</div></td>
+                        <td class="row-pad px-3 text-ink-600">{{ c.location || '—' }}</td>
+                        <td class="row-pad px-3 text-ink-600">{{ c.from || '—' }} <span class="text-ink-300">→</span> {{ c.to || '—' }}</td>
+                        <td class="row-pad px-3"><span v-for="r in c.reasons" :key="r" class="mr-1 inline-block rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">{{ r }}</span></td>
+                        <td class="row-pad px-3 text-ink-600">{{ c.consultant }}</td>
+                        <td class="nums row-pad px-3 text-ink-500">{{ c.date || '—' }}</td>
+                        <td class="row-pad px-5"><span v-if="c.signoff" class="rounded-full bg-tint-success px-2.5 py-0.5 text-xs font-semibold text-on-success">Signed {{ c.signoff }}</span><span v-else class="rounded-full bg-tint-accent px-2.5 py-0.5 text-xs font-semibold text-on-accent">Active</span></td>
                     </tr>
                     <tr v-if="!results.data.length"><td colspan="7" class="px-5 py-10 text-center text-ink-400">{{ hasSearched ? 'No consultations match the current filters.' : 'No consultations match.' }}</td></tr>
                 </tbody>
             </table>
             <table v-else class="w-full text-sm">
-                <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400"><th v-if="mode === 'admissions'" scope="col" class="w-10 px-2 py-3"><span class="sr-only">Details</span></th><th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Age/Sex</th><th scope="col" class="px-3 py-3">Location</th><th scope="col" class="px-3 py-3">Consultant</th><th scope="col" class="px-3 py-3">Admitted</th><th scope="col" class="px-3 py-3">Discharged</th><th scope="col" class="px-3 py-3">LOS</th><th scope="col" class="px-3 py-3">Outcome</th><th scope="col" class="px-5 py-3 text-right">Edit</th></tr></thead>
+                <thead>
+                    <tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
+                        <th v-if="mode === 'admissions'" scope="col" class="sticky top-16 z-10 w-10 bg-card px-2 py-3"><span class="sr-only">Details</span></th>
+                        <SortableTh label="Patient" sort-key="name" :current="sortState.state" class="sticky top-16 z-10 bg-card px-5 py-3" @sort="onSort" />
+                        <th scope="col" class="sticky top-16 z-10 bg-card px-3 py-3">Age/Sex</th>
+                        <th scope="col" class="sticky top-16 z-10 bg-card px-3 py-3">Location</th>
+                        <th scope="col" class="sticky top-16 z-10 bg-card px-3 py-3">Consultant</th>
+                        <SortableTh label="Admitted" sort-key="admit_date" :current="sortState.state" class="sticky top-16 z-10 bg-card px-3 py-3" @sort="onSort" />
+                        <SortableTh label="Discharged" sort-key="discharge_date" :current="sortState.state" class="sticky top-16 z-10 bg-card px-3 py-3" @sort="onSort" />
+                        <SortableTh label="LOS" sort-key="los" :current="sortState.state" class="sticky top-16 z-10 bg-card px-3 py-3" @sort="onSort" />
+                        <SortableTh label="Outcome" sort-key="outcome" :current="sortState.state" class="sticky top-16 z-10 bg-card px-3 py-3" @sort="onSort" />
+                        <th scope="col" class="sticky top-16 z-10 bg-card px-5 py-3 text-right">Edit</th>
+                    </tr>
+                </thead>
                 <tbody class="divide-y divide-line">
                     <template v-for="r in results.data" :key="r.id">
-                        <tr class="hover:bg-brand-50/40">
-                            <td v-if="mode === 'admissions'" class="px-2 py-3">
+                        <tr class="transition-row hover:bg-tint-accent">
+                            <td v-if="mode === 'admissions'" class="status-rail row-pad px-2" :class="outcomeRail(r.outcome)">
                                 <button @click="toggleExpand(r.id)" :aria-expanded="expanded.has(r.id) ? 'true' : 'false'" :aria-label="`Toggle details for ${r.name}`" class="grid h-7 w-7 place-items-center rounded-lg text-ink-400 ring-1 ring-line transition hover:bg-brand-50 hover:text-brand-700">
                                     <svg class="h-4 w-4 transition-transform" :class="expanded.has(r.id) && 'rotate-90'" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
                                 </button>
                             </td>
-                            <td class="px-5 py-3"><div class="font-semibold text-ink-800">{{ r.name }}</div><div class="nums text-xs text-ink-400">MRN {{ r.mrn }}</div></td>
-                            <td class="nums px-3 py-3 text-ink-600">{{ r.age ?? '—' }} · {{ (r.gender||'—').slice(0,1) }}</td>
-                            <td class="px-3 py-3 text-ink-600">{{ r.location || '—' }}</td>
-                            <td class="px-3 py-3 text-ink-600">{{ r.consultant }}</td>
-                            <td class="nums px-3 py-3 text-ink-500">{{ r.admit_date || '—' }}</td>
-                            <td class="nums px-3 py-3 text-ink-500">{{ r.discharge_date || '—' }}</td>
-                            <td class="nums px-3 py-3"><span v-if="r.los !== null" class="rounded-full px-2 py-0.5 text-xs font-bold" :class="losTone(r.los_band)">{{ r.los }}d</span><span v-else class="text-ink-300">—</span></td>
-                            <td class="px-3 py-3"><span v-if="r.outcome" class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="outcomeTone(r.outcome)">{{ r.outcome }}</span><span v-else class="text-ink-300">—</span></td>
-                            <td class="px-5 py-3 text-right"><button v-if="canModify" @click="openEdit(r.id)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50">Edit</button></td>
+                            <td class="row-pad px-5" :class="mode !== 'admissions' ? ['status-rail', outcomeRail(r.outcome)] : ''"><div class="font-semibold text-ink-800">{{ r.name }}</div><div class="nums text-xs text-ink-400">MRN {{ r.mrn }}</div></td>
+                            <td class="nums row-pad px-3 text-ink-600">{{ r.age ?? '—' }} · {{ (r.gender||'—').slice(0,1) }}</td>
+                            <td class="row-pad px-3 text-ink-600">{{ r.location || '—' }}</td>
+                            <td class="row-pad px-3 text-ink-600">{{ r.consultant }}</td>
+                            <td class="nums row-pad px-3 text-ink-500">{{ r.admit_date || '—' }}</td>
+                            <td class="nums row-pad px-3 text-ink-500">{{ r.discharge_date || '—' }}</td>
+                            <td class="nums row-pad px-3"><span v-if="r.los !== null" class="rounded-full px-2 py-0.5 text-xs font-bold" :class="losTone(r.los_band)">{{ r.los }}d</span><span v-else class="text-ink-300">—</span></td>
+                            <td class="row-pad px-3"><span v-if="r.outcome" class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="outcomeTone(r.outcome)">{{ r.outcome }}</span><span v-else class="text-ink-300">—</span></td>
+                            <td class="row-pad px-5 text-right"><button v-if="canModify" @click="openEdit(r.id)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50">Edit</button></td>
                         </tr>
                         <!-- expandable detail panel (admissions mode) -->
                         <tr v-if="mode === 'admissions' && expanded.has(r.id)" class="bg-app/60">
@@ -332,7 +404,7 @@ const toggleExpand = (id) => {
         </div>
 
         <!-- edit modal (canonical PatientForm — resolves the old free-text-nationality drift) -->
-        <BaseModal :open="!!editing" title="Modify patient" size="lg" tall @close="editing = null">
+        <BaseModal :open="!!editing" title="Modify patient" size="lg" tall @close="closeEdit">
                 <form @submit.prevent="submitEdit" class="space-y-3">
                     <PatientForm :form="mForm" :selected-dx="mDx" :countries="options.countries" :consultants="options.consultants" :today="today" :field-class="fld" @add-dx="mAdd" @remove-dx="mRemove" />
                     <!-- per-patient activity trail (Phase 2 — Item 2) -->
@@ -340,7 +412,7 @@ const toggleExpand = (id) => {
                         <summary class="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-ink-700">Activity <span class="nums font-normal text-ink-400">({{ mActivity.length }})</span></summary>
                         <div class="px-3 pb-3"><ActivityPanel :items="mActivity" /></div>
                     </details>
-                    <div class="flex justify-end gap-2 pt-1"><button type="button" @click="editing = null" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save changes</button></div>
+                    <div class="flex justify-end gap-2 pt-1"><button type="button" @click="closeEdit" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="mForm.processing" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Save changes</button></div>
                 </form>
         </BaseModal>
     </AppLayout>

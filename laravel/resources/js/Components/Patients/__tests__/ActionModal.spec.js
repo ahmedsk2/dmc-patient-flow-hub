@@ -25,6 +25,9 @@ vi.mock('@inertiajs/vue3', () => ({
 // gate-then-retry calls useHandover().saveHandover — make it a controllable spy.
 const { saveHandover } = vi.hoisted(() => ({ saveHandover: vi.fn(() => Promise.resolve(true)) }));
 vi.mock('@/composables/useHandover', () => ({ useHandover: () => ({ saveHandover, fetchHandover: vi.fn(), preflight: vi.fn() }) }));
+// the unsaved-changes guard's ask() — controllable per test (Wave 3, Item 1/2).
+const { ask } = vi.hoisted(() => ({ ask: vi.fn() }));
+vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => ({ ask }) }));
 // BaseModal: render the slot unconditionally so sub-forms are inspectable regardless of `open`.
 vi.mock('@/Components/BaseModal.vue', () => ({
     default: { props: ['open', 'title', 'subtitle', 'size', 'tall', 'fieldFirst', 'closable'], template: '<div><slot /></div>' },
@@ -47,7 +50,7 @@ const mountWith = (mode, p = patient, over = {}) => mount(ActionModal, {
     },
 });
 
-beforeEach(() => { posts.length = 0; saveHandover.mockClear(); saveHandover.mockResolvedValue(true); });
+beforeEach(() => { posts.length = 0; saveHandover.mockClear(); saveHandover.mockResolvedValue(true); ask.mockReset(); });
 
 describe('ActionModal — title map (relocated from PatientsIndex.wave2 Item 5)', () => {
     it('assign mode title is "Assign consultant"', () => {
@@ -235,5 +238,98 @@ describe('ActionModal — close', () => {
         const w = mountWith('assign');
         w.vm.$emit('close');
         expect(w.emitted('close')).toBeTruthy();
+    });
+});
+
+// Wave 3, Item 1/2: the Cancel button (and BaseModal's `:dirty` prop) route through the SAME
+// unsaved-changes guard, keyed off the ACTIVE mode's own form.isDirty.
+describe('ActionModal — unsaved-changes guard (Cancel button)', () => {
+    it('clean form: Cancel closes immediately without asking', async () => {
+        const w = mountWith('assign');
+        expect(w.vm.modalDirty).toBe(false);
+        await w.find('button.text-ink-500').trigger('click');
+        expect(ask).not.toHaveBeenCalled();
+        expect(w.emitted('close')).toBeTruthy();
+    });
+
+    it('dirty form: Cancel asks (danger) before closing', async () => {
+        ask.mockResolvedValue(true);
+        const w = mountWith('assign');
+        w.vm.aForm.isDirty = true;
+        await w.vm.$nextTick();
+        expect(w.vm.modalDirty).toBe(true);
+        await w.find('button.text-ink-500').trigger('click');
+        expect(ask).toHaveBeenCalledTimes(1);
+        expect(ask.mock.calls[0][2]).toBe('danger');
+        expect(w.emitted('close')).toBeTruthy();
+    });
+
+    it('dirty form: declining the confirm keeps the modal open', async () => {
+        ask.mockResolvedValue(false);
+        const w = mountWith('assign');
+        w.vm.aForm.isDirty = true;
+        await w.vm.$nextTick();
+        await w.find('button.text-ink-500').trigger('click');
+        expect(ask).toHaveBeenCalledTimes(1);
+        expect(w.emitted('close')).toBeFalsy();
+    });
+
+    it('BaseModal receives :dirty bound to the active mode form', async () => {
+        const w = mountWith('medical');
+        expect(w.vm.modalDirty).toBe(false);
+        w.vm.mdForm.isDirty = true;
+        await w.vm.$nextTick();
+        expect(w.vm.modalDirty).toBe(true);
+    });
+});
+
+// Wave 3, Item 4: ErrorSummary at the top of the active mode's form, mapped from that form's own
+// .errors onto ids scoped to (uid, mode, field) — never the handover-gate error, which already has
+// its own dedicated block.
+describe('ActionModal — ErrorSummary wiring', () => {
+    it('renders nothing when the active form has no errors', () => {
+        const w = mountWith('assign');
+        expect(w.find('[role="alert"]').exists()).toBe(false);
+    });
+
+    it('maps the active form errors onto ids that resolve to the real inputs', async () => {
+        const w = mountWith('assign');
+        w.vm.aForm.errors = { consultant_id: 'Select a consultant' };
+        await w.vm.$nextTick();
+        const alert = w.get('[role="alert"]');
+        const link = alert.get('a');
+        const href = link.attributes('href').slice(1);
+        expect(w.get(`#${href}`).element.tagName).toBe('SELECT');
+        expect(w.get(`#${href}`).attributes('aria-describedby')).toBe(`${href}-err`);
+    });
+
+    it('excludes the handover-gate error from the summary (it has its own inline block)', async () => {
+        const w = mountWith('assign');
+        w.vm.aForm.errors = { handover: 'Handover is stale' };
+        await w.vm.$nextTick();
+        expect(w.find('[role="alert"]').exists()).toBe(false);
+        expect(w.text()).toContain('Handover is stale');   // still shown, just not via the summary
+    });
+});
+
+// Wave 3, Item 5: double-submit guard — guardSubmit() no-ops while the form is already processing,
+// on top of the existing :disabled="…Form.processing" binding.
+describe('ActionModal — double-submit guard', () => {
+    it('submitAssign no-ops while aForm.processing is true', async () => {
+        const w = mountWith('assign');
+        w.vm.aForm.consultant_id = 5;
+        w.vm.aForm.processing = true;
+        await w.vm.$nextTick();
+        w.vm.submitAssign();
+        expect(posts.length).toBe(0);
+    });
+
+    it('every mode\'s submit button is :disabled when its form is processing', async () => {
+        for (const [mode, key] of [['medical', 'mdForm'], ['complete', 'cdForm'], ['icu', 'icuForm'], ['transfer', 'tForm']]) {
+            const w = mountWith(mode);
+            w.vm[key].processing = true;
+            await w.vm.$nextTick();
+            expect(w.find('form button[type="submit"]').attributes('disabled')).toBeDefined();
+        }
     });
 });
