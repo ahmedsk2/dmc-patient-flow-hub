@@ -244,7 +244,12 @@ export default {
                     const q = this.query.trim();
                     if (q.length < 2) { this.results = []; return; }
                     this.timer = setTimeout(async () => {
-                        const res = await fetch(`/api/patients/search?q=${encodeURIComponent(q)}`, { headers: { Accept: 'application/json' } });
+                        // SPC-TM-011 (Wave 1): the name/MRN term rides the POST body, never a URL
+                        const res = await fetch('/api/patients/search', {
+                            method: 'POST',
+                            headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf() },
+                            body: JSON.stringify({ q }),
+                        });
                         this.results = res.ok ? await res.json() : [];
                     }, 250);
                 },
@@ -256,7 +261,7 @@ export default {
                        :class="tone === 'danger' ? 'text-on-danger' : 'text-brand-700'">{{ label }}</p>
                     <div class="relative">
                         <input v-model="query" @input="onInput" role="combobox" aria-autocomplete="list"
-                            :aria-expanded="results.length > 0"
+                            :aria-expanded="results.length > 0" autocomplete="off"
                             class="w-full rounded-xl border border-ink-200 bg-card px-3.5 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                             placeholder="Search MRN or name (≥2 chars)…" />
                         <ul v-if="results.length" role="listbox"

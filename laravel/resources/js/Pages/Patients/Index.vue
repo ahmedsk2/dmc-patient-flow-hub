@@ -37,10 +37,22 @@ const view = ref(props.filters.view || '');
 const consultantId = ref(props.filters.consultant_id || '');
 const specialtyId = ref(props.filters.specialty_id || '');
 let timer = null;
-const apply = () => router.get('/patients', {
-        search: search.value || undefined, location: location.value || undefined, view: view.value || undefined,
-        consultant_id: consultantId.value || undefined, specialty_id: specialtyId.value || undefined,
-    }, { preserveState: true, replace: true, preserveScroll: true });
+// SPC-TM-011 (Wave 1): the free-text term is patient name/MRN, so a term-carrying visit POSTs it
+// in the body (non-PII filters ride the query string and stay shareable); a term-less visit keeps
+// the plain GET flow exactly as before. Legacy GET-with-term URLs redirect term-less server-side.
+const nonPiiFilters = () => ({
+    location: location.value || undefined, view: view.value || undefined,
+    consultant_id: consultantId.value || undefined, specialty_id: specialtyId.value || undefined,
+});
+const apply = () => {
+    const opts = { preserveState: true, replace: true, preserveScroll: true };
+    if (search.value.trim()) {
+        const q = new URLSearchParams(Object.entries(nonPiiFilters()).filter(([, v]) => v !== undefined)).toString();
+        router.post(`/patients${q ? `?${q}` : ''}`, { search: search.value }, opts);
+    } else {
+        router.get('/patients', nonPiiFilters(), opts);
+    }
+};
 watch(search, () => { clearTimeout(timer); timer = setTimeout(apply, 300); });
 const setLocation = (l) => { location.value = location.value === l ? '' : l; apply(); };
 const setView = (v) => { view.value = view.value === v ? '' : v; apply(); };
@@ -234,7 +246,7 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
 
             <div class="relative ml-auto">
                 <svg class="pointer-events-none absolute left-3 top-2.5 h-5 w-5 text-ink-400" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" /></svg>
-                <input v-model="search" v-focus aria-label="Search patients by name or MRN" placeholder="Search name or MRN…" class="w-56 rounded-xl border border-ink-200 bg-card py-2 pl-10 pr-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+                <input v-model="search" v-focus aria-label="Search patients by name or MRN" placeholder="Search name or MRN…" autocomplete="off" class="w-56 rounded-xl border border-ink-200 bg-card py-2 pl-10 pr-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
             </div>
             <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line">
                 <button v-for="l in ['Ward','ICU','ER']" :key="l" @click="setLocation(l)" class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="location === l ? 'bg-brand-600 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ l }}</button>
@@ -302,8 +314,9 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
                             No active match.
                             <span v-if="fallback.discharged">
                                 Found <strong class="nums text-ink-700">{{ fallback.discharged }}</strong> discharged
-                                <Link :href="`/registry?mode=admissions&search=${encodeURIComponent(fallback.search)}&discharged=1`"
-                                      class="font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700">view →</Link>
+                                <!-- SPC-TM-011: the term POSTs to the registry in the body -->
+                                <button type="button" @click="router.post('/registry?mode=admissions&discharged=1', { search: fallback.search })"
+                                      class="font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700">view →</button>
                             </span>
                             <span v-if="fallback.unassigned">
                                 / <strong class="nums text-ink-700">{{ fallback.unassigned }}</strong> awaiting assignment

@@ -35,7 +35,7 @@ const dlId = `admit-from-${useId()}`;
 
 <template>
     <div class="grid grid-cols-2 gap-3">
-        <div><label class="mb-1 block text-sm font-semibold text-ink-700">MRN</label><input v-model="form.mrn" inputmode="numeric" :class="[fieldClass, form.errors.mrn && 'border-danger-500']" /><p v-if="form.errors.mrn" class="mt-1 text-xs text-on-danger">{{ form.errors.mrn }}</p></div>
+        <div><label class="mb-1 block text-sm font-semibold text-ink-700">MRN</label><input v-model="form.mrn" inputmode="numeric" autocomplete="off" :class="[fieldClass, form.errors.mrn && 'border-danger-500']" /><p v-if="form.errors.mrn" class="mt-1 text-xs text-on-danger">{{ form.errors.mrn }}</p></div>
         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Bed</label><input v-model="form.bed" :class="fieldClass" /><p v-if="form.errors.bed" class="mt-1 text-xs text-on-danger">{{ form.errors.bed }}</p></div>
         <div class="col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Name</label><input v-model="form.name" :class="[fieldClass, form.errors.name && 'border-danger-500']" /><p v-if="form.errors.name" class="mt-1 text-xs text-on-danger">{{ form.errors.name }}</p></div>
         <div><label class="mb-1 block text-sm font-semibold text-ink-700">Age</label><input v-model="form.age" inputmode="numeric" :class="fieldClass" /><p v-if="form.errors.age" class="mt-1 text-xs text-on-danger">{{ form.errors.age }}</p></div>

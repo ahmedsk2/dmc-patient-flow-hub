@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import BaseModal from '@/Components/BaseModal.vue';
+import IdentityChip from '@/Components/IdentityChip.vue';
 import AdmissionSummary from '@/Components/Patients/AdmissionSummary.vue';
 import { useHandover } from '@/composables/useHandover';
 import { consultantOptions, DISCHARGE_DESTINATIONS, OUTCOME_STATUSES } from '@/lib/ui.js';
@@ -114,7 +115,15 @@ defineExpose({
 </script>
 
 <template>
-    <BaseModal :open="open" :title="modalTitle" :subtitle="patient ? `${patient.name} · MRN ${patient.mrn}` : ''" size="md" tall field-first @close="close">
+    <BaseModal :open="open" :title="modalTitle" size="md" tall field-first @close="close">
+        <!-- Wave 1 (EHC UI): the header carries the SAME identity tuple the user selected on —
+             IdentityChip re-verifies name/MRN/age·sex/location at the moment of action. Data is
+             unchanged; only the presentation moved from a plain-text subtitle to the chip. -->
+        <template #subtitle>
+            <IdentityChip v-if="patient" class="mt-1" :name="patient.name" :mrn="patient.mrn"
+                :age="patient.age" :sex="patient.gender || ''" :location="patient.location || ''"
+                :status="patient.outcome === 'Dead' ? 'deceased' : (patient.discharged ? 'discharged' : '')" />
+        </template>
         <template v-if="patient">
             <form v-if="mode === 'assign'" @submit.prevent="submitAssign" class="space-y-4">
                 <select v-model="aForm.consultant_id" title="On-service consultants only" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select consultant…</option><option v-for="c in assignConsultants" :key="c.id" :value="c.id">{{ c.name }}{{ !c.on_service ? ' (off service)' : '' }}</option></select>

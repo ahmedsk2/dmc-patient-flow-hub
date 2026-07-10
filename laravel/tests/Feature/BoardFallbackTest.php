@@ -48,7 +48,7 @@ class BoardFallbackTest extends TestCase
         $this->admission($this->patient('Ali Saleh'), ['consultant_id' => $consultant->id, 'discharge_date' => now()->subDay()->toDateString(), 'transfer_type' => 'discharge from ward']);
         $this->admission($this->patient('Ali Unassigned'), ['consultant_id' => null]);
 
-        $this->actingAs($consultant)->get('/patients?search=Ali')
+        $this->actingAs($consultant)->post('/patients', ['search' => 'Ali'])
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('groups', [])
                 ->where('fallback.discharged', 2)
@@ -61,7 +61,7 @@ class BoardFallbackTest extends TestCase
         $consultant = $this->user(User::ROLE_CONSULTANT);
         $this->admission($this->patient('Active Match'), ['consultant_id' => $consultant->id]);
 
-        $this->actingAs($consultant)->get('/patients?search=Active')
+        $this->actingAs($consultant)->post('/patients', ['search' => 'Active'])
             ->assertInertia(fn (AssertableInertia $page) => $page->where('fallback', null));
     }
 
@@ -83,7 +83,7 @@ class BoardFallbackTest extends TestCase
         $this->admission($this->patient('Zahra Noor'), ['consultant_id' => $consultantB->id, 'discharge_date' => now()->subDay()->toDateString(), 'transfer_type' => 'discharge from ward']);
 
         // consultant A searches "Zahra" — D1 scope means they see 0 discharged (it's B's patient)
-        $this->actingAs($consultantA)->get('/patients?search=Zahra')
+        $this->actingAs($consultantA)->post('/patients', ['search' => 'Zahra'])
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('groups', [])
                 ->where('fallback.discharged', 0)
@@ -98,7 +98,7 @@ class BoardFallbackTest extends TestCase
         $this->admission($this->patient('Yusuf One'), ['consultant_id' => $someConsultant->id, 'discharge_date' => now()->subDay()->toDateString(), 'transfer_type' => 'discharge from ward']);
         $this->admission($this->patient('Yusuf Two'), ['consultant_id' => null, 'discharge_date' => now()->subDay()->toDateString(), 'transfer_type' => 'discharge from ward']);
 
-        $this->actingAs($admin)->get('/patients?search=Yusuf')
+        $this->actingAs($admin)->post('/patients', ['search' => 'Yusuf'])
             ->assertInertia(fn (AssertableInertia $page) => $page->where('fallback.discharged', 2));
     }
 }

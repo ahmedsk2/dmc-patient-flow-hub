@@ -1,6 +1,6 @@
 <script setup>
 import { ref, reactive, computed, watch } from 'vue';
-import { Link, router, usePage } from '@inertiajs/vue3';
+import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
 import ActivityPanel from '@/Components/ActivityPanel.vue';
@@ -8,7 +8,7 @@ import { useConfirm } from '@/composables/useConfirm';
 import BaseModal from '@/Components/BaseModal.vue';
 import PatientForm from '@/Components/PatientForm.vue';
 import { usePatientEdit } from '@/composables/usePatientEdit';
-import { localToday, vFocus } from '@/lib/ui.js';
+import { localToday, vFocus, xsrf } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
 
@@ -29,27 +29,76 @@ f.longterm = !!f.longterm; f.discharged = !!f.discharged; f.tb = !!f.tb; f.readm
 f.dx = Array.isArray(f.dx) ? f.dx : (f.dx ? [f.dx] : []);
 f.indication = Array.isArray(f.indication) ? f.indication.map(Number) : (f.indication ? [Number(f.indication)] : []);
 
+// ---- SPC-TM-011 (Wave 1): the free-text term is PHI (name/MRN, or the diagnosis keyword the
+// audit trail already redacts). It travels in a POST body ONLY. Non-PII filters stay in the query
+// string so filtered views remain shareable. GET-with-term is legacy-accepted server-side but
+// redirects term-less.
+const term = computed(() => (props.mode === 'diagnosis' ? String(f.keyword || '') : String(f.search || '')).trim());
+const hasTerm = computed(() => term.value !== '');
+const termBody = () => (props.mode === 'diagnosis' ? { keyword: f.keyword } : { search: f.search });
+// the shareable (term-less) filter payload for GET visits
+const publicFilters = () => {
+    const { search, keyword, ...rest } = { ...f };
+    return { mode: props.mode, ...rest };
+};
+
 const setMode = (m) => router.get('/registry', { mode: m }, { preserveState: false });
-const apply = () => router.get('/registry', { mode: props.mode, ...f }, { preserveState: true, preserveScroll: true });
+const apply = () => hasTerm.value
+    ? router.post(`/registry?${qs.value}`, termBody(), { preserveState: true, preserveScroll: true })
+    : router.get('/registry', publicFilters(), { preserveState: true, preserveScroll: true });
 const reset = () => router.get('/registry', { mode: props.mode }, { preserveState: false });
 
+// paginator links are plain GET URLs carrying only the non-PII query; with a term active the page
+// change must re-send the term in a POST body (the paginator reads `page` from the URL either way)
+const goPage = (url) => {
+    if (!url) return;
+    if (hasTerm.value) router.post(url, termBody(), { preserveState: true, preserveScroll: true });
+    else router.visit(url, { preserveScroll: true });
+};
+
+// term-LESS by construction: search/keyword never enter a URL (SPC-TM-011)
 const qs = computed(() => new URLSearchParams(
     Object.entries({ mode: props.mode, ...f }).flatMap(([k, v]) =>
+        k === 'search' || k === 'keyword' ? [] :
         Array.isArray(v) ? v.map((x) => [`${k}[]`, x]) : (v === '' || v === false ? [] : [[k, v]]))
 ).toString());
 
 // §3.6: surface the matched row count on-demand (hover/focus the export buttons) so the user can
 // see how large the export is before starting it; advise a slower path above ~20k rows.
+// POSTed so a term-filtered count carries its term in the body.
 const matchCount = ref(null);
 const loadMatchCount = async () => {
     if (matchCount.value !== null) return;
     try {
-        const r = await fetch('/registry/count?' + qs.value, { headers: { Accept: 'application/json' } });
+        const r = await fetch('/registry/count?' + qs.value, {
+            method: 'POST',
+            headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf() },
+            body: JSON.stringify(termBody()),
+        });
         matchCount.value = (await r.json()).count;
     } catch { /* advisory only — never blocks the export */ }
 };
-// invalidate the cached count whenever the filter set changes
-watch(qs, () => { matchCount.value = null; });
+// invalidate the cached count whenever the filter set (or the term) changes
+watch([qs, term], () => { matchCount.value = null; });
+
+// term-aware exports: with a term active, the download is a self-submitting POST form (the term
+// rides the body; the browser still treats the attachment response as a normal download). The
+// term-less path keeps the plain link so copy/middle-click behave exactly as before.
+const postExport = (path) => {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `${path}?${qs.value}`;
+    const add = (name, value) => {
+        const el = document.createElement('input');
+        el.type = 'hidden'; el.name = name; el.value = value;
+        form.appendChild(el);
+    };
+    add('_token', document.querySelector('meta[name="csrf-token"]')?.content || '');
+    Object.entries(termBody()).forEach(([k, v]) => { if (v) add(k, v); });
+    document.body.appendChild(form);
+    form.submit();
+    form.remove();
+};
 
 // §3.7: distinguish "first page load" from "searched and got nothing" so the empty state only
 // shows after the user actually applied a filter (any non-default value)
@@ -102,7 +151,7 @@ const toggleExpand = (id) => {
             <!-- ADMISSIONS -->
             <div v-if="mode === 'admissions'" class="space-y-3">
                 <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                    <input v-model="f.search" v-focus @keyup.enter="apply" :class="fld" aria-label="Search admissions by name or MRN" placeholder="Name or MRN" />
+                    <input v-model="f.search" v-focus @keyup.enter="apply" :class="fld" aria-label="Search admissions by name or MRN" placeholder="Name or MRN" autocomplete="off" />
                     <select v-model="f.consultant_id" :class="fld"><option value="">Any consultant</option><option v-for="c in options.consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select>
                     <select v-model="f.gender" :class="fld"><option value="">Any gender</option><option>Male</option><option>Female</option></select>
                     <input v-model="f.nationality" :class="fld" list="natlist" placeholder="Nationality" /><datalist id="natlist"><option v-for="c in options.countries" :key="c" :value="c" /></datalist>
@@ -128,14 +177,20 @@ const toggleExpand = (id) => {
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.readmit72" class="rounded text-brand-600" /> {{ options.readmitWindow ?? 3 }}-day readmissions</label>
                     <button @click="apply" class="ml-auto rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">Search</button>
                     <button @click="reset" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 hover:text-ink-700">Reset</button>
-                    <a :href="`/registry/export-xlsx?${qs}`" @mouseenter="loadMatchCount" @focus="loadMatchCount" class="rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</a>
-                    <a :href="`/registry/export?${qs}`" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50">CSV</a>
+                    <template v-if="hasTerm">
+                        <button type="button" @click="postExport('/registry/export-xlsx')" @mouseenter="loadMatchCount" @focus="loadMatchCount" class="rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</button>
+                        <button type="button" @click="postExport('/registry/export')" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50">CSV</button>
+                    </template>
+                    <template v-else>
+                        <a :href="`/registry/export-xlsx?${qs}`" @mouseenter="loadMatchCount" @focus="loadMatchCount" class="rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</a>
+                        <a :href="`/registry/export?${qs}`" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50">CSV</a>
+                    </template>
                 </div>
             </div>
             <!-- CONSULTATIONS -->
             <div v-else-if="mode === 'consultations'" class="space-y-3">
                 <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                    <input v-model="f.search" v-focus @keyup.enter="apply" :class="fld" aria-label="Search consultations by name or MRN" placeholder="Name or MRN" />
+                    <input v-model="f.search" v-focus @keyup.enter="apply" :class="fld" aria-label="Search consultations by name or MRN" placeholder="Name or MRN" autocomplete="off" />
                     <select v-model="f.consultant_id" :class="fld"><option value="">Any consultant</option><option v-for="c in options.consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select>
                     <input v-model="f.consultation_from" :class="fld" placeholder="From service" />
                     <input v-model="f.to_service" :class="fld" placeholder="To service" />
@@ -154,19 +209,31 @@ const toggleExpand = (id) => {
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.signed_only" class="rounded text-brand-600" /> Signed off only</label>
                     <button @click="apply" class="ml-auto rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">Search</button>
                     <button @click="reset" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 hover:text-ink-700">Reset</button>
-                    <a :href="`/registry/export-xlsx?${qs}`" @mouseenter="loadMatchCount" @focus="loadMatchCount" class="rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</a>
-                    <a :href="`/registry/export?${qs}`" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50">CSV</a>
+                    <template v-if="hasTerm">
+                        <button type="button" @click="postExport('/registry/export-xlsx')" @mouseenter="loadMatchCount" @focus="loadMatchCount" class="rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</button>
+                        <button type="button" @click="postExport('/registry/export')" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50">CSV</button>
+                    </template>
+                    <template v-else>
+                        <a :href="`/registry/export-xlsx?${qs}`" @mouseenter="loadMatchCount" @focus="loadMatchCount" class="rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</a>
+                        <a :href="`/registry/export?${qs}`" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50">CSV</a>
+                    </template>
                 </div>
             </div>
             <!-- DIAGNOSIS -->
             <div v-else class="flex flex-wrap items-end gap-3">
-                <div class="grow"><label class="text-xs text-ink-400">Diagnosis keyword</label><input v-model="f.keyword" v-focus @keyup.enter="apply" :class="[fld, 'w-full']" aria-label="Diagnosis keyword search" placeholder="e.g. pneumonia, sepsis…" /></div>
+                <div class="grow"><label class="text-xs text-ink-400">Diagnosis keyword</label><input v-model="f.keyword" v-focus @keyup.enter="apply" :class="[fld, 'w-full']" aria-label="Diagnosis keyword search" placeholder="e.g. pneumonia, sepsis…" autocomplete="off" /></div>
                 <div><label class="text-xs text-ink-400">Admitted from</label><input v-model="f.from" type="date" :class="fld" /></div>
                 <div><label class="text-xs text-ink-400">to</label><input v-model="f.to" type="date" :class="fld" /></div>
                 <button @click="apply" class="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">Search</button>
                 <button @click="reset" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 hover:text-ink-700">Reset</button>
-                <a :href="`/registry/export-xlsx?${qs}`" @mouseenter="loadMatchCount" @focus="loadMatchCount" class="rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</a>
-                <a :href="`/registry/export?${qs}`" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50">CSV</a>
+                <template v-if="hasTerm">
+                    <button type="button" @click="postExport('/registry/export-xlsx')" @mouseenter="loadMatchCount" @focus="loadMatchCount" class="rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</button>
+                    <button type="button" @click="postExport('/registry/export')" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50">CSV</button>
+                </template>
+                <template v-else>
+                    <a :href="`/registry/export-xlsx?${qs}`" @mouseenter="loadMatchCount" @focus="loadMatchCount" class="rounded-xl bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700">Excel</a>
+                    <a :href="`/registry/export?${qs}`" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50">CSV</a>
+                </template>
             </div>
         </div>
 
@@ -259,7 +326,9 @@ const toggleExpand = (id) => {
 
         <div v-if="results.last_page > 1" class="mt-4 flex items-center justify-between text-sm text-ink-500">
             <span class="nums">Showing {{ results.from }}–{{ results.to }} of {{ results.total }}</span>
-            <div class="flex gap-1"><component :is="l.url ? Link : 'span'" v-for="l in results.links" :key="l.label" :href="l.url || undefined" preserve-scroll class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold transition" :class="l.active ? 'bg-brand-600 text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" /></div>
+            <!-- SPC-TM-011: page changes route through goPage() — with a term active the POST body
+                 re-carries it (the links themselves are term-less GET URLs from the paginator) -->
+            <div class="flex gap-1"><component :is="l.url ? 'button' : 'span'" v-for="l in results.links" :key="l.label" :type="l.url ? 'button' : undefined" @click="l.url && goPage(l.url)" class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold transition" :class="l.active ? 'bg-brand-600 text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" /></div>
         </div>
 
         <!-- edit modal (canonical PatientForm — resolves the old free-text-nationality drift) -->

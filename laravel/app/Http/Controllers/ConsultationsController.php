@@ -18,13 +18,20 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 class ConsultationsController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request): Response|RedirectResponse
     {
         // legacy access_PICU_patients [0,2,3,4] page gate — observers are read-only and the
         // consultations workspace is a clinical-role page (J2-12)
         if (Auth::user()->isObserver()) {
             throw new AccessDeniedHttpException('Observers have read-only access.');
         }
+
+        // SPC-TM-011 (Wave 1): the free-text term (patient name/MRN) rides a POST body
+        // (/consultations/search). A legacy GET-with-term redirects term-less, keeping status/scope.
+        if ($request->isMethod('get') && trim((string) $request->query('search', '')) !== '') {
+            return redirect()->route('consultations.index', \Illuminate\Support\Arr::except($request->query(), ['search']));
+        }
+
         $filters = $request->only('search', 'status', 'scope');
         $status = $filters['status'] ?? 'active';
         $mine = ($filters['scope'] ?? '') === 'mine';

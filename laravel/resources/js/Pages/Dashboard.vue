@@ -74,6 +74,9 @@ const goHref = (href) => {
     const { path, query } = parseHref(href);
     router.visit(path, query ? { data: query } : {});
 };
+// SPC-TM-011 (Wave 1): a Recent-Admissions row jumps to the board by POSTing the MRN in the body —
+// the term never enters a URL (goHref stays for the non-PII drill-through links only).
+const openPatient = (mrn) => router.post('/patients', { search: String(mrn ?? '') });
 const consultantIdByName = computed(() =>
     Object.fromEntries((props.consultantBoard || []).map((c) => [c.name, c.id])));
 const drillToConsultant = (name) => {
@@ -593,13 +596,14 @@ onUnmounted(() => clearInterval(autoRefresh));
                     </button>
                 </div>
             </div>
-            <!-- recent admissions — each row deep-links to that patient on the board (search=MRN);
-                 a native <button> so it is keyboard-operable, text-start + ms-/me- for RTL safety -->
+            <!-- recent admissions — each row deep-links to that patient on the board. SPC-TM-011:
+                 the MRN POSTs in the body (never a query string); a native <button> so it is
+                 keyboard-operable, text-start + ms-/me- for RTL safety -->
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h2 class="mb-4 font-semibold text-ink-700">Recent Admissions</h2>
                 <div class="divide-y divide-line">
                     <button v-for="r in recent" :key="r.mrn + r.admitted" type="button"
-                            @click="goHref(`/patients?search=${encodeURIComponent(r.mrn)}`)"
+                            @click="openPatient(r.mrn)"
                             class="flex w-full items-center gap-3 rounded-lg px-1 py-2.5 text-start transition hover:bg-brand-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
                         <div class="grid h-9 w-9 place-items-center rounded-full bg-ink-50 text-xs font-bold text-ink-500">{{ (r.name || '?').slice(0,2).toUpperCase() }}</div>
                         <div class="min-w-0 flex-1">

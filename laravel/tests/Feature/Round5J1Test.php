@@ -204,7 +204,7 @@ class Round5J1Test extends TestCase
         $a->diagnoses()->create(['seq' => 1, 'icd10_code' => 'ZZ0501']);
 
         $this->actingAs($this->admin())
-            ->get('/registry?mode=diagnosis&keyword=Capwide')
+            ->post('/registry', ['mode' => 'diagnosis', 'keyword' => 'Capwide'])
             ->assertInertia(fn (AssertableInertia $p) => $p->where('results.total', 1)
                 ->where('results.data.0.mrn', '92000030'));
     }

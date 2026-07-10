@@ -205,13 +205,13 @@ class PatientMergeTest extends TestCase
 
         // searching the SOURCE's old MRN returns nothing — the source patient is gone and its
         // admission now carries the TARGET's MRN/name
-        $this->actingAs($this->admin())->get('/registry?search=5556001')
+        $this->actingAs($this->admin())->post('/registry', ['search' => '5556001'])
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('results.data', fn ($rows) => collect($rows)->isEmpty()));
 
         // searching the TARGET's MRN returns BOTH admissions (the moved one + the target's own),
         // each attributed to the target identity — and the moved admission keeps its row id
-        $this->actingAs($this->admin())->get('/registry?search=5556002')
+        $this->actingAs($this->admin())->post('/registry', ['search' => '5556002'])
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('results.data', function ($rows) use ($aSource) {
                     $this->assertSame(2, collect($rows)->count(), 'both admissions resolve under the target');
@@ -231,7 +231,7 @@ class PatientMergeTest extends TestCase
 
         $this->merge($this->admin(), $source, $target)->assertRedirect();
 
-        $res = $this->actingAs($this->admin())->getJson('/api/patients/search?q=Searchable');
+        $res = $this->actingAs($this->admin())->postJson('/api/patients/search', ['q' => 'Searchable']);
         $res->assertOk();
         $ids = collect($res->json())->pluck('id');
         $this->assertFalse($ids->contains($source->id), 'soft-deleted source not in the typeahead');

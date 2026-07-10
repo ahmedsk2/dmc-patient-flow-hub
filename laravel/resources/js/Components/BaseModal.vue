@@ -70,7 +70,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
             <div :class="['flex items-start justify-between', subtitle ? 'mb-4' : 'mb-4 items-center']">
                 <div>
                     <h3 :id="titleId" class="text-lg font-bold text-ink-900">{{ title }}</h3>
-                    <p v-if="subtitle" class="text-sm text-ink-400">{{ subtitle }}</p>
+                    <!-- Wave 1 (EHC UI): callers may replace the plain-text subtitle with richer
+                         header content (e.g. the IdentityChip tuple); the string prop remains the
+                         default so every existing modal renders exactly as before -->
+                    <slot name="subtitle">
+                        <p v-if="subtitle" class="text-sm text-ink-400">{{ subtitle }}</p>
+                    </slot>
                 </div>
                 <button v-if="closable" type="button" @click="close" aria-label="Close" class="text-ink-400 hover:text-ink-700">✕</button>
             </div>

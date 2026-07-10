@@ -212,7 +212,7 @@ class AuditViewerTest extends TestCase
 
     public function test_registry_search_redacts_search_term(): void
     {
-        $this->actingAs($this->admin)->get('/registry?search=JohnDoe')->assertOk();
+        $this->actingAs($this->admin)->post('/registry', ['search' => 'JohnDoe'])->assertOk();
 
         $row = AuditLog::where('action', 'registry.search')->latest('id')->first();
         $this->assertSame('7 chars', $row->details['filters']['search']);

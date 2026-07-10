@@ -8,8 +8,12 @@ import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import QuickJump from '@/Components/QuickJump.vue';
 import { useTour } from '@/composables/useTour';
 import { xsrf } from '@/lib/ui.js';
+import { clearRecents } from '@/lib/recentPatients';
 
-const logout = () => router.post('/logout');
+// Wave 1 (EHC UI): signing out also forgets the command palette's recent-patient ids (module
+// memory) — shared clinical workstations must never carry one user's recents into the next
+// session. Used by BOTH the header sign-out button and the idle auto-logout below.
+const logout = () => { clearRecents(); router.post('/logout'); };
 
 // Wave 2, Item 10: onboarding tour. maybeAutoStart() fires once on first authenticated load when
 // auth.user.tour_completed_at is null and the route isn't excluded; the header "?" replays it
@@ -270,7 +274,7 @@ const idleTick = () => {
     const limit = mins * 60;
     if (elapsed >= limit) {
         showIdleWarning.value = false;
-        router.post('/logout');
+        logout();   // clears palette recents too — same path as the manual sign-out
         return;
     }
     if (elapsed >= limit - 60) {

@@ -68,14 +68,14 @@ class RegistryModesTest extends TestCase
         $this->admissionWithDx('60000004', ['E11.9']); // no pneumonia
 
         $this->actingAs($this->admin)
-            ->get('/registry?mode=diagnosis&keyword=pneumonia')
+            ->post('/registry', ['mode' => 'diagnosis', 'keyword' => 'pneumonia'])
             ->assertInertia(fn (AssertableInertia $p) => $p
                 ->where('results.total', 1)
                 ->where('results.data.0.mrn', '60000003'));
 
         // <2-char keyword guard returns an empty page, not everything
         $this->actingAs($this->admin)
-            ->get('/registry?mode=diagnosis&keyword=p')
+            ->post('/registry', ['mode' => 'diagnosis', 'keyword' => 'p'])
             ->assertInertia(fn (AssertableInertia $p) => $p->where('results.total', 0));
     }
 
@@ -93,7 +93,7 @@ class RegistryModesTest extends TestCase
                 ->where('results.data.0.name', 'Cons Signed'));
 
         $this->actingAs($this->admin)
-            ->get('/registry?mode=consultations&search=Cons Open')
+            ->post('/registry', ['mode' => 'consultations', 'search' => 'Cons Open'])
             ->assertInertia(fn (AssertableInertia $p) => $p
                 ->where('results.total', 1)
                 ->where('results.data.0.name', 'Cons Open'));

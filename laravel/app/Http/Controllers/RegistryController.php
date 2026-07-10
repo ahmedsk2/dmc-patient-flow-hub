@@ -24,8 +24,17 @@ use Inertia\Response;
  */
 class RegistryController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request): Response|\Illuminate\Http\RedirectResponse
     {
+        // SPC-TM-011 (Wave 1): the free-text terms (`search` = patient name/MRN, `keyword` =
+        // diagnosis free text — exactly the two fields redactedFilters() already treats as PHI)
+        // now travel in a POST body. Old GET-with-term bookmarks don't 500 — they are accepted and
+        // redirected to the term-less URL, keeping every non-PII filter shareable.
+        if ($request->isMethod('get')
+            && (trim((string) $request->query('search', '')) !== '' || trim((string) $request->query('keyword', '')) !== '')) {
+            return redirect()->route('registry.index', \Illuminate\Support\Arr::except($request->query(), ['search', 'keyword']));
+        }
+
         // Phase 3 — §3.7: reject garbage date/age filters before they reach the query builder
         // (mirrors StatisticsController::index). FormRequest avoided here — minimal gain for 4 rules.
         $request->validate([
@@ -80,8 +89,9 @@ class RegistryController extends Controller
 
     private function mode(Request $request): string
     {
-        return in_array($request->query('mode'), ['admissions', 'consultations', 'diagnosis'], true)
-            ? $request->query('mode') : 'admissions';
+        // input() (query + body merged): the POST search flow may carry mode in either place
+        return in_array($request->input('mode'), ['admissions', 'consultations', 'diagnosis'], true)
+            ? $request->input('mode') : 'admissions';
     }
 
     /**

@@ -74,10 +74,15 @@ Route::middleware(['auth', 'session.timeout', 'mfa.enroll', 'pwd'])->group(funct
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
     Route::get('/patients', [PatientsController::class, 'index'])->name('patients.index');
+    // Wave 1 (EHC UI) — SPC-TM-011: the board's free-text term (patient name/MRN) travels in a POST
+    // body, never a query string (URLs land in history/proxy/access logs). GET stays for the
+    // shareable non-PII filters; a legacy GET-with-term redirects term-less inside index().
+    Route::post('/patients', [PatientsController::class, 'index'])->name('patients.search');
     // Wave 2, Item 2: global patient quick-jump. Lives in the AUTH (non-admin) group on purpose — it
     // is PHI-aware by SCOPING (active-only + D1 for non-admins; full history for admins), not by
-    // blocking non-admins. The admin-only /api/patients/search (PatientMergeController) is unchanged.
-    Route::get('/api/patients/quick-search', [PatientsController::class, 'quickSearch'])->name('patients.quickSearch');
+    // blocking non-admins. The admin-only /api/patients/search (PatientMergeController) is separate.
+    // SPC-TM-011: POST-only since Wave 1 — the term (or the recents' opaque id list) rides the body.
+    Route::post('/api/patients/quick-search', [PatientsController::class, 'quickSearch'])->name('patients.quickSearch');
     Route::get('/active-list', [PatientsController::class, 'activeList'])->name('patients.activeList');   // printable census (all roles, D1-scoped)
     Route::post('/admissions/shuffle', [PatientActionController::class, 'shuffle'])->name('admissions.shuffle');
     Route::post('/admissions/reassign', [PatientActionController::class, 'bulkReassign'])->name('admissions.reassign');
@@ -111,6 +116,12 @@ Route::middleware(['auth', 'session.timeout', 'mfa.enroll', 'pwd'])->group(funct
     Route::post('/notifications/read-all', [HandoverController::class, 'readAll'])->name('notifications.readAll');
     Route::get('/consultations', [ConsultationsController::class, 'index'])->name('consultations.index');
     Route::post('/consultations', [ConsultationsController::class, 'store'])->name('consultations.store');
+    // Wave 1 (EHC UI) — SPC-TM-011: POST /consultations is already the create action, so the
+    // term-in-body search lands on a sibling URI wired to the SAME index() (non-PII status/scope
+    // stay in the query string). The GET twin catches refresh/bookmarks of that URI and falls back
+    // to the term-less workspace instead of a 405.
+    Route::post('/consultations/search', [ConsultationsController::class, 'index'])->name('consultations.search');
+    Route::get('/consultations/search', fn () => redirect()->route('consultations.index'));
     Route::post('/consultations/{consultation}/signoff', [ConsultationsController::class, 'signoff'])->name('consultations.signoff');
     Route::post('/consultations/{consultation}/reverse-signoff', [ConsultationsController::class, 'reverseSignoff'])->name('consultations.reverseSignoff');
     Route::put('/consultations/{consultation}', [ConsultationsController::class, 'update'])->name('consultations.update');
@@ -152,10 +163,19 @@ Route::middleware(['auth', 'session.timeout', 'mfa.enroll', 'pwd'])->group(funct
         Route::get('/statistics/export', [StatisticsController::class, 'exportXlsx'])->name('statistics.export.xlsx');
         Route::get('/statistics/export/pdf', [StatisticsController::class, 'exportPdf'])->name('statistics.export.pdf');
         Route::get('/registry', [RegistryController::class, 'index'])->name('registry.index');
+        // Wave 1 (EHC UI) — SPC-TM-011: the free-text term (name/MRN/diagnosis keyword — the two
+        // fields the audit trail already treats as PHI) moves into a POST body; non-PII filters
+        // stay in the query string so filtered views remain shareable. A legacy GET-with-term
+        // redirects term-less inside index(). Count + exports gain POST twins so a term-filtered
+        // count/export also carries its term in the body (the GET forms remain for term-less use).
+        Route::post('/registry', [RegistryController::class, 'index'])->name('registry.search');
         // Phase 3 — §3.6: cheap match-count for the pre-export row-count advisory (before the exports)
         Route::get('/registry/count', [RegistryController::class, 'matchCount'])->name('registry.count');
+        Route::post('/registry/count', [RegistryController::class, 'matchCount']);
         Route::get('/registry/export', [RegistryController::class, 'export'])->name('registry.export');
+        Route::post('/registry/export', [RegistryController::class, 'export']);
         Route::get('/registry/export-xlsx', [RegistryController::class, 'exportXlsx'])->name('registry.export.xlsx');
+        Route::post('/registry/export-xlsx', [RegistryController::class, 'exportXlsx']);
         Route::get('/reports', [ReportsController::class, 'index'])->name('reports.index');
         Route::get('/reports/pdf', [ReportsController::class, 'pdf'])->name('reports.pdf');
         Route::get('/reports/monthly', [ReportsController::class, 'monthly'])->name('reports.monthly');
@@ -206,7 +226,8 @@ Route::middleware(['auth', 'session.timeout', 'mfa.enroll', 'pwd'])->group(funct
         // Phase 4 — Item 9: patient-merge / MRN-dedup tooling. The merge POST is step-up gated
         // (high-risk, identity-changing — re-points clinical history between patient records).
         Route::get('/admin/patient-merge', [PatientMergeController::class, 'index'])->name('patient-merge.index');
-        Route::get('/api/patients/search', [PatientMergeController::class, 'searchPatients'])->name('patient-merge.search-patients');
+        // SPC-TM-011 (Wave 1): the merge typeahead searches by patient name/MRN — POST-only now.
+        Route::post('/api/patients/search', [PatientMergeController::class, 'searchPatients'])->name('patient-merge.search-patients');
         Route::post('/admin/patient-merge/search', [PatientMergeController::class, 'search'])->name('patient-merge.preview');
         Route::post('/admin/patient-merge', [PatientMergeController::class, 'merge'])->name('patient-merge.merge')->middleware('stepup');
     });

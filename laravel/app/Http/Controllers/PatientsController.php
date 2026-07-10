@@ -18,8 +18,15 @@ use Inertia\Response;
  */
 class PatientsController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request): Response|\Illuminate\Http\RedirectResponse
     {
+        // SPC-TM-011 (Wave 1): the free-text term is patient name/MRN — it now travels in a POST
+        // body only. A legacy GET-with-term (old bookmark/history entry) is still accepted but
+        // redirects to the term-less board, keeping every non-PII filter.
+        if ($request->isMethod('get') && trim((string) $request->query('search', '')) !== '') {
+            return redirect()->route('patients.index', \Illuminate\Support\Arr::except($request->query(), ['search']));
+        }
+
         $settings = Setting::current();
         // consultant_id / specialty_id are dashboard drill-through filters (Phase 1, Item 3); they
         // apply ON TOP of the D1 consultant scope, never replacing it.
@@ -101,43 +108,61 @@ class PatientsController extends Controller
      * The match is a prepared LIKE binding (no interpolation). < 2 chars → 422 + [] (client debounces
      * and also guards). This is deliberately NOT the admin-only PatientMergeController::searchPatients
      * (different scope + payload); the shared search shape lives here.
+     *
+     * Wave 1 (EHC UI): POST-only now (SPC-TM-011 — the term rides the request body). The same
+     * endpoint also re-hydrates the palette's RECENTS: given `ids` (opaque admission row ids, max
+     * 10) instead of `q`, it returns the same row shape for the ids the SAME scope allows — a
+     * recent the viewer can no longer see (or a discharged one, for non-admins) silently drops out.
+     * Rows carry `dest` (board|registry) instead of a URL so the client never builds an
+     * MRN-bearing query string.
      */
     public function quickSearch(Request $request): \Illuminate\Http\JsonResponse
     {
-        $q = trim((string) $request->query('q', ''));
-        if (mb_strlen($q) < 2) {
-            return response()->json([], 422);
-        }
-
         $u = $request->user();
         $isAdmin = $u->isAdmin();
         [$scope] = $this->boardScope($request);
 
-        $like = "%{$q}%";
-        $rows = Admission::query()
+        $base = Admission::query()
             // admin sees full history; everyone else only open episodes, D1-scoped
             ->when(! $isAdmin, fn ($a) => $a->whereNull('discharge_date')->tap($scope))
-            ->whereHas('patient', fn ($p) => $p->where('name', 'like', $like)->orWhere('mrn', 'like', $like))
-            ->with(['patient:id,mrn,name', 'consultant:id,full_name,name'])
-            ->orderByDesc('admit_date')
-            ->limit(8)
-            ->get();
+            ->with(['patient:id,mrn,name,gender,age', 'consultant:id,full_name,name']);
+
+        $ids = collect((array) $request->input('ids', []))
+            ->filter(fn ($v) => is_numeric($v))->map(fn ($v) => (int) $v)->unique()->take(10)->values();
+
+        if ($ids->isNotEmpty()) {
+            $rows = $base->whereIn('id', $ids)->orderByDesc('admit_date')->get();
+        } else {
+            $q = trim((string) $request->input('q', ''));
+            if (mb_strlen($q) < 2) {
+                return response()->json([], 422);
+            }
+            $like = "%{$q}%";
+            $rows = $base
+                ->whereHas('patient', fn ($p) => $p->where('name', 'like', $like)->orWhere('mrn', 'like', $like))
+                ->orderByDesc('admit_date')
+                ->limit(8)
+                ->get();
+        }
 
         return response()->json($rows->map(function (Admission $a) {
             $discharged = $a->discharge_date !== null;
-            $status = $discharged ? 'discharged' : ($a->consultant_id ? 'active' : 'unassigned');
-            $mrn = $a->patient?->mrn;
 
             return [
                 'id' => $a->id,
-                'mrn' => $mrn,
+                'mrn' => $a->patient?->mrn,
                 'name' => $a->patient?->name ?? 'Unknown',
-                'status' => $status,
+                // identity-ribbon fields (Wave 1): age·sex, location, last-admission date, outcome
+                'age' => $a->patient?->age,
+                'gender' => $a->patient?->gender,
+                'location' => $a->current_location,
+                'admit_date' => optional($a->admit_date)->toDateString(),
+                'deceased' => $a->outcome === 'Dead',
+                'status' => $discharged ? 'discharged' : ($a->consultant_id ? 'active' : 'unassigned'),
                 'consultant' => $a->consultant ? ($a->consultant->full_name ?: $a->consultant->name) : null,
-                // active/unassigned → the board handles ?search; discharged (admin-only result) → registry
-                'href' => $discharged
-                    ? '/registry?mode=admissions&search=' . rawurlencode((string) $mrn)
-                    : '/patients?search=' . rawurlencode((string) $mrn),
+                // active/unassigned → the board; discharged (admin-only result) → the registry.
+                // The client POSTs the MRN there — no URL ever carries it (SPC-TM-011).
+                'dest' => $discharged ? 'registry' : 'board',
             ];
         })->values());
     }

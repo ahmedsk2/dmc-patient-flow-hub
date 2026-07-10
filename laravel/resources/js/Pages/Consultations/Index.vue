@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, computed } from 'vue';
-import { Link, router, useForm, usePage } from '@inertiajs/vue3';
+import { router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BaseModal from '@/Components/BaseModal.vue';
 import { useConfirm } from '@/composables/useConfirm';
@@ -22,8 +22,25 @@ const status = ref(props.filters.status || 'active');
 const scope = ref(props.filters.scope || '');
 let timer = null;
 
-const apply = () => router.get('/consultations', { search: search.value || undefined, status: status.value, scope: scope.value || undefined },
-    { preserveState: true, replace: true, preserveScroll: true });
+// SPC-TM-011 (Wave 1): the free-text term is patient name/MRN, so it POSTs in the body to
+// /consultations/search (POST /consultations is taken by "create"); status/scope stay in the
+// query string. Term-less visits keep the plain GET flow. Page links route through goPage() so a
+// term-filtered page change re-carries the term in the body.
+const nonPii = () => ({ status: status.value, scope: scope.value || undefined });
+const apply = () => {
+    const opts = { preserveState: true, replace: true, preserveScroll: true };
+    if (search.value.trim()) {
+        const q = new URLSearchParams(Object.entries(nonPii()).filter(([, v]) => v !== undefined)).toString();
+        router.post(`/consultations/search${q ? `?${q}` : ''}`, { search: search.value }, opts);
+    } else {
+        router.get('/consultations', nonPii(), opts);
+    }
+};
+const goPage = (url) => {
+    if (!url) return;
+    if (search.value.trim()) router.post(url, { search: search.value }, { preserveState: true, preserveScroll: true });
+    else router.visit(url, { preserveScroll: true });
+};
 watch(search, () => { clearTimeout(timer); timer = setTimeout(apply, 300); });
 const setStatus = (s) => { status.value = s; apply(); };
 const toggleMine = () => { scope.value = scope.value === 'mine' ? '' : 'mine'; apply(); };
@@ -95,7 +112,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
             </div>
             <div class="relative ml-auto">
                 <svg class="pointer-events-none absolute left-3 top-2.5 h-5 w-5 text-ink-400" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" /></svg>
-                <input v-model="search" v-focus aria-label="Search consultations by name or MRN" placeholder="Search name or MRN…" class="w-64 rounded-xl border border-ink-200 bg-card py-2 pl-10 pr-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+                <input v-model="search" v-focus aria-label="Search consultations by name or MRN" placeholder="Search name or MRN…" autocomplete="off" class="w-64 rounded-xl border border-ink-200 bg-card py-2 pl-10 pr-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
             </div>
             <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line">
                 <button v-for="s in [['active','Active'],['signed','Signed off'],['all','All']]" :key="s[0]" @click="setStatus(s[0])"
@@ -159,7 +176,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
         <div v-if="consultations.last_page > 1" class="mt-4 flex items-center justify-between text-sm text-ink-500">
             <span class="nums">Showing {{ consultations.from }}–{{ consultations.to }} of {{ consultations.total }}</span>
             <div class="flex gap-1">
-                <component :is="l.url ? Link : 'span'" v-for="l in consultations.links" :key="l.label" :href="l.url || undefined" preserve-scroll
+                <component :is="l.url ? 'button' : 'span'" v-for="l in consultations.links" :key="l.label" :type="l.url ? 'button' : undefined" @click="l.url && goPage(l.url)"
                     class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold transition"
                     :class="l.active ? 'bg-brand-600 text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" />
             </div>

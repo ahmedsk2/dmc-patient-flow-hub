@@ -109,15 +109,19 @@ describe('Item 1 — fallback prop + zero-state affordance', () => {
         expect(vm.fallback.discharged).toBe(2);
         expect(vm.fallback.unassigned).toBe(1);
     });
-    it('renders the discharged/unassigned affordance with correct hrefs when groups empty', () => {
+    it('renders the discharged/unassigned affordance when groups empty (term POSTs — SPC-TM-011)', async () => {
         const w = renderWith(consultant(), { groups: [], fallback: { discharged: 2, unassigned: 1, search: 'Ali' } });
         const html = w.html();
         expect(html).toContain('No active match.');
         expect(html).toContain('discharged');
         expect(html).toContain('awaiting assignment');
-        // links point to registry (search-carried) + the queue
+        // the registry jump carries the term in a POST body, never a URL; the queue link stays a link
+        expect(html).not.toContain('search=Ali');
+        const view = w.findAll('button').find((b) => b.text().includes('view →'));
+        expect(view).toBeTruthy();
+        await view.trigger('click');
+        expect(post).toHaveBeenCalledWith('/registry?mode=admissions&discharged=1', { search: 'Ali' });
         const hrefs = w.findAll('a').map((a) => a.attributes('href'));
-        expect(hrefs).toContain('/registry?mode=admissions&search=Ali&discharged=1');
         expect(hrefs).toContain('/admissions');
     });
     it('renders NO fallback row when fallback is null', () => {

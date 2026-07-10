@@ -193,7 +193,8 @@ class PatientMergeController extends Controller
      */
     public function searchPatients(Request $request): JsonResponse
     {
-        $q = trim((string) $request->query('q', ''));
+        // SPC-TM-011 (Wave 1): POST-only route — the name/MRN term arrives in the body, never a URL
+        $q = trim((string) $request->input('q', ''));
         if (mb_strlen($q) < 2) {
             return response()->json([]);
         }
