@@ -96,6 +96,17 @@ class RegisterController extends Controller
         }
 
         $code = self::generateCode();
+
+        // Send BEFORE persisting the cooldown/send-count/code state so an SMTP failure returns a
+        // friendly error (not a raw 500) and does NOT arm the cooldown or burn the per-row send cap
+        // — a failed send must be freely retryable.
+        try {
+            Mail::to($data['email'])->send(new RegistrationCodeMail($code));
+        } catch (\Throwable $e) {
+            report($e);
+            $this->jsonFail(['email' => 'We could not send your code right now — please try again shortly.']);
+        }
+
         $pending->fill([
             'email' => $data['email'],
             'email_code_hash' => Hash::make($code),
@@ -105,8 +116,6 @@ class RegisterController extends Controller
             'email_attempts' => 0,
             'expires_at' => now()->addMinutes(self::ROW_TTL_MINUTES),
         ])->save();
-
-        Mail::to($data['email'])->send(new RegistrationCodeMail($code));
 
         return response()->json(['sent' => true]);
     }

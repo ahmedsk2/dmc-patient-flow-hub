@@ -125,7 +125,7 @@ Route::middleware(['auth', 'session.timeout', 'email.verify', 'mfa.enroll', 'pwd
 
     // Phase 4 — Item 4: step-up re-auth form (auth-only; the gated actions enforce admin themselves)
     Route::get('/stepup', [StepUpController::class, 'show'])->name('stepup.show');
-    Route::post('/stepup', [StepUpController::class, 'verify'])->name('stepup.verify');
+    Route::post('/stepup', [StepUpController::class, 'verify'])->name('stepup.verify')->middleware('throttle:stepup');
 
     // Handovers — read is all-roles; save is canManage/outgoing (enforced in the action)
     Route::get('/admissions/{admission}/handover', [HandoverController::class, 'show'])->name('admissions.handover.show');

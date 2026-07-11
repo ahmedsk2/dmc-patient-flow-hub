@@ -6,7 +6,9 @@ use App\Models\AuditLog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
@@ -73,7 +75,12 @@ class ProfileController extends Controller
         $u->update([
             'password' => $data['password'],                 // hashed by the model cast
             'pass_exp_date' => now()->toDateString(),        // resets the 3-month expiry clock
+            'remember_token' => Str::random(60),             // rotate any recaller (defense in depth)
         ]);
+        // Evict the user's OTHER sessions (keep the one making this change) so a changed password
+        // logs a stolen live session out. (SESSION_DRIVER=database in prod; a no-op for other drivers.)
+        DB::table('sessions')->where('user_id', $u->id)
+            ->where('id', '!=', $request->session()->getId())->delete();
         AuditLog::create(['actor_id' => $u->id, 'actor_name' => $u->name, 'action' => 'password.change',
             'entity_type' => 'user', 'entity_id' => (string) $u->id, 'ip' => $request->ip()]);
 

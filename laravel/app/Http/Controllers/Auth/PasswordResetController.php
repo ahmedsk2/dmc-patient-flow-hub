@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password as PasswordRule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -59,7 +61,17 @@ class PasswordResetController extends Controller
 
         $status = Password::reset(
             $request->only('email', 'password', 'password_confirmation', 'token'),
-            fn ($user) => $user->forceFill(['password' => Hash::make($request->password), 'pass_exp_date' => now()->toDateString()])->save()
+            function ($user) use ($request) {
+                $user->forceFill([
+                    'password' => Hash::make($request->password),
+                    'pass_exp_date' => now()->toDateString(),
+                    'remember_token' => Str::random(60),   // rotate any recaller (defense in depth)
+                ])->save();
+                // Kill every existing session for this account. A reset is the recovery action a
+                // compromised user takes — a stolen live session cookie must NOT survive it.
+                // (SESSION_DRIVER=database in prod; a no-op for other drivers.)
+                DB::table('sessions')->where('user_id', $user->id)->delete();
+            }
         );
 
         return $status === Password::PASSWORD_RESET

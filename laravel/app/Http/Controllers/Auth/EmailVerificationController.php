@@ -47,12 +47,21 @@ class EmailVerificationController extends Controller
         }
 
         $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+        // Send BEFORE committing the cooldown/code state. Verification is a MANDATORY gate, so an
+        // unhandled TransportException here would 500 every user during an SMTP outage; instead we
+        // return a friendly error and leave the cooldown un-armed so a retry isn't wrongly blocked.
+        try {
+            Mail::to($user->email)->send(new RegistrationCodeMail($code));
+        } catch (\Throwable $e) {
+            report($e);
+            $this->jsonFail(['code' => 'We could not send your code right now — please try again shortly.']);
+        }
+
         $request->session()->put('email.verify.code_hash', Hash::make($code));
         $request->session()->put('email.verify.expires', now()->addMinutes(self::CODE_TTL_MINUTES)->getTimestamp());
         $request->session()->put('email.verify.sent_at', now()->getTimestamp());
         $request->session()->put('email.verify.attempts', 0);
-
-        Mail::to($user->email)->send(new RegistrationCodeMail($code));
 
         return response()->json(['sent' => true]);
     }

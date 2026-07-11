@@ -92,6 +92,10 @@ class Admission extends Model
     {
         return fn ($s) => $s->selectRaw('1')
             ->from("admissions as {$alias}")
+            // exclude soft-deleted prior episodes — the raw self-reference bypasses the SoftDeletes
+            // global scope, and every readmissionJoin() call site pairs with the same guard, so this
+            // keeps the board badge / registry filter in agreement with Statistics & Reports.
+            ->whereNull("{$alias}.deleted_at")
             ->whereColumn("{$alias}.patient_id", 'admissions.patient_id')
             ->whereColumn("{$alias}.id", '<>', 'admissions.id')
             ->whereColumn("{$alias}.discharge_date", '<=', 'admissions.admit_date')

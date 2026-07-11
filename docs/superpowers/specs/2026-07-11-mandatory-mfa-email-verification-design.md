@@ -231,3 +231,33 @@ the `chk_discharge_*` constraints, and (c) raises `memory_limit` to 1 G when the
 lower (the full transform OOM'd at 128 M). Covered by a new `LegacyImportTest` case. Gates after
 all of the above: **PHPUnit 576 + 56 green**, and the real reload reconciled exactly (admissions
 36,596 == source, consultations 1,280, users 328; 0 constraint violations; 4 dup emails nulled).
+
+### Multi-agent production-readiness + security audit (2026-07-11)
+
+A 30-agent workflow (7 dimension auditors → refute-by-default verifier per finding → synthesis)
+audited the whole Laravel app. **Verdict: READY-WITH-FIXES — 0 Critical, 0 High** (13 of 22 raw
+findings refuted; core posture — server-side authz, MFA/remember-me, injection, headers,
+transactions, audit trail — verified clean). The 7 clear-win fixes (user-approved; L1 consultation-edit
+ownership left OPEN as deliberate legacy parity):
+
+- **M1 session invalidation** — password reset (`PasswordResetController`) and change
+  (`ProfileController::updatePassword`) now purge the user's `sessions` rows (reset: all; change: all
+  but current) + rotate `remember_token`, so a stolen live session can't survive the recovery action.
+- **M2 audit-chain atomicity** — `Audit::log` wraps the write in `DB::transaction` so the
+  `lockForUpdate` predecessor read holds through the row_hash stamp; concurrent writes no longer fork
+  the chain / trip false `audit:verify` alarms.
+- **M3 timezone** — `config/app.php` now `env('APP_TIMEZONE', 'UTC')` (was a hardcoded `'UTC'` that
+  made the documented `APP_TIMEZONE=Asia/Riyadh` knob inert → "today" census drifted 00:00–03:00).
+- **M4 mail resilience** — both verification-code sends (`EmailVerificationController`,
+  `RegisterController`) send inside try/catch BEFORE committing cooldown state → an SMTP outage returns
+  a friendly error, not a 500 at the mandatory gate, and doesn't poison the resend cooldown.
+- **L2 handover read-logging** — `HandoverController::show` writes a break-glass `handover.read` audit
+  row when `log_record_opens` is on (parity with `AdmissionsController::edit`); reads stay all-roles
+  (handover is cross-cover by design — scope NOT restricted).
+- **L3 step-up hardening** — a session-independent `stepup` rate limiter (5/min per user) on
+  `/stepup` + an 8-attempt in-session cap in `StepUpController::verify`.
+- **L4 readmission soft-delete** — `Admission::readmissionExists` now filters `prev.deleted_at`, so the
+  board badge / registry filter agree with Statistics & Reports after an admin soft-deletes an anchor.
+- **L5 CI least-privilege** — `laravel-ci.yml` gained `permissions: { contents: read }`.
+
+Covered by `tests/Feature/SecurityAuditFixesTest.php` (10 tests).

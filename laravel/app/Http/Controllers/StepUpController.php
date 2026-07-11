@@ -20,6 +20,8 @@ use Inertia\Response;
  */
 class StepUpController extends Controller
 {
+    private const MAX_ATTEMPTS = 8;   // per session — matches the MFA challenge budget
+
     public function show(): Response
     {
         return Inertia::render('Auth/StepUp', [
@@ -32,6 +34,14 @@ class StepUpController extends Controller
     {
         $user = $request->user();
         $request->validate(['password' => ['required', 'string']]);
+
+        // guess budget: cap in-session attempts (mirrors the MFA challenge) so a hijacked session
+        // can't brute-force the step-up password/TOTP; throttle:stepup bounds the per-minute rate.
+        $attempts = (int) $request->session()->get('stepup.attempts', 0) + 1;
+        $request->session()->put('stepup.attempts', $attempts);
+        if ($attempts > self::MAX_ATTEMPTS) {
+            throw ValidationException::withMessages(['password' => 'Too many attempts — please wait a moment and try again.']);
+        }
 
         if (! Hash::check($request->input('password'), $user->password)) {
             throw ValidationException::withMessages(['password' => 'That password is incorrect.']);
@@ -50,6 +60,7 @@ class StepUpController extends Controller
             $user->update(['mfa_last_counter' => $counter]);
         }
 
+        $request->session()->forget('stepup.attempts');   // clear the guess budget on success
         $request->session()->put('stepup.verified_at', now()->getTimestamp());
         Audit::log('stepup.verified', 'user', (string) Auth::id());
 

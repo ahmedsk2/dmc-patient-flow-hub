@@ -60,6 +60,13 @@ class AppServiceProvider extends ServiceProvider
             ];
         });
 
+        // Step-up re-auth (authenticated). Keyed by the confirmed user id (+ IP) so brute-forcing the
+        // step-up password/TOTP is rate-bounded without one NAT'd hospital locking users out of each
+        // other. Paired with an in-session attempt cap in StepUpController (mirrors the MFA challenge).
+        RateLimiter::for('stepup', function (Request $request) {
+            return Limit::perMinute(5)->by('stepup:' . ($request->user()?->id ?? $request->ip()));
+        });
+
         // Existing-user email-verify gate (authenticated) — keyed by the confirmed user id + IP.
         RateLimiter::for('email-verify', function (Request $request) {
             $id = $request->user()?->id ?? ($request->hasSession() ? $request->session()->getId() : '');

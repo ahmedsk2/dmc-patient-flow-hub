@@ -7,6 +7,7 @@ use App\Models\Handover;
 use App\Models\HandoverRevision;
 use App\Models\HandoverSignature;
 use App\Models\Notification;
+use App\Models\Setting;
 use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,6 +26,13 @@ class HandoverController extends Controller
     /** GET /admissions/{admission}/handover — current text + latest 20 revisions (all roles, read-only). */
     public function show(Admission $admission): JsonResponse
     {
+        // Break-glass PHI-read logging (parity with AdmissionsController::edit): the handover body +
+        // revisions are free-text clinical narrative, so when an admin turns `log_record_opens` ON
+        // this writes ONE audit row per open. Reads stay all-roles (handover is cross-cover by design).
+        if (Setting::current()->log_record_opens) {
+            Audit::log('handover.read', 'admission', (string) $admission->id, ['mrn' => $admission->patient?->mrn]);
+        }
+
         $h = $admission->handover()->with('updatedBy:id,name,full_name')->first();
 
         return response()->json([

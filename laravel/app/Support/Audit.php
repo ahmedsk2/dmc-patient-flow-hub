@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\AuditLog;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Request;
 
 /**
@@ -31,7 +32,14 @@ final class Audit
         ?string $entityId = null,
         array $details = []
     ): void {
-        AuditLog::create([
+        // Wrap in a transaction so the hash-chain append is atomic: AuditLog's `creating` hook takes
+        // a `lockForUpdate` on the predecessor row_hash and the `created` hook stamps this row's
+        // row_hash in a SECOND statement. Under autocommit that lock releases between the two, so two
+        // concurrent audit writes could read the same predecessor (or a still-NULL row_hash) and fork
+        // the chain — making `audit:verify` raise false tamper alarms. One transaction holds the lock
+        // across both statements, serialising concurrent appends. (Nests safely as a savepoint when a
+        // caller already opened a transaction.)
+        DB::transaction(fn () => AuditLog::create([
             'actor_id' => Auth::id(),
             'actor_name' => Auth::user()?->name,
             'action' => $action,
@@ -39,6 +47,6 @@ final class Audit
             'entity_id' => $entityId,
             'details' => $details,
             'ip' => Request::ip(),
-        ]);
+        ]));
     }
 }
