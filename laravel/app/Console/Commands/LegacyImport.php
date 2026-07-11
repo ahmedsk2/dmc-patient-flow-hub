@@ -23,6 +23,11 @@ class LegacyImport extends Command
 
     public function handle(): int
     {
+        // Transforming the whole legacy DB (tens of thousands of episodes) materialises large result
+        // sets; the CLI default of 128M is not enough. Raise the ceiling to 1G, but never LOWER an
+        // admin's already-higher (or unlimited) setting.
+        $this->ensureMemory('1024M');
+
         $this->legacy = DB::connection('legacy');
         $this->info('Importing from legacy connection: ' . $this->legacy->getDatabaseName());
 
@@ -105,20 +110,39 @@ class LegacyImport extends Command
     private function importUsers(): array
     {
         $rows = [];
-        $seen = [];   // legacy member_name is NOT unique (and the collation is case-insensitive);
-                      // suffix the legacy id on collision so usernames stay unique + login still works.
-        foreach ($this->legacy->table('members')->get() as $m) {
+        $seen = [];        // legacy member_name is NOT unique (and the collation is case-insensitive);
+                           // suffix the legacy id on collision so usernames stay unique + login still works.
+        $seenEmail = [];   // users.email is UNIQUE (defense-in-depth). The lowest member_id keeps a
+                           // shared address; later duplicates are nulled so the insert can't violate
+                           // the index (~4 real dup-email pairs exist in prod). A nulled account still
+                           // logs in by username — an admin can assign it a unique email later.
+        foreach ($this->legacy->table('members')->orderBy('member_id')->get() as $m) {
             $base = trim((string) ($m->member_name ?: ('user' . $m->member_id)));
             $username = mb_substr($base, 0, 240);
             if (isset($seen[mb_strtolower($username)])) {
                 $username = mb_substr($base, 0, 230) . '_' . $m->member_id;
             }
             $seen[mb_strtolower($username)] = true;
+
+            $email = $m->member_email ?: null;   // '' / '0' -> null (matches the historical import)
+            if ($email !== null) {
+                // Fold to lowercase ASCII so the dedup key matches the users.email index collation
+                // (utf8mb4_unicode_ci is accent-INSENSITIVE — 'josé' == 'jose'); a plain trim+lower
+                // would let accent-variant duplicates both survive here and then collide at the index,
+                // aborting the whole import.
+                $key = mb_strtolower(Str::ascii(trim($email)));
+                if ($key === '' || isset($seenEmail[$key])) {
+                    $email = null;
+                } else {
+                    $seenEmail[$key] = true;
+                }
+            }
+
             $rows[] = [
                 'username' => $username,
                 'name' => $m->full_name ?: $m->member_name,
                 'full_name' => $m->full_name,
-                'email' => $m->member_email ?: null,
+                'email' => $email,
                 'password' => $m->member_password,          // already a bcrypt hash — kept as-is
                 'role' => (int) ($m->position ?? 5),
                 'specialty_id' => ($m->specialty_id ?? 0) > 0 ? $m->specialty_id : null,
@@ -162,7 +186,7 @@ class LegacyImport extends Command
             $batch[] = [
                 'mrn' => $mrn,
                 'name' => $r->PNAME, 'gender' => $r->gender,
-                'age' => is_numeric($r->age) ? (int) $r->age : null,
+                'age' => $this->age($r->age),
                 'nationality' => $this->nationality($r->nationality ?? null),
                 'created_at' => now(), 'updated_at' => now(),
             ];
@@ -186,22 +210,33 @@ class LegacyImport extends Command
                     // placeholder patient (don't drop real patients just because the MRN is blank).
                     $pid = DB::table('patients')->insertGetId([
                         'mrn' => 'NOMRN-' . $p->ID, 'name' => $p->PNAME, 'gender' => $p->gender,
-                        'age' => is_numeric($p->age) ? (int) $p->age : null,
+                        'age' => $this->age($p->age),
                         'nationality' => $this->nationality($p->nationality ?? null),
                         'created_at' => now(), 'updated_at' => now(),
                     ]);
                 }
+
+                // Satisfy the chk_* date constraints (migration 2026_06_14_010006): NULL the impossible
+                // date, keeping the row + admit_date. Order matches the migration's self-heal — fix the
+                // admit-relative inversions first, then discharge-vs-medical on what survives.
+                $admit = $this->date($p->ADMDATE);
+                $med = $this->date($p->med_DISDATE);
+                $dis = $this->date($p->DISDATE);
+                if ($dis !== null && $admit !== null && $dis < $admit) { $dis = null; }
+                if ($med !== null && $admit !== null && $med < $admit) { $med = null; }
+                if ($dis !== null && $med !== null && $dis < $med) { $dis = null; }
+
                 $batch[] = [
                     'patient_id' => $pid,
                     'bed' => $p->BED,
                     'admitted_from' => $p->ADMFROM,
-                    'admit_date' => $this->date($p->ADMDATE),
+                    'admit_date' => $admit,
                     'current_location' => $p->current_location,
                     'consultant_id' => $u($p->consultant_id),
                     'admitted_by' => $u($p->admitted_by),
                     'discharged_by' => $u($p->trans_discharge_by),
-                    'medical_discharge_date' => $this->date($p->med_DISDATE),
-                    'discharge_date' => $this->date($p->DISDATE),
+                    'medical_discharge_date' => $med,
+                    'discharge_date' => $dis,
                     'discharge_to' => $p->DISTO,
                     'outcome' => $p->MORTALITY,
                     'delay_reason' => $p->delay,
@@ -275,7 +310,7 @@ class LegacyImport extends Command
                     'mrn' => $mrn === '' ? null : $mrn,
                     'patient_id' => $patientMap[$mrn] ?? null,
                     'patient_name' => $c->PNAME,
-                    'age' => is_numeric($c->age) ? (int) $c->age : null,
+                    'age' => $this->age($c->age),
                     'bed' => $c->BED,
                     'current_location' => $c->current_location,
                     'consultation_date' => $this->date($c->consultation_date),
@@ -326,10 +361,45 @@ class LegacyImport extends Command
         try { return \Carbon\Carbon::parse($v)->toDateString(); } catch (\Throwable $e) { return null; }
     }
 
+    /**
+     * A numeric age within the storable clinical range [0,150] (chk_age_range). Non-numeric values,
+     * out-of-range ages, and MRNs mistakenly typed into the age field (which also overflow the
+     * unsignedSmallInteger column) all become NULL — keep the row, drop the impossible datum.
+     */
+    private function age($v): ?int
+    {
+        if (! is_numeric($v)) { return null; }
+        $age = (int) $v;
+
+        return ($age >= 0 && $age <= 150) ? $age : null;
+    }
+
     private function insertBatched(string $table, array $rows): void
     {
         foreach (array_chunk($rows, 1000) as $chunk) {
             if ($chunk) { DB::table($table)->insert($chunk); }
         }
+    }
+
+    /** Raise memory_limit to $target only if the current limit is finite and smaller (never lower it). */
+    private function ensureMemory(string $target): void
+    {
+        $current = trim((string) ini_get('memory_limit'));
+        if ($current === '-1') { return; }                 // already unlimited
+        if ($this->toBytes($current) < $this->toBytes($target)) {
+            @ini_set('memory_limit', $target);
+        }
+    }
+
+    private function toBytes(string $v): int
+    {
+        $v = trim($v);
+        $n = (int) $v;
+        return match (strtolower(substr($v, -1))) {
+            'g' => $n * 1024 * 1024 * 1024,
+            'm' => $n * 1024 * 1024,
+            'k' => $n * 1024,
+            default => $n,
+        };
     }
 }

@@ -76,14 +76,16 @@ class RegisterController extends Controller
             $pending = new PendingRegistration(['token' => $token]);
         }
 
-        // Changing the target address mid-flow resets the email-OTP lifecycle (a new address must
-        // be re-verified from scratch) but leaves any already-provisioned TOTP secret alone — the
-        // authenticator isn't tied to the email, and `store()` re-checks the email match anyway.
+        // Changing the target address mid-flow re-arms email verification (a new address is
+        // unverified and must be re-checked) but deliberately does NOT reset the rate-limit
+        // counters (`email_sent_at` / `email_send_count`): zeroing them would let an attacker
+        // switch addresses to bypass the 60s resend cooldown and the per-row send cap, turning
+        // this endpoint into an email-bomb relay for mailing unlimited codes to arbitrary victims.
+        // (`email_attempts` is reset unconditionally by the fill() below on every send.) The
+        // already-provisioned TOTP secret is left alone — it isn't tied to the email, and store()
+        // re-checks the email match anyway.
         if ($pending->email !== $data['email']) {
             $pending->email_verified_at = null;
-            $pending->email_send_count = 0;
-            $pending->email_attempts = 0;
-            $pending->email_sent_at = null;
         }
 
         if ($pending->email_sent_at && $pending->email_sent_at->diffInSeconds(now()) < self::RESEND_COOLDOWN_SECONDS) {

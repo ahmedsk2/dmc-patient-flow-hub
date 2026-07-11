@@ -256,4 +256,59 @@ class RegistrationFlowTest extends TestCase
         ])->assertSessionHasErrors('email');
         $this->assertNull(User::where('username', 'nopending')->first());
     }
+
+    // ---- email-bomb hardening (2026-07-11 adversarial-review follow-up) ---------------------------
+    // Switching the target address mid-flow must NOT reset the resend cooldown or the per-row send
+    // cap — otherwise the endpoint is a relay for mailing unlimited codes to arbitrary victims.
+
+    public function test_changing_the_target_email_does_not_reset_the_resend_cooldown(): void
+    {
+        Mail::fake();
+        $this->postJson('/register/email/send', ['email' => 'first@example.test'])->assertOk();
+
+        // immediately switching to another address is still inside the 60s cooldown → rejected
+        $this->postJson('/register/email/send', ['email' => 'second@example.test'])
+            ->assertUnprocessable()->assertJsonValidationErrors('email');
+        Mail::assertSent(RegistrationCodeMail::class, 1);   // only the first code actually went out
+
+        // once the cooldown elapses, switching is allowed
+        $this->travel(61)->seconds();
+        $this->postJson('/register/email/send', ['email' => 'second@example.test'])->assertOk();
+    }
+
+    public function test_the_send_cap_counts_across_changed_addresses(): void
+    {
+        Mail::fake();
+        // five sends, each to a DIFFERENT address (cooldown honoured between them) exhausts the cap
+        foreach (range(1, 5) as $i) {
+            $this->postJson('/register/email/send', ['email' => "victim{$i}@example.test"])->assertOk();
+            $this->travel(61)->seconds();
+        }
+
+        // the 6th is capped regardless of the (again new) target address
+        $this->postJson('/register/email/send', ['email' => 'victim6@example.test'])
+            ->assertUnprocessable()->assertJsonValidationErrors('email');
+    }
+
+    public function test_email_send_is_throttled_per_ip_independently_of_the_session(): void
+    {
+        // The per-row cap/cooldown and the 'register' throttle both key off the session, so a
+        // cookie-less client (fresh session each request) evades them. The 'register-email' limiter
+        // must bound the mail relay by IP alone — session-independent — so it can't be reset that way.
+        $limiter = app(\Illuminate\Cache\RateLimiter::class)->limiter('register-email');
+        $this->assertNotNull($limiter, 'the register-email limiter must be registered');
+
+        $keyFor = fn (string $ip) => collect(\Illuminate\Support\Arr::wrap($limiter(
+            \Illuminate\Http\Request::create('/register/email/send', 'POST', server: ['REMOTE_ADDR' => $ip])
+        )))->map(fn ($l) => (string) $l->key);
+
+        $a = $keyFor('198.51.100.7');
+        $b = $keyFor('198.51.100.8');
+
+        $this->assertNotEmpty($a);
+        $this->assertTrue($a->every(fn ($k) => str_contains($k, '198.51.100.7')), 'limiter is keyed by the IP');
+        $this->assertNotEquals($a->all(), $b->all(), 'a different IP gets a different bucket');
+        // Request::create() carries NO session, yet the limiter resolved without error — proof it
+        // does not depend on a session id (so dropping cookies cannot rotate the bucket).
+    }
 }

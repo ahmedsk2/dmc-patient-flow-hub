@@ -55,13 +55,20 @@ Pick **one**:
   handover_revisions, handover_signatures, notifications) â€” that's expected; they start empty.
 - **(b) Rebuild from the legacy DB** â€” create an empty DB, then:
   `php artisan migrate && php artisan legacy:import` (requires the `legacy` connection to reach the
-  original database; the import is read-only on the source and idempotent on the target).
+  original database; the import is read-only on the source and idempotent on the target). The
+  importer self-heals to satisfy the schema: out-of-range/garbage ages and inverted admission dates
+  are NULLed, duplicate member emails are de-duplicated (lowest id keeps the address) to fit the
+  `users.email` unique index, and it raises `memory_limit` to 1 G when the CLI default is lower. To
+  refresh an already-populated target with a newer legacy dump, just re-run `legacy:import` (it
+  truncates and re-derives).
 
 ## 4. First-login / app configuration (in the UI, as an admin)
 
 - [ ] **Control â†’ Settings:** set the real **Licensed ward beds** and **ICU beds** (occupancy is wrong
       until you do â€” defaults are placeholders). Changes are recorded in the on-page history.
-- [ ] **Control â†’ Settings:** choose the **MFA enforcement** policy (off / admins / everyone).
+- [ ] **Control â†’ Settings:** the **MFA enforcement** setting is now inert — MFA (authenticator app) is
+      mandatory for **every** user since the 2026-07-11 auth-hardening (each user enrols at their
+      next login; email verification is likewise required for accounts with an on-file address).
 - [ ] **Control â†’ Users:** verify roles/capabilities; deactivate any accounts that should not exist.
 - [ ] **New Admissions queue:** assign any patients showing as *awaiting assignment*.
 

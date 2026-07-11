@@ -58,7 +58,7 @@ Route::middleware('guest')->group(function () {
     // 2026-07-11 auth-hardening: multi-step signup — email must be verified (mailed code) and a
     // TOTP authenticator confirmed, BOTH tracked server-side against session('reg.token'), before
     // the hardened store() will create an account. All steps throttled (guest, no stable identity).
-    Route::post('/register/email/send', [RegisterController::class, 'sendEmailCode'])->name('register.email.send')->middleware('throttle:register');
+    Route::post('/register/email/send', [RegisterController::class, 'sendEmailCode'])->name('register.email.send')->middleware(['throttle:register', 'throttle:register-email']);
     Route::post('/register/email/verify', [RegisterController::class, 'verifyEmailCode'])->name('register.email.verify')->middleware('throttle:register');
     Route::post('/register/mfa/provision', [RegisterController::class, 'provisionMfa'])->name('register.mfa.provision')->middleware('throttle:register');
     Route::post('/register/mfa/confirm', [RegisterController::class, 'confirmMfa'])->name('register.mfa.confirm')->middleware('throttle:register');

@@ -193,9 +193,41 @@ throttled; TOTP secret encrypted; nothing leaked/replayable across sessions). On
   `remember_web` cookie) + two new tests.
 
 **Minor, non-exploitable (pended, not blocking):** email-verify code not cleared on the
-registration path after use → now cleared (fixed); a resend-cooldown reset when the target
-email is changed mid-flow allows an email-bomb bounded by `throttle:register` (10/min) — worth
-tightening; the `users.email` DB UNIQUE index was dropped by an earlier migration so
-uniqueness rests on the app rule + a pending-row collision check — recommend restoring a
-partial unique index as defense-in-depth; a non-atomic attempt-counter read (throttle-bounded
-TOCTOU) and idempotent `provisionMfa` secret re-return (same session only) — both immaterial.
+registration path after use → now cleared (fixed); a non-atomic attempt-counter read
+(throttle-bounded TOCTOU) and idempotent `provisionMfa` secret re-return (same session only)
+— both immaterial.
+
+### Follow-up hardening — the two pended items, now DONE (2026-07-11)
+
+1. **Email-bomb — FIXED (two layers).** (a) `RegisterController::sendEmailCode` used to reset
+   `email_sent_at` **and** `email_send_count` whenever the applicant changed the target email,
+   which reset both the 60 s resend cooldown and the 5-per-row send cap. The reset now clears
+   **only** `email_verified_at` (re-arm verification for the new address); the rate-limit
+   counters persist across address changes. (b) A second adversarial pass found the counters +
+   the `register` throttle are **all session-keyed**, so a cookie-less client (fresh session +
+   fresh pending row per request) evaded them entirely — an unbounded relay for mailing one-shot
+   codes to *distinct* victims (the earlier "bounded by throttle:register" note was wrong;
+   `throttle:register` is itself session-keyed). Fix: a dedicated **session-independent, IP-keyed**
+   limiter `register-email` (10/min + 60/hour per IP) on the `/register/email/send` route — a
+   cookie-drop can't rotate the bucket, cutting an abuser from unbounded to a few dozen distinct
+   victims/hour/IP (forcing a botnet). Kept generous for a whole hospital behind one NAT
+   (registration is infrequent; same-victim repeats are already ~1/30 min via the pending-row
+   collision check). Three new tests in `RegistrationFlowTest` (cooldown not reset by switching;
+   cap counts across changed addresses; limiter is IP-keyed and session-independent).
+2. **`users.email` UNIQUE index — RESTORED** (migration
+   `2026_07_11_000002_restore_users_email_unique`). Defense-in-depth for the login-adjacent
+   identity used by password-reset + email verification. NULL emails stay allowed/non-unique
+   (legacy "no address" shape). The migration NULLs any pre-existing duplicate (lowest id keeps
+   the address) using the column's own collation, and **`legacy:import` de-duplicates member
+   emails the same way** so a fresh re-import never violates it (prod had 4 dup-email pairs).
+   New tests: `UsersEmailUniqueTest` + a dedup case in `LegacyImportTest`.
+
+**Importer robustness (surfaced while reloading the July 2026 production dump):** because these
+CHECK constraints post-date the importer, `legacy:import` never sanitised for them. It now (a)
+NULLs out-of-range/garbage `age` values (MRNs typed into the age field — patients **and**
+consultations) to satisfy `chk_age_range` and avoid smallint overflow, (b) NULLs the impossible
+date on inverted admission dates (mirroring migration `2026_06_14_010006`'s self-heal) to satisfy
+the `chk_discharge_*` constraints, and (c) raises `memory_limit` to 1 G when the CLI default is
+lower (the full transform OOM'd at 128 M). Covered by a new `LegacyImportTest` case. Gates after
+all of the above: **PHPUnit 576 + 56 green**, and the real reload reconciled exactly (admissions
+36,596 == source, consultations 1,280, users 328; 0 constraint violations; 4 dup emails nulled).

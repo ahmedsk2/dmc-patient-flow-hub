@@ -45,6 +45,21 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(10)->by($session . '|' . $request->ip());
         });
 
+        // The email-code SEND step is the ONLY registration endpoint that dispatches mail to an
+        // arbitrary, attacker-supplied address. 'register' above is session-keyed, so a script that
+        // drops its cookies gets a fresh session (and a fresh pending row) on every request and
+        // evades both that limiter AND the per-row send cap — an unbounded relay for mailing one-shot
+        // codes to distinct victims. Add a SESSION-INDEPENDENT, IP-keyed bound a cookie-less client
+        // can't rotate. Kept generous (registration is infrequent) so a whole hospital behind one NAT
+        // can still onboard a batch of staff; an abuser is cut from unbounded to a few dozen distinct
+        // victims per hour per IP, which forces a botnet rather than a one-liner.
+        RateLimiter::for('register-email', function (Request $request) {
+            return [
+                Limit::perMinute(10)->by('reg-email:' . $request->ip()),
+                Limit::perHour(60)->by('reg-email:' . $request->ip()),
+            ];
+        });
+
         // Existing-user email-verify gate (authenticated) — keyed by the confirmed user id + IP.
         RateLimiter::for('email-verify', function (Request $request) {
             $id = $request->user()?->id ?? ($request->hasSession() ? $request->session()->getId() : '');

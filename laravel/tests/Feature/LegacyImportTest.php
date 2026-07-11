@@ -200,6 +200,73 @@ class LegacyImportTest extends TestCase
         $this->assertNull(DB::table('admissions')->where('legacy_id', 4)->value('assigned_at'));
     }
 
+    public function test_import_deduplicates_member_emails_to_satisfy_the_unique_index(): void
+    {
+        // two legacy members share an email (case-insensitively) — real prod data has 4 such pairs.
+        // The restored users.email unique index would otherwise make the re-import fail on insert.
+        $L = DB::connection('legacy');
+        $L->table('members')->insert([
+            ['member_id' => 10, 'member_name' => 'alpha', 'full_name' => 'Alpha',
+             'member_email' => 'Shared@Example.test', 'member_password' => '$2y$04$abcdefghijklmnopqrstuv',
+             'position' => 3, 'active' => 1],
+            // case-only duplicate
+            ['member_id' => 11, 'member_name' => 'beta', 'full_name' => 'Beta',
+             'member_email' => 'shared@example.test', 'member_password' => '$2y$04$abcdefghijklmnopqrstuv',
+             'position' => 3, 'active' => 1],
+            // accent-only duplicate — utf8mb4_unicode_ci treats 'á' == 'a', so the DB index would
+            // reject this too; the importer's ASCII-fold dedup must catch it (a plain lower/trim wouldn't)
+            ['member_id' => 12, 'member_name' => 'gamma', 'full_name' => 'Gamma',
+             'member_email' => 'sháred@example.test', 'member_password' => '$2y$04$abcdefghijklmnopqrstuv',
+             'position' => 3, 'active' => 1],
+        ]);
+
+        $this->artisan('legacy:import')->assertSuccessful();
+
+        // exactly one survivor keeps the shared address; the lowest member_id wins, the others nulled
+        $this->assertSame(1, DB::table('users')->whereRaw('LOWER(email) = ?', ['shared@example.test'])->count());
+        $this->assertSame('Shared@Example.test', DB::table('users')->where('legacy_id', 10)->value('email'));
+        $this->assertNull(DB::table('users')->where('legacy_id', 11)->value('email'));
+        $this->assertNull(DB::table('users')->where('legacy_id', 12)->value('email'), 'accent-variant duplicate nulled');
+        // the duplicate-email members are still imported — they just log in by username only
+        $this->assertNotNull(DB::table('users')->where('legacy_id', 11)->value('id'));
+        $this->assertNotNull(DB::table('users')->where('legacy_id', 12)->value('id'));
+    }
+
+    public function test_import_sanitizes_out_of_range_age_and_inverted_dates(): void
+    {
+        // The importer must satisfy the schema's CHECK constraints (migration 2026_06_14_010006):
+        // patients.age in [0,150] and admission dates non-inverted. Real dumps carry MRNs typed into
+        // the age field (huge numbers) and discharge-before-admit rows — the import truncates+reinserts
+        // so it can't rely on the migration's one-time self-heal; it must sanitize on insert.
+        $L = DB::connection('legacy');
+        $episode = fn (array $row) => array_merge([
+            'MORTALITY' => null, 'trans_discharge' => null, 'DISDATE' => null, 'med_DISDATE' => null,
+            'current_location' => 'Ward', 'newassign' => null, 'assigned_on' => null, 'consultant_id' => null,
+        ], $row);
+        $L->table('picupatients')->insert([
+            // garbage age (MRN in the age field) + discharge BEFORE admit
+            $episode(['ID' => 20, 'MRN' => '20001', 'PNAME' => 'Bad Age', 'age' => '403306273',
+                'ADMDATE' => '2024-05-10', 'DISDATE' => '2024-05-01', 'MORTALITY' => 'Alive',
+                'trans_discharge' => 'discharge from ward']),
+            // medical-discharge BEFORE admit
+            $episode(['ID' => 21, 'MRN' => '20002', 'PNAME' => 'Bad Med', 'age' => '55',
+                'ADMDATE' => '2024-06-10', 'med_DISDATE' => '2024-06-01']),
+        ]);
+
+        $this->artisan('legacy:import')->assertSuccessful();
+
+        // out-of-range age → NULL (row preserved)
+        $this->assertNull(DB::table('patients')->where('mrn', '20001')->value('age'));
+        // impossible discharge date → NULL, admission + admit_date preserved
+        $adm20 = DB::table('admissions')->where('legacy_id', 20)->first();
+        $this->assertNotNull($adm20);
+        $this->assertNull($adm20->discharge_date);
+        $this->assertSame('2024-05-10', $adm20->admit_date);
+        // impossible medical-discharge date → NULL; a valid age is untouched
+        $this->assertNull(DB::table('admissions')->where('legacy_id', 21)->value('medical_discharge_date'));
+        $this->assertSame(55, (int) DB::table('patients')->where('mrn', '20002')->value('age'));
+    }
+
     public function test_import_is_idempotent(): void
     {
         $this->seedLegacy();
