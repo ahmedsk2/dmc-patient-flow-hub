@@ -36,8 +36,10 @@ const ICON_HOVER = /hover:bg-(?:danger|success|warning|info)-100 hover:text-(?:d
 
 // File-scoped LEAVE cases (path suffix + a substring that uniquely identifies the line).
 const ALLOW = [
-    // complete-discharge ICON button (no text label; the SVG follows the class immediately)
-    { file: 'Pages/Patients/Index.vue', needle: 'text-success-600 hover:bg-success-100"><svg' },
+    // complete-discharge ICON button (no text label; the SVG follows the class immediately). Moved
+    // from Patients/Index.vue into PatientCard.vue when the board card was extracted (shared by the
+    // Grouped + Split boards); the resting text-success-600 is a >=3:1 non-text glyph on bg-card.
+    { file: 'Components/Patients/PatientCard.vue', needle: 'text-success-600 hover:bg-success-100"><svg' },
     // status ICON circles (bg-X-100 wrapper + SVG glyph, no text) — non-text, >=3:1
     // status ICON circle (bg-success-100 wrapper + SVG glyph, no text) — non-text, 4.32:1 >=3 both themes
     { file: 'Pages/Admissions/Index.vue', needle: 'place-items-center rounded-full bg-success-100 text-success-600' },

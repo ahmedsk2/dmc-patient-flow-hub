@@ -3,16 +3,16 @@ import { ref, watch, computed, onMounted, nextTick } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import ActivityPanel from '@/Components/ActivityPanel.vue';
-import PatientFlags from '@/Components/PatientFlags.vue';
 import BaseModal from '@/Components/BaseModal.vue';
 import PatientForm from '@/Components/PatientForm.vue';
+import PatientCard from '@/Components/Patients/PatientCard.vue';
 import ActionModal from '@/Components/Patients/ActionModal.vue';
 import ReassignModal from '@/Components/Patients/ReassignModal.vue';
 import HandoverModal from '@/Components/Patients/HandoverModal.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { usePatientEdit } from '@/composables/usePatientEdit';
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
-import { localToday, vFocus, locTone, formatDate } from '@/lib/ui.js';
+import { localToday, vFocus } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
 
@@ -28,6 +28,8 @@ const me = computed(() => page.props.auth.user);
 const canAssign = computed(() => me.value.role !== 5 && (me.value.is_admin || me.value.can.assign));   // observers never see assign controls
 const canReassign = computed(() => me.value.role !== 5 && (me.value.is_admin || me.value.can.assign || me.value.can.manage));
 const isObserver = computed(() => me.value.role === 5);
+// still needed here for the HandoverModal's can-manage gate (the board's per-card canManage now lives
+// inside PatientCard, but the handover editor is an Index-owned modal).
 const canManage = (row) => me.value.is_admin || me.value.can.manage || row.consultant_id === me.value.id;
 
 const search = ref(props.filters.search || '');
@@ -73,6 +75,24 @@ const visibleGroups = computed(() =>
         ? props.groups.filter((g) => g.id === me.value.id)
         : props.groups);
 
+// board view mode — Grouped (roster + stacked consultant cards) vs Split (master–detail: a pinned
+// consultant rail + one consultant's cards in a detail pane). Persisted per-browser ('dmc-board-view').
+// Both are pure presentation over the SAME server data; the toggle only re-lays-out the board.
+const viewMode = ref('grouped');
+const setViewMode = (v) => { viewMode.value = v; localStorage.setItem('dmc-board-view', v); };
+// Split selection: a consultant group id, or the sentinel 'all' (flat census). `selectedId` starts
+// null → resolves to the first visible group; a filter that removes the selection falls back the same.
+const selectedId = ref(null);
+const selectGroup = (id) => { selectedId.value = id; };
+const selectedGroup = computed(() => {
+    if (selectedId.value === 'all') return null;
+    const id = selectedId.value ?? visibleGroups.value[0]?.id;
+    return visibleGroups.value.find((g) => g.id === id) || visibleGroups.value[0] || null;
+});
+// which rail row reads as selected (resolves null → first group; keeps 'all' as-is)
+const railSelectedId = computed(() => (selectedId.value === 'all' ? 'all' : (selectedGroup.value?.id ?? null)));
+const allPatients = computed(() => visibleGroups.value.flatMap((g) => g.patients || []));
+
 // clear ALL filters (incl. the dashboard drill-through ones) — reset to the default board
 const clearFilters = () => {
     search.value = ''; location.value = ''; view.value = ''; consultantId.value = ''; specialtyId.value = '';
@@ -85,13 +105,34 @@ const filtering = computed(() => !!(props.filters.search || props.filters.view |
     || props.filters.consultant_id || props.filters.specialty_id));
 const open = ref(new Set(filtering.value ? props.groups.map((g) => g.id) : []));
 const persistOpen = () => localStorage.setItem('dmc-board-open', JSON.stringify([...open.value]));
-const toggle = (id) => { open.value.has(id) ? open.value.delete(id) : open.value.add(id); open.value = new Set(open.value); persistOpen(); };
+// group-section element refs (grouped view) — used to bring a consultant's cards into view + move
+// focus there the instant it's expanded, so opening from the roster no longer means scroll-hunting.
+const groupEls = {};
+const setGroupEl = (id, el) => { if (el) groupEls[id] = el; else delete groupEls[id]; };
+const prefersReducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+const toggle = (id) => {
+    const wasOpen = open.value.has(id);
+    wasOpen ? open.value.delete(id) : open.value.add(id);
+    open.value = new Set(open.value);
+    persistOpen();
+    // just OPENED in the grouped board → scroll that consultant into view + focus the section
+    if (!wasOpen && viewMode.value === 'grouped') {
+        nextTick(() => {
+            const el = groupEls[id];
+            if (!el) return;
+            el.scrollIntoView?.({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
+            el.focus?.();
+        });
+    }
+};
 const allOpen = () => { open.value = new Set(props.groups.map((g) => g.id)); persistOpen(); };
 const allClosed = () => { open.value = new Set(); persistOpen(); };
 
 onMounted(() => {
     const d = localStorage.getItem('dmc-density');
     if (d === 'compact' || d === 'comfortable') density.value = d;
+    const vm = localStorage.getItem('dmc-board-view');
+    if (vm === 'grouped' || vm === 'split') viewMode.value = vm;
     myGroupOnly.value = localStorage.getItem('dmc-board-my-group') === '1';
 
     // board expand state — persisted per browser; intersect with current group ids (a group may
@@ -120,43 +161,10 @@ const sections = computed(() => [
     { key: 'off', label: 'Off-service', rows: visibleGroups.value.filter((g) => bucket(g) === 'off') },
 ]);
 
-// diagnosis list expand — clicking the "N dx" badge reveals the names (read-only, all roles)
-const dxOpen = ref(null);
-const toggleDx = (id) => (dxOpen.value = dxOpen.value === id ? null : id);
-
-// per-card kebab (touch only): collapses the rare actions (Delete / Long-term / Undo-medical)
-// into one menu so the action row isn't cramped on coarse-pointer devices. Keyed by admission id.
-const kebabOpen = ref(null);
-const toggleKebab = (id) => (kebabOpen.value = kebabOpen.value === id ? null : id);
-const closeKebab = () => (kebabOpen.value = null);
-
-// inline bed edit — ANY clinical role, matching the J1-opened /bed endpoint (K1-2; was
-// canManage-only affordance); observers stay read-only. Saves on blur/Enter, Esc cancels.
-// (vFocus now imported from @/lib/ui.js — Item 6 shares one directive across pages.)
-const bedEdit = ref(null);
-const startBed = (p) => { if (!isObserver.value && !p.discharged) bedEdit.value = { id: p.id, value: p.bed || '' }; };
-const cancelBed = () => (bedEdit.value = null);
-const saveBed = (p) => {
-    if (!bedEdit.value || bedEdit.value.id !== p.id) return;
-    const value = bedEdit.value.value.trim();
-    bedEdit.value = null;
-    if (value === (p.bed || '')) return;   // unchanged — no request
-    router.post(`/admissions/${p.id}/bed`, { bed: value || null }, { preserveScroll: true });
-};
-
 // ---- Index-level (non-modal) actions ----------------------------------------------------------
 // Wave 2, Item 4: no confirm — shuffle is low-stakes + reversible (re-shuffle / manual reassign);
 // the server's flash ("Shuffle assigned N patients…" / "No unassigned patients") is the feedback.
 const shuffle = () => router.post('/admissions/shuffle', {}, { preserveScroll: true });
-
-// board handover icon — tone/title come from the per-row `handover` summary the server ships with
-// each card; clicking opens the HandoverModal child (which does the fetch + edit + save).
-const fmtAt = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
-// W0-T3e: the stale branch hovered to warning-600 as text, an undeclared step → no hover at all.
-// `text-on-warning` is the AA-safe amber (5.93:1 light / 9.96:1 dark) and darkens on light, brightens
-// on dark — the right affordance in both. warning-600 itself is a FILL token; as text it is 3.29:1.
-const handoverTone = (p) => !p.handover ? 'text-ink-300 hover:text-ink-500' : p.handover.today ? 'text-brand-600 hover:text-brand-700' : 'text-on-warning hover:text-on-warning';
-const handoverTitle = (p) => p.handover ? `Handover — last updated ${p.handover.updated_by || '—'} ${fmtAt(p.handover.updated_at)}` : 'No handover yet';
 
 // ---- modal orchestration: Index OPENS the child modals + reloads/flashes on their `saved` --------
 const today = localToday();
@@ -186,16 +194,8 @@ const onActionSaved = () => closeModal();
 const onReassignSaved = () => closeReassign();
 const onHandoverSaved = () => closeHandover();
 
-const longterm = (row) => router.post(`/admissions/${row.id}/longterm`, {}, { preserveScroll: true });
-// the board shows active patients only, so the undo here is the phase-1 (medical) one;
-// reversing a COMPLETED discharge lives on the admin Recent registry.
-// Wave 2, Item 4: no confirm — this is itself a reversal (re-run medical-discharge to redo); the
-// server flashes 'Medical discharge undone.'
-const undoMedical = (row) => router.post(`/admissions/${row.id}/undo-medical-discharge`, {}, { preserveScroll: true });
-
 // modify (full edit) — canonical PatientForm + usePatientEdit (fetch-on-open + identity-confirm).
 // The Modify modal is a BaseModal (owns its own focus-trap + Esc), so a11yModify is gone.
-const canModify = computed(() => me.value.is_admin || me.value.can.modify);
 const { form: mForm, editing, selectedDx, activity: mActivity, open: openModify, addDx, removeDx, submit: submitModify, isDirty: mIsDirty } =
     usePatientEdit({ ask, onSuccess: () => (editing.value = null) });
 // Wave 3, Item 1: closing Modify with unsaved edits (Esc/backdrop/X via @close, or the footer
@@ -207,14 +207,6 @@ const closeModify = () => guardModify(() => { editing.value = null; });
 // Esc handling now lives in BaseModal (each modal owns a window-level Escape listener, matching the
 // old page dispatcher's scope — so the IcdTypeahead's first-Esc dropdown swallow still works).
 
-// hard delete (admin only — server re-checks)
-const destroyAdmission = async (row) => {
-    if (await ask('Delete admission',
-        `Permanently remove the episode for ${row.name} (MRN ${row.mrn}) and its diagnoses. This cannot be undone.`, 'danger'))
-        router.delete(`/admissions/${row.id}`, { preserveScroll: true });
-};
-
-const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b === 'long' ? 'bg-tint-danger text-on-danger' : 'bg-tint-warning text-on-warning';
 </script>
 
 <template>
@@ -273,6 +265,13 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
                     :aria-pressed="density === d[0]" :title="`${d[1]} board density`"
                     class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="density === d[0] ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">{{ d[1] }}</button>
             </div>
+            <!-- board layout: Grouped (roster + stacked cards) vs Split (master–detail). Persisted per
+                 browser ('dmc-board-view'); pure presentation over the same data. -->
+            <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line" role="group" aria-label="Board layout">
+                <button v-for="vm in [['grouped','Grouped'],['split','Split']]" :key="vm[0]" @click="setViewMode(vm[0])"
+                    :aria-pressed="viewMode === vm[0]" :title="`${vm[1]} board layout`"
+                    class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="viewMode === vm[0] ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">{{ vm[1] }}</button>
+            </div>
             <a href="/active-list" target="_blank" title="Print board" aria-label="Print board (opens in a new tab)" class="grid h-9 w-9 place-items-center rounded-xl bg-card text-ink-500 shadow-sm ring-1 ring-line transition hover:bg-ink-50">
                 <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.4 42.4 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.32 0H6.34m11.32 0 .55-6.171M6.34 18l-.55-6.171m0 0a42.4 42.4 0 0 1 12.42 0M5.79 11.829V6.75A2.25 2.25 0 0 1 8.04 4.5h7.92a2.25 2.25 0 0 1 2.25 2.25v5.079" /></svg>
             </a>
@@ -284,6 +283,28 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
             </button>
         </div>
 
+        <!-- empty board + discharged/unassigned fall-through (shown in BOTH layouts) -->
+        <div v-if="!groups.length" class="rounded-2xl bg-card p-8 text-center shadow-card ring-1 ring-line">
+            <p class="text-ink-400">No assigned patients match your filters.</p>
+            <!-- Wave 2, Item 1: discharged/unassigned fall-through. Counts are D1-scoped server-side; the
+                 registry link 403s for non-admins (a clean "not authorised" page) — owner-approved. -->
+            <p v-if="fallback && (fallback.discharged || fallback.unassigned)" class="mt-2 text-sm text-ink-500">
+                No active match.
+                <span v-if="fallback.discharged">
+                    Found <strong class="nums text-ink-700">{{ fallback.discharged }}</strong> discharged
+                    <!-- SPC-TM-011: the term POSTs to the registry in the body -->
+                    <button type="button" @click="router.post('/registry?mode=admissions&discharged=1', { search: fallback.search })"
+                        class="font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700">view →</button>
+                </span>
+                <span v-if="fallback.unassigned">
+                    / <strong class="nums text-ink-700">{{ fallback.unassigned }}</strong> awaiting assignment
+                    <Link href="/admissions" class="font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700">queue →</Link>
+                </span>
+            </p>
+        </div>
+
+        <!-- GROUPED layout: per-consultant roster summary + stacked consultant cards -->
+        <template v-else-if="viewMode === 'grouped'">
         <!-- summary: patients per consultant (data-tour anchor for the onboarding tour, Item 10) -->
         <div data-tour="board" class="mb-5 overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
           <div class="overflow-x-auto">
@@ -309,26 +330,6 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
                             <td class="nums px-3 py-2 text-center text-ink-500">{{ g.counts.tb || '' }}</td>
                         </tr>
                     </template>
-                    <tr v-if="!groups.length"><td colspan="7" class="px-5 py-8 text-center text-ink-400">No assigned patients match your filters.</td></tr>
-                    <!-- Wave 2, Item 1: discharged/unassigned fall-through. Only shows when a search
-                         returned an empty board AND there are matching discharged/unassigned rows.
-                         Counts are D1-scoped server-side; the registry link 403s for non-admins (a
-                         clean "not authorised" page, not a dead end) — owner-approved default. -->
-                    <tr v-if="!groups.length && fallback && (fallback.discharged || fallback.unassigned)">
-                        <td colspan="7" class="px-5 py-3 text-center text-sm text-ink-500">
-                            No active match.
-                            <span v-if="fallback.discharged">
-                                Found <strong class="nums text-ink-700">{{ fallback.discharged }}</strong> discharged
-                                <!-- SPC-TM-011: the term POSTs to the registry in the body -->
-                                <button type="button" @click="router.post('/registry?mode=admissions&discharged=1', { search: fallback.search })"
-                                      class="font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700">view →</button>
-                            </span>
-                            <span v-if="fallback.unassigned">
-                                / <strong class="nums text-ink-700">{{ fallback.unassigned }}</strong> awaiting assignment
-                                <Link href="/admissions" class="font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700">queue →</Link>
-                            </span>
-                        </td>
-                    </tr>
                 </tbody>
             </table>
           </div>
@@ -339,8 +340,11 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
             <button @click="allClosed" class="hover:underline">Collapse all</button>
         </div>
 
-        <!-- per-consultant patient cards (Item 7: visibleGroups honours "my group only") -->
-        <div v-for="g in visibleGroups" :key="g.id" v-show="open.has(g.id)" class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line" :class="compact ? 'mb-2.5' : 'mb-4'">
+        <!-- per-consultant patient cards (Item 7: visibleGroups honours "my group only"). The ref +
+             tabindex + scroll-mt let toggle() bring a just-expanded consultant into view (past the
+             sticky header) and move focus there — no more scroll-hunting from the roster. -->
+        <div v-for="g in visibleGroups" :key="g.id" v-show="open.has(g.id)" :ref="(el) => setGroupEl(g.id, el)" tabindex="-1"
+            class="scroll-mt-20 overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line focus:outline-none" :class="compact ? 'mb-2.5' : 'mb-4'">
             <div class="flex items-center justify-between border-b border-line px-5 py-3">
                 <!-- Wave 5 a11y fix: was <h3> with no <h2> anywhere on the page (only AppLayout's own
                      <h1> precedes it) — an h1->h3 skip. This is the first/only in-page heading level,
@@ -359,80 +363,70 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
             </div>
             <p v-if="!g.patients.length" class="px-5 py-4 text-sm text-ink-400">No patients on this list yet.</p>
             <div v-else class="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" :class="compact ? 'gap-2 p-2.5' : 'gap-3 p-4'">
-                <div v-for="p in g.patients" :key="p.id" class="rounded-xl ring-1 ring-line">
-                    <div class="flex items-center justify-between rounded-t-xl bg-app/60" :class="compact ? 'px-2.5 py-1' : 'px-3 py-2'">
-                        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="locTone(p.location)">
-                            {{ p.location || '—' }} ·
-                            <input v-if="bedEdit && bedEdit.id === p.id" v-model="bedEdit.value" v-focus maxlength="64"
-                                aria-label="Bed" class="w-14 rounded border border-ink-200 bg-card px-1 py-0 text-[11px] font-semibold text-ink-700 outline-none focus:border-brand-500"
-                                @blur="saveBed(p)" @keydown.enter.prevent="$event.target.blur()" @keydown.esc.prevent="cancelBed" />
-                            <button v-else-if="!isObserver && !p.discharged" type="button" @click="startBed(p)" title="Edit bed" aria-label="Edit bed"
-                                class="rounded underline decoration-dotted underline-offset-2 hover:opacity-75">{{ p.bed || '—' }}</button>
-                            <template v-else>{{ p.bed || '—' }}</template>
-                        </span>
-                        <span class="flex items-center gap-1">
-                            <button type="button" @click="openHandover(p)" :title="handoverTitle(p)" :aria-label="handoverTitle(p)"
-                                class="grid h-6 w-6 place-items-center rounded-lg transition hover:bg-white/70" :class="handoverTone(p)">
-                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z" /></svg>
-                            </button>
-                            <span v-if="p.los !== null" class="nums rounded-full px-2 py-0.5 text-[11px] font-bold" :class="losTone(p.los_band)">{{ p.los }}d</span>
-                        </span>
-                    </div>
-                    <div :class="compact ? 'px-2.5 py-1.5' : 'px-3 py-2'">
-                        <div class="font-semibold text-ink-800">{{ p.name }}</div>
-                        <div class="nums text-xs text-ink-400">MRN {{ p.mrn }} · {{ p.age ?? '—' }}y · {{ (p.gender||'—').slice(0,1) }}</div>
-                        <div class="nums text-xs text-ink-400">Admitted {{ formatDate(p.admit_date) || '—' }}</div>
-                        <!-- refined badge set (owner-approved, supersedes the loud legacy hex; J2-10):
-                             token-based so the .dark remap covers both themes. Semantics kept:
-                             New=info(blue), Readmit=warning(amber), Long-term=accent(gold subtle),
-                             TB=danger(red infection alert — NOT success-green), Disch-still-in=neutral "in progress". -->
-                        <div class="mt-1.5 flex flex-wrap gap-1">
-                            <PatientFlags :patient="p" :readmit-window="readmitWindow" variant="badge" />
-                            <Link v-if="p.sign_pending" href="/handovers" title="Handover awaiting your signature" class="rounded-full bg-brand-100 px-1.5 py-0.5 text-[10px] font-semibold text-brand-700 hover:bg-brand-200">Sign pending</Link>
-                            <button v-if="p.dx_count" type="button" @click="toggleDx(p.id)" :aria-expanded="dxOpen === p.id"
-                                :aria-label="`${p.dx_count} diagnoses — ${dxOpen === p.id ? 'hide' : 'show'} names`"
-                                class="rounded-full px-1.5 py-0.5 text-[10px] font-semibold transition"
-                                :class="dxOpen === p.id ? 'bg-brand-100 text-brand-700' : 'bg-ink-50 text-ink-500 hover:bg-ink-100'">{{ p.dx_count }} dx</button>
-                        </div>
-                        <ul v-if="dxOpen === p.id && p.diagnoses?.length" class="mt-1.5 space-y-0.5 rounded-lg bg-app/70 px-2 py-1.5 text-[11px] leading-snug text-ink-600">
-                            <li v-for="d in p.diagnoses" :key="d.code"><span class="nums font-semibold text-brand-700">{{ d.code }}</span> {{ d.name }}</li>
-                        </ul>
-                    </div>
-                    <!-- Touch (coarse): primary buttons lift to 40px and the three rare actions
-                         (long-term / undo-medical / delete) fold away into a kebab so the row stays
-                         uncramped. Desktop layout is unchanged (h-7 + every action inline). -->
-                    <div v-if="!isObserver && !p.discharged" class="flex items-center gap-1 coarse:gap-0.5 border-t border-ink-50 px-2" :class="compact ? 'py-1' : 'py-1.5'">
-                        <button v-if="canAssign" @click="openModal('assign', p)" title="Reassign consultant" aria-label="Reassign consultant" class="grid h-7 w-7 coarse:h-10 coarse:w-10 place-items-center rounded-lg text-ink-400 hover:bg-info-100 hover:text-info-500"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18 7.5v6m3-3h-6m-3.75-1.875a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" /></svg></button>
-                        <button v-if="canModify" @click="openModify(p)" title="Modify details" aria-label="Modify details" class="grid h-7 w-7 coarse:h-10 coarse:w-10 place-items-center rounded-lg text-ink-400 hover:bg-brand-100 hover:text-brand-700"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" /></svg></button>
-                        <!-- long-term: rare action — hidden on touch (lives in the kebab below) -->
-                        <button @click="longterm(p)" :title="p.is_longterm ? 'Remove long-term' : 'Mark long-term'" :aria-label="p.is_longterm ? 'Remove long-term' : 'Mark long-term'" class="grid h-7 w-7 coarse:hidden place-items-center rounded-lg hover:bg-tint-accent" :class="p.is_longterm ? 'text-on-accent' : 'text-ink-400 hover:text-on-accent'"><svg class="h-4 w-4" :fill="p.is_longterm ? 'currentColor' : 'none'" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5m-9-6h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm0 2.25h.008v.008H12v-.008ZM9.75 15h.008v.008H9.75V15Zm0 2.25h.008v.008H9.75v-.008ZM7.5 15h.008v.008H7.5V15Zm0 2.25h.008v.008H7.5v-.008Zm6.75-4.5h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V15Zm0 2.25h.008v.008h-.008v-.008Zm2.25-4.5h.008v.008H16.5v-.008Zm0 2.25h.008v.008H16.5V15Z" /></svg></button>
-                        <button v-if="canManage(p)" @click="openModal('transfer', p)" title="Transfer" aria-label="Transfer" class="grid h-7 w-7 coarse:h-10 coarse:w-10 place-items-center rounded-lg text-ink-400 hover:bg-brand-100 hover:text-brand-700"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg></button>
-                        <template v-if="canManage(p)">
-                            <button v-if="p.location === 'ICU'" @click="openModal('icu', p)" title="ICU discharge" aria-label="ICU discharge" class="ms-auto grid h-7 w-7 coarse:h-10 coarse:w-10 place-items-center rounded-lg text-ink-400 hover:bg-success-100 hover:text-success-600"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg></button>
-                            <template v-else-if="p.medically_discharged">
-                                <button @click="openModal('complete', p)" title="Complete discharge" aria-label="Complete discharge" class="ms-auto grid h-7 w-7 coarse:h-10 coarse:w-10 place-items-center rounded-lg text-success-600 hover:bg-success-100"><svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm13.36-1.814a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l3.75-5.25Z" clip-rule="evenodd" /></svg></button>
-                                <!-- undo medical: rare action — hidden on touch (kebab) -->
-                                <button @click="undoMedical(p)" title="Undo medical discharge" aria-label="Undo medical discharge" class="grid h-7 w-7 coarse:hidden place-items-center rounded-lg text-ink-400 hover:bg-danger-100 hover:text-danger-600"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" /></svg></button>
-                            </template>
-                            <button v-else @click="openModal('medical', p)" title="Discharge" aria-label="Discharge" class="ms-auto grid h-7 w-7 coarse:h-10 coarse:w-10 place-items-center rounded-lg text-ink-400 hover:bg-success-100 hover:text-success-600"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M11.35 3.836c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m8.9-4.414c.376.023.75.05 1.124.08 1.131.094 1.976 1.057 1.976 2.192V16.5A2.25 2.25 0 0 1 18 18.75h-2.25m-7.5-10.5H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V18.75m-7.5-10.5h6.375c.621 0 1.125.504 1.125 1.125v9.375m-8.25-3 1.5 1.5 3-3.75" /></svg></button>
-                        </template>
-                        <!-- delete: rare action — hidden on touch (kebab) -->
-                        <button v-if="me.is_admin" @click="destroyAdmission(p)" title="Delete admission" aria-label="Delete admission" class="grid h-7 w-7 coarse:hidden place-items-center rounded-lg text-ink-400 hover:bg-danger-100 hover:text-danger-600"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg></button>
-                        <!-- kebab (touch only): groups the three rare actions above -->
-                        <div class="relative hidden coarse:block">
-                            <button type="button" @click="toggleKebab(p.id)" :aria-expanded="kebabOpen === p.id" aria-haspopup="menu" title="More actions" aria-label="More actions" class="grid h-10 w-10 place-items-center rounded-lg text-ink-400 hover:bg-ink-50 hover:text-ink-700"><svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.75a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm0 6.75a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm0 6.75a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" /></svg></button>
-                            <!-- transparent backdrop closes the menu on outside tap -->
-                            <div v-if="kebabOpen === p.id" class="fixed inset-0 z-0" @click="closeKebab"></div>
-                            <div v-if="kebabOpen === p.id" role="menu" class="absolute end-0 bottom-12 z-10 w-44 overflow-hidden rounded-xl bg-card py-1 shadow-lg ring-1 ring-line" @keydown.esc="closeKebab">
-                                <button type="button" role="menuitem" @click="longterm(p); closeKebab()" class="flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm font-medium text-ink-700 hover:bg-ink-50">{{ p.is_longterm ? 'Remove long-term' : 'Mark long-term' }}</button>
-                                <button v-if="canManage(p) && p.medically_discharged && p.location !== 'ICU'" type="button" role="menuitem" @click="undoMedical(p); closeKebab()" class="flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm font-medium text-on-danger hover:bg-tint-danger">Undo medical discharge</button>
-                                <button v-if="me.is_admin" type="button" role="menuitem" @click="destroyAdmission(p); closeKebab()" class="flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm font-medium text-on-danger hover:bg-tint-danger">Delete admission</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <PatientCard v-for="p in g.patients" :key="p.id" :patient="p" :compact="compact" :readmit-window="readmitWindow"
+                    @open-modal="openModal" @modify="openModify" @handover="openHandover" />
             </div>
         </div>
+        </template>
+
+        <!-- SPLIT layout: master–detail — a pinned consultant rail + the selected consultant's cards.
+             Switching consultants is one click; the rail stays put while the detail pane scrolls. -->
+        <template v-else>
+            <div class="lg:grid lg:grid-cols-[15rem_1fr] lg:items-start lg:gap-4">
+                <!-- rail: All-active + per-section consultants. Mobile = a short scrollable list above
+                     the detail; on large screens it stays pinned while only the detail pane scrolls. -->
+                <aside aria-label="Consultants" class="mb-3 lg:mb-0 lg:sticky lg:top-20">
+                    <div class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
+                        <div class="max-h-56 overflow-y-auto p-1.5 lg:max-h-[80vh]">
+                            <button type="button" @click="selectGroup('all')" :aria-current="railSelectedId === 'all' ? 'true' : undefined"
+                                class="mb-0.5 flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-start text-sm font-semibold transition"
+                                :class="railSelectedId === 'all' ? 'bg-tint-accent text-on-accent' : 'text-ink-700 hover:bg-ink-50'">
+                                <span>All active</span>
+                                <span class="nums text-xs">{{ allPatients.length }}</span>
+                            </button>
+                            <template v-for="sec in sections" :key="sec.key">
+                                <p v-if="sec.rows.length" class="px-3 pb-1 pt-3 text-[10px] font-bold uppercase tracking-wide text-ink-400">{{ sec.label }}</p>
+                                <button v-for="g in sec.rows" :key="g.id" type="button" @click="selectGroup(g.id)"
+                                    :aria-current="railSelectedId === g.id ? 'true' : undefined"
+                                    class="mb-0.5 flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-start text-sm transition"
+                                    :class="railSelectedId === g.id ? 'bg-tint-accent font-semibold text-on-accent' : 'text-ink-700 hover:bg-ink-50'">
+                                    <span class="truncate">Dr. {{ g.name }}</span>
+                                    <span class="flex shrink-0 items-center gap-1.5 text-xs">
+                                        <span v-if="g.counts.new" class="font-semibold text-on-info">{{ g.counts.new }}n</span>
+                                        <span v-if="g.counts.icu" class="font-semibold text-on-danger">{{ g.counts.icu }}i</span>
+                                        <span class="nums font-semibold" :class="railSelectedId === g.id ? 'text-on-accent' : 'text-ink-500'">{{ g.counts.active }}</span>
+                                    </span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                </aside>
+
+                <!-- detail: the selected consultant's cards, or the flat all-active census -->
+                <section class="min-w-0">
+                    <template v-if="railSelectedId === 'all'">
+                        <h2 class="mb-3 font-bold text-ink-800">All active patients <span class="ms-1 text-sm font-normal text-ink-400">· {{ allPatients.length }}</span></h2>
+                        <div v-if="allPatients.length" class="grid sm:grid-cols-2 xl:grid-cols-3" :class="compact ? 'gap-2' : 'gap-3'">
+                            <PatientCard v-for="p in allPatients" :key="p.id" :patient="p" :compact="compact" :readmit-window="readmitWindow"
+                                @open-modal="openModal" @modify="openModify" @handover="openHandover" />
+                        </div>
+                        <p v-else class="rounded-2xl bg-card px-5 py-8 text-center text-sm text-ink-400 ring-1 ring-line">No active patients.</p>
+                    </template>
+                    <div v-else-if="selectedGroup" class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
+                        <div class="flex items-center justify-between border-b border-line px-5 py-3">
+                            <h2 class="font-bold text-ink-800">Dr. {{ selectedGroup.name }} <span class="ms-1 text-sm font-normal text-ink-400">· {{ selectedGroup.counts.total }} patient(s)</span></h2>
+                            <button v-if="canReassign && !isObserver && selectedGroup.patients.length" @click="openReassign(selectedGroup.id)"
+                                class="rounded-lg px-2.5 py-1 text-xs font-semibold text-brand-700 ring-1 ring-brand-200 transition hover:bg-brand-50">Reassign</button>
+                        </div>
+                        <p v-if="!selectedGroup.patients.length" class="px-5 py-4 text-sm text-ink-400">No patients on this list yet.</p>
+                        <div v-else class="grid sm:grid-cols-2 xl:grid-cols-3" :class="compact ? 'gap-2 p-2.5' : 'gap-3 p-4'">
+                            <PatientCard v-for="p in selectedGroup.patients" :key="p.id" :patient="p" :compact="compact" :readmit-window="readmitWindow"
+                                @open-modal="openModal" @modify="openModify" @handover="openHandover" />
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </template>
 
         <!-- per-patient action modal (assign / discharge / complete / icu / transfer) — owns its own
              useForms + the handover gate-then-retry; Index just opens it + reloads on `saved`. -->

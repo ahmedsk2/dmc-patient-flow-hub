@@ -6,6 +6,7 @@ import ConfirmDialog from '@/Components/ConfirmDialog.vue';
 import NavLink from '@/Components/NavLink.vue';
 import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import QuickJump from '@/Components/QuickJump.vue';
+import ScrollTopButton from '@/Components/ScrollTopButton.vue';
 import { useTour } from '@/composables/useTour';
 import { useSessionTimeout } from '@/composables/useSessionTimeout';
 import { xsrf } from '@/lib/ui.js';
@@ -568,6 +569,9 @@ onUnmounted(() => {
 
         <!-- Global themed confirmation dialog (replaces window.confirm; reads useConfirm singleton) -->
         <ConfirmDialog />
+
+        <!-- Global "back to top" — appears on every page once the reader scrolls past the fold -->
+        <ScrollTopButton />
     </div>
 </template>
 

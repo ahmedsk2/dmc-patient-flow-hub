@@ -47,19 +47,16 @@ const renderWith = (user, props = {}) => {
 
 beforeEach(() => { post.mockClear(); ask.mockClear(); localStorage.clear(); });
 
-describe('Item 4 — confirmation-fatigue trim (shuffle / undoMedical fire immediately)', () => {
+describe('Item 4 — confirmation-fatigue trim (shuffle fires immediately)', () => {
     it('shuffle posts immediately and never calls ask()', () => {
         const vm = mountWith(consultant()).vm;
         vm.shuffle();
         expect(post).toHaveBeenCalledWith('/admissions/shuffle', {}, { preserveScroll: true });
         expect(ask).not.toHaveBeenCalled();
     });
-    it('undoMedical posts immediately and never calls ask()', () => {
-        const vm = mountWith(consultant()).vm;
-        vm.undoMedical({ id: 42, name: 'X', mrn: '1' });
-        expect(post).toHaveBeenCalledWith('/admissions/42/undo-medical-discharge', {}, { preserveScroll: true });
-        expect(ask).not.toHaveBeenCalled();
-    });
+    // undoMedical (also a no-confirm trim) RELOCATED to Components/Patients/__tests__/PatientCard.spec.js
+    // — the per-card row actions (longterm/undoMedical/delete + bed edit) moved off the Index instance
+    // into PatientCard when the board card was extracted so the Grouped + Split boards share it.
 });
 
 // Item 5 — modal title map: RELOCATED to Components/Patients/__tests__/ActionModal.spec.js. The
