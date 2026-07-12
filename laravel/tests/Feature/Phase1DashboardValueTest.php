@@ -351,7 +351,7 @@ class Phase1DashboardValueTest extends TestCase
             'admit_date' => Carbon::today()->subDays(10)->toDateString(),   // admit precedes med discharge (Phase 4 — Item 7 CHECK)
             'medical_discharge_date' => Carbon::today()->subDay()->toDateString()]);             // ward + boarding
         $this->admission(['consultant_id' => $c->id, 'current_location' => 'ICU']);              // ICU
-        $this->admission(['consultant_id' => $c->id, 'current_location' => 'Ward', 'assigned_at' => now()]); // new
+        $this->admission(['consultant_id' => $c->id, 'current_location' => 'Ward', 'is_new_assignment' => 1]); // new (flagged)
 
         $this->actingAs($c)->get('/')->assertOk()
             ->assertInertia(fn (AssertableInertia $p) => $p
@@ -360,6 +360,22 @@ class Phase1DashboardValueTest extends TestCase
                 ->where('myUnit.icu', 1)
                 ->where('myUnit.boarding', 1)
                 ->where('myUnit.new', 1));
+    }
+
+    public function test_new_count_uses_the_flag_not_a_rolling_24h_window(): void
+    {
+        // Regression (legacy-parity): a "new" assignment whose assigned_at is OLDER than 24h — e.g.
+        // every row in an imported snapshot — must STILL count as New. "New" is the is_new_assignment
+        // flag (the managed legacy signal), not a rolling assigned_at >= now-24h window, which silently
+        // read 0 and blanked the dashboard's "New" column on imported data.
+        Cache::forget(DashboardCache::KEY);
+        $c = $this->consultant();
+        $this->admission(['consultant_id' => $c->id, 'current_location' => 'Ward',
+            'is_new_assignment' => 1, 'assigned_at' => now()->subDays(5)]);
+
+        $this->actingAs($this->admin())->get('/')->assertOk()
+            ->assertInertia(fn (AssertableInertia $p) => $p
+                ->where('consultantBoard', fn ($rows) => (int) collect($rows)->firstWhere('id', $c->id)['new'] === 1));
     }
 
     public function test_my_unit_sign_pending_counts_only_this_consultant(): void

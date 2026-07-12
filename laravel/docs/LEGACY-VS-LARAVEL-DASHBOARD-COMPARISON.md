@@ -110,3 +110,34 @@ when eyeballing the two dashboards side by side:
 > ⚠️ If you already imported the earlier `dmc_laravel_export.sql` to the demo, **re-import the
 > regenerated one** (or re-run `legacy:import` after pulling this fix) — otherwise the demo dashboard
 > will still show the inflated ~390 census.
+
+---
+
+## Round 2 — side-by-side PDF comparison (dump 5, 2026-07-13)
+
+Compared the two printed dashboards directly. **Every headline number matches or is explained:**
+
+| Metric | Legacy dashboard | Laravel "Command Center" | Verdict |
+|---|---|---|---|
+| Total admissions (year) | 4,566 | 4,566 | ✓ exact |
+| Total discharges (year) | 4,552 | 4,551 | ≈ (−1, bad-date edge) |
+| Avg LOS (month) | 4.56 | 4.63 | ≈ (Laravel guards negative LOS) |
+| Consultations / Sign-offs (year) | 0 / 0 | 0 / 0 | ✓ (stale consult data) |
+| Total non-ICU (assigned) | 92 | 92 | ✓ exact |
+| Currently in ICU | 15 | 16 | ≈ (legacy tile counts only consultant-assigned ICU; Laravel counts all active ICU — the extra 1 is an unassigned ICU patient) |
+| TB (current) | — | 9 | (Laravel donut) |
+
+### BUG FOUND & FIXED — the "New" column was blank
+The Laravel *"Patient count per consultant"* table showed **OLD/ACTIVE/WARD populated but NEW empty**.
+Cause: the dashboard (and the active-board "New" badge) defined **"New" as a rolling last-24h window**
+(`assigned_at >= now − 24h`). On an imported snapshot the newest assignment is backfilled to
+`assigned_on` **midnight**, so once you're a day past that midnight it falls outside 24h → **0 for
+everyone**. The legacy dashboard's "New" is the sticky **`newassign` flag** (no date filter) = **27**
+patients — a managed operational signal (set on assign/handover/shuffle, cleared on discharge/reassign).
+
+**Fix:** "New" now keys on the `is_new_assignment` **flag** everywhere it's counted — the dashboard
+consultant table, the "My unit" lens, and the active-board badge/counts — matching the legacy app and
+staying consistent across the two screens. Verified: the column now shows **27** (matching legacy),
+and a regression test pins that a flag-set assignment with a >24h-old `assigned_at` still counts as New.
+Files: `DashboardController`, `PatientsController`; test in `Phase1DashboardValueTest`. This is a CODE
+fix — deploy it with `git pull` (the data/export is unaffected).

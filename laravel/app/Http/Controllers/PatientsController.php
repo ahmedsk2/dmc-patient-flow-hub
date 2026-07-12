@@ -261,7 +261,10 @@ class PatientsController extends Controller
             ->whereExists(Admission::readmissionExists($readmitWindow))
             ->pluck('id')->flip();
 
-        $newCutoff = now()->subDay();   // "New" = assigned within the last 24h (rolling)
+        // "New" = the is_new_assignment flag (set on assign/handover/shuffle, cleared on discharge/
+        // reassign) — the managed legacy signal, NOT a rolling 24h assigned_at window (which reads 0
+        // on imported data once assignments age past 24h). Keeps the board's New badge/count in step
+        // with the dashboard's "Patient count per consultant" table and the legacy app.
 
         // handover meta + my pending signatures — two grouped lookups, no per-card queries
         $handovers = \App\Models\Handover::whereIn('admission_id', $admissions->pluck('id'))
@@ -315,7 +318,7 @@ class PatientsController extends Controller
                 'diagnoses' => $a->diagnoses->sortBy('seq')->values()
                     ->map(fn ($d) => ['code' => $d->icd10_code, 'name' => $dxNames[$d->icd10_code] ?? $d->icd10_code])->all(),
                 'is_longterm' => (bool) $a->is_longterm,
-                'is_new' => $a->assigned_at !== null && $a->assigned_at->greaterThanOrEqualTo($newCutoff),
+                'is_new' => (bool) $a->is_new_assignment,
                 'is_tb' => $isTb,
                 'is_readmission' => $readmitIds->has($a->id),
                 'medically_discharged' => $medDischarged,
@@ -335,7 +338,7 @@ class PatientsController extends Controller
 
             $c = &$groups[$cid]['counts'];
             $c['total']++;
-            if ($a->assigned_at !== null && $a->assigned_at->greaterThanOrEqualTo($newCutoff)) { $c['new']++; } else { $c['old']++; }
+            if ($a->is_new_assignment) { $c['new']++; } else { $c['old']++; }
             if ($isIcu) { $c['icu']++; } else { $c['ward']++; }
             if ($isTb) $c['tb']++;
             if (! $discharged && ! $isIcu && ! $medDischarged && ! $a->is_longterm && ! $isTb) $c['active']++;

@@ -169,7 +169,11 @@ class DashboardController extends Controller
         // while they still hold patients. The SUM cases guard a.id IS NOT NULL so the empty
         // left-join row contributes nothing.
         $tbExists = "EXISTS (SELECT 1 FROM admission_diagnoses ad JOIN tb_diagnoses tb ON tb.icd10_code = ad.icd10_code WHERE ad.admission_id = a.id)";
-        $newCutoff = now()->subDay();   // "New" = assigned within the last 24h (rolling)
+        // "New" keys on the is_new_assignment FLAG (the managed legacy signal — set on assign /
+        // handover / shuffle, cleared on discharge / reassign), NOT a rolling assigned_at >= now-24h
+        // window: that window silently reads 0 on imported/snapshot data once the newest assignment is
+        // >24h old, blanking the "New" column even though 27 patients are flagged. Matches the legacy
+        // "Patient count per consultant" table (active + newassign=1).
         $consultantBoard = DB::table('users as u')
             ->leftJoin('admissions as a', fn ($j) => $j->on('u.id', '=', 'a.consultant_id')->whereNull('a.discharge_date')->whereNull('a.deleted_at'))
             ->where('u.active', 1)
@@ -179,13 +183,13 @@ class DashboardController extends Controller
                 ->orWhereExists(fn ($s) => $s->selectRaw('1')->from('admissions as ax')
                     ->whereColumn('ax.consultant_id', 'u.id')->whereNull('ax.discharge_date')->whereNull('ax.deleted_at')))
             ->selectRaw("u.id, COALESCE(u.full_name, u.name) consultant, u.on_service, u.specialty_id,
-                SUM(CASE WHEN a.id IS NOT NULL AND a.assigned_at >= ? THEN 1 ELSE 0 END) new,
-                SUM(CASE WHEN a.id IS NOT NULL AND (a.assigned_at IS NULL OR a.assigned_at < ?) THEN 1 ELSE 0 END) old,
+                SUM(CASE WHEN a.id IS NOT NULL AND a.is_new_assignment = 1 THEN 1 ELSE 0 END) new,
+                SUM(CASE WHEN a.id IS NOT NULL AND a.is_new_assignment = 0 THEN 1 ELSE 0 END) old,
                 SUM(CASE WHEN a.current_location = 'ICU' THEN 1 ELSE 0 END) icu,
                 SUM(CASE WHEN a.id IS NOT NULL AND (a.current_location <> 'ICU' OR a.current_location IS NULL) THEN 1 ELSE 0 END) ward,
                 SUM(CASE WHEN a.id IS NOT NULL AND {$tbExists} THEN 1 ELSE 0 END) tb,
                 SUM(CASE WHEN a.id IS NOT NULL AND (a.current_location <> 'ICU' OR a.current_location IS NULL) AND a.medical_discharge_date IS NULL AND a.is_longterm = 0 AND NOT {$tbExists} THEN 1 ELSE 0 END) active,
-                COUNT(a.id) total", [$newCutoff, $newCutoff])
+                COUNT(a.id) total")
             ->groupByRaw('u.id, consultant, u.on_service, u.specialty_id')
             ->orderByDesc('total')->get()
             ->map(fn ($r) => [
@@ -359,7 +363,7 @@ class DashboardController extends Controller
                 'ward' => (int) $myActive()->whereRaw($nonIcu)->count(),
                 'icu' => (int) $myActive()->where('current_location', 'ICU')->count(),
                 'boarding' => (int) $myActive()->whereNotNull('medical_discharge_date')->count(),
-                'new' => (int) $myActive()->where('assigned_at', '>=', Carbon::today()->subDay())->count(),
+                'new' => (int) $myActive()->where('is_new_assignment', 1)->count(),
                 'signPending' => (int) DB::table('handover_signatures as hs')
                     ->where('hs.to_consultant_id', $myId)->whereNull('hs.signed_at')->whereNull('hs.voided_at')->count(),
                 'myConsults' => (int) DB::table('consultations')

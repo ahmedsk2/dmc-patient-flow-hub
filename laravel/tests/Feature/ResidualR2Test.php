@@ -59,9 +59,9 @@ class ResidualR2Test extends TestCase
         Icd10::create(['code' => 'E11.9', 'name' => 'Type 2 diabetes mellitus without complications']);
         $c = $this->user(User::ROLE_CONSULTANT, ['full_name' => 'Dr Board Dx']);
 
-        // patient A: assigned within 24h (New) with two diagnoses; B: older assignment, no dx
+        // patient A: flagged New (is_new_assignment) with two diagnoses; B: not flagged (Old), no dx
         $a = $this->admission(['admit_date' => now()->subDays(5)->toDateString(),
-            'consultant_id' => $c->id, 'assigned_at' => now()->subHours(2)]);
+            'consultant_id' => $c->id, 'is_new_assignment' => 1]);
         $a->diagnoses()->create(['seq' => 1, 'icd10_code' => 'J18.9']);
         $a->diagnoses()->create(['seq' => 2, 'icd10_code' => 'E11.9']);
         $this->admission(['admit_date' => now()->subDays(3)->toDateString(), 'consultant_id' => $c->id]);

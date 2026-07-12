@@ -47,14 +47,16 @@ class WaveBTest extends TestCase
         $this->assertNull($a->discharge_date, 'complete-discharge must be rejected without a prior medical discharge (outcome guard)');
     }
 
-    public function test_new_assignment_is_a_rolling_24h_window(): void
+    public function test_new_assignment_counts_by_flag_not_a_24h_window(): void
     {
         $c = User::create([
             'username' => 'wb_cons', 'name' => 'ZZ New Old', 'password' => 'secret12345',
             'role' => User::ROLE_CONSULTANT, 'active' => 1, 'on_service' => 1, 'specialty_id' => 1,
         ]);
-        $this->admission(['consultant_id' => $c->id, 'assigned_at' => now()->subHours(1)]);   // within 24h → new
-        $this->admission(['consultant_id' => $c->id, 'assigned_at' => now()->subHours(30)]);  // older → not new
+        // "New" keys on the is_new_assignment FLAG, not a rolling assigned_at window — a flagged
+        // assignment with an OLD assigned_at (e.g. imported data) is still New; an unflagged one is Old.
+        $this->admission(['consultant_id' => $c->id, 'is_new_assignment' => 1, 'assigned_at' => now()->subHours(30)]); // flagged → new
+        $this->admission(['consultant_id' => $c->id, 'is_new_assignment' => 0, 'assigned_at' => now()->subHours(1)]);  // not flagged → old
 
         $this->actingAs($this->admin())->get('/')->assertInertia(fn (AssertableInertia $p) => $p
             ->where('consultantBoard', function ($cb) {
