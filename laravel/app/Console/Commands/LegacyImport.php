@@ -216,15 +216,24 @@ class LegacyImport extends Command
                     ]);
                 }
 
-                // Satisfy the chk_* date constraints (migration 2026_06_14_010006): NULL the impossible
-                // date, keeping the row + admit_date. Order matches the migration's self-heal — fix the
-                // admit-relative inversions first, then discharge-vs-medical on what survives.
+                // Satisfy the chk_* date constraints WITHOUT resurrecting discharged patients as active.
+                // A discharge date that predates admit or medical-discharge is a data-entry error, but the
+                // patient IS discharged — NULLing discharge_date (as the migration self-heal does) would
+                // flip them back to "currently admitted" and massively inflate the active census (the
+                // legacy app keeps the bad date, so the patient stays discharged). Instead CLAMP a
+                // too-early discharge UP to the latest valid anchor (admit, or medical-discharge): the row
+                // stays discharged, LOS becomes >= 0, and chk_discharge_gte_admit + chk_discharge_gte_medical
+                // both hold. A medical-discharge that predates admit is dropped (it doesn't drive the
+                // discharged/active status, and chk_medical_discharge_gte_admit requires it).
                 $admit = $this->date($p->ADMDATE);
                 $med = $this->date($p->med_DISDATE);
                 $dis = $this->date($p->DISDATE);
-                if ($dis !== null && $admit !== null && $dis < $admit) { $dis = null; }
                 if ($med !== null && $admit !== null && $med < $admit) { $med = null; }
-                if ($dis !== null && $med !== null && $dis < $med) { $dis = null; }
+                if ($dis !== null) {
+                    $floor = $admit;
+                    if ($med !== null && ($floor === null || $med > $floor)) { $floor = $med; }
+                    if ($floor !== null && $dis < $floor) { $dis = $floor; }
+                }
 
                 $batch[] = [
                     'patient_id' => $pid,

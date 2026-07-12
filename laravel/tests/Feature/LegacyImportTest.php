@@ -251,20 +251,27 @@ class LegacyImportTest extends TestCase
             // medical-discharge BEFORE admit
             $episode(['ID' => 21, 'MRN' => '20002', 'PNAME' => 'Bad Med', 'age' => '55',
                 'ADMDATE' => '2024-06-10', 'med_DISDATE' => '2024-06-01']),
+            // discharge AFTER admit but BEFORE medical-discharge -> clamp up to medical-discharge
+            $episode(['ID' => 22, 'MRN' => '20003', 'PNAME' => 'Dis Before Med', 'age' => '40',
+                'ADMDATE' => '2024-07-01', 'med_DISDATE' => '2024-07-06', 'DISDATE' => '2024-07-03',
+                'MORTALITY' => 'Alive', 'trans_discharge' => 'discharge from ward']),
         ]);
 
         $this->artisan('legacy:import')->assertSuccessful();
 
         // out-of-range age → NULL (row preserved)
         $this->assertNull(DB::table('patients')->where('mrn', '20001')->value('age'));
-        // impossible discharge date → NULL, admission + admit_date preserved
+        // inverted discharge date is CLAMPED to admit (NOT nulled) — the patient stays DISCHARGED so it
+        // can't inflate the active census; LOS becomes 0. This is the census-fidelity fix.
         $adm20 = DB::table('admissions')->where('legacy_id', 20)->first();
         $this->assertNotNull($adm20);
-        $this->assertNull($adm20->discharge_date);
+        $this->assertSame('2024-05-10', $adm20->discharge_date, 'inverted discharge clamped to admit, still discharged');
         $this->assertSame('2024-05-10', $adm20->admit_date);
         // impossible medical-discharge date → NULL; a valid age is untouched
         $this->assertNull(DB::table('admissions')->where('legacy_id', 21)->value('medical_discharge_date'));
         $this->assertSame(55, (int) DB::table('patients')->where('mrn', '20002')->value('age'));
+        // discharge < medical-discharge → clamped up to the medical-discharge date (still discharged)
+        $this->assertSame('2024-07-06', DB::table('admissions')->where('legacy_id', 22)->value('discharge_date'));
     }
 
     public function test_import_is_idempotent(): void
