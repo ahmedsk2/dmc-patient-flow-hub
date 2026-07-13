@@ -215,6 +215,10 @@ Route::middleware(['auth', 'session.timeout', 'email.verify', 'mfa.enroll', 'pwd
         Route::post('/import', [ImportController::class, 'store'])->name('import.store');
         Route::get('/control', [ControlController::class, 'index'])->name('control.index');
         Route::put('/control/settings', [ControlController::class, 'updateSettings'])->name('control.settings');
+        // Runtime configuration (SMTP / timezone / app basics) — sensitive, so step-up gated like
+        // destroyUser. The RuntimeConfigServiceProvider applies these over .env on the next request.
+        Route::put('/control/system', [ControlController::class, 'updateSystem'])->name('control.system')->middleware('stepup');
+        Route::post('/control/system/test-email', [ControlController::class, 'testEmail'])->name('control.system.testEmail')->middleware('stepup');
         Route::put('/control/users/{user}', [ControlController::class, 'updateUser'])->name('control.users.update');
         Route::delete('/control/users/{user}', [ControlController::class, 'destroyUser'])->name('control.users.destroy')->middleware('stepup');   // Phase 4 — Item 4
         Route::post('/control/users/{user}/reset-mfa', [ControlController::class, 'resetMfa'])->name('control.users.resetMfa');

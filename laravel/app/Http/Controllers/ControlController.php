@@ -14,6 +14,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -35,8 +36,18 @@ class ControlController extends Controller
                 'can' => ['assign' => (bool) $u->can_assign, 'add' => (bool) $u->can_add, 'manage' => (bool) $u->can_manage, 'modify' => (bool) $u->can_modify],
             ]);
 
+        $s = Setting::current();
+
         return Inertia::render('Control/Index', [
             'settings' => Setting::current(),
+            'system' => [
+                'mail_mailer' => $s->mail_mailer, 'mail_host' => $s->mail_host, 'mail_port' => $s->mail_port,
+                'mail_encryption' => $s->mail_encryption, 'mail_username' => $s->mail_username,
+                'mail_password_set' => filled($s->getRawOriginal('mail_password')),
+                'mail_from_address' => $s->mail_from_address, 'mail_from_name' => $s->mail_from_name,
+                'app_timezone' => $s->app_timezone, 'app_name' => $s->app_name, 'app_url' => $s->app_url,
+            ],
+            'timezones' => timezone_identifiers_list(),
             // 2026-07-11 auth-hardening: MFA enrollment is now mandatory for every user, always —
             // the mfa_enforcement setting below is inert (kept in-schema); the UI should annotate
             // the control as a no-op rather than implying it still switches enrollment off.
@@ -116,6 +127,78 @@ class ControlController extends Controller
         Audit::log('settings.update', 'settings', '1', $data);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Settings saved.']);
+    }
+
+    /**
+     * Save runtime config (SMTP / timezone / app basics). The SMTP password is write-only:
+     * a blank submit keeps the current stored value, the plaintext is never echoed back to the
+     * client (see index()'s mail_password_set flag), and both the setting_changes history row
+     * and the audit_log detail redact it rather than recording the value.
+     */
+    public function updateSystem(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'mail_mailer' => ['nullable', 'in:smtp,log'],
+            'mail_host' => ['nullable', 'required_if:mail_mailer,smtp', 'string', 'max:255'],
+            'mail_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
+            'mail_encryption' => ['nullable', 'in:tls,ssl,none'],
+            'mail_username' => ['nullable', 'string', 'max:255'],
+            'mail_password' => ['nullable', 'string', 'max:255'],
+            'mail_from_address' => ['nullable', 'email', 'max:255'],
+            'mail_from_name' => ['nullable', 'string', 'max:120'],
+            'app_timezone' => ['nullable', Rule::in(timezone_identifiers_list())],
+            'app_name' => ['nullable', 'string', 'max:120'],
+            'app_url' => ['nullable', 'url', 'max:255'],
+        ]);
+
+        if (! filled($data['mail_password'] ?? null)) {
+            unset($data['mail_password']);
+        }
+
+        $settings = Setting::current();
+
+        foreach ($data as $field => $new) {
+            $old = $settings->{$field};
+            if ((string) $old === (string) $new) {
+                continue;
+            }
+            $redact = $field === 'mail_password';
+            DB::table('setting_changes')->insert([
+                'field' => $field,
+                'old_value' => $redact ? '••••' : ($old === null ? null : (string) $old),
+                'new_value' => $redact ? '••••' : (string) $new,
+                'changed_by' => Auth::id(),
+                'created_at' => now(),
+            ]);
+        }
+
+        $settings->update($data);
+
+        $detail = collect($data)->except('mail_password')->all();
+        if (array_key_exists('mail_password', $data)) {
+            $detail['mail_password'] = 'changed';
+        }
+        Audit::log('settings.system.update', 'settings', '1', $detail);
+
+        return back()->with('flash', ['type' => 'success', 'message' => 'System configuration saved.']);
+    }
+
+    /** Send a one-off test email to the acting admin's own address, using the current mail config. */
+    public function testEmail(Request $request): RedirectResponse
+    {
+        $to = $request->user()->email;
+        if (! $to) {
+            return back()->with('flash', ['type' => 'error', 'message' => 'Your account has no email address to send a test to.']);
+        }
+
+        try {
+            Mail::raw('This is a test email from the DMC Internal Medicine Control Panel. If you received it, your mail settings are working.',
+                fn ($m) => $m->to($to)->subject('DMC — test email'));
+        } catch (\Throwable $e) {
+            return back()->with('flash', ['type' => 'error', 'message' => 'Test email failed: '.$e->getMessage()]);
+        }
+
+        return back()->with('flash', ['type' => 'success', 'message' => "Test email sent to {$to}."]);
     }
 
     /** Phase 4 — Item 4: ['step_up' => true] when a recent step-up is in session, else []. */
