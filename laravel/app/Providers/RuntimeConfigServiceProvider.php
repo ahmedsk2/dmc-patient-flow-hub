@@ -16,11 +16,14 @@ class RuntimeConfigServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
-        if (! Schema::hasTable('settings')) {
-            return;
-        }
-
         try {
+            // Schema::hasTable AND the read must BOTH be inside this guard: during `composer install`
+            // (package:discover), `artisan migrate`, or any deploy step that boots the app before the
+            // database is reachable, even Schema::hasTable() THROWS (no connection / no sqlite file) —
+            // it does not simply return false. Any such failure falls back to .env.
+            if (! Schema::hasTable('settings')) {
+                return;
+            }
             // Deliberately NOT Setting::current(): that helper is memoized process-wide via
             // once() and firstOrCreate()s a row. This boot() runs on every application boot,
             // including every test's app boot — which happens BEFORE RefreshDatabase's
@@ -32,7 +35,7 @@ class RuntimeConfigServiceProvider extends ServiceProvider
             // Setting::current() as before.
             $s = Setting::query()->orderBy('id')->first();
         } catch (\Throwable) {
-            return;
+            return;   // DB unavailable/unreadable (composer/migrate/deploy) -> keep .env
         }
 
         if ($s === null) {
