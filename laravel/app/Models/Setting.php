@@ -8,7 +8,7 @@ class Setting extends Model
 {
     protected $guarded = ['id'];
 
-    protected $casts = ['log_record_opens' => 'boolean'];
+    protected $casts = ['log_record_opens' => 'boolean', 'mail_password' => 'encrypted'];
 
     /**
      * The single settings row (created with defaults on first access).
