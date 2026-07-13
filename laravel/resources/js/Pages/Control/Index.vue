@@ -1,6 +1,6 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
-import { Link, router, useForm } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
+import { router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BaseModal from '@/Components/BaseModal.vue';
 import Tabs from '@/Components/Tabs.vue';
@@ -10,7 +10,7 @@ import { guardSubmit } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
 
-const props = defineProps({ settings: Object, users: Object, filters: Object, roles: Object, counts: Object, specialties: Array, reasons: Array, settingHistory: Array, reportRecipients: { type: Array, default: () => [] } });
+const props = defineProps({ settings: Object, users: { type: Array, default: () => [] }, roles: Object, counts: Object, specialties: Array, reasons: Array, settingHistory: Array, reportRecipients: { type: Array, default: () => [] } });
 
 const fieldLabels = {
     min_hospitalist: 'Min hospitalist census', max_hospitalist: 'Max hospitalist census',
@@ -54,18 +54,38 @@ const sForm = useForm({
 });
 const saveSettings = guardSubmit(sForm, () => sForm.put('/control/settings', { preserveScroll: true }));
 
-const q = ref(props.filters.q || '');
-let timer = null;
-watch(q, () => { clearTimeout(timer); timer = setTimeout(() => router.get('/control', { q: q.value || undefined }, { preserveState: true, replace: true, preserveScroll: true }), 300); });
+// Instant client-side user filtering over the FULL list (all users are shipped now, ~323 rows).
+// Every control narrows in-memory — no server round-trip, no pages to click past. `search` matches
+// name/username/email (case-insensitive); role/status/service/capability are exact.
+const search = ref('');
+const roleFilter = ref('');       // '' = any, else a role id (string, from the <select>)
+const statusFilter = ref('');     // '' | 'active' | 'disabled'
+const serviceFilter = ref('');    // '' | 'on' | 'off'
+const capFilter = ref('');        // '' | 'assign' | 'add' | 'manage' | 'modify'
+const anyUserFilter = computed(() => !!(search.value || roleFilter.value !== '' || statusFilter.value || serviceFilter.value || capFilter.value));
+const clearUserFilters = () => { search.value = ''; roleFilter.value = ''; statusFilter.value = ''; serviceFilter.value = ''; capFilter.value = ''; };
+const filteredUsers = computed(() => {
+    const term = search.value.trim().toLowerCase();
+    return props.users.filter((u) => {
+        if (term && !`${u.full_name || ''} ${u.name || ''} ${u.username || ''} ${u.email || ''}`.toLowerCase().includes(term)) return false;
+        if (roleFilter.value !== '' && u.role !== Number(roleFilter.value)) return false;
+        if (statusFilter.value === 'active' && !u.active) return false;
+        if (statusFilter.value === 'disabled' && u.active) return false;
+        if (serviceFilter.value === 'on' && !u.on_service) return false;
+        if (serviceFilter.value === 'off' && u.on_service) return false;
+        if (capFilter.value && !u.can?.[capFilter.value]) return false;
+        return true;
+    });
+});
 
-// client-side sort (current page) on Full name / On service — L1-15
+// client-side sort on Full name / On service, applied over the filtered set — L1-15
 const sort = ref({ key: null, dir: 1 });
 const toggleSort = (key) => { sort.value = sort.value.key === key ? { key, dir: -sort.value.dir } : { key, dir: 1 }; };
 const ariaSort = (key) => (sort.value.key === key ? (sort.value.dir === 1 ? 'ascending' : 'descending') : 'none');
 const sortedUsers = computed(() => {
     const { key, dir } = sort.value;
-    if (!key) return props.users.data;
-    return [...props.users.data].sort((a, b) => dir * (key === 'full_name'
+    if (!key) return filteredUsers.value;
+    return [...filteredUsers.value].sort((a, b) => dir * (key === 'full_name'
         ? String(a.full_name || a.name || '').localeCompare(String(b.full_name || b.name || ''), undefined, { sensitivity: 'base' })
         : (b.on_service ? 1 : 0) - (a.on_service ? 1 : 0)));   // ascending = on-service first
 });
@@ -206,39 +226,60 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
 
         <!-- Users -->
         <div v-show="active === 'users'">
-            <div class="mb-3"><input v-model="q" :class="[field, 'max-w-sm']" placeholder="Search users…" /></div>
-            <div class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
-                <table class="w-full text-sm">
-                    <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
-                        <th scope="col" class="px-5 py-3" :aria-sort="ariaSort('full_name')">
-                            <button @click="toggleSort('full_name')" class="inline-flex items-center gap-1 uppercase tracking-wide hover:text-ink-600">Full name<span aria-hidden="true" class="text-[10px]">{{ sort.key === 'full_name' ? (sort.dir === 1 ? '▲' : '▼') : '↕' }}</span></button>
-                        </th>
-                        <th scope="col" class="px-3 py-3">Role</th><th scope="col" class="px-3 py-3">Capabilities</th>
-                        <th scope="col" class="px-3 py-3" :aria-sort="ariaSort('on_service')">
-                            <button @click="toggleSort('on_service')" class="inline-flex items-center gap-1 uppercase tracking-wide hover:text-ink-600">On service<span aria-hidden="true" class="text-[10px]">{{ sort.key === 'on_service' ? (sort.dir === 1 ? '▲' : '▼') : '↕' }}</span></button>
-                        </th>
-                        <th scope="col" class="px-3 py-3">Status</th><th scope="col" class="px-5 py-3 text-right">Edit</th>
-                    </tr></thead>
-                    <tbody class="divide-y divide-line">
-                        <tr v-for="u in sortedUsers" :key="u.id" class="hover:bg-brand-50/40">
-                            <td class="px-5 py-3"><div class="font-semibold text-ink-800">{{ u.name }}</div><div class="text-xs text-ink-400">{{ u.username }} · {{ u.email || '—' }}</div></td>
-                            <td class="px-3 py-3"><span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="roleTone(u.role)">{{ u.role_label }}</span></td>
-                            <td class="px-3 py-3">
-                                <div class="flex flex-wrap gap-1">
-                                    <span v-for="(v, k) in u.can" :key="k" v-show="v" class="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold capitalize text-brand-700">{{ k }}</span>
-                                    <span v-if="!Object.values(u.can).some(Boolean)" class="text-xs text-ink-300">—</span>
-                                </div>
-                            </td>
-                            <td class="px-3 py-3"><span v-if="u.on_service" class="rounded-full bg-brand-100 px-2.5 py-0.5 text-xs font-semibold text-brand-700">On</span><span v-else class="text-xs text-ink-300">—</span></td>
-                            <td class="px-3 py-3"><span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="u.active ? 'bg-tint-success text-on-success' : 'bg-ink-100 text-ink-400'">{{ u.active ? 'Active' : 'Disabled' }}</span></td>
-                            <td class="px-5 py-3 text-right"><button @click="editUser(u)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50">Edit</button></td>
-                        </tr>
-                    </tbody>
-                </table>
+            <!-- instant filters — all client-side over every user (search + role/status/service/capability) -->
+            <div class="mb-3 flex flex-wrap items-center gap-2">
+                <div class="relative">
+                    <svg class="pointer-events-none absolute start-3 top-2.5 h-4.5 w-4.5 text-ink-400" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" /></svg>
+                    <input v-model="search" aria-label="Search users by name, username, or email" placeholder="Search name, username, email…" class="w-64 rounded-xl border border-ink-200 bg-card py-2 ps-9 pe-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+                </div>
+                <select v-model="roleFilter" aria-label="Filter by role" class="rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
+                    <option value="">All roles</option>
+                    <option v-for="(label, id) in roles" :key="id" :value="id">{{ label }}</option>
+                </select>
+                <select v-model="statusFilter" aria-label="Filter by status" class="rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
+                    <option value="">Any status</option><option value="active">Active</option><option value="disabled">Disabled</option>
+                </select>
+                <select v-model="serviceFilter" aria-label="Filter by on-service" class="rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
+                    <option value="">Any service</option><option value="on">On service</option><option value="off">Off service</option>
+                </select>
+                <select v-model="capFilter" aria-label="Filter by capability" class="rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
+                    <option value="">Any capability</option><option value="assign">Can assign</option><option value="add">Can add</option><option value="manage">Can manage</option><option value="modify">Can modify</option>
+                </select>
+                <button v-if="anyUserFilter" @click="clearUserFilters" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 ring-1 ring-line transition hover:bg-ink-50">Clear</button>
+                <span class="ms-auto text-sm text-ink-400" aria-live="polite"><span class="nums font-semibold text-ink-600">{{ sortedUsers.length }}</span> of {{ users.length }} user(s)</span>
             </div>
-            <div v-if="users.last_page > 1" class="mt-4 flex justify-end gap-1">
-                <component :is="l.url ? Link : 'span'" v-for="l in users.links" :key="l.label" :href="l.url || undefined" preserve-scroll
-                    class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold" :class="l.active ? 'bg-brand-solid text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" />
+            <div class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
+                <!-- all users on one scrollable pane (no pagination) — the header stays put while you scroll -->
+                <div class="max-h-[65vh] overflow-auto">
+                    <table class="w-full text-sm">
+                        <thead class="sticky top-0 z-10 bg-card"><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
+                            <th scope="col" class="px-5 py-3" :aria-sort="ariaSort('full_name')">
+                                <button @click="toggleSort('full_name')" class="inline-flex items-center gap-1 uppercase tracking-wide hover:text-ink-600">Full name<span aria-hidden="true" class="text-[10px]">{{ sort.key === 'full_name' ? (sort.dir === 1 ? '▲' : '▼') : '↕' }}</span></button>
+                            </th>
+                            <th scope="col" class="px-3 py-3">Role</th><th scope="col" class="px-3 py-3">Capabilities</th>
+                            <th scope="col" class="px-3 py-3" :aria-sort="ariaSort('on_service')">
+                                <button @click="toggleSort('on_service')" class="inline-flex items-center gap-1 uppercase tracking-wide hover:text-ink-600">On service<span aria-hidden="true" class="text-[10px]">{{ sort.key === 'on_service' ? (sort.dir === 1 ? '▲' : '▼') : '↕' }}</span></button>
+                            </th>
+                            <th scope="col" class="px-3 py-3">Status</th><th scope="col" class="px-5 py-3 text-right">Edit</th>
+                        </tr></thead>
+                        <tbody class="divide-y divide-line">
+                            <tr v-for="u in sortedUsers" :key="u.id" class="hover:bg-brand-50/40">
+                                <td class="px-5 py-3"><div class="font-semibold text-ink-800">{{ u.name }}</div><div class="text-xs text-ink-400">{{ u.username }} · {{ u.email || '—' }}</div></td>
+                                <td class="px-3 py-3"><span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="roleTone(u.role)">{{ u.role_label }}</span></td>
+                                <td class="px-3 py-3">
+                                    <div class="flex flex-wrap gap-1">
+                                        <span v-for="(v, k) in u.can" :key="k" v-show="v" class="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold capitalize text-brand-700">{{ k }}</span>
+                                        <span v-if="!Object.values(u.can).some(Boolean)" class="text-xs text-ink-300">—</span>
+                                    </div>
+                                </td>
+                                <td class="px-3 py-3"><span v-if="u.on_service" class="rounded-full bg-brand-100 px-2.5 py-0.5 text-xs font-semibold text-brand-700">On</span><span v-else class="text-xs text-ink-300">—</span></td>
+                                <td class="px-3 py-3"><span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="u.active ? 'bg-tint-success text-on-success' : 'bg-ink-100 text-ink-400'">{{ u.active ? 'Active' : 'Disabled' }}</span></td>
+                                <td class="px-5 py-3 text-right"><button @click="editUser(u)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50">Edit</button></td>
+                            </tr>
+                            <tr v-if="!sortedUsers.length"><td colspan="6" class="px-5 py-10 text-center text-ink-400">No users match these filters.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 

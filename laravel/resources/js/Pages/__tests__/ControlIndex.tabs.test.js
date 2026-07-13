@@ -41,8 +41,9 @@ const props = {
         alert_overcensus_pct: 100, alert_boarding_max: 5, alert_readmit_rate_pct: 10, alert_deaths_delta_pct: 50,
         idle_timeout_minutes: 30, abs_timeout_minutes: 0, failed_login_notify_threshold: 5, dq_los_multiplier: 2,
     },
-    users: { data: [], last_page: 1, links: [] },
-    filters: {}, roles: { 0: 'Admin', 2: 'Registrar', 3: 'Consultant', 4: 'Resident', 5: 'Observer' },
+    // users is now a flat array (all users shipped for the instant client-side filter; no pagination)
+    users: [],
+    roles: { 0: 'Admin', 2: 'Registrar', 3: 'Consultant', 4: 'Resident', 5: 'Observer' },
     counts: { users: 1, active_users: 1, patients: 1, admissions: 1, consultations: 1, icd10: 1, specialties: 1 },
     specialties: [], reasons: [], settingHistory: [], reportRecipients: [],
 };

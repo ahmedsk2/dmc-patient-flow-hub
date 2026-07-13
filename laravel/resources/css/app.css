@@ -461,6 +461,22 @@
             outline: none;
         }
     }
+
+    /* Clickability affordance. Tailwind v4's Preflight sets `cursor: default` on <button> to match
+     * native OS chrome — which left every button / role="button" / <summary> / <select> in the app
+     * reading as un-clickable on hover (the #1 "this doesn't feel like a button" signal). Restore the
+     * pointer on genuine interactive controls; a DISABLED control keeps the default arrow, the correct
+     * "you can't act here" signal. Base layer, so an explicit `cursor-*` utility still wins where wanted. */
+    button:not(:disabled),
+    [role='button']:not([aria-disabled='true']),
+    summary,
+    select:not(:disabled),
+    input[type='checkbox']:not(:disabled),
+    input[type='radio']:not(:disabled),
+    label:has(> input[type='checkbox']:not(:disabled)),
+    label:has(> input[type='radio']:not(:disabled)) {
+        cursor: pointer;
+    }
 }
 
 /* The semantic surface utilities — `bg-card`, `bg-app`, `border-line`, `ring-line`, `divide-line`

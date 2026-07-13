@@ -23,12 +23,12 @@ class ControlController extends Controller
 {
     public function index(Request $request): Response
     {
+        // Ship ALL users (~323 rows — a small payload) so the Users tab filters + searches INSTANTLY
+        // client-side: no server round-trip per keystroke, no pages to click past. See Control/Index.vue.
         $users = User::query()
-            ->when($request->query('q'), fn ($q, $s) => $q->where(fn ($w) =>
-                $w->where('full_name', 'like', "%{$s}%")->orWhere('username', 'like', "%{$s}%")->orWhere('email', 'like', "%{$s}%")))
             ->orderBy('role')->orderBy('full_name')
-            ->paginate(20)->withQueryString()
-            ->through(fn (User $u) => [
+            ->get()
+            ->map(fn (User $u) => [
                 'id' => $u->id, 'name' => $u->full_name ?: $u->name, 'full_name' => $u->full_name, 'username' => $u->username, 'email' => $u->email,
                 'role' => (int) $u->role, 'role_label' => $u->roleLabel(), 'active' => (bool) $u->active,
                 'on_service' => (bool) $u->on_service, 'specialty_id' => $u->specialty_id, 'mfa' => (bool) $u->mfa_enrolled_at,
@@ -42,7 +42,6 @@ class ControlController extends Controller
             // the control as a no-op rather than implying it still switches enrollment off.
             'mfaMandatory' => true,
             'users' => $users,
-            'filters' => ['q' => $request->query('q', '')],
             'roles' => User::ROLE_LABELS,
             'specialties' => Specialty::orderBy('name')->get(['id', 'name', 'is_external']),
             'reasons' => ConsultationReason::orderBy('name')->get(['id', 'name']),
