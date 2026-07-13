@@ -445,7 +445,6 @@ const SNAPSHOT = [
     ".max-w-3xl",
     ".max-w-4xl",
     ".max-w-56",
-    ".max-w-\\[1000px\\]",
     ".max-w-\\[55\\%\\]",
     ".max-w-\\[820px\\]",
     ".max-w-full",

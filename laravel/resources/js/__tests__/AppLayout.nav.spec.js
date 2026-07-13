@@ -134,6 +134,20 @@ describe('AppLayout — role/capability-aware nav (Item 4)', () => {
         expect(labels(mountLayout())).toContain('New Admissions');
     });
 
+    it('shows New Admissions for an admin even when can.add is false (is_admin bypass)', () => {
+        // an admin can add server-side regardless of the raw flag, so the link must not be hidden on it
+        setPage(baseUser({ role: 0, is_admin: true, can: { add: false } }));
+        expect(labels(mountLayout())).toContain('New Admissions');
+    });
+
+    it('shows the Active List census link for every role incl. Observer', () => {
+        for (const role of [0, 2, 3, 4, 5]) {
+            setPage(baseUser({ role, is_admin: role === 0, can: { add: role !== 5 } }));
+            const links = mountLayout().findAllComponents(NavLink);
+            expect(links.filter((n) => n.props('href') === '/active-list'), `role ${role} should see Active List`).toHaveLength(1);
+        }
+    });
+
     it('Observer (role 5) sees neither New Admissions nor Consultations', () => {
         setPage(baseUser({ role: 5, is_admin: false, can: { add: false } }));
         const l = labels(mountLayout());

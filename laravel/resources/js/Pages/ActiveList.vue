@@ -1,4 +1,5 @@
 <script setup>
+import { ref, computed } from 'vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PatientFlags from '@/Components/PatientFlags.vue';
 import { locTone } from '@/lib/ui.js';
@@ -8,10 +9,17 @@ import { locTone } from '@/lib/ui.js';
 // buttons, headed by the legacy "Patient Count per Consultant" table incl. the OFF-service section.
 const props = defineProps({ groups: Array, readmitWindow: Number, generatedAt: String });
 
-const totals = props.groups.reduce((t, g) => t + g.counts.total, 0);
-const wardTotal = props.groups.reduce((t, g) => t + g.counts.ward, 0);
+// Print filter (screen-only): 'all' prints every consultant + the per-consultant count summary; a
+// specific consultant id prints ONLY that consultant's section and drops the summary (a one-row count
+// table is noise). All groups are already on the page, so this is a pure client-side filter.
+const selected = ref('all');
+const visibleGroups = computed(() => selected.value === 'all' ? props.groups : props.groups.filter((g) => g.id === selected.value));
+const selectedName = computed(() => visibleGroups.value[0]?.name ?? '');
+// Totals track the current selection so a single-consultant printout isn't headed by the whole-ward count.
+const totals = computed(() => visibleGroups.value.reduce((t, g) => t + g.counts.total, 0));
+const wardTotal = computed(() => visibleGroups.value.reduce((t, g) => t + g.counts.ward, 0));
 
-// counts-table sections: on-service hospitalists → on-service subspecialists → OFF-service
+// counts-table sections: on-service hospitalists → on-service subspecialists → OFF-service (all groups)
 const bucket = (g) => g.on_service && g.specialty_id === 1 ? 'hosp' : g.on_service ? 'subs' : 'off';
 const sections = [
     { key: 'hosp', label: 'On-service · Hospitalists', rows: props.groups.filter((g) => bucket(g) === 'hosp') },
@@ -30,15 +38,23 @@ const print = () => window.print();
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.4 42.4 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.32 0H6.34m11.32 0 .55-6.171M6.34 18l-.55-6.171m0 0a42.4 42.4 0 0 1 12.42 0M5.79 11.829V6.75A2.25 2.25 0 0 1 8.04 4.5h7.92a2.25 2.25 0 0 1 2.25 2.25v5.079" /></svg>
                 Print
             </button>
+            <!-- print scope: whole ward or one consultant -->
+            <label class="inline-flex items-center gap-2 text-sm font-semibold text-ink-600">
+                Consultant
+                <select v-model="selected" aria-label="Choose which consultant to print" class="rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm font-normal text-ink-700 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
+                    <option value="all">All consultants</option>
+                    <option v-for="g in groups" :key="g.id" :value="g.id">Dr. {{ g.name }} ({{ g.counts.total }})</option>
+                </select>
+            </label>
             <span class="text-sm text-ink-400">Read-only census board — formatted for printing.</span>
         </div>
 
-        <!-- printable document -->
-        <div class="report mx-auto max-w-[1000px] rounded-2xl bg-card p-8 shadow-card ring-1 ring-line print:rounded-none print:shadow-none print:ring-0">
+        <!-- printable document — full page width so columns expand to fit their text (up to 100%) -->
+        <div class="report mx-auto max-w-full rounded-2xl bg-card p-8 shadow-card ring-1 ring-line print:rounded-none print:shadow-none print:ring-0">
             <header class="mb-5 flex items-start justify-between border-b-2 border-brand-600 pb-3">
                 <div>
                     <h1 class="text-2xl font-extrabold text-navy-900">DMC <span class="text-brand-600">Internal Medicine</span></h1>
-                    <p class="text-sm text-ink-500">Active Patient Census Board</p>
+                    <p class="text-sm text-ink-500">Active Patient Census Board<span v-if="selected !== 'all'"> — Dr. {{ selectedName }}</span></p>
                 </div>
                 <div class="text-right text-xs text-ink-400">
                     <p>Eastern Health Cluster</p><p class="text-brand-600">تجمع الشرقية الصحي</p>
@@ -46,8 +62,9 @@ const print = () => window.print();
                 </div>
             </header>
 
-            <!-- legacy "Patient Count per Consultant" summary (active-list.php), incl. OFF-service -->
-            <section v-if="groups.length" class="group-block mb-6">
+            <!-- legacy "Patient Count per Consultant" summary (active-list.php), incl. OFF-service.
+                 Only meaningful when printing every consultant — hidden when one is selected. -->
+            <section v-if="groups.length && selected === 'all'" class="group-block mb-6">
                 <h2 class="mb-1.5 border-b border-line pb-1 text-sm font-bold uppercase tracking-wide text-navy-800">Patient count per consultant</h2>
                 <table class="w-full border-collapse text-xs">
                     <thead>
@@ -74,7 +91,7 @@ const print = () => window.print();
                 </table>
             </section>
 
-            <section v-for="g in groups" :key="g.id" class="group-block mb-5">
+            <section v-for="g in visibleGroups" :key="g.id" class="group-block mb-5">
                 <div class="mb-1.5 flex items-baseline justify-between border-b border-line pb-1">
                     <h2 class="text-sm font-bold uppercase tracking-wide text-navy-800">Dr. {{ g.name }}</h2>
                     <span class="nums text-xs text-ink-400">{{ g.counts.total }} patient(s) · Ward {{ g.counts.ward }} · ICU {{ g.counts.icu }}<template v-if="g.counts.tb"> · TB {{ g.counts.tb }}</template></span>
