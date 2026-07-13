@@ -10,7 +10,7 @@ import { guardSubmit } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
 
-const props = defineProps({ settings: Object, users: { type: Array, default: () => [] }, roles: Object, counts: Object, specialties: Array, reasons: Array, settingHistory: Array, reportRecipients: { type: Array, default: () => [] } });
+const props = defineProps({ settings: Object, users: { type: Array, default: () => [] }, roles: Object, counts: Object, specialties: Array, reasons: Array, settingHistory: Array, reportRecipients: { type: Array, default: () => [] }, system: { type: Object, default: () => ({}) }, timezones: { type: Array, default: () => [] } });
 
 const fieldLabels = {
     min_hospitalist: 'Min hospitalist census', max_hospitalist: 'Max hospitalist census',
@@ -32,6 +32,7 @@ const controlTabs = computed(() => [
     { id: 'overview', label: 'Overview' },
     { id: 'settings', label: 'Settings', badge: !!sForm.isDirty },
     { id: 'users', label: 'Users' },
+    { id: 'system', label: 'System' },
     { id: 'reference', label: 'Reference' },
 ]);
 
@@ -123,6 +124,18 @@ const submitReason = guardSubmit(reasonForm, () => reasonForm.post('/control/rea
 const recipientForm = useForm({ email: '' });
 const submitRecipient = guardSubmit(recipientForm, () => recipientForm.post('/control/report-recipients', { preserveScroll: true, onSuccess: () => recipientForm.reset() }));
 const removeRecipient = async (r) => { if (await ask('Remove recipient', `Stop sending the monthly report to ${r.email}?`, 'neutral')) router.delete(`/control/report-recipients/${r.id}`, { preserveScroll: true }); };
+
+// System (runtime config). Password is write-only: '' means "keep the current one".
+const sysForm = useForm({
+    mail_mailer: props.system.mail_mailer ?? 'log',
+    mail_host: props.system.mail_host ?? '', mail_port: props.system.mail_port ?? '',
+    mail_encryption: props.system.mail_encryption ?? 'tls', mail_username: props.system.mail_username ?? '',
+    mail_password: '',
+    mail_from_address: props.system.mail_from_address ?? '', mail_from_name: props.system.mail_from_name ?? '',
+    app_timezone: props.system.app_timezone ?? '', app_name: props.system.app_name ?? '', app_url: props.system.app_url ?? '',
+});
+const saveSystem = guardSubmit(sysForm, () => sysForm.put('/control/system', { preserveScroll: true }));
+const sendTestEmail = () => router.post('/control/system/test-email', {}, { preserveScroll: true });
 
 const countCards = [
     ['Users', 'users'], ['Active users', 'active_users'], ['Patients', 'patients'],
@@ -280,6 +293,51 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
                         </tbody>
                     </table>
                 </div>
+            </div>
+        </div>
+
+        <!-- System (runtime config) -->
+        <div v-show="active === 'system'" class="grid gap-5 lg:grid-cols-2">
+            <!-- Email -->
+            <form @submit.prevent="saveSystem" class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line lg:col-span-2">
+                <h3 class="mb-1 font-bold text-ink-800">Email</h3>
+                <p class="mb-4 text-sm text-ink-400">SMTP delivery. Set <strong>Log</strong> to capture mail without sending. Blank the password to keep the current one.</p>
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Mailer</span>
+                        <select v-model="sysForm.mail_mailer" aria-label="Mailer" :class="field"><option value="smtp">SMTP (send)</option><option value="log">Log (don't send)</option></select></label>
+                    <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Host</span><input v-model="sysForm.mail_host" aria-label="SMTP host" :class="field" placeholder="smtp.example.com" /></label>
+                    <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Port</span><input v-model="sysForm.mail_port" type="number" min="1" max="65535" aria-label="SMTP port" :class="field" placeholder="587" /></label>
+                    <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Encryption</span>
+                        <select v-model="sysForm.mail_encryption" aria-label="SMTP encryption" :class="field"><option value="tls">TLS</option><option value="ssl">SSL</option><option value="none">None</option></select></label>
+                    <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Username</span><input v-model="sysForm.mail_username" aria-label="SMTP username" :class="field" /></label>
+                    <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Password <span v-if="system.mail_password_set" class="ml-1 rounded-full bg-tint-success px-1.5 py-0.5 text-[10px] font-semibold text-on-success">Set</span></span>
+                        <input v-model="sysForm.mail_password" type="password" autocomplete="new-password" aria-label="SMTP password" :class="field" :placeholder="system.mail_password_set ? 'Leave blank to keep current' : 'Not set'" /></label>
+                    <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">From address</span><input v-model="sysForm.mail_from_address" type="email" aria-label="From address" :class="field" placeholder="noreply@dmc-im.com" /></label>
+                    <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">From name</span><input v-model="sysForm.mail_from_name" aria-label="From name" :class="field" placeholder="DMC Internal Medicine" /></label>
+                </div>
+                <p v-if="sysForm.errors.mail_host || sysForm.errors.mail_from_address" class="mt-2 text-xs text-on-danger">{{ sysForm.errors.mail_host || sysForm.errors.mail_from_address }}</p>
+                <div class="mt-4 flex items-center gap-2">
+                    <button type="submit" :disabled="sysForm.processing" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Save system config</button>
+                    <button type="button" @click="sendTestEmail" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-600 ring-1 ring-line transition hover:bg-ink-50">Send test email</button>
+                </div>
+            </form>
+
+            <!-- Localization -->
+            <div class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
+                <h3 class="mb-1 font-bold text-ink-800">Localization</h3>
+                <p class="mb-4 text-sm text-ink-400">The application timezone (dates + times across the app).</p>
+                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Timezone</span>
+                    <select v-model="sysForm.app_timezone" aria-label="Timezone" :class="field"><option value="">Use server default (.env)</option><option v-for="tz in timezones" :key="tz" :value="tz">{{ tz }}</option></select></label>
+                <p v-if="sysForm.errors.app_timezone" class="mt-1 text-xs text-on-danger">{{ sysForm.errors.app_timezone }}</p>
+            </div>
+
+            <!-- Application -->
+            <div class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
+                <h3 class="mb-1 font-bold text-ink-800">Application</h3>
+                <p class="mb-4 text-sm text-ink-400">Display name + the URL used in emails.</p>
+                <label class="mb-3 block"><span class="mb-1 block text-sm font-semibold text-ink-700">Display name</span><input v-model="sysForm.app_name" aria-label="Display name" :class="field" placeholder="DMC Internal Medicine" /></label>
+                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">App URL</span><input v-model="sysForm.app_url" aria-label="App URL" :class="field" placeholder="https://dmc-im.com" /></label>
+                <p v-if="sysForm.errors.app_url" class="mt-1 text-xs text-on-danger">{{ sysForm.errors.app_url }}</p>
             </div>
         </div>
 

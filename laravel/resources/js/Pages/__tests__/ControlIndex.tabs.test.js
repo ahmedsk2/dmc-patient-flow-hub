@@ -56,7 +56,7 @@ describe('Control/Index — Tabs retrofit', () => {
     it('renders an accessible tablist with the four tabs, Overview active by default', () => {
         const w = mountPage();
         const tabs = w.findAll('[role="tab"]');
-        expect(tabs.map((t) => t.text().replace(/\(unsaved changes\)$/, '').trim())).toEqual(['Overview', 'Settings', 'Users', 'Reference']);
+        expect(tabs.map((t) => t.text().replace(/\(unsaved changes\)$/, '').trim())).toEqual(['Overview', 'Settings', 'Users', 'System', 'Reference']);
         expect(tabs[0].attributes('aria-selected')).toBe('true');
     });
 
