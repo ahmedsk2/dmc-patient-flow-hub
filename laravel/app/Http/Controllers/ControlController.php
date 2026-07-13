@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -137,7 +138,7 @@ class ControlController extends Controller
      */
     public function updateSystem(Request $request): RedirectResponse
     {
-        $data = $request->validate([
+        $rules = [
             'mail_mailer' => ['nullable', 'in:smtp,log'],
             'mail_host' => ['nullable', 'required_if:mail_mailer,smtp', 'string', 'max:255'],
             'mail_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
@@ -149,20 +150,44 @@ class ControlController extends Controller
             'app_timezone' => ['nullable', Rule::in(timezone_identifiers_list())],
             'app_name' => ['nullable', 'string', 'max:120'],
             'app_url' => ['nullable', 'url', 'max:255'],
-        ]);
+        ];
 
+        // Validate manually so a validation FAILURE never flashes the plaintext SMTP password into the
+        // (unencrypted, file-driver) session's old-input bag — Laravel's default $dontFlash omits it.
+        $validator = Validator::make($request->all(), $rules);
+        if ($validator->fails()) {
+            return back()->withErrors($validator)->withInput($request->except('mail_password'));
+        }
+        $data = $validator->validated();
+
+        // write-only password: a blank/absent submit KEEPS the current value.
         if (! filled($data['mail_password'] ?? null)) {
             unset($data['mail_password']);
         }
 
         $settings = Setting::current();
 
+        // append-only history, mirroring updateSettings — the password value is REDACTED.
+        $passwordChanged = false;
         foreach ($data as $field => $new) {
-            $old = $settings->{$field};
+            if ($field === 'mail_password') {
+                // decrypting the current value can throw if the ciphertext is undecryptable (APP_KEY
+                // mismatch / cross-env DB copy) — guard it so submitting a NEW password can't 500.
+                try {
+                    $old = $settings->mail_password;
+                } catch (\Throwable) {
+                    $old = null;
+                }
+            } else {
+                $old = $settings->{$field};
+            }
             if ((string) $old === (string) $new) {
                 continue;
             }
             $redact = $field === 'mail_password';
+            if ($redact) {
+                $passwordChanged = true;
+            }
             DB::table('setting_changes')->insert([
                 'field' => $field,
                 'old_value' => $redact ? '••••' : ($old === null ? null : (string) $old),
@@ -174,11 +199,13 @@ class ControlController extends Controller
 
         $settings->update($data);
 
+        // audit detail: changed non-secret fields (+ a redacted 'changed' marker only when the password
+        // actually changed) + whether this was step-up verified (convention: destroyUser).
         $detail = collect($data)->except('mail_password')->all();
-        if (array_key_exists('mail_password', $data)) {
+        if ($passwordChanged) {
             $detail['mail_password'] = 'changed';
         }
-        Audit::log('settings.system.update', 'settings', '1', $detail);
+        Audit::log('settings.system.update', 'settings', '1', $detail + $this->stepUpDetail());
 
         return back()->with('flash', ['type' => 'success', 'message' => 'System configuration saved.']);
     }

@@ -91,4 +91,12 @@ class ControlSystemTest extends TestCase
         $resp->assertRedirect();
         $resp->assertSessionHas('flash', fn ($f) => ($f['type'] ?? null) === 'success');
     }
+
+    public function test_a_validation_error_never_flashes_the_plaintext_password(): void
+    {
+        $this->actingAs($this->admin())->withSession($this->stepup())
+            ->put('/control/system', ['app_url' => 'not-a-url', 'mail_password' => 'leaky-pw'])
+            ->assertSessionHasErrors('app_url');
+        $this->assertArrayNotHasKey('mail_password', (array) session('_old_input'));
+    }
 }
