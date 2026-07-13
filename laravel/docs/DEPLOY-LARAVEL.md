@@ -44,6 +44,12 @@ Set in `.env` (never commit it):
 | `LOG_CHANNEL` / `LOG_LEVEL` | `daily` / `warning` (rotated; stock `single` grows unbounded) |
 | `SENTRY_DSN` | optional but recommended: `composer require sentry/sentry-laravel` on the server, set the DSN, and unhandled exceptions get alerted instead of dying silently in a log file (the SDK is inert while the DSN is empty) |
 
+### Runtime configuration (Control Panel → System)
+Timezone and mail (`MAIL_*`) can now be set in-app (Control Panel → **System**) and take effect on
+the next request — no `.env` edit or `config:cache` needed once a value is set. `.env` remains the
+fallback for any field left blank. The SMTP password is stored encrypted (AES-256 via `APP_KEY`).
+Bootstrap config still lives ONLY in `.env`: `APP_KEY`, the DB credentials, `APP_ENV`/`APP_DEBUG`.
+
 ## 3. Database
 
 Pick **one**:
