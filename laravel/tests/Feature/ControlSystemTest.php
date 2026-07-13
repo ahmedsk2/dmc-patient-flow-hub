@@ -37,7 +37,9 @@ class ControlSystemTest extends TestCase
             ->where('system.mail_host', 'smtp.example.com')
             ->where('system.mail_password_set', true)
             ->where('system.app_timezone', 'Asia/Riyadh')
-            ->missing('system.mail_password'));
+            ->missing('system.mail_password')
+            // and the sibling `settings` prop (the raw model) must NOT re-leak the decrypted secret
+            ->missing('settings.mail_password'));
     }
 
     public function test_update_saves_config_and_a_blank_password_keeps_the_current_one(): void

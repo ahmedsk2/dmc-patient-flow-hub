@@ -10,6 +10,12 @@ class Setting extends Model
 
     protected $casts = ['log_record_opens' => 'boolean', 'mail_password' => 'encrypted'];
 
+    // The SMTP secret. Eloquent's toArray()/toJson DECRYPTS `encrypted` casts, so without $hidden the
+    // plaintext would serialize into any Inertia prop that ships the raw model (e.g. Control's `settings`
+    // prop) and reach the browser. $hidden excludes it from SERIALIZATION only — direct property access
+    // (the RuntimeConfig provider, the write-only Control reads) is unaffected.
+    protected $hidden = ['mail_password'];
+
     /**
      * The single settings row (created with defaults on first access).
      *
