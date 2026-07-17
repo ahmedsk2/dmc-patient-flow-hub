@@ -38,7 +38,7 @@ On each save (`POST /admissions/{admission}/handover` → `HandoverController::s
 2. A **new immutable `handover_revisions` row is appended**, snapshotting the `body`, the
    `checkpoints`, the `author_id` (= session user), and `created_at`. Revisions are never
    updated or deleted — they are the changelog.
-3. An `audit_logs` entry `handover.update` is written (actor = session user, target = the
+3. An `audit_log` entry `handover.update` is written (actor = session user, target = the
    admission, detail = the new revision id).
 4. Any open incomplete-handover reminders for this admission are **resolved** (see §4).
 
@@ -67,7 +67,7 @@ The incoming consultant (or an admin) acknowledges the handover from their inbox
 - stamps `signed_at` and `signed_by` on the `handover_signatures` row, and
 - **re-binds the signature to the CURRENT latest revision** — i.e. the record captures the exact
   version of the note the signer actually read, not an older one.
-- writes an `audit_logs` `handover.sign` entry.
+- writes an `audit_log` `handover.sign` entry.
 
 A signature can be superseded/`voided_at` if the situation changes (e.g. a re-transfer); voided
 requests are retained, not deleted.
@@ -75,7 +75,7 @@ requests are retained, not deleted.
 ### 2.4 Reading (break-glass)
 Handover notes are readable by all clinical roles by design (cross-cover). When an admin turns on
 **record-open logging** (`settings.log_record_opens`), every open of a handover writes an
-`audit_logs` `handover.read` entry (actor + patient MRN) — a break-glass trail for sensitive
+`audit_log` `handover.read` entry (actor + patient MRN) — a break-glass trail for sensitive
 episodes.
 
 ---
@@ -126,11 +126,11 @@ was written).
 |---|---|---|---|
 | `handover_revisions` | Every edit of the note: who, when, full text, checkpoint snapshot | `admission_id`, `body`, `checkpoints`, `author_id`, `created_at` | **Append-only** — never updated or deleted |
 | `handover_signatures` | Which consultant acknowledged which exact revision, and when; who was the outgoing consultant | `admission_id`, `from_consultant_id`, `to_consultant_id`, `revision_id`, `required_at`, `signed_at`, `signed_by`, `voided_at` | Stamped on sign/void; rows retained |
-| `audit_logs` | The action trail | events: `handover.update`, `handover.sign`, `handover.read` (break-glass), `handover.reassign_incomplete` + the reassign move itself; columns `actor_id`, `actor_name`, `action`, `entity_type`, `entity_id`, `details` (JSON), `ip`, `created_at` | **Append-only + tamper-evident** (each row is chained by a `row_hash`; run `php artisan audit:verify` to detect any edited/removed row) |
+| `audit_log` | The action trail | events: `handover.update`, `handover.sign`, `handover.read` (break-glass), `handover.reassign_incomplete` + the reassign move itself; columns `actor_id`, `actor_name`, `action`, `entity_type`, `entity_id`, `details` (JSON), `ip`, `created_at` | **Append-only + tamper-evident** (each row is chained by a `row_hash`; run `php artisan audit:verify` to detect any edited/removed row) |
 | `notifications` | The reminder trail: raised → resolved, with recipients + timestamps | `user_id`, `type='handover.incomplete'`, `payload`, `created_at`, `resolved_at` | `resolved_at` stamped on completion |
 | `handovers` | The current state only (latest body + checkpoints) | `admission_id`, `body`, `checkpoints`, `updated_by`, `updated_at` | Overwritten each save — history lives in `handover_revisions` |
 
-**Immutability note.** `handover_revisions` and `audit_logs` are append-only: the app never edits
+**Immutability note.** `handover_revisions` and `audit_log` are append-only: the app never edits
 a past revision or an audit row in place. To reconstruct history, read the revisions in order —
 the current `handovers` row is only ever the newest snapshot.
 
@@ -170,13 +170,13 @@ ORDER BY n.created_at;
 -- resolved_at IS NULL  → still outstanding
 -- resolved_at NOT NULL → completed at that timestamp
 ```
-The same soft-gate events are also in `audit_logs` under `handover.reassign_incomplete` (with the
+The same soft-gate events are also in `audit_log` under `handover.reassign_incomplete` (with the
 admission ids and the reminded recipients), and the underlying move is in the reassign audit entry.
 
 > **"Who opened this patient's handover (break-glass)?"**
 ```sql
 SELECT created_at, actor_id, actor_name, details
-FROM audit_logs
+FROM audit_log
 WHERE action = 'handover.read' AND entity_type = 'admission' AND entity_id = :admission_id
 ORDER BY created_at;
 -- only populated for periods when settings.log_record_opens was ON
@@ -189,7 +189,7 @@ ORDER BY created_at;
 - Author / editor / signer / reminder-recipient identity is taken from the **server session**,
   not the request body. A user cannot attribute an action to someone else.
 - Revisions and audit logs are **append-only**; there is no edit-in-place path in the app. The
-  `audit_logs` trail is additionally **tamper-evident** — rows are linked by a `row_hash` chain, so
+  `audit_log` trail is additionally **tamper-evident** — rows are linked by a `row_hash` chain, so
   a deleted or altered row is detectable with `php artisan audit:verify`.
 - Checkpoints are snapshotted **per revision**, so code-status / risk flags are auditable at every
   historical version, not just the current one.
