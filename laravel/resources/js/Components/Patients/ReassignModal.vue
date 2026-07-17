@@ -14,10 +14,12 @@ import { consultantOptions, guardSubmit } from '@/lib/ui.js';
  * handover editors + save-all-stale + "Uncheck all stale", the "X of Y still need today's note"
  * counter, and the preflightReady gate.
  *
- * THE GATE (clinical safety, preserved exactly): Confirm stays LOCKED (`preflightReady === false`)
- * until every SELECTED patient's handover is current today AND at least one patient is selected.
- * Stale rows are cleared either by writing today's note (saveAllStale) or by dropping them from the
- * move set (uncheckAllStale). The submit is a SUBSET move — only the checked patients travel.
+ * THE GATE (soft, HO-T5): Confirm unlocks (`preflightReady === true`) once preflight has loaded and
+ * at least one patient is selected — a stale handover no longer blocks the move. Selecting a stale
+ * row shows a warning instead: the move proceeds, and persistent reminders go to the mover + outgoing
+ * consultant until each incomplete handover is written. Stale rows can still be resolved in-modal
+ * (saveAllStale) or dropped from the move set (uncheckAllStale) before confirming. The submit is a
+ * SUBSET move — only the checked patients travel.
  *
  * Open/close + a11y from BaseModal; group-header opens it pre-filled (from=this consultant), the
  * toolbar opens it blank — both via openModal(fromId?). On success emits `saved` (Index reloads).
@@ -48,8 +50,8 @@ const onServiceConsultants = computed(() => consultantOptions(props.consultants,
 const openModal = (fromId = '') => { rForm.from_consultant_id = fromId; rForm.to_consultant_id = ''; };
 
 // preflight: lists the consultant's patients with per-patient CHECKBOXES (all checked by default —
-// uncheck to leave someone behind). Only SELECTED stale handovers need today's text; Confirm unlocks
-// once every selected handover is current and ≥1 is selected.
+// uncheck to leave someone behind). A stale SELECTED handover no longer blocks Confirm (soft gate,
+// HO-T5) — it just surfaces a warning; Confirm unlocks once preflight has loaded and ≥1 is selected.
 const preflight = ref(null);   // null | { loading, rows: [{id,name,mrn,handover_today,body}] }
 const preflightBodies = ref({});
 const selectedIds = ref(new Set());
@@ -64,15 +66,15 @@ const loadPreflight = async (id) => {
     nextTick(() => document.querySelector('[data-stale-textarea]')?.focus());
 };
 // Wave 2, Item 9: exclude all stale rows from the move set — the user accepts those patients won't
-// be reassigned in this batch (valid when partial reassignment is intended). With no stale rows left
-// among the selected, preflightReady unlocks and the move proceeds on the non-stale subset.
+// be reassigned in this batch (valid when partial reassignment is intended). preflightReady no longer
+// depends on this (soft gate) but it's still the easy way to move only the already-current patients.
 const uncheckAllStale = () => {
     const staleIds = new Set(staleRows.value.map((r) => r.id));
     selectedIds.value = new Set([...selectedIds.value].filter((id) => !staleIds.has(id)));
 };
 watch(() => rForm.from_consultant_id, (id) => { preflight.value = null; selectedIds.value = new Set(); if (id) loadPreflight(id); });
 const staleRows = computed(() => (preflight.value?.rows || []).filter((r) => !r.handover_today && selectedIds.value.has(r.id)));
-const preflightReady = computed(() => !!preflight.value && !preflight.value.loading && selectedIds.value.size > 0 && staleRows.value.length === 0);
+const preflightReady = computed(() => !!preflight.value && !preflight.value.loading && selectedIds.value.size > 0);
 const allStaleFilled = computed(() => staleRows.value.every((r) => (preflightBodies.value[r.id] || '').trim().length > 0));
 const savingAll = ref(false);
 const saveAllStale = async () => {
@@ -92,7 +94,7 @@ const { guardedClose } = useUnsavedGuard(modalDirty, ask);
 const doClose = () => emit('close');
 const close = () => guardedClose(doClose);
 const submitReassign = guardSubmit(rForm, () => {
-    if (!preflightReady.value) return;   // mirror the disabled-button gate (e.g. a keyboard Enter): never move while a selected patient's handover is still stale
+    if (!preflightReady.value) return;   // mirror the disabled-button gate (e.g. a keyboard Enter): still require preflight loaded + ≥1 selected — a stale handover no longer blocks (soft gate)
     rForm.admission_ids = [...selectedIds.value];   // SUBSET move: only the checked patients travel
     rForm.post('/admissions/reassign', { preserveScroll: true, onSuccess: () => { emit('saved'); rForm.reset(); selectedIds.value = new Set(); } });
 });
@@ -129,8 +131,8 @@ defineExpose({
                         </li>
                     </ul>
                     <template v-if="staleRows.length">
-                        <!-- Item 9: at-a-glance counter so the user sees how many still block the move -->
-                        <p class="mt-3 text-sm font-semibold text-on-warning">{{ staleRows.length }} of {{ preflight.rows.length }} patient(s) still need today's handover note.</p>
+                        <!-- HO-T5: soft gate — the move is allowed; this warns rather than blocks -->
+                        <p class="mt-3 rounded-lg bg-tint-warning px-2.5 py-1.5 text-sm font-semibold text-on-warning">{{ staleRows.length }} of {{ selectedIds.size }} selected patient(s) will move with an incomplete handover — a reminder will be sent to you and the outgoing consultant until each is completed. You can write the note(s) below now, or proceed.</p>
                         <div v-for="(r, i) in staleRows" :key="'h' + r.id" class="mt-2">
                             <p class="text-xs font-semibold text-ink-700"><IdentityChip :name="r.name" :mrn="String(r.mrn ?? '')" /></p>
                             <textarea v-model="preflightBodies[r.id]" :data-stale-textarea="i === 0 ? '' : undefined" rows="2" maxlength="5000" :aria-label="`Handover for ${r.name}`" placeholder="Write today's handover…" class="mt-1 w-full rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>

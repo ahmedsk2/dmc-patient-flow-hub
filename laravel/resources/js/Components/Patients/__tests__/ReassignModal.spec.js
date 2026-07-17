@@ -79,12 +79,23 @@ describe('ReassignModal — preflight load + selectedIds', () => {
         await w.vm.$nextTick();
         expect(preflight).toHaveBeenCalledWith(7);
     });
-    it('preflightReady is LOCKED while a selected handover is stale', async () => {
+    it('preflightReady is TRUE even while a selected handover is stale (soft gate, HO-T5)', async () => {
         preflight.mockResolvedValue(rows);
         const w = mountWith();
         await w.vm.loadPreflight(5);
         await w.vm.$nextTick();
-        expect(w.vm.preflightReady).toBe(false);   // confirm locked
+        expect(w.vm.preflightReady).toBe(true);   // confirm no longer locked by staleness
+    });
+});
+
+describe('ReassignModal — soft handover gate (HO-T5: warn, don\'t block)', () => {
+    it('allows confirm with a stale handover and shows the incomplete-handover warning', async () => {
+        preflight.mockResolvedValue(rows);   // id 1 stale + selected, id 2 current + selected
+        const w = mountWith();
+        await w.vm.loadPreflight(5);
+        await w.vm.$nextTick();
+        expect(w.vm.preflightReady).toBe(true);
+        expect(w.text()).toContain('will move with an incomplete handover');
     });
 });
 
@@ -133,13 +144,15 @@ describe('ReassignModal — confirm submit (SUBSET move)', () => {
         expect(posts[0].form.admission_ids).toEqual([2]);   // subset move — only the checked travel
         expect(w.emitted('saved')).toBeTruthy();
     });
-    it('does NOT submit while a selected handover is stale (preflightReady guard — e.g. keyboard Enter)', async () => {
-        preflight.mockResolvedValue(rows);   // id 1 is stale + selected → preflightReady false
+    it('submits even while a selected handover is stale (soft gate, HO-T5 — warns but allows)', async () => {
+        preflight.mockResolvedValue(rows);   // id 1 is stale + selected → preflightReady is still true
         const w = mountWith();
         await w.vm.loadPreflight(5);
         await w.vm.$nextTick();
+        w.vm.rForm.to_consultant_id = 6;
         w.vm.submitReassign();
-        expect(posts.length).toBe(0);        // guard blocked the move
+        expect(posts.length).toBe(1);                                // no longer blocked by staleness
+        expect(posts[0].form.admission_ids).toEqual([1, 2]);         // nothing was unchecked — both travel
     });
 
     it('double-submit guard: submitReassign no-ops while rForm.processing is true', async () => {
