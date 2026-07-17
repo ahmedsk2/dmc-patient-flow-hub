@@ -11,7 +11,7 @@ class HandoverRevision extends Model
     const UPDATED_AT = null;
 
     protected $guarded = ['id'];
-    protected $casts = ['created_at' => 'datetime'];
+    protected $casts = ['created_at' => 'datetime', 'checkpoints' => 'array'];
 
     public function admission(): BelongsTo { return $this->belongsTo(Admission::class); }
     public function author(): BelongsTo { return $this->belongsTo(User::class, 'author_id'); }

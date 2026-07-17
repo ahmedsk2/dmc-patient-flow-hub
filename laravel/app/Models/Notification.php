@@ -10,7 +10,7 @@ class Notification extends Model
 {
     public $timestamps = false;          // created_at only (DB default useCurrent)
     protected $guarded = ['id'];
-    protected $casts = ['payload' => 'array', 'read_at' => 'datetime', 'created_at' => 'datetime'];
+    protected $casts = ['payload' => 'array', 'read_at' => 'datetime', 'resolved_at' => 'datetime', 'created_at' => 'datetime'];
 
     public function user(): BelongsTo { return $this->belongsTo(User::class); }
 }

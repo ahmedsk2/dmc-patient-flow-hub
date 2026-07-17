@@ -10,6 +10,7 @@ use Illuminate\Support\Carbon;
 class Handover extends Model
 {
     protected $guarded = ['id'];
+    protected $casts = ['checkpoints' => 'array'];
 
     public function admission(): BelongsTo { return $this->belongsTo(Admission::class); }
     public function updatedBy(): BelongsTo { return $this->belongsTo(User::class, 'updated_by'); }
