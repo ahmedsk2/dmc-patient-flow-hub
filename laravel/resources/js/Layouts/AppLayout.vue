@@ -253,6 +253,13 @@ const notifications = ref([]);
 // across read-all (server only clears these via HandoverController::save's resolve step).
 const actionable = ref([]);
 const readOverride = ref(false);   // optimistic zero after read-all, until the next shared-prop refresh
+// HO-T7 (spec §C3): the /api/notifications feed includes ALL types (incl. handover.incomplete), so an
+// actionable item would otherwise show twice — once pinned above, once in the normal list. Drop the
+// pinned ids from the feed (keyed by id) so the normal list holds only the non-actionable items.
+const feedNotifications = computed(() => {
+    const pinned = new Set(actionable.value.map((n) => n.id));
+    return notifications.value.filter((n) => !pinned.has(n.id));
+});
 const unread = computed(() => (readOverride.value ? 0 : (page.props.unreadNotifications || 0)));
 watch(() => page.props.unreadNotifications, () => (readOverride.value = false));
 
@@ -518,15 +525,17 @@ onUnmounted(() => {
                                     <p class="nums mt-0.5 text-xs text-ink-400">{{ relTime(n.created_at) }}</p>
                                 </Link>
                             </div>
-                            <ul v-if="notifications.length" class="max-h-80 divide-y divide-line overflow-auto">
-                                <li v-for="n in notifications" :key="n.id">
+                            <!-- non-actionable feed (actionable ids are pinned above, so they're filtered out here) -->
+                            <ul v-if="feedNotifications.length" class="max-h-80 divide-y divide-line overflow-auto">
+                                <li v-for="n in feedNotifications" :key="n.id">
                                     <button @click="goInbox" class="w-full px-4 py-3 text-start transition hover:bg-brand-50/40" :class="{ 'bg-brand-50/30': !n.read_at }">
                                         <p class="text-sm leading-snug text-ink-700">{{ notifText(n) }}</p>
                                         <p class="nums mt-0.5 text-xs text-ink-400">{{ relTime(n.created_at) }}</p>
                                     </button>
                                 </li>
                             </ul>
-                            <div v-else class="px-4 py-6 text-center text-sm text-ink-400">No notifications yet.</div>
+                            <!-- empty state ONLY when neither group has anything (a lone pinned group must not trigger it) -->
+                            <div v-if="!actionable.length && !feedNotifications.length" class="px-4 py-6 text-center text-sm text-ink-400">No notifications yet.</div>
                             </template>
                         </div>
                     </div>

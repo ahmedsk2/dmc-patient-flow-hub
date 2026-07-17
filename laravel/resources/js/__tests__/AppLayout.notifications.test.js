@@ -84,12 +84,15 @@ describe('AppLayout notifications', () => {
 
     // HO-T7: persistent "incomplete handover" reminders render in a pinned group above the
     // regular notifications list, and stay lit (the read-all POST doesn't clear them server-side).
-    it('renders a "Needs attention" group for actionable handover.incomplete reminders', async () => {
+    // The SAME item comes back in BOTH `actionable` and the all-types `notifications` feed — it must
+    // render ONCE (pinned), never duplicated in the normal list (spec §C3).
+    it('renders an actionable handover.incomplete reminder ONCE (pinned), not duplicated in the feed', async () => {
+        const item = { id: 1, type: 'handover.incomplete', payload: { admission_id: 42, patient_name: 'Jane Doe', mrn: '12345', from_name: 'Smith' }, read_at: null, resolved_at: null, created_at: new Date().toISOString() };
         global.fetch
             .mockResolvedValueOnce({
                 json: async () => ({
-                    notifications: [{ id: 1, type: 'handover.incomplete', payload: { admission_id: 42, patient_name: 'Jane Doe', mrn: '12345', from_name: 'Smith' }, read_at: null, resolved_at: null, created_at: new Date().toISOString() }],
-                    actionable: [{ id: 1, type: 'handover.incomplete', payload: { admission_id: 42, patient_name: 'Jane Doe', mrn: '12345', from_name: 'Smith' }, created_at: new Date().toISOString() }],
+                    notifications: [item],   // the all-types feed includes it too
+                    actionable: [item],      // …and it's pinned
                     unread: 1,
                 }),
             })
@@ -98,11 +101,18 @@ describe('AppLayout notifications', () => {
         await w.vm.toggleBell();
         await w.vm.$nextTick();
 
+        // pinned "Needs attention" group rendered for the actionable item — and it links by admission
+        // id (?highlight=42), never by MRN, so no PHI rides in the URL.
         expect(w.vm.actionable).toHaveLength(1);
-        const text = w.text();
-        expect(text).toContain('Needs attention');
-        expect(text).toContain('Jane Doe');
-        expect(text).toContain('without a completed handover');
+        expect(w.text()).toContain('Needs attention');
+        expect(w.html()).toContain('/patients?highlight=42');
+
+        // dedup (spec §C3): the same id is filtered out of the all-types feed, so the normal list
+        // does NOT render a second copy — feedNotifications is empty and the feed <ul> isn't rendered.
+        expect(w.vm.feedNotifications).toHaveLength(0);
+        expect(w.find('ul.max-h-80').exists()).toBe(false);
+        // the actionable link target appears exactly once in the DOM (pinned only, no duplicate row)
+        expect(w.html().split('/patients?highlight=42').length - 1).toBe(1);
     });
 });
 
