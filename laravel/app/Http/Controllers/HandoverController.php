@@ -64,15 +64,31 @@ class HandoverController extends Controller
         if (! (Auth::user()->canManageAdmission($admission) || $isOutgoing)) {
             throw new AccessDeniedHttpException('Only the primary consultant or a manager may update the handover.');
         }
-        $data = $request->validate(['body' => ['required', 'string', 'max:5000']]);
+        // jsonValidate(), not $request->validate(): this route isn't under api/* so Laravel's
+        // automatic exception-to-JSON rendering (bootstrap/app.php's shouldRenderJsonWhen) is
+        // OFF here — a plain validate() failure would redirect-back instead of answering JSON,
+        // which breaks the fetch()-based saveHandover()/checkpoint callers (see Controller::jsonValidate).
+        $data = $this->jsonValidate($request, [
+            'body' => ['required', 'string', 'max:5000'],
+            'checkpoints' => ['nullable', 'array'],
+            'checkpoints.vte_completed' => ['boolean'],
+            'checkpoints.ready_for_discharge' => ['boolean'],
+            'checkpoints.high_risk' => ['boolean'],
+            'checkpoints.needs_workup' => ['boolean'],
+            'checkpoints.workup_pending' => ['boolean'],
+            'checkpoints.code_status' => ['nullable', 'in:full,dnr,dni'],
+        ]);
 
-        DB::transaction(function () use ($admission, $data) {
+        DB::transaction(function () use ($admission, $data, $request) {
             $h = Handover::firstOrNew(['admission_id' => $admission->id]);
+            // checkpoints: replace with the submitted set when present, else keep the current ones
+            $cp = $request->has('checkpoints') ? $this->normalizeCheckpoints($data['checkpoints'] ?? []) : $h->checkpoints;
             $h->body = $data['body'];
+            $h->checkpoints = $cp;
             $h->updated_by = Auth::id();
             $h->updated_at = now();   // explicit — an unchanged body must still satisfy the same-day gate
             $h->save();
-            HandoverRevision::create(['admission_id' => $admission->id, 'body' => $data['body'], 'author_id' => Auth::id()]);
+            HandoverRevision::create(['admission_id' => $admission->id, 'body' => $data['body'], 'checkpoints' => $cp, 'author_id' => Auth::id()]);
         });
         Audit::log('handover.update', 'admission', (string) $admission->id, ['revision_id' => HandoverRevision::latestIdFor($admission->id)]);
 
@@ -182,6 +198,19 @@ class HandoverController extends Controller
             'revision_id' => HandoverRevision::latestIdFor($s->admission_id) ?? $s->revision_id,
         ]);
         Audit::log('handover.sign', 'admission', (string) $s->admission_id, ['signature_id' => $s->id, 'revision_id' => $s->revision_id]);
+    }
+
+    /** Coerce the six checkpoint fields to a canonical shape (booleans + a nullable code_status enum). */
+    private function normalizeCheckpoints(array $c): array
+    {
+        return [
+            'vte_completed' => (bool) ($c['vte_completed'] ?? false),
+            'ready_for_discharge' => (bool) ($c['ready_for_discharge'] ?? false),
+            'high_risk' => (bool) ($c['high_risk'] ?? false),
+            'needs_workup' => (bool) ($c['needs_workup'] ?? false),
+            'workup_pending' => (bool) ($c['workup_pending'] ?? false),
+            'code_status' => in_array($c['code_status'] ?? null, ['full', 'dnr', 'dni'], true) ? $c['code_status'] : null,
+        ];
     }
 
     /** GET /api/notifications — latest 15 for the bell dropdown + unread count. */
