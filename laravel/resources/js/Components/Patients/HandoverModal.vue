@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import BaseModal from '@/Components/BaseModal.vue';
 import { useHandover } from '@/composables/useHandover';
@@ -23,13 +23,43 @@ const emit = defineEmits(['saved', 'close']);
 
 const { fetchHandover } = useHandover();
 
-const data = ref(null);          // null | { body, today, updated_at, updated_by_name, revisions }
-const hForm = useForm({ body: '' });
+// canonical checkpoint shape — used both as the form default and as the fallback when a fetched
+// payload's checkpoints are null (no handover row yet) or partial (older revision row).
+const defaultCheckpoints = () => ({
+    vte_completed: false, ready_for_discharge: false, high_risk: false,
+    needs_workup: false, workup_pending: false, code_status: null,
+});
+const CODE_STATUS_LABEL = { full: 'Full', dnr: 'DNR', dni: 'DNI' };
+
+const data = ref(null);          // null | { body, checkpoints, today, updated_at, updated_by_name, revisions }
+const hForm = useForm({ body: '', checkpoints: defaultCheckpoints() });
 const editing = ref(false);
 const histOpen = ref(false);
 let requestId = 0;               // guards against a stale fetch resolving out of order
 
 const fmtAt = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
+
+// read-view chip row: one chip per SET flag / non-null code_status. Colour tokens are reused
+// verbatim from PatientFlags.vue (bg-tint-warning/text-on-warning, bg-tint-danger/text-on-danger)
+// and DxChips.vue (bg-brand-100/text-brand-700) — no new Tailwind utilities introduced.
+const checkpointChips = computed(() => {
+    const cp = data.value?.checkpoints;
+    if (!cp) return [];
+    const chips = [];
+    if (cp.vte_completed) chips.push({ key: 'vte', label: 'VTE', classes: 'bg-brand-100 text-brand-700' });
+    if (cp.ready_for_discharge) chips.push({ key: 'dc', label: 'D/C ready', classes: 'bg-brand-100 text-brand-700' });
+    if (cp.high_risk) chips.push({ key: 'hr', label: 'High-risk', classes: 'bg-tint-warning text-on-warning' });
+    if (cp.needs_workup) chips.push({ key: 'nw', label: 'Needs workup', classes: 'bg-brand-100 text-brand-700' });
+    if (cp.workup_pending) chips.push({ key: 'wp', label: 'Workup pending', classes: 'bg-brand-100 text-brand-700' });
+    if (cp.code_status) {
+        chips.push({
+            key: 'cs',
+            label: CODE_STATUS_LABEL[cp.code_status] || cp.code_status,
+            classes: cp.code_status === 'full' ? 'bg-brand-100 text-brand-700' : 'bg-tint-danger text-on-danger',
+        });
+    }
+    return chips;
+});
 
 // open → reset view + fetch; close → tear down. Mirrors the old imperative openHandover/closeHandover.
 watch(
@@ -41,7 +71,11 @@ watch(
         hForm.reset(); hForm.clearErrors();
         const d = await fetchHandover(props.patient.id);
         // drop a fetch that resolved after a different patient opened (or the modal closed)
-        if (my === requestId && props.open && props.patient?.id === id) { data.value = d; hForm.body = d.body || ''; }
+        if (my === requestId && props.open && props.patient?.id === id) {
+            data.value = d;
+            hForm.body = d.body || '';
+            hForm.checkpoints = { ...defaultCheckpoints(), ...(d.checkpoints || {}) };
+        }
     },
     { immediate: true },
 );
@@ -51,7 +85,7 @@ const submitHandover = () => hForm.post(`/admissions/${props.patient.id}/handove
     preserveScroll: true, preserveState: true, onSuccess: () => emit('saved'),
 });
 
-defineExpose({ data, hForm, editing, histOpen, submitHandover });
+defineExpose({ data, hForm, editing, histOpen, submitHandover, checkpointChips });
 </script>
 
 <template>
@@ -64,6 +98,21 @@ defineExpose({ data, hForm, editing, histOpen, submitHandover });
                     <span v-if="data.updated_at" class="ml-1 rounded-full px-2 py-0.5 text-[10px] font-semibold" :class="data.today ? 'bg-brand-100 text-brand-700' : 'bg-tint-warning text-on-warning'">{{ data.today ? 'Updated today' : 'Stale' }}</span>
                 </p>
                 <template v-if="editing">
+                    <div class="mb-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm text-ink-600 sm:grid-cols-3">
+                        <label class="flex items-center gap-2"><input type="checkbox" v-model="hForm.checkpoints.vte_completed" class="rounded text-brand-600" /> VTE prophylaxis</label>
+                        <label class="flex items-center gap-2"><input type="checkbox" v-model="hForm.checkpoints.ready_for_discharge" class="rounded text-brand-600" /> Ready for discharge</label>
+                        <label class="flex items-center gap-2"><input type="checkbox" v-model="hForm.checkpoints.high_risk" class="rounded text-brand-600" /> High-risk</label>
+                        <label class="flex items-center gap-2"><input type="checkbox" v-model="hForm.checkpoints.needs_workup" class="rounded text-brand-600" /> Needs more workup</label>
+                        <label class="flex items-center gap-2"><input type="checkbox" v-model="hForm.checkpoints.workup_pending" class="rounded text-brand-600" /> Workup pending</label>
+                        <label class="flex items-center gap-2">Code status
+                            <select v-model="hForm.checkpoints.code_status" aria-label="Code status" class="rounded-lg border border-ink-200 px-2 py-1 text-xs outline-none focus:border-brand-500">
+                                <option :value="null">None</option>
+                                <option value="full">Full</option>
+                                <option value="dnr">DNR</option>
+                                <option value="dni">DNI</option>
+                            </select>
+                        </label>
+                    </div>
                     <textarea v-model="hForm.body" rows="6" maxlength="5000" aria-label="Handover text" class="w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
                     <p v-if="hForm.errors.body" class="mt-1 text-xs text-on-danger">{{ hForm.errors.body }}</p>
                     <div class="mt-3 flex justify-end gap-2">
@@ -72,6 +121,9 @@ defineExpose({ data, hForm, editing, histOpen, submitHandover });
                     </div>
                 </template>
                 <template v-else>
+                    <div v-if="checkpointChips.length" class="mb-2 flex flex-wrap gap-1.5">
+                        <span v-for="c in checkpointChips" :key="c.key" class="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" :class="c.classes">{{ c.label }}</span>
+                    </div>
                     <p class="whitespace-pre-wrap rounded-xl bg-app/70 px-3 py-2.5 text-sm leading-relaxed text-ink-700">{{ data.body || 'No handover text recorded.' }}</p>
                     <div class="mt-3 flex items-center justify-between">
                         <button v-if="data.revisions?.length" type="button" @click="histOpen = !histOpen" :aria-expanded="histOpen" class="text-xs font-semibold text-brand-600 hover:underline">{{ histOpen ? 'Hide history' : `History (${data.revisions.length})` }}</button>

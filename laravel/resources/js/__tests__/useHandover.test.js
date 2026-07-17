@@ -31,6 +31,25 @@ describe('useHandover', () => {
         expect(await saveHandover(1, 'x')).toBe(false);
     });
 
+    it('saveHandover posts checkpoints in the body when provided', async () => {
+        global.fetch.mockResolvedValue({ ok: true });
+        const { saveHandover } = useHandover();
+        const checkpoints = { vte_completed: true, high_risk: false, code_status: 'dnr' };
+        await saveHandover(42, 'note text', checkpoints);
+        const [, opts] = global.fetch.mock.calls[0];
+        expect(JSON.parse(opts.body)).toEqual({ body: 'note text', checkpoints });
+    });
+
+    it('saveHandover omits the checkpoints key when the arg is not provided', async () => {
+        global.fetch.mockResolvedValue({ ok: true });
+        const { saveHandover } = useHandover();
+        await saveHandover(42, 'note text');
+        const [, opts] = global.fetch.mock.calls[0];
+        const parsed = JSON.parse(opts.body);
+        expect(parsed).toEqual({ body: 'note text' });
+        expect(parsed).not.toHaveProperty('checkpoints');
+    });
+
     it('fetchHandover GETs the handover URL and returns parsed JSON', async () => {
         global.fetch.mockResolvedValue({ json: () => Promise.resolve({ body: 'hi', today: true }) });
         const { fetchHandover } = useHandover();

@@ -19,13 +19,13 @@ import { xsrf } from '@/lib/ui.js';
 export function useHandover() {
     const saving = ref(false);
 
-    async function saveHandover(admissionId, body) {
+    async function saveHandover(admissionId, body, checkpoints = undefined) {
         saving.value = true;
         try {
             const res = await fetch(`/admissions/${admissionId}/handover`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-XSRF-TOKEN': xsrf() },
-                body: JSON.stringify({ body }),
+                body: JSON.stringify(checkpoints === undefined ? { body } : { body, checkpoints }),
             });
             return res.ok;
         } finally {

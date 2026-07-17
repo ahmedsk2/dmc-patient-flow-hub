@@ -10,7 +10,9 @@ const { posts } = vi.hoisted(() => ({ posts: [] }));
 vi.mock('@inertiajs/vue3', () => ({
     useForm: (obj) => {
         const f = { ...obj, errors: {}, processing: false,
-            post: vi.fn((url, opts) => { posts.push({ url }); if (opts?.onSuccess) opts.onSuccess(); }),
+            // capture the live form snapshot at post-time (body + checkpoints) so tests can assert
+            // what would have been serialized, since this double doesn't do real HTTP submission.
+            post: vi.fn((url, opts) => { posts.push({ url, body: f.body, checkpoints: f.checkpoints }); if (opts?.onSuccess) opts.onSuccess(); }),
             reset: vi.fn(), clearErrors: vi.fn() };
         return f;
     },
@@ -62,5 +64,32 @@ describe('HandoverModal — close', () => {
         const w = mountWith({ open: true, patient });
         w.vm.$emit('close');
         expect(w.emitted('close')).toBeTruthy();
+    });
+});
+
+describe('HandoverModal — checkpoints', () => {
+    it('shows checkpoint chips for set flags in the read view', async () => {
+        fetchHandover.mockResolvedValue({
+            ...data,
+            checkpoints: { vte_completed: true, ready_for_discharge: false, high_risk: true, needs_workup: false, workup_pending: false, code_status: 'dnr' },
+        });
+        const w = mountWith();
+        await w.setProps({ open: true, patient });
+        await flushPromises();
+        expect(w.text()).toContain('VTE');
+        expect(w.text()).toContain('DNR');
+        expect(w.text()).toContain('High-risk');
+    });
+
+    it('edits checkpoints and posts them on Save', async () => {
+        const w = mountWith();
+        await w.setProps({ open: true, patient });
+        await flushPromises();
+        w.vm.editing = true;
+        w.vm.hForm.checkpoints.high_risk = true;
+        w.vm.hForm.checkpoints.code_status = 'dnr';
+        w.vm.submitHandover();
+        expect(posts[0].url).toBe('/admissions/7/handover');
+        expect(posts[0].checkpoints).toEqual(expect.objectContaining({ high_risk: true, code_status: 'dnr' }));
     });
 });

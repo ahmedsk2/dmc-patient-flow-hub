@@ -37,6 +37,7 @@ class HandoverController extends Controller
 
         return response()->json([
             'body' => $h?->body,
+            'checkpoints' => $h?->checkpoints,
             'updated_by_name' => $h?->updatedBy ? ($h->updatedBy->full_name ?: $h->updatedBy->name) : null,
             'updated_at' => $h?->updated_at?->toIso8601String(),
             'today' => $h !== null && $h->updated_at->isToday(),
@@ -44,6 +45,7 @@ class HandoverController extends Controller
                 ->with('author:id,name,full_name')->orderByDesc('id')->limit(20)->get()
                 ->map(fn ($r) => [
                     'body' => $r->body,
+                    'checkpoints' => $r->checkpoints,
                     'author' => $r->author ? ($r->author->full_name ?: $r->author->name) : null,
                     'at' => $r->created_at?->toIso8601String(),
                 ]),
