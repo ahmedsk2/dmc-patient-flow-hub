@@ -249,6 +249,9 @@ const iconPath = (key) => icons[key] || icons.doc;
 const bellOpen = ref(false);
 const bellLoading = ref(false);
 const notifications = ref([]);
+// HO-T7: still-open "handover.incomplete" reminders — pinned "Needs attention" group, persists
+// across read-all (server only clears these via HandoverController::save's resolve step).
+const actionable = ref([]);
 const readOverride = ref(false);   // optimistic zero after read-all, until the next shared-prop refresh
 const unread = computed(() => (readOverride.value ? 0 : (page.props.unreadNotifications || 0)));
 watch(() => page.props.unreadNotifications, () => (readOverride.value = false));
@@ -260,6 +263,7 @@ const toggleBell = async () => {
     try {
         const d = await (await fetch('/api/notifications', { headers: { Accept: 'application/json' } })).json();
         notifications.value = d.notifications || [];
+        actionable.value = d.actionable || [];
         if (d.unread > 0) {
             await fetch('/notifications/read-all', { method: 'POST', headers: { Accept: 'application/json', 'X-XSRF-TOKEN': xsrf() } });
         }
@@ -282,6 +286,11 @@ const notifText = (n) => {
     if (n.type === 'dq.daily_report') {
         const total = (p.over_los || 0) + (p.no_dx || 0) + (p.bad_dates || 0) + (p.orphan_dx || 0) + (p.double_open || 0);
         return `Data quality: ${total} item(s) need review (see the Data Quality page)`;
+    }
+    // HO-T7: persistent "incomplete handover" reminder — the reassign moved the patient before the
+    // handover note was refreshed today; stays lit until someone saves a note (see resolve step).
+    if (n.type === 'handover.incomplete') {
+        return `${p.patient_name || 'A patient'}${p.mrn ? ` (MRN ${p.mrn})` : ''} was reassigned from Dr. ${p.from_name || '—'} without a completed handover — complete it.`;
     }
     if (p.count) return `Dr. ${p.from_name || 'A consultant'} handed over ${p.count} patient(s) to you`;
     return `Dr. ${p.from_name || 'A consultant'} handed over ${p.patient_name || 'a patient'}${p.mrn ? ` (MRN ${p.mrn})` : ''}`;
@@ -495,7 +504,21 @@ onUnmounted(() => {
                                 <button @click="goInbox" class="text-xs font-semibold text-brand-600 hover:underline">Handover inbox →</button>
                             </div>
                             <div v-if="bellLoading" class="px-4 py-6 text-center text-sm text-ink-400">Loading…</div>
-                            <ul v-else-if="notifications.length" class="max-h-80 divide-y divide-line overflow-auto">
+                            <template v-else>
+                            <!-- HO-T7: pinned "Needs attention" group — persistent handover.incomplete
+                                 reminders that stay lit until resolved server-side (a note is saved), not
+                                 dismissed by read-all. Links by admission id (?highlight=), NOT by MRN —
+                                 the board's GET handler strips a `search` query param (SPC-TM-011,
+                                 MRN-out-of-URL) and PHI must never ride in a URL regardless. -->
+                            <div v-if="actionable.length" class="border-b border-line">
+                                <p class="px-4 pt-2.5 pb-1 text-[11px] font-bold uppercase tracking-wide text-on-warning">Needs attention</p>
+                                <Link v-for="n in actionable" :key="n.id" :href="`/patients?highlight=${n.payload?.admission_id || ''}`" @click="bellOpen = false"
+                                      class="block px-4 py-2.5 text-start transition hover:bg-tint-warning/40">
+                                    <p class="text-sm leading-snug text-ink-700">{{ notifText(n) }}</p>
+                                    <p class="nums mt-0.5 text-xs text-ink-400">{{ relTime(n.created_at) }}</p>
+                                </Link>
+                            </div>
+                            <ul v-if="notifications.length" class="max-h-80 divide-y divide-line overflow-auto">
                                 <li v-for="n in notifications" :key="n.id">
                                     <button @click="goInbox" class="w-full px-4 py-3 text-start transition hover:bg-brand-50/40" :class="{ 'bg-brand-50/30': !n.read_at }">
                                         <p class="text-sm leading-snug text-ink-700">{{ notifText(n) }}</p>
@@ -504,6 +527,7 @@ onUnmounted(() => {
                                 </li>
                             </ul>
                             <div v-else class="px-4 py-6 text-center text-sm text-ink-400">No notifications yet.</div>
+                            </template>
                         </div>
                     </div>
                     <div class="flex items-center gap-3 border-s border-line ps-3">

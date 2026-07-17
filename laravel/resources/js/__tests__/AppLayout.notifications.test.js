@@ -81,6 +81,29 @@ describe('AppLayout notifications', () => {
         await w.vm.toggleBell();      // close → no fetch
         expect(global.fetch).toHaveBeenCalledTimes(1);
     });
+
+    // HO-T7: persistent "incomplete handover" reminders render in a pinned group above the
+    // regular notifications list, and stay lit (the read-all POST doesn't clear them server-side).
+    it('renders a "Needs attention" group for actionable handover.incomplete reminders', async () => {
+        global.fetch
+            .mockResolvedValueOnce({
+                json: async () => ({
+                    notifications: [{ id: 1, type: 'handover.incomplete', payload: { admission_id: 42, patient_name: 'Jane Doe', mrn: '12345', from_name: 'Smith' }, read_at: null, resolved_at: null, created_at: new Date().toISOString() }],
+                    actionable: [{ id: 1, type: 'handover.incomplete', payload: { admission_id: 42, patient_name: 'Jane Doe', mrn: '12345', from_name: 'Smith' }, created_at: new Date().toISOString() }],
+                    unread: 1,
+                }),
+            })
+            .mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+        const w = mountLayout();
+        await w.vm.toggleBell();
+        await w.vm.$nextTick();
+
+        expect(w.vm.actionable).toHaveLength(1);
+        const text = w.text();
+        expect(text).toContain('Needs attention');
+        expect(text).toContain('Jane Doe');
+        expect(text).toContain('without a completed handover');
+    });
 });
 
 describe('AppLayout flash toast roles', () => {

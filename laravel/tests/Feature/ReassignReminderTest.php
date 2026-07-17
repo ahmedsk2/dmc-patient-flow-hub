@@ -73,4 +73,15 @@ class ReassignReminderTest extends TestCase
         ])->assertRedirect();
         $this->assertDatabaseMissing('notifications', ['type' => 'handover.incomplete']);
     }
+
+    public function test_saving_a_handover_resolves_the_incomplete_reminders(): void
+    {
+        [$admin, $from, $to, $admission] = $this->reassignFixture();
+        $this->actingAs($admin)->post('/admissions/reassign', ['from_consultant_id' => $from->id, 'to_consultant_id' => $to->id, 'admission_ids' => [$admission->id]]);
+        $this->assertSame(2, Notification::where('type', 'handover.incomplete')->whereNull('resolved_at')->count());
+
+        // the receiving consultant writes the note → both reminders resolve
+        $this->actingAs($to)->postJson("/admissions/{$admission->id}/handover", ['body' => 'done'])->assertOk();
+        $this->assertSame(0, Notification::where('type', 'handover.incomplete')->whereNull('resolved_at')->count());
+    }
 }

@@ -94,6 +94,10 @@ class HandoverController extends Controller
         });
         Audit::log('handover.update', 'admission', (string) $admission->id, ['revision_id' => HandoverRevision::latestIdFor($admission->id)]);
 
+        // Resolve any persistent "incomplete handover" reminders for this admission (all recipients).
+        Notification::where('type', 'handover.incomplete')->whereNull('resolved_at')
+            ->where('payload->admission_id', (string) $admission->id)->update(['resolved_at' => now()]);
+
         return $request->expectsJson()
             ? response()->json(['saved' => true, 'updated_at' => now()->toIso8601String()])
             : back()->with('flash', ['type' => 'success', 'message' => 'Handover saved.']);
@@ -215,20 +219,33 @@ class HandoverController extends Controller
         ];
     }
 
-    /** GET /api/notifications — latest 15 for the bell dropdown + unread count. */
+    /**
+     * GET /api/notifications — latest 15 for the bell dropdown + the still-open "actionable"
+     * (handover.incomplete) list + a resolved-aware unread count. Actionable reminders persist
+     * in both the dropdown and the badge count until resolved server-side (HandoverController::save),
+     * NOT dismissed by read-all — see readAll() below.
+     */
     public function notifications(): JsonResponse
     {
+        $me = Auth::id();
+        $actionable = fn ($q) => $q->where('type', 'handover.incomplete')->whereNull('resolved_at');
+
         return response()->json([
-            'notifications' => Notification::where('user_id', Auth::id())
-                ->orderByDesc('id')->limit(15)->get(['id', 'type', 'payload', 'read_at', 'created_at']),
-            'unread' => Notification::where('user_id', Auth::id())->whereNull('read_at')->count(),
+            'notifications' => Notification::where('user_id', $me)->orderByDesc('id')->limit(15)
+                ->get(['id', 'type', 'payload', 'read_at', 'resolved_at', 'created_at']),
+            'actionable' => Notification::where('user_id', $me)->where($actionable)
+                ->orderByDesc('id')->get(['id', 'type', 'payload', 'created_at']),
+            'unread' => Notification::where('user_id', $me)->where(fn ($q) => $q
+                ->where(fn ($x) => $x->where('type', '!=', 'handover.incomplete')->whereNull('read_at'))
+                ->orWhere($actionable))->count(),
         ]);
     }
 
-    /** POST /notifications/read-all — opening the bell marks everything read. */
+    /** POST /notifications/read-all — opening the bell marks everything read EXCEPT actionable reminders (those persist until resolved). */
     public function readAll(Request $request)
     {
-        Notification::where('user_id', Auth::id())->whereNull('read_at')->update(['read_at' => now()]);
+        Notification::where('user_id', Auth::id())->whereNull('read_at')
+            ->where('type', '!=', 'handover.incomplete')->update(['read_at' => now()]);
 
         return $request->expectsJson() ? response()->json(['ok' => true]) : back();
     }
