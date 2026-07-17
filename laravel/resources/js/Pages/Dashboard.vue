@@ -427,9 +427,9 @@ onUnmounted(() => clearInterval(autoRefresh));
             </div>
             <div class="grid grid-cols-3 gap-3 sm:grid-cols-6">
                 <button v-for="[label, value, tone, link] in myUnitCards" :key="label" type="button"
-                        class="rounded-xl p-3 text-start ring-1 ring-line transition" :class="[tone, link ? 'cursor-pointer hover:ring-brand-300' : 'cursor-default']"
+                        class="min-w-0 rounded-xl p-3 text-start ring-1 ring-line transition" :class="[tone, link ? 'cursor-pointer hover:ring-brand-300' : 'cursor-default']"
                         @click="link && goHref(link)">
-                    <p class="nums text-2xl font-extrabold text-ink-900">{{ value }}</p>
+                    <p class="nums truncate text-2xl font-extrabold text-ink-900">{{ value }}</p>
                     <p class="text-xs text-ink-400">{{ label }}</p>
                 </button>
             </div>
@@ -446,7 +446,7 @@ onUnmounted(() => clearInterval(autoRefresh));
         <h2 class="sr-only">Key performance indicators</h2>
         <!-- 8 KPI cards: 4-across on desktop (two even rows) so each card has room for its label +
              icon tile + numeral + spark; 8-across packed them to ~130px and the label ran under the icon. -->
-        <div data-tour="dashboard-hero" class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+        <div data-tour="dashboard-hero" class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             <!-- W4 triad: label → big tabular numeral → (delta chip + inline sparkline) row, brand icon tile kept -->
             <component :is="c.href ? 'button' : 'div'" v-for="c in kpiCards" :key="c.label" type="button"
                 :data-kpi="c.label"
@@ -456,7 +456,7 @@ onUnmounted(() => clearInterval(autoRefresh));
                 <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0 flex-1">
                         <p class="text-xs font-semibold uppercase tracking-wide text-ink-400">{{ c.label }}</p>
-                        <p class="font-display nums mt-2 text-3xl font-extrabold" :class="c.tone === 'warning' ? 'text-on-warning' : 'text-ink-900'">{{ c.value }}</p>
+                        <p class="font-display nums mt-2 truncate text-3xl font-extrabold" :class="c.tone === 'warning' ? 'text-on-warning' : 'text-ink-900'">{{ c.value }}</p>
                         <p class="mt-1 text-xs text-ink-400">{{ c.sub }}</p>
                         <!-- triad row 3: delta chip + inline sparkline. Colour is a graphic hue on the spark
                              (text-brand-600 → currentColor); meaning on the chip is arrow + number, not colour. -->

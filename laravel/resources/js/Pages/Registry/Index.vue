@@ -180,7 +180,7 @@ const toggleExpand = (id) => {
         { label: 'Analytics & Reports' },
         { label: 'Registry' },
     ]">
-        <div class="mb-4 flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line w-fit">
+        <div class="mb-4 flex max-w-full gap-1 overflow-x-auto rounded-xl bg-card p-1 shadow-sm ring-1 ring-line w-fit">
             <button v-for="m in modes" :key="m[0]" @click="setMode(m[0])" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="mode === m[0] ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">{{ m[1] }}</button>
         </div>
 
@@ -243,7 +243,7 @@ const toggleExpand = (id) => {
                         <label class="flex items-center gap-1 text-xs text-ink-500"><input type="radio" value="and" v-model="f.ind_match" /> all</label>
                     </template>
                 </div>
-                <div class="flex items-center gap-4">
+                <div class="flex flex-wrap items-center gap-4">
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.signed_only" class="rounded text-brand-600" /> Signed off only</label>
                     <button @click="apply" class="ms-auto rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover">Search</button>
                     <button @click="reset" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 hover:text-ink-700">Reset</button>
@@ -299,7 +299,8 @@ const toggleExpand = (id) => {
              scrolling context becomes this box instead of the page), so the rounded-2xl top corners
              are a deliberate, minor trade-off for a working sticky thead. -->
         <div class="rounded-2xl bg-card shadow-card ring-1 ring-line" :class="density === 'compact' ? 'density-compact' : 'density-comfortable'">
-            <table v-if="mode === 'consultations'" class="w-full text-sm">
+            <div v-if="mode === 'consultations'" class="overflow-x-auto lg:overflow-x-visible">
+            <table class="w-full text-sm">
                 <thead>
                     <tr class="border-b border-line text-start text-xs font-semibold uppercase tracking-wide text-ink-400">
                         <SortableTh label="Patient" sort-key="name" :current="sortState.state" class="sticky top-16 z-10 bg-card px-5 py-3" @sort="onSort" />
@@ -324,7 +325,9 @@ const toggleExpand = (id) => {
                     <tr v-if="!results.data.length"><td colspan="7" class="px-5 py-10 text-center text-ink-400">{{ hasSearched ? 'No consultations match the current filters.' : 'No consultations match.' }}</td></tr>
                 </tbody>
             </table>
-            <table v-else class="w-full text-sm">
+            </div>
+            <div v-else class="overflow-x-auto lg:overflow-x-visible">
+            <table class="w-full text-sm">
                 <thead>
                     <tr class="border-b border-line text-start text-xs font-semibold uppercase tracking-wide text-ink-400">
                         <th v-if="mode === 'admissions'" scope="col" class="sticky top-16 z-10 w-10 bg-card px-2 py-3"><span class="sr-only">Details</span></th>
@@ -394,9 +397,10 @@ const toggleExpand = (id) => {
                     <tr v-if="!results.data.length"><td :colspan="mode === 'admissions' ? 10 : 9" class="px-5 py-10 text-center text-ink-400">{{ hasSearched ? 'No admissions match the current filters.' : 'No admissions match.' }}</td></tr>
                 </tbody>
             </table>
+            </div>
         </div>
 
-        <div v-if="results.last_page > 1" class="mt-4 flex items-center justify-between text-sm text-ink-500">
+        <div v-if="results.last_page > 1" class="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-ink-500">
             <span class="nums">Showing {{ results.from }}–{{ results.to }} of {{ results.total }}</span>
             <!-- SPC-TM-011: page changes route through goPage() — with a term active the POST body
                  re-carries it (the links themselves are term-less GET URLs from the paginator) -->

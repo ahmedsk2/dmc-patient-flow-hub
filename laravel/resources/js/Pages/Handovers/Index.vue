@@ -62,6 +62,7 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
 
         <!-- awaiting my signature -->
         <div v-show="tab === 'awaiting'" class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
+            <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
                     <th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Bed</th><th scope="col" class="px-3 py-3">From</th><th scope="col" class="px-3 py-3">Required</th><th scope="col" class="px-5 py-3 text-right">Sign</th>
@@ -97,10 +98,12 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
                     <tr v-if="!awaiting.length"><td colspan="5" class="px-5 py-10 text-center text-ink-400">No handovers awaiting your signature.</td></tr>
                 </tbody>
             </table>
+            </div>
         </div>
 
         <!-- my outgoing -->
         <div v-show="tab === 'outgoing'" class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
+            <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
                     <th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">To</th><th scope="col" class="px-3 py-3">Handed over</th><th scope="col" class="px-3 py-3">Status</th><th scope="col" class="px-5 py-3">Handover text</th>
@@ -130,6 +133,7 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
                     <tr v-if="!outgoing.length"><td colspan="5" class="px-5 py-10 text-center text-ink-400">No outgoing handovers in the last 7 days.</td></tr>
                 </tbody>
             </table>
+            </div>
         </div>
     </AppLayout>
 </template>

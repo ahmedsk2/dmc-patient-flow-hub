@@ -109,7 +109,7 @@ const pretty = (details) => JSON.stringify(details ?? {}, null, 2);
         <div class="mb-2 text-sm text-ink-400"><span class="nums font-semibold text-ink-600">{{ logs.total }}</span> event(s)</div>
 
         <!-- table -->
-        <div class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
+        <div class="overflow-x-auto rounded-2xl bg-card shadow-card ring-1 ring-line">
             <table class="w-full text-sm">
                 <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
                     <th scope="col" class="px-5 py-3">Date/Time</th>
@@ -158,7 +158,7 @@ const pretty = (details) => JSON.stringify(details ?? {}, null, 2);
 
         <div v-if="logs.last_page > 1" class="mt-4 flex items-center justify-between text-sm text-ink-500">
             <span class="nums">Showing {{ logs.from }}–{{ logs.to }} of {{ logs.total }}</span>
-            <div class="flex gap-1"><component :is="l.url ? Link : 'span'" v-for="l in logs.links" :key="l.label" :href="l.url || undefined" preserve-scroll class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold transition" :class="l.active ? 'bg-brand-solid text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" /></div>
+            <div class="flex gap-1 overflow-x-auto"><component :is="l.url ? Link : 'span'" v-for="l in logs.links" :key="l.label" :href="l.url || undefined" preserve-scroll class="grid h-9 min-w-9 shrink-0 place-items-center rounded-lg px-2 text-sm font-semibold transition" :class="l.active ? 'bg-brand-solid text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" /></div>
         </div>
     </AppLayout>
 </template>

@@ -88,7 +88,7 @@ const destroyAdmission = async (p) => {
             <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">
                 Awaiting assignment <span class="nums ml-1 text-on-accent">{{ queue.length }}</span>
             </span>
-            <div class="ml-auto flex gap-2">
+            <div class="ml-auto flex flex-wrap gap-2">
                 <button v-if="canAssign && queue.length" @click="shuffle" class="inline-flex items-center gap-1.5 rounded-xl bg-card px-4 py-2 text-sm font-semibold text-ink-600 shadow ring-1 ring-ink-200 transition hover:bg-ink-50">
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" /></svg>
                     Shuffle / auto-assign
@@ -166,6 +166,7 @@ const destroyAdmission = async (p) => {
         <!-- admission-from-ICU modal -->
         <BaseModal :open="showIcu" title="Admit from ICU" size="2xl" tall @close="closeIcu">
             <p class="mb-3 text-sm text-ink-400">Pull a current ICU patient onto the ward — they enter the assignment queue for a (new) consultant.</p>
+            <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400"><th scope="col" class="px-3 py-2">MRN</th><th scope="col" class="px-3 py-2">Patient</th><th scope="col" class="px-3 py-2">Bed</th><th scope="col" class="px-3 py-2">Consultant</th><th scope="col" class="px-3 py-2"></th></tr></thead>
                 <tbody class="divide-y divide-line">
@@ -179,6 +180,7 @@ const destroyAdmission = async (p) => {
                     <tr v-if="!icuPatients.length"><td colspan="5" class="px-3 py-6 text-center text-ink-400">No ICU patients.</td></tr>
                 </tbody>
             </table>
+            </div>
         </BaseModal>
 
         <!-- modify queued patient modal -->

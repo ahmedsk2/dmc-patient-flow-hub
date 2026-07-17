@@ -428,6 +428,16 @@
             radial-gradient(100% 60% at 100% 0%, rgb(0 86 94 / 0.18), transparent 60%);
     }
 
+    /* Phones: the page never scrolls sideways. Wide content (tables, long strings) scrolls INSIDE
+     * its own card instead of widening the page. `overflow-x: clip` (not `hidden`) is deliberate —
+     * `hidden` would force overflow-y to `auto` and turn <body> into a scroll container, which breaks
+     * the `sticky top-0` app header; `clip` clips the x-axis without establishing a scroll container,
+     * so the sticky header keeps working. */
+    html,
+    body {
+        overflow-x: clip;
+    }
+
     /* Display family for the big numerals + wordmark (apply via .font-display). */
     .font-display {
         font-family: var(--font-display);

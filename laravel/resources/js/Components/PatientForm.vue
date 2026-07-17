@@ -51,7 +51,7 @@ const summaryErrors = computed(() => Object.fromEntries(
 
 <template>
     <ErrorSummary :errors="summaryErrors" />
-    <div class="grid grid-cols-2 gap-3">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div><label :for="fid('mrn')" class="mb-1 block text-sm font-semibold text-ink-700">MRN</label><input :id="fid('mrn')" v-model="form.mrn" inputmode="numeric" autocomplete="off" :aria-describedby="form.errors.mrn ? fid('mrn') + '-err' : undefined" :class="[fieldClass, form.errors.mrn && 'border-danger-500']" /><p v-if="form.errors.mrn" :id="fid('mrn') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.mrn }}</p></div>
         <div><label :for="fid('bed')" class="mb-1 block text-sm font-semibold text-ink-700">Bed</label><input :id="fid('bed')" v-model="form.bed" :aria-describedby="form.errors.bed ? fid('bed') + '-err' : undefined" :class="fieldClass" /><p v-if="form.errors.bed" :id="fid('bed') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.bed }}</p></div>
         <div class="col-span-2"><label :for="fid('name')" class="mb-1 block text-sm font-semibold text-ink-700">Name</label><input :id="fid('name')" v-model="form.name" :aria-describedby="form.errors.name ? fid('name') + '-err' : undefined" :class="[fieldClass, form.errors.name && 'border-danger-500']" /><p v-if="form.errors.name" :id="fid('name') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.name }}</p></div>

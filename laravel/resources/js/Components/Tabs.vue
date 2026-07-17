@@ -81,7 +81,7 @@ function onListKeydown(e) {
 
 <template>
     <div>
-        <div ref="listEl" role="tablist" class="flex items-end gap-1 border-b border-hairline" @keydown="onListKeydown">
+        <div ref="listEl" role="tablist" class="flex items-end gap-1 overflow-x-auto border-b border-hairline" @keydown="onListKeydown">
             <button
                 v-for="t in tabs"
                 :id="tabDomId(t.id)"

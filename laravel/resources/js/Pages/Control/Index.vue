@@ -362,8 +362,8 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
                 <p class="mb-3 text-sm text-ink-400">Each address receives the prior month's activity booklet (PDF) automatically on the 1st of the month.</p>
                 <ul v-if="reportRecipients.length" class="mb-4 divide-y divide-line rounded-xl ring-1 ring-line">
                     <li v-for="r in reportRecipients" :key="r.id" class="flex items-center justify-between gap-2 px-4 py-2.5 text-sm">
-                        <span class="text-ink-700">{{ r.email }}<span v-if="!r.active" class="ml-2 rounded-full bg-ink-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-ink-500">inactive</span></span>
-                        <button @click="removeRecipient(r)" class="rounded-lg px-3 py-1 text-xs font-semibold text-on-danger hover:bg-tint-danger">Remove</button>
+                        <span class="min-w-0 flex-1 truncate text-ink-700">{{ r.email }}<span v-if="!r.active" class="ml-2 rounded-full bg-ink-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-ink-500">inactive</span></span>
+                        <button @click="removeRecipient(r)" class="shrink-0 rounded-lg px-3 py-1 text-xs font-semibold text-on-danger hover:bg-tint-danger">Remove</button>
                     </li>
                 </ul>
                 <p v-else class="mb-4 text-sm text-ink-300">No recipients yet — the scheduled email will send to no one.</p>
