@@ -79,4 +79,22 @@ class HandoverCheckpointsTest extends TestCase
             'body' => 'x', 'checkpoints' => ['code_status' => 'bogus'],
         ])->assertStatus(422);
     }
+
+    /** The `$request->has('checkpoints') ? ... : $h->checkpoints` branch: omitting the key entirely
+     *  (not sending an empty array) must preserve whatever checkpoints were already saved. */
+    public function test_save_preserves_existing_checkpoints_when_the_key_is_omitted(): void
+    {
+        [$admin, $admission] = $this->adminAndAdmission();
+        Handover::create(['admission_id' => $admission->id, 'body' => 'initial', 'updated_by' => $admin->id,
+            'checkpoints' => ['high_risk' => true, 'code_status' => 'dnr']]);
+
+        $this->actingAs($admin)->postJson("/admissions/{$admission->id}/handover", [
+            'body' => 'updated body, no checkpoints key',
+        ])->assertOk();
+
+        $h = Handover::where('admission_id', $admission->id)->first();
+        $this->assertSame('updated body, no checkpoints key', $h->body);
+        $this->assertTrue($h->checkpoints['high_risk']);
+        $this->assertSame('dnr', $h->checkpoints['code_status']);
+    }
 }

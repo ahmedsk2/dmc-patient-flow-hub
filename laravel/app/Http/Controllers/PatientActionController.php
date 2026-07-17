@@ -340,7 +340,14 @@ class PatientActionController extends Controller
             $fromName = $this->consultantName((int) $data['from_consultant_id']);
             $toName = $this->consultantName((int) $data['to_consultant_id']);
             foreach ($stale as $a) {
+                // recipients who ALREADY hold an unresolved reminder for this admission — don't duplicate
+                $existing = Notification::where('type', 'handover.incomplete')->whereNull('resolved_at')
+                    ->where('payload->admission_id', (string) $a->id)
+                    ->whereIn('user_id', $recipients)->pluck('user_id')->all();
                 foreach ($recipients as $uid) {
+                    if (in_array((int) $uid, array_map('intval', $existing), true)) {
+                        continue;
+                    }
                     Notification::create(['user_id' => $uid, 'type' => 'handover.incomplete', 'created_at' => now(), 'payload' => [
                         'admission_id' => $a->id, 'patient_name' => $a->patient?->name, 'mrn' => $a->patient?->mrn,
                         'from_name' => $fromName, 'to_name' => $toName,

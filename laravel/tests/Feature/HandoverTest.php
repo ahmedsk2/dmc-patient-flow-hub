@@ -437,6 +437,52 @@ class HandoverTest extends TestCase
         $this->assertSame(0, Notification::where('user_id', $me->id)->whereNull('read_at')->count());
     }
 
+    /** HO-T7: read-all marks regular notifications read but must never touch an actionable
+     *  (unresolved handover.incomplete) reminder — those only clear via HandoverController::save. */
+    public function test_read_all_marks_transfer_read_but_leaves_the_incomplete_reminder_untouched(): void
+    {
+        $me = $this->user();
+        $transfer = Notification::create(['user_id' => $me->id, 'type' => 'handover.transfer', 'payload' => ['count' => 1]]);
+        $incomplete = Notification::create(['user_id' => $me->id, 'type' => 'handover.incomplete', 'payload' => ['admission_id' => 1]]);
+
+        $this->actingAs($me)->postJson('/notifications/read-all')->assertOk();
+
+        $this->assertNotNull($transfer->fresh()->read_at);
+        $this->assertNull($incomplete->fresh()->read_at);
+        $this->assertNull($incomplete->fresh()->resolved_at);
+    }
+
+    /** GET /api/notifications: `unread` and `actionable` are resolved-aware — an unresolved
+     *  handover.incomplete counts even though it has no read_at, and drops out once resolved. */
+    public function test_notifications_api_unread_and_actionable_are_resolved_aware(): void
+    {
+        $me = $this->user();
+        Notification::create(['user_id' => $me->id, 'type' => 'handover.transfer', 'payload' => [], 'read_at' => now()]);
+        $incomplete = Notification::create(['user_id' => $me->id, 'type' => 'handover.incomplete', 'payload' => ['admission_id' => 1]]);
+
+        $this->actingAs($me)->getJson('/api/notifications')->assertOk()
+            ->assertJsonPath('unread', 1)
+            ->assertJsonCount(1, 'actionable')
+            ->assertJsonPath('actionable.0.id', $incomplete->id);
+
+        $incomplete->update(['resolved_at' => now()]);
+
+        $this->actingAs($me)->getJson('/api/notifications')->assertOk()
+            ->assertJsonPath('unread', 0)
+            ->assertJsonCount(0, 'actionable');
+    }
+
+    /** HandleInertiaRequests' `unreadNotifications` shared prop must match /api/notifications'
+     *  resolved-aware count — an unresolved handover.incomplete counts toward the bell badge. */
+    public function test_shared_unread_notifications_prop_counts_an_unresolved_incomplete_reminder(): void
+    {
+        $me = $this->user();
+        Notification::create(['user_id' => $me->id, 'type' => 'handover.incomplete', 'payload' => ['admission_id' => 1]]);
+
+        $this->actingAs($me)->get('/patients')->assertInertia(fn (AssertableInertia $p) => $p
+            ->where('unreadNotifications', 1));
+    }
+
     // ---- 8. inbox + preflight + board meta -------------------------------------------------------
 
     public function test_inbox_lists_awaiting_and_outgoing(): void

@@ -84,4 +84,57 @@ class ReassignReminderTest extends TestCase
         $this->actingAs($to)->postJson("/admissions/{$admission->id}/handover", ['body' => 'done'])->assertOk();
         $this->assertSame(0, Notification::where('type', 'handover.incomplete')->whereNull('resolved_at')->count());
     }
+
+    /**
+     * The reminder recipients are `collect([Auth::id(), from_consultant_id])->unique()` — when the
+     * acting user IS the from-consultant that collapses to ONE recipient. Locks in that a self-reassign
+     * never fans out to two rows for the same person.
+     */
+    public function test_self_reassign_creates_only_one_reminder_not_two(): void
+    {
+        [, $from, $to, $admission] = $this->reassignFixture();
+        $from->update(['can_manage' => true]);
+
+        $this->actingAs($from)->post('/admissions/reassign', [
+            'from_consultant_id' => $from->id, 'to_consultant_id' => $to->id,
+            'admission_ids' => [$admission->id],
+        ])->assertRedirect();
+
+        $this->assertSame($to->id, (int) $admission->fresh()->consultant_id);
+        $this->assertSame(1, Notification::where('type', 'handover.incomplete')->count(),
+            'actor == from-consultant must collapse to a single recipient, not one row per role');
+        $this->assertSame(1, Notification::where('type', 'handover.incomplete')
+            ->whereNull('resolved_at')->where('user_id', $from->id)->count());
+    }
+
+    /**
+     * Fix 1: reassigning the SAME still-stale admission twice (X→Y, then Y→Z) must not pile up a
+     * second unresolved reminder for a recipient who already holds one for that admission.
+     */
+    public function test_repeat_reassign_of_a_still_stale_admission_dedups_the_admins_reminder(): void
+    {
+        [$admin, $x, $y, $admission] = $this->reassignFixture();
+        $z = User::create([
+            'username' => 'rr_z_' . substr(md5(uniqid('', true)), 0, 8),
+            'name' => 'RR Z', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
+            'on_service' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->post('/admissions/reassign', [
+            'from_consultant_id' => $x->id, 'to_consultant_id' => $y->id, 'admission_ids' => [$admission->id],
+        ])->assertRedirect();
+        $this->actingAs($admin)->post('/admissions/reassign', [
+            'from_consultant_id' => $y->id, 'to_consultant_id' => $z->id, 'admission_ids' => [$admission->id],
+        ])->assertRedirect();
+
+        $this->assertSame($z->id, (int) $admission->fresh()->consultant_id);
+
+        $forAdmission = fn ($userId) => Notification::where('type', 'handover.incomplete')
+            ->whereNull('resolved_at')->where('user_id', $userId)
+            ->where('payload->admission_id', (string) $admission->id)->count();
+
+        $this->assertSame(1, $forAdmission($admin->id), 'admin was a recipient on both reassigns — must dedup to 1');
+        $this->assertLessThanOrEqual(1, $forAdmission($x->id));
+        $this->assertLessThanOrEqual(1, $forAdmission($y->id));
+    }
 }
