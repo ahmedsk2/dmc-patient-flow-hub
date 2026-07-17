@@ -291,7 +291,8 @@ class PatientActionController extends Controller
         // the new-assignment fields are left UNTOUCHED, preserving any existing assigned_at
         $markNew = $request->boolean('mark_new', true);
 
-        $moving = Admission::whereNull('discharge_date')->where('consultant_id', $data['from_consultant_id'])->get();
+        $moving = Admission::whereNull('discharge_date')->where('consultant_id', $data['from_consultant_id'])
+            ->with('patient:id,name,mrn')->get();
 
         // subset selection: every submitted id must belong to the from-consultant AND be active
         if (array_key_exists('admission_ids', $data) && $data['admission_ids'] !== null) {
@@ -305,13 +306,10 @@ class PatientActionController extends Controller
             $moving = $moving->whereIn('id', $selected->all())->values();
         }
 
-        // every SELECTED patient needs a handover updated TODAY (use the preflight endpoint /
-        // bulk modal editors to bring them current before confirming)
+        // handover freshness per moved admission — NOT a blocking gate (soft gate, owner-approved):
+        // a stale handover raises a persistent reminder below instead of stopping the transfer.
         $freshIds = Handover::whereIn('admission_id', $moving->pluck('id'))
             ->whereDate('updated_at', today())->pluck('admission_id')->flip();
-        if ($moving->contains(fn ($a) => ! $freshIds->has($a->id))) {
-            throw ValidationException::withMessages(['handover' => 'Handover must be updated today before transfer.']);
-        }
 
         [$count, $sigIds] = DB::transaction(function () use ($data, $markNew, $moving) {
             $count = Admission::whereIn('id', $moving->pluck('id'))
@@ -332,6 +330,26 @@ class PatientActionController extends Controller
             ['to' => $data['to_consultant_id'], 'count' => $count, 'mark_new' => $markNew,
                 'handover_signature_ids' => $sigIds]);
         $this->bustDashboardCache();
+
+        // Soft gate (owner-approved): the move is NOT blocked by a stale handover. Instead, raise a
+        // PERSISTENT reminder (handover.incomplete) to the actor AND the from-consultant for every moved
+        // patient whose handover wasn't current today; it clears when a note is saved (HandoverController).
+        $stale = $moving->reject(fn ($a) => $freshIds->has($a->id));
+        if ($stale->isNotEmpty()) {
+            $recipients = collect([Auth::id(), (int) $data['from_consultant_id']])->unique()->values();
+            $fromName = $this->consultantName((int) $data['from_consultant_id']);
+            $toName = $this->consultantName((int) $data['to_consultant_id']);
+            foreach ($stale as $a) {
+                foreach ($recipients as $uid) {
+                    Notification::create(['user_id' => $uid, 'type' => 'handover.incomplete', 'created_at' => now(), 'payload' => [
+                        'admission_id' => $a->id, 'patient_name' => $a->patient?->name, 'mrn' => $a->patient?->mrn,
+                        'from_name' => $fromName, 'to_name' => $toName,
+                    ]]);
+                }
+            }
+            Audit::log('handover.reassign_incomplete', 'consultant', (string) $data['from_consultant_id'],
+                ['admission_ids' => $stale->pluck('id')->all(), 'recipients' => $recipients->all()]);
+        }
 
         return back()->with('flash', ['type' => 'success', 'message' => "Reassigned {$count} patient(s)."]);
     }

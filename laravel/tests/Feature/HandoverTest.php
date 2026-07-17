@@ -211,20 +211,30 @@ class HandoverTest extends TestCase
 
     // ---- 3. same-day gate on bulk reassign ------------------------------------------------------
 
-    public function test_bulk_reassign_blocked_when_any_patient_lacks_today_handover(): void
+    // HO-T5: the same-day handover gate on bulk reassign is now a SOFT gate — a stale/missing
+    // handover no longer blocks the move. It proceeds and raises a persistent `handover.incomplete`
+    // reminder to the actor and the outgoing consultant instead (see tests/Feature/ReassignReminderTest.php
+    // for the dedicated coverage of the reminder's recipients/payload).
+    public function test_bulk_reassign_proceeds_despite_a_missing_handover_and_raises_a_reminder(): void
     {
+        $admin = $this->user(['role' => User::ROLE_ADMIN]);
         $from = $this->user();
         $to = $this->user();
         $a1 = $this->admission(['consultant_id' => $from->id]);
         $a2 = $this->admission(['consultant_id' => $from->id]);
         $this->freshHandover($a1, $from);   // a2 has none
 
-        $this->actingAs($this->user(['role' => User::ROLE_ADMIN]))
+        $this->actingAs($admin)
             ->post('/admissions/reassign', ['from_consultant_id' => $from->id, 'to_consultant_id' => $to->id])
-            ->assertSessionHasErrors('handover');
+            ->assertRedirect()->assertSessionHasNoErrors();
 
-        $this->assertSame($from->id, (int) $a1->fresh()->consultant_id, 'nothing moves while any handover is missing');
-        $this->assertSame($from->id, (int) $a2->fresh()->consultant_id);
+        $this->assertSame($to->id, (int) $a1->fresh()->consultant_id, 'move proceeds despite the stale handover on a2');
+        $this->assertSame($to->id, (int) $a2->fresh()->consultant_id);
+
+        // only a2 was stale — one reminder to the actor (admin) and one to the outgoing consultant (from)
+        $this->assertSame(2, Notification::where('type', 'handover.incomplete')->count());
+        $this->assertDatabaseHas('notifications', ['user_id' => $admin->id, 'type' => 'handover.incomplete']);
+        $this->assertDatabaseHas('notifications', ['user_id' => $from->id, 'type' => 'handover.incomplete']);
     }
 
     public function test_bulk_reassign_with_today_handovers_moves_all_with_signatures_and_one_notification(): void
