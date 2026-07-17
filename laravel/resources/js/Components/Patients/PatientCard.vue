@@ -9,6 +9,7 @@
 import { ref, computed } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import PatientFlags from '@/Components/PatientFlags.vue';
+import CheckpointChips from '@/Components/Patients/CheckpointChips.vue';
 import { locTone, vFocus, formatDate } from '@/lib/ui.js';
 import { useConfirm } from '@/composables/useConfirm';
 
@@ -101,6 +102,8 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
                     :aria-label="`${patient.dx_count} diagnoses — ${dxOpen ? 'hide' : 'show'} names`"
                     class="rounded-full px-1.5 py-0.5 text-[10px] font-semibold transition"
                     :class="dxOpen ? 'bg-brand-100 text-brand-700' : 'bg-ink-50 text-ink-500 hover:bg-ink-100'">{{ patient.dx_count }} dx</button>
+                <!-- handover checkpoint chips (spec §D4) — only renders when a flag/code-status is set -->
+                <CheckpointChips :checkpoints="patient.handover?.checkpoints" />
             </div>
             <ul v-if="dxOpen && patient.diagnoses?.length" class="mt-1.5 space-y-0.5 rounded-lg bg-app/70 px-2 py-1.5 text-[11px] leading-snug text-ink-600">
                 <li v-for="d in patient.diagnoses" :key="d.code"><span class="nums font-semibold text-brand-700">{{ d.code }}</span> {{ d.name }}</li>

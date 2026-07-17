@@ -1,7 +1,8 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { ref, watch } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import BaseModal from '@/Components/BaseModal.vue';
+import CheckpointChips from '@/Components/Patients/CheckpointChips.vue';
 import { useHandover } from '@/composables/useHandover';
 
 /**
@@ -29,8 +30,6 @@ const defaultCheckpoints = () => ({
     vte_completed: false, ready_for_discharge: false, high_risk: false,
     needs_workup: false, workup_pending: false, code_status: null,
 });
-const CODE_STATUS_LABEL = { full: 'Full', dnr: 'DNR', dni: 'DNI' };
-
 const data = ref(null);          // null | { body, checkpoints, today, updated_at, updated_by_name, revisions }
 const hForm = useForm({ body: '', checkpoints: defaultCheckpoints() });
 const editing = ref(false);
@@ -38,28 +37,6 @@ const histOpen = ref(false);
 let requestId = 0;               // guards against a stale fetch resolving out of order
 
 const fmtAt = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
-
-// read-view chip row: one chip per SET flag / non-null code_status. Colour tokens are reused
-// verbatim from PatientFlags.vue (bg-tint-warning/text-on-warning, bg-tint-danger/text-on-danger)
-// and DxChips.vue (bg-brand-100/text-brand-700) — no new Tailwind utilities introduced.
-const checkpointChips = computed(() => {
-    const cp = data.value?.checkpoints;
-    if (!cp) return [];
-    const chips = [];
-    if (cp.vte_completed) chips.push({ key: 'vte', label: 'VTE', classes: 'bg-brand-100 text-brand-700' });
-    if (cp.ready_for_discharge) chips.push({ key: 'dc', label: 'D/C ready', classes: 'bg-brand-100 text-brand-700' });
-    if (cp.high_risk) chips.push({ key: 'hr', label: 'High-risk', classes: 'bg-tint-warning text-on-warning' });
-    if (cp.needs_workup) chips.push({ key: 'nw', label: 'Needs workup', classes: 'bg-brand-100 text-brand-700' });
-    if (cp.workup_pending) chips.push({ key: 'wp', label: 'Workup pending', classes: 'bg-brand-100 text-brand-700' });
-    if (cp.code_status) {
-        chips.push({
-            key: 'cs',
-            label: CODE_STATUS_LABEL[cp.code_status] || cp.code_status,
-            classes: cp.code_status === 'full' ? 'bg-brand-100 text-brand-700' : 'bg-tint-danger text-on-danger',
-        });
-    }
-    return chips;
-});
 
 // open → reset view + fetch; close → tear down. Mirrors the old imperative openHandover/closeHandover.
 watch(
@@ -85,7 +62,7 @@ const submitHandover = () => hForm.post(`/admissions/${props.patient.id}/handove
     preserveScroll: true, preserveState: true, onSuccess: () => emit('saved'),
 });
 
-defineExpose({ data, hForm, editing, histOpen, submitHandover, checkpointChips });
+defineExpose({ data, hForm, editing, histOpen, submitHandover });
 </script>
 
 <template>
@@ -121,9 +98,7 @@ defineExpose({ data, hForm, editing, histOpen, submitHandover, checkpointChips }
                     </div>
                 </template>
                 <template v-else>
-                    <div v-if="checkpointChips.length" class="mb-2 flex flex-wrap gap-1.5">
-                        <span v-for="c in checkpointChips" :key="c.key" class="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" :class="c.classes">{{ c.label }}</span>
-                    </div>
+                    <CheckpointChips :checkpoints="data?.checkpoints" class="mb-2" />
                     <p class="whitespace-pre-wrap rounded-xl bg-app/70 px-3 py-2.5 text-sm leading-relaxed text-ink-700">{{ data.body || 'No handover text recorded.' }}</p>
                     <div class="mt-3 flex items-center justify-between">
                         <button v-if="data.revisions?.length" type="button" @click="histOpen = !histOpen" :aria-expanded="histOpen" class="text-xs font-semibold text-brand-600 hover:underline">{{ histOpen ? 'Hide history' : `History (${data.revisions.length})` }}</button>

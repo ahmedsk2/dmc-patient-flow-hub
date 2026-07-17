@@ -121,6 +121,7 @@ class HandoverController extends Controller
             'voided_at' => $s->voided_at?->toIso8601String(),
             'body' => $s->admission?->handover?->body,
             'body_updated_at' => $s->admission?->handover?->updated_at?->toIso8601String(),
+            'checkpoints' => $s->admission?->handover?->checkpoints,
         ];
         $with = ['admission.patient:id,mrn,name', 'admission.handover', 'fromConsultant:id,name,full_name', 'toConsultant:id,name,full_name'];
 

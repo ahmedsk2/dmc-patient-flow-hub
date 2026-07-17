@@ -21,7 +21,7 @@ const { ask } = useConfirm();
 // reloads/flashes on each child's `saved` emit. Each child owns its own useForm(s) + a11y via
 // BaseModal. The Modify modal still uses the canonical PatientForm + usePatientEdit here.
 
-const props = defineProps({ groups: Array, filters: Object, stats: Object, consultants: Array, specialties: Array, externalServices: Array, readmitWindow: Number, countries: Array, fallback: { type: Object, default: null } });
+const props = defineProps({ groups: Array, filters: Object, stats: Object, consultants: Array, specialties: Array, externalServices: Array, readmitWindow: Number, countries: Array, fallback: { type: Object, default: null }, highlight: { type: Number, default: null } });
 
 const page = usePage();
 const me = computed(() => page.props.auth.user);
@@ -128,6 +128,11 @@ const toggle = (id) => {
 const allOpen = () => { open.value = new Set(props.groups.map((g) => g.id)); persistOpen(); };
 const allClosed = () => { open.value = new Set(); persistOpen(); };
 
+// deep-link target from the incomplete-handover reminder bell (?highlight=<admission_id>, Fix B) —
+// the matching PatientCard briefly rings once it scrolls into view (see onMounted below). Cleared
+// after ~2s; a no-op id (nothing matches, or already cleared) just means no card gets the class.
+const highlightedId = ref(null);
+
 onMounted(() => {
     const d = localStorage.getItem('dmc-density');
     if (d === 'compact' || d === 'comfortable') density.value = d;
@@ -150,6 +155,28 @@ onMounted(() => {
     // first visit / all collapsed WHILE a filter is active → expand everything as before
     if (open.value.size === 0 && filtering.value) {
         open.value = new Set(props.groups.map((g) => g.id));
+    }
+
+    // deep-link: ?highlight=<admission_id> (Fix B) — find the consultant group holding that
+    // admission, force it open (+ switch Split's rail to it), scroll the matching card into view,
+    // and flash it briefly. Guarded throughout: no-op if highlight is absent, or the admission no
+    // longer matches any visible patient (discharged/reassigned/filtered out since the reminder
+    // fired) — never throws.
+    if (props.highlight) {
+        const targetGroup = props.groups.find((g) => (g.patients || []).some((p) => p.id === props.highlight));
+        if (targetGroup) {
+            open.value = new Set(open.value).add(targetGroup.id);
+            persistOpen();
+            if (viewMode.value === 'split') selectGroup(targetGroup.id);
+            highlightedId.value = props.highlight;
+            // two ticks: one for the open/selection state to flush, one for the now-visible card to mount
+            nextTick(() => nextTick(() => {
+                document.querySelector(`[data-admission-id="${props.highlight}"]`)?.scrollIntoView?.({
+                    behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'center',
+                });
+            }));
+            setTimeout(() => { highlightedId.value = null; }, 2000);
+        }
     }
 });
 
@@ -364,6 +391,7 @@ const closeModify = () => guardModify(() => { editing.value = null; });
             <p v-if="!g.patients.length" class="px-5 py-4 text-sm text-ink-400">No patients on this list yet.</p>
             <div v-else class="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" :class="compact ? 'gap-2 p-2.5' : 'gap-3 p-4'">
                 <PatientCard v-for="p in g.patients" :key="p.id" :patient="p" :compact="compact" :readmit-window="readmitWindow"
+                    :data-admission-id="p.id" :class="p.id === highlightedId ? 'outline outline-2 outline-offset-2 outline-brand-500' : ''"
                     @open-modal="openModal" @modify="openModify" @handover="openHandover" />
             </div>
         </div>
@@ -408,6 +436,7 @@ const closeModify = () => guardModify(() => { editing.value = null; });
                         <h2 class="mb-3 font-bold text-ink-800">All active patients <span class="ms-1 text-sm font-normal text-ink-400">· {{ allPatients.length }}</span></h2>
                         <div v-if="allPatients.length" class="grid sm:grid-cols-2 xl:grid-cols-3" :class="compact ? 'gap-2' : 'gap-3'">
                             <PatientCard v-for="p in allPatients" :key="p.id" :patient="p" :compact="compact" :readmit-window="readmitWindow"
+                                :data-admission-id="p.id" :class="p.id === highlightedId ? 'outline outline-2 outline-offset-2 outline-brand-500' : ''"
                                 @open-modal="openModal" @modify="openModify" @handover="openHandover" />
                         </div>
                         <p v-else class="rounded-2xl bg-card px-5 py-8 text-center text-sm text-ink-400 ring-1 ring-line">No active patients.</p>
@@ -421,6 +450,7 @@ const closeModify = () => guardModify(() => { editing.value = null; });
                         <p v-if="!selectedGroup.patients.length" class="px-5 py-4 text-sm text-ink-400">No patients on this list yet.</p>
                         <div v-else class="grid sm:grid-cols-2 xl:grid-cols-3" :class="compact ? 'gap-2 p-2.5' : 'gap-3 p-4'">
                             <PatientCard v-for="p in selectedGroup.patients" :key="p.id" :patient="p" :compact="compact" :readmit-window="readmitWindow"
+                                :data-admission-id="p.id" :class="p.id === highlightedId ? 'outline outline-2 outline-offset-2 outline-brand-500' : ''"
                                 @open-modal="openModal" @modify="openModify" @handover="openHandover" />
                         </div>
                     </div>

@@ -54,6 +54,10 @@ class PatientsController extends Controller
             'groups' => $groups,
             'filters' => $filters,
             'fallback' => $fallback,
+            // deep-link target for the incomplete-handover reminder bell (?highlight=<admission_id>).
+            // Deliberately NOT part of $filters — it doesn't filter the board, it just tells the
+            // client which already-visible admission to expand/scroll/flash to.
+            'highlight' => $request->integer('highlight') ?: null,
             'readmitWindow' => $readmitWindow,
             'consultants' => User::consultantOptions(),
             'countries' => \App\Models\Country::orderBy('name')->pluck('name'),   // Modify modal nationality select
@@ -332,6 +336,7 @@ class PatientsController extends Controller
                     'updated_at' => $h->updated_at->toIso8601String(),
                     'updated_by' => $h->updatedBy ? ($h->updatedBy->full_name ?: $h->updatedBy->name) : null,
                     'today' => $h->updated_at->isToday(),
+                    'checkpoints' => $h->checkpoints,
                 ] : null,
                 'sign_pending' => $signPendingPatientIds->has($a->patient_id),
             ];

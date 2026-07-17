@@ -303,13 +303,13 @@ const toggleExpand = (id) => {
             <table class="w-full text-sm">
                 <thead>
                     <tr class="border-b border-line text-start text-xs font-semibold uppercase tracking-wide text-ink-400">
-                        <SortableTh label="Patient" sort-key="name" :current="sortState.state" class="sticky top-16 z-10 bg-card px-5 py-3" @sort="onSort" />
-                        <th scope="col" class="sticky top-16 z-10 bg-card px-3 py-3">Location</th>
-                        <th scope="col" class="sticky top-16 z-10 bg-card px-3 py-3">From → To</th>
-                        <th scope="col" class="sticky top-16 z-10 bg-card px-3 py-3">Indication</th>
-                        <th scope="col" class="sticky top-16 z-10 bg-card px-3 py-3">Consultant</th>
-                        <SortableTh label="Date" sort-key="date" :current="sortState.state" class="sticky top-16 z-10 bg-card px-3 py-3" @sort="onSort" />
-                        <SortableTh label="Status" sort-key="status" :current="sortState.state" class="sticky top-16 z-10 bg-card px-5 py-3" @sort="onSort" />
+                        <SortableTh label="Patient" sort-key="name" :current="sortState.state" class="static lg:sticky lg:top-16 z-10 bg-card px-5 py-3" @sort="onSort" />
+                        <th scope="col" class="static lg:sticky lg:top-16 z-10 bg-card px-3 py-3">Location</th>
+                        <th scope="col" class="static lg:sticky lg:top-16 z-10 bg-card px-3 py-3">From → To</th>
+                        <th scope="col" class="static lg:sticky lg:top-16 z-10 bg-card px-3 py-3">Indication</th>
+                        <th scope="col" class="static lg:sticky lg:top-16 z-10 bg-card px-3 py-3">Consultant</th>
+                        <SortableTh label="Date" sort-key="date" :current="sortState.state" class="static lg:sticky lg:top-16 z-10 bg-card px-3 py-3" @sort="onSort" />
+                        <SortableTh label="Status" sort-key="status" :current="sortState.state" class="static lg:sticky lg:top-16 z-10 bg-card px-5 py-3" @sort="onSort" />
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-line">
@@ -330,16 +330,16 @@ const toggleExpand = (id) => {
             <table class="w-full text-sm">
                 <thead>
                     <tr class="border-b border-line text-start text-xs font-semibold uppercase tracking-wide text-ink-400">
-                        <th v-if="mode === 'admissions'" scope="col" class="sticky top-16 z-10 w-10 bg-card px-2 py-3"><span class="sr-only">Details</span></th>
-                        <SortableTh label="Patient" sort-key="name" :current="sortState.state" class="sticky top-16 z-10 bg-card px-5 py-3" @sort="onSort" />
-                        <th scope="col" class="sticky top-16 z-10 bg-card px-3 py-3">Age/Sex</th>
-                        <th scope="col" class="sticky top-16 z-10 bg-card px-3 py-3">Location</th>
-                        <th scope="col" class="sticky top-16 z-10 bg-card px-3 py-3">Consultant</th>
-                        <SortableTh label="Admitted" sort-key="admit_date" :current="sortState.state" class="sticky top-16 z-10 bg-card px-3 py-3" @sort="onSort" />
-                        <SortableTh label="Discharged" sort-key="discharge_date" :current="sortState.state" class="sticky top-16 z-10 bg-card px-3 py-3" @sort="onSort" />
-                        <SortableTh label="LOS" sort-key="los" :current="sortState.state" class="sticky top-16 z-10 bg-card px-3 py-3" @sort="onSort" />
-                        <SortableTh label="Outcome" sort-key="outcome" :current="sortState.state" class="sticky top-16 z-10 bg-card px-3 py-3" @sort="onSort" />
-                        <th scope="col" class="sticky top-16 z-10 bg-card px-5 py-3 text-end">Edit</th>
+                        <th v-if="mode === 'admissions'" scope="col" class="static lg:sticky lg:top-16 z-10 w-10 bg-card px-2 py-3"><span class="sr-only">Details</span></th>
+                        <SortableTh label="Patient" sort-key="name" :current="sortState.state" class="static lg:sticky lg:top-16 z-10 bg-card px-5 py-3" @sort="onSort" />
+                        <th scope="col" class="static lg:sticky lg:top-16 z-10 bg-card px-3 py-3">Age/Sex</th>
+                        <th scope="col" class="static lg:sticky lg:top-16 z-10 bg-card px-3 py-3">Location</th>
+                        <th scope="col" class="static lg:sticky lg:top-16 z-10 bg-card px-3 py-3">Consultant</th>
+                        <SortableTh label="Admitted" sort-key="admit_date" :current="sortState.state" class="static lg:sticky lg:top-16 z-10 bg-card px-3 py-3" @sort="onSort" />
+                        <SortableTh label="Discharged" sort-key="discharge_date" :current="sortState.state" class="static lg:sticky lg:top-16 z-10 bg-card px-3 py-3" @sort="onSort" />
+                        <SortableTh label="LOS" sort-key="los" :current="sortState.state" class="static lg:sticky lg:top-16 z-10 bg-card px-3 py-3" @sort="onSort" />
+                        <SortableTh label="Outcome" sort-key="outcome" :current="sortState.state" class="static lg:sticky lg:top-16 z-10 bg-card px-3 py-3" @sort="onSort" />
+                        <th scope="col" class="static lg:sticky lg:top-16 z-10 bg-card px-5 py-3 text-end">Edit</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-line">

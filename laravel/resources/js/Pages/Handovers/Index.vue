@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import CheckpointChips from '@/Components/Patients/CheckpointChips.vue';
 import { useConfirm } from '@/composables/useConfirm';
 
 const { ask } = useConfirm();
@@ -74,6 +75,7 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
                                 <svg class="mr-1.5 inline h-4 w-4 text-ink-300" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" :d="open === s.id ? 'm4.5 15.75 7.5-7.5 7.5 7.5' : 'm19.5 8.25-7.5 7.5-7.5-7.5'" /></svg>
                                 <span class="font-semibold text-ink-800">{{ s.patient }}</span>
                                 <span class="nums ml-2 text-xs text-ink-400">MRN {{ s.mrn }}</span>
+                                <CheckpointChips :checkpoints="s.checkpoints" class="mt-1" />
                             </td>
                             <td class="nums px-3 py-3 text-ink-600">{{ s.bed || '—' }}</td>
                             <td class="px-3 py-3 text-ink-600">Dr. {{ s.from }}</td>
@@ -110,7 +112,7 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
                 </tr></thead>
                 <tbody class="divide-y divide-line">
                     <tr v-for="s in outgoing" :key="s.id" class="align-top hover:bg-brand-50/40">
-                        <td class="px-5 py-3"><div class="font-semibold text-ink-800">{{ s.patient }}</div><div class="nums text-xs text-ink-400">MRN {{ s.mrn }}</div></td>
+                        <td class="px-5 py-3"><div class="font-semibold text-ink-800">{{ s.patient }}</div><div class="nums text-xs text-ink-400">MRN {{ s.mrn }}</div><CheckpointChips :checkpoints="s.checkpoints" class="mt-1" /></td>
                         <td class="px-3 py-3 text-ink-600">Dr. {{ s.to }}</td>
                         <td class="nums px-3 py-3 text-ink-500" :title="fmt(s.required_at)">{{ relTime(s.required_at) }}</td>
                         <td class="px-3 py-3"><span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="stateTone[stateOf(s)]" :title="s.signed_at ? fmt(s.signed_at) : ''">{{ stateLabel[stateOf(s)] }}</span></td>
