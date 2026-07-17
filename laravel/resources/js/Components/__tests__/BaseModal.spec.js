@@ -87,6 +87,12 @@ describe('BaseModal', () => {
         expect(w.find('[role="dialog"]').classes()).toContain('max-w-2xl');
         w.unmount();
     });
+
+    it('supports a wide size (~75%) for large forms', () => {
+        const w = mountModal({ size: 'wide' });
+        expect(w.find('[role="dialog"]').classes()).toContain('max-w-4xl');
+        w.unmount();
+    });
 });
 
 // Wave 3, Item 2: an optional `dirty` prop gates Esc / backdrop-click / the X-close button behind

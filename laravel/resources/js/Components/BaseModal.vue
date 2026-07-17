@@ -35,8 +35,9 @@ const props = defineProps({
     open: { type: Boolean, required: true },
     title: { type: String, default: '' },
     subtitle: { type: String, default: '' },
-    // md = max-w-md, lg = max-w-lg, xl/2xl = max-w-2xl (the three widths the old modals used)
-    size: { type: String, default: 'md', validator: (v) => ['md', 'lg', 'xl', '2xl'].includes(v) },
+    // md = max-w-md, lg = max-w-lg, xl/2xl = max-w-2xl (the three widths the old modals used);
+    // wide = max-w-4xl (~75%) for large multi-column forms (e.g. the Reassign modal's preflight list)
+    size: { type: String, default: 'md', validator: (v) => ['md', 'lg', 'xl', '2xl', 'wide'].includes(v) },
     // big forms scrolled inside a capped height; toolbars/short modals did not
     tall: { type: Boolean, default: false },
     // clinical-action modals focused the first FIELD (not a button) on open — match that
@@ -53,7 +54,7 @@ const { ask } = useConfirm();
 const { guardedClose } = useUnsavedGuard(() => props.dirty, ask);
 const titleId = `modal-title-${useId()}`;
 
-const sizeClass = { md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-2xl', '2xl': 'max-w-2xl' };
+const sizeClass = { md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-2xl', '2xl': 'max-w-2xl', wide: 'max-w-4xl' };
 
 watch(
     () => props.open,

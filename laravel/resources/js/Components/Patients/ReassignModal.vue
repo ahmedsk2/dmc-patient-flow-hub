@@ -105,7 +105,7 @@ defineExpose({
 </script>
 
 <template>
-    <BaseModal :open="open" title="Reassign a consultant's patients" subtitle="Moves the selected active patients from one consultant to another." size="md" tall field-first :closable="false" :dirty="modalDirty" @close="close">
+    <BaseModal :open="open" title="Reassign a consultant's patients" subtitle="Moves the selected active patients from one consultant to another." size="wide" tall field-first :closable="false" :dirty="modalDirty" @close="close">
         <form @submit.prevent="submitReassign" class="space-y-4">
             <div><label class="mb-1 block text-sm font-semibold text-ink-700">From</label><select v-model="rForm.from_consultant_id" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select…</option><option v-for="c in consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
             <div><label class="mb-1 block text-sm font-semibold text-ink-700">To <span class="font-normal text-ink-400">(on-service only)</span></label><select v-model="rForm.to_consultant_id" title="On-service consultants only" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select…</option><option v-for="c in onServiceConsultants" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
