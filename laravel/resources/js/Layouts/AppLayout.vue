@@ -256,7 +256,6 @@ const notifications = ref([]);
 // HO-T7: still-open "handover.incomplete" reminders — pinned "Needs attention" group, persists
 // across read-all/Clear (server only clears these via HandoverController::save's resolve step).
 const actionable = ref([]);
-const readOverride = ref(false);   // optimistic zero after Clear, until the next shared-prop refresh
 // HO-T7 (spec §C3): the /api/notifications feed includes ALL types (incl. handover.incomplete), so an
 // actionable item would otherwise show twice — once pinned above, once in the normal list. Drop the
 // pinned ids from the feed (keyed by id) so the normal list holds only the non-actionable items.
@@ -264,8 +263,14 @@ const feedNotifications = computed(() => {
     const pinned = new Set(actionable.value.map((n) => n.id));
     return notifications.value.filter((n) => !pinned.has(n.id));
 });
-const unread = computed(() => (readOverride.value ? 0 : (page.props.unreadNotifications || 0)));
-watch(() => page.props.unreadNotifications, () => (readOverride.value = false));
+// null = trust the shared `unreadNotifications` prop; a number = a locally-known truth (the exact
+// count the refetch just returned, which is resolved-aware — it excludes read ordinary items but
+// still includes any surviving `handover.incomplete` alarms). Clear must NOT hardcode 0: readAll()
+// deliberately never resolves those alarms, so a hardcoded zero would hide a genuinely outstanding
+// reminder until the next Inertia navigation refreshed the shared prop.
+const unreadOverride = ref(null);
+const unread = computed(() => unreadOverride.value ?? (page.props.unreadNotifications || 0));
+watch(() => page.props.unreadNotifications, () => (unreadOverride.value = null));   // a real server refresh always wins
 
 const toggleBell = async () => {
     bellOpen.value = !bellOpen.value;
@@ -287,10 +292,10 @@ const clearNotifications = async () => {
     clearing.value = true;
     try {
         await fetch('/notifications/read-all', { method: 'POST', headers: { Accept: 'application/json', 'X-XSRF-TOKEN': xsrf() } });
-        readOverride.value = true;
         const d = await (await fetch('/api/notifications', { headers: { Accept: 'application/json' } })).json();
         notifications.value = d.notifications || [];
         actionable.value = d.actionable || [];
+        unreadOverride.value = d.unread ?? 0;   // still-open actionable reminders keep the badge lit
     } finally { clearing.value = false; }
 };
 const goInbox = () => { bellOpen.value = false; router.visit('/handovers'); };

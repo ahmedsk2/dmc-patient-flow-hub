@@ -109,8 +109,11 @@ so it does not fall through the cracks:
 - **Type / payload:** `notifications.type = 'handover.incomplete'`, payload
   `{admission_id, patient_name, mrn, from_name, to_name}`.
 - **Persistence:** the reminder stays "unresolved" (`resolved_at IS NULL`) and keeps the bell's
-  unread badge lit **even after the user opens the bell** — opening the bell (read-all) dismisses
-  ordinary notifications but not these. It appears in a pinned **"Needs attention"** group.
+  unread badge lit for as long as it is outstanding. Opening the bell only fetches the latest
+  notifications — it does not mark anything read. The explicit **Clear** button marks ordinary
+  notifications read; it never touches an unresolved `handover.incomplete` reminder, and it never
+  deletes a row (the reminder trail is retained for audit). It appears in a pinned **"Needs
+  attention"** group.
 - **Resolution:** the reminder auto-resolves for **every** recipient the moment **any** handover
   note is saved for that admission — `resolved_at` is stamped. There is no manual dismiss; the
   clinical action (writing the note) is what clears it.

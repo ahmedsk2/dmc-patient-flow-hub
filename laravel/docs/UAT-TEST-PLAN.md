@@ -228,7 +228,7 @@ If any of these fail, stop and report — deeper testing is pointless until they
 | HND-05 | As the receiving consultant, open **Handovers inbox**, **sign** a pending handover | Marked signed; timestamped | | |
 | HND-06 | **Sign many** at once | All selected signed | | |
 | HND-07 | The **notification bell** shows unread items; open it | Latest notifications listed with an unread count | | |
-| HND-08 | Click "mark all read" | Unread count clears | | |
+| HND-08 | Click **Clear** | Ordinary notifications are marked read; any unresolved "incomplete handover" reminder stays pinned in "Needs attention" and keeps the unread badge lit | | |
 
 ---
 

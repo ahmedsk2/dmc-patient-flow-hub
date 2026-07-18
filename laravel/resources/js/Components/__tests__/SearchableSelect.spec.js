@@ -33,8 +33,18 @@ describe('SearchableSelect', () => {
     it('emits the option id on selection', async () => {
         const w = mount(SearchableSelect, { props: { modelValue: '', options: many } });
         await w.find('input[role="combobox"]').trigger('focus');
-        await w.findAll('[role="option"]')[2].trigger('mousedown');
+        // index 0 is the leading "clear" row (rendered only while the query is empty — see the
+        // "can be cleared" test below), so the real options start at index 1: index 3 is many[2] = id 3.
+        await w.findAll('[role="option"]')[3].trigger('mousedown');
         expect(w.emitted('update:modelValue').at(-1)[0]).toBe(3);
+        w.unmount();
+    });
+
+    it('can be cleared back to no selection from the combobox branch', async () => {
+        const w = mount(SearchableSelect, { props: { modelValue: 3, options: many, placeholder: 'Any consultant' } });
+        await w.find('input[role="combobox"]').trigger('focus');
+        await w.findAll('[role="option"]')[0].trigger('mousedown');   // the leading clear row
+        expect(w.emitted('update:modelValue').at(-1)[0]).toBe('');
         w.unmount();
     });
 

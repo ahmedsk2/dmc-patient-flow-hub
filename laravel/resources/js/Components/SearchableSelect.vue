@@ -73,6 +73,13 @@ const onKeydown = (e) => {
                @input="onInput" @focus="openList" @keydown="onKeydown" @blur="close" />
         <ul v-if="open && filtered.length" role="listbox"
             class="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-line bg-card py-1 shadow-lg">
+            <!-- leading "clear" row — only while the query is empty, so it never pollutes search
+                 results. The native <select> branch always offers a blank "no selection" option;
+                 this is the combobox branch's equivalent (e.g. Registry's consultant filter needs an
+                 "all consultants" state, and once a value was picked there was no way back to none). -->
+            <li v-if="!query.trim()" role="option" :aria-selected="false"
+                @mousedown.prevent="choose({ id: '' })"
+                class="cursor-pointer px-3 py-1.5 text-sm text-ink-400" :class="hi === -1 ? 'bg-brand-50' : ''">{{ placeholder }}</li>
             <li v-for="(o, i) in filtered" :key="o.id" role="option" :aria-selected="i === hi"
                 @mousedown.prevent="choose(o)" @mouseenter="hi = i"
                 class="cursor-pointer px-3 py-1.5 text-sm" :class="i === hi ? 'bg-brand-50' : ''">{{ label(o) }}</li>

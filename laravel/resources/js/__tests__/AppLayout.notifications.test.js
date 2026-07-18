@@ -42,7 +42,7 @@ describe('AppLayout notifications', () => {
     });
     afterEach(() => { vi.restoreAllMocks(); });
 
-    it('unread computed reflects the prop while readOverride is false', () => {
+    it('unread computed reflects the prop while no local override is set', () => {
         const w = mountLayout();
         expect(w.vm.unread).toBe(3);
     });
@@ -161,6 +161,28 @@ describe('AppLayout notifications', () => {
         expect(w.vm.feedNotifications).toHaveLength(0);
         expect(w.vm.actionable).toHaveLength(1);
         expect(w.text()).toContain('Needs attention');
+        // the badge must NOT be forced to 0 — a surviving handover.incomplete alarm (unread: 1 in the
+        // refetch response) has to keep lighting it, or a consultant reading the badge would wrongly
+        // conclude nothing is outstanding.
+        expect(w.vm.unread).toBe(1);
+    });
+
+    // Mirror case: when the refetch reports everything is truly resolved (unread: 0), the badge
+    // must actually go to 0 — Clear isn't supposed to freeze a stale nonzero count either.
+    it('Clear zeroes the badge when the refetch reports no remaining unread', async () => {
+        const ordinary = { id: 1, type: 'handover.transfer', payload: { from_name: 'Dr X' }, read_at: null, created_at: new Date().toISOString() };
+        global.fetch.mockResolvedValueOnce({ json: async () => ({ notifications: [ordinary], actionable: [], unread: 1 }) }); // open
+        const w = mountLayout();
+        await w.vm.toggleBell();
+        await w.vm.$nextTick();
+
+        global.fetch
+            .mockResolvedValueOnce({ ok: true, json: async () => ({}) })                                          // POST /notifications/read-all
+            .mockResolvedValueOnce({ json: async () => ({ notifications: [], actionable: [], unread: 0 }) });      // refetch /api/notifications
+        await w.vm.clearNotifications();
+        await w.vm.$nextTick();
+
+        expect(w.vm.unread).toBe(0);
     });
 });
 

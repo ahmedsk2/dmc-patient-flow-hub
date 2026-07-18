@@ -31,7 +31,7 @@ class PatientsController extends Controller
         // consultant_id / specialty_id are dashboard drill-through filters (Phase 1, Item 3); they
         // apply ON TOP of the D1 consultant scope, never replacing it.
         $filters = $request->only('search', 'location', 'view', 'consultant_id', 'specialty_id', 'needs_handover');
-        [$scope] = $this->boardScope($request);
+        $scope = $this->boardScope($request);
         $tbExists = $this->tbExists();
         [$groups, $readmitWindow] = $this->boardGroups($filters, $settings, $scope, $tbExists);
 
@@ -130,7 +130,7 @@ class PatientsController extends Controller
     {
         $u = $request->user();
         $isAdmin = $u->isAdmin();
-        [$scope] = $this->boardScope($request);
+        $scope = $this->boardScope($request);
 
         $base = Admission::query()
             // admin sees full history; everyone else only open episodes, D1-scoped
@@ -197,15 +197,13 @@ class PatientsController extends Controller
     /**
      * D1 (legacy endorsement scope [0,2,4]): a consultant sees only THEIR OWN group;
      * admin/registrar/resident/observer see the whole board.
-     *
-     * @return array{0: \Closure, 1: ?int} [scope closure, own-only consultant id (null = unscoped)]
      */
-    private function boardScope(Request $request): array
+    private function boardScope(Request $request): \Closure
     {
         $u = $request->user();
         $ownOnly = $u->seesOwnPatientsOnly();
 
-        return [fn ($q) => $ownOnly ? $q->where('consultant_id', $u->id) : $q, $ownOnly ? (int) $u->id : null];
+        return fn ($q) => $ownOnly ? $q->where('consultant_id', $u->id) : $q;
     }
 
     /** Active-TB predicate (diagnosis on the tb_diagnoses list). */
