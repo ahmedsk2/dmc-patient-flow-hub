@@ -31,9 +31,9 @@ class PatientsController extends Controller
         // consultant_id / specialty_id are dashboard drill-through filters (Phase 1, Item 3); they
         // apply ON TOP of the D1 consultant scope, never replacing it.
         $filters = $request->only('search', 'location', 'view', 'consultant_id', 'specialty_id', 'needs_handover');
-        [$scope, $ownOnlyId] = $this->boardScope($request);
+        [$scope] = $this->boardScope($request);
         $tbExists = $this->tbExists();
-        [$groups, $readmitWindow] = $this->boardGroups($filters, $settings, $scope, $tbExists, $ownOnlyId);
+        [$groups, $readmitWindow] = $this->boardGroups($filters, $settings, $scope, $tbExists);
 
         // Wave 2, Item 1: discharged/unassigned fall-through. The board only matches active+assigned
         // patients, so a search for a discharged or not-yet-assigned patient silently returns nothing.
@@ -185,7 +185,7 @@ class PatientsController extends Controller
     public function activeList(Request $request): Response
     {
         [$groups, $readmitWindow] = $this->boardGroups(
-            [], Setting::current(), fn ($q) => $q, $this->tbExists(), null);
+            [], Setting::current(), fn ($q) => $q, $this->tbExists());
 
         return Inertia::render('ActiveList', [
             'groups' => $groups,
@@ -222,13 +222,11 @@ class PatientsController extends Controller
      * Shared by the interactive board (index) and the printable census (activeList).
      *
      * A consultant appears only while they hold at least one matching admission — a consultant
-     * holding zero patients is hidden everywhere (TD-T5), even on-service ones. $ownOnlyId keeps
-     * the D1 consultant scope (unused now that the zero-census injection is gone, kept for the
-     * shared boardScope() call signature).
+     * holding zero patients is hidden everywhere (TD-T5), even on-service ones.
      *
      * @return array{0: array, 1: int} [$groups, $readmitWindow]
      */
-    private function boardGroups(array $filters, Setting $settings, \Closure $scope, \Closure $tbExists, ?int $ownOnlyId): array
+    private function boardGroups(array $filters, Setting $settings, \Closure $scope, \Closure $tbExists): array
     {
         $tbCodes = DB::table('tb_diagnoses')->pluck('icd10_code')->flip();
 

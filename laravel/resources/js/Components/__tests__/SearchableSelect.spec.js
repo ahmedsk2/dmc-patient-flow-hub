@@ -45,4 +45,24 @@ describe('SearchableSelect', () => {
         expect(w.text()).toContain('No matches');
         w.unmount();
     });
+
+    it('puts id and aria-describedby on the real control in BOTH branches', () => {
+        const few = [{ id: 1, name: 'Alpha' }, { id: 2, name: 'Beta' }];
+        const many = Array.from({ length: 12 }, (_, i) => ({ id: i + 1, name: `Dr. Person ${i + 1}` }));
+
+        const nativeW = mount(SearchableSelect, { props: { modelValue: '', options: few, id: 'pick-1', ariaDescribedby: 'pick-1-err' } });
+        const sel = nativeW.find('select');
+        expect(sel.attributes('id')).toBe('pick-1');
+        expect(sel.attributes('aria-describedby')).toBe('pick-1-err');
+        nativeW.unmount();
+
+        // the branch that production actually renders for a real consultant list
+        const comboW = mount(SearchableSelect, { props: { modelValue: '', options: many, id: 'pick-2', ariaDescribedby: 'pick-2-err' } });
+        const input = comboW.find('input[role="combobox"]');
+        expect(input.attributes('id')).toBe('pick-2');
+        expect(input.attributes('aria-describedby')).toBe('pick-2-err');
+        // and NOT on the wrapper
+        expect(comboW.find('div').attributes('id')).toBeUndefined();
+        comboW.unmount();
+    });
 });

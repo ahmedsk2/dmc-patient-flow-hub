@@ -21,7 +21,15 @@ const props = defineProps({
     disabled: { type: Boolean, default: false },
     searchableFrom: { type: Number, default: 8 },
     inputClass: { type: String, default: FIELD },
+    // Explicit id/aria-describedby props (rather than relying on attribute fallthrough): the
+    // component has TWO possible root elements (a <select> or a wrapper <div>), and fallthrough
+    // always lands on whichever is the actual root — which is wrong on the combobox branch,
+    // where the real control (the <input role="combobox">) is a CHILD of the root <div>. Owning
+    // these as props lets us route them onto the real control in both branches explicitly.
+    id: { type: String, default: undefined },
+    ariaDescribedby: { type: String, default: undefined },
 });
+defineOptions({ inheritAttrs: false });
 const emit = defineEmits(['update:modelValue']);
 
 const searchable = computed(() => props.options.length > props.searchableFrom);
@@ -53,14 +61,14 @@ const onKeydown = (e) => {
 
 <template>
     <!-- short list: the native control is genuinely better (OS picker on mobile) -->
-    <select v-if="!searchable" :value="modelValue" :disabled="disabled" :class="inputClass"
+    <select v-if="!searchable" v-bind="$attrs" :id="id" :aria-describedby="ariaDescribedby" :value="modelValue" :disabled="disabled" :class="inputClass"
             @change="emit('update:modelValue', $event.target.value)">
         <option value="">{{ placeholder }}</option>
         <option v-for="o in options" :key="o.id" :value="o.id">{{ label(o) }}</option>
     </select>
 
     <div v-else class="relative">
-        <input :value="open ? query : (selected ? label(selected) : '')" :class="inputClass" :placeholder="placeholder"
+        <input v-bind="$attrs" :id="id" :aria-describedby="ariaDescribedby" :value="open ? query : (selected ? label(selected) : '')" :class="inputClass" :placeholder="placeholder"
                :disabled="disabled" role="combobox" :aria-expanded="open" aria-autocomplete="list"
                @input="onInput" @focus="openList" @keydown="onKeydown" @blur="close" />
         <ul v-if="open && filtered.length" role="listbox"
