@@ -97,4 +97,16 @@ class HandoverCheckpointsTest extends TestCase
         $this->assertTrue($h->checkpoints['high_risk']);
         $this->assertSame('dnr', $h->checkpoints['code_status']);
     }
+
+    public function test_notifications_table_has_an_indexed_admission_id_column(): void
+    {
+        $this->assertTrue(\Illuminate\Support\Facades\Schema::hasColumn('notifications', 'admission_id'));
+
+        [$u] = $this->adminAndAdmission();
+        $n = Notification::create([
+            'user_id' => $u->id, 'type' => 'handover.incomplete', 'created_at' => now(),
+            'admission_id' => 4242, 'payload' => ['admission_id' => 4242],
+        ]);
+        $this->assertSame(4242, (int) Notification::find($n->id)->admission_id);
+    }
 }
