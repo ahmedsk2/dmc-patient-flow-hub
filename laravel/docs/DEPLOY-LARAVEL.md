@@ -96,6 +96,42 @@ Pick **one**:
 - [ ] PDF download works (Reports â†’ Download PDF)
 - [ ] `php artisan test` on a staging copy is green (291 tests / 2,338 assertions as of 2026-06-12)
 
+## 7. Updating an existing deployment
+
+Sections 1–6 are the **first** install. Routine updates are this:
+
+```bash
+php artisan down --secret="a-long-random-string"   # you can preview via https://host/<secret>
+mysqldump -u <user> -p <dbname> | gzip > ~/pre-deploy-$(date +%F-%H%M).sql.gz
+
+cd /path/to/repo && git pull
+cd laravel
+php artisan migrate --force
+php artisan config:cache && php artisan route:cache && php artisan view:cache
+php artisan up
+```
+
+**Maintenance mode goes on BEFORE the pull.** Between `git pull` and `migrate` the new code is
+running against the old schema; a migration that adds a column the new code already queries (e.g.
+`notifications.admission_id`) makes every request touching that query throw until `migrate` lands.
+
+**Back up before migrating.** This database holds real patient data. Additive and reversible
+migrations are still no help against an interrupted run.
+
+**Usually NOT needed:**
+
+| Step | When it IS needed |
+|---|---|
+| `composer install --no-dev --optimize-autoloader` | only when the pull changed `composer.lock` |
+| `npm ci && npm run build` | never — `public/build` is committed, built and verified in CI before each push |
+| `php artisan queue:restart` | only if `QUEUE_CONNECTION` is moved off `sync` and real workers run |
+
+If code changes don't take effect after `up`, OPcache is serving stale bytecode — restart PHP-FPM.
+
+Migrations are cumulative: `migrate --force` applies **every** migration not yet in the
+`migrations` table, which may be several releases' worth if deploys have been batched. Read the
+list it prints.
+
 ## Rollback
 
 The previous system (legacy PHP app) remains deployable from the repo root per [`DEPLOY.md`](../../DEPLOY.md);
