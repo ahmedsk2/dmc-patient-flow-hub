@@ -242,6 +242,22 @@ class ReassignReminderTest extends TestCase
             'saving a handover note on the new episode must resolve its reminders for every recipient');
     }
 
+    public function test_the_receiving_consultant_never_gets_the_pending_alarm(): void
+    {
+        [$admin, $from, $to, $admission] = $this->reassignFixture();
+
+        $this->actingAs($admin)->post('/admissions/reassign', [
+            'from_consultant_id' => $from->id, 'to_consultant_id' => $to->id, 'admission_ids' => [$admission->id],
+        ])->assertRedirect();
+
+        // initiator + OUTGOING consultant are chased …
+        $this->assertDatabaseHas('notifications', ['user_id' => $admin->id, 'type' => 'handover.incomplete']);
+        $this->assertDatabaseHas('notifications', ['user_id' => $from->id, 'type' => 'handover.incomplete']);
+        // … the RECEIVER is not (they get the ordinary handover.transfer notice instead)
+        $this->assertDatabaseMissing('notifications', ['user_id' => $to->id, 'type' => 'handover.incomplete']);
+        $this->assertDatabaseHas('notifications', ['user_id' => $to->id, 'type' => 'handover.transfer']);
+    }
+
     public function test_reminders_are_written_with_the_admission_id_column_and_resolve_by_it(): void
     {
         [$admin, $from, $to, $admission] = $this->reassignFixture();
