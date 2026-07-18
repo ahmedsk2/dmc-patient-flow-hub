@@ -14,12 +14,17 @@ name: CI
 # legacy E2E job against a stale legacy snapshot (chronically red since 2026-07-08, "could not
 # scrape login CSRF token" — the legacy app's canonical, passing lineage is the `renovation`
 # branch). Any push that actually touches legacy files still runs this pipeline in full.
+#
+# `.gitignore` is ignored here for the same reason: a repo-root housekeeping commit cannot change
+# legacy behaviour, but it DOES fall outside every other entry above, so it was waking this job and
+# producing a misleading red run (observed 2026-07-18). Note the list is filename-exact — a NEW
+# top-level file (say a root CHANGELOG.md) would still trip it until added here.
 on:
   push:
     branches: [ main, master, renovation ]
-    paths-ignore: [ 'laravel/**', '.github/workflows/laravel-ci.yml', 'docs/superpowers/**', 'README.md' ]
+    paths-ignore: [ 'laravel/**', '.github/workflows/laravel-ci.yml', 'docs/superpowers/**', 'README.md', '.gitignore' ]
   pull_request:
-    paths-ignore: [ 'laravel/**', '.github/workflows/laravel-ci.yml', 'docs/superpowers/**', 'README.md' ]
+    paths-ignore: [ 'laravel/**', '.github/workflows/laravel-ci.yml', 'docs/superpowers/**', 'README.md', '.gitignore' ]
 
 jobs:
   lint-and-test:
