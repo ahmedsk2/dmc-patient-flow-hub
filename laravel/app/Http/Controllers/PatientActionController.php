@@ -765,10 +765,16 @@ class PatientActionController extends Controller
         ] + ($sig ? ['handover_signature_id' => $sig->id] : []));
         $this->bustDashboardCache();
 
+        // Freshness is judged against the OLD (closing) episode — that's the one whose handover
+        // was or wasn't current at transfer time. But the reminder must TARGET the NEW episode:
+        // the closing one is discharged and invisible to Admission::active() /
+        // scopeNeedsHandoverToday(), so a reminder anchored there is unreachable from the board
+        // or inbox once the outgoing consultant's 7-day "My outgoing" window lapses. Do not
+        // "simplify" this back to $admission — that's the bug this comment guards against.
         if ($gated && $oldConsultant !== null && ! Handover::updatedToday($admission->id)) {
-            $admission->loadMissing('patient:id,name,mrn');
+            $new->loadMissing('patient:id,name,mrn');
             $this->raiseIncompleteHandoverReminders(
-                [$admission],
+                [$new],
                 $oldConsultant,
                 (int) $data['consultant_id'],
                 $request->boolean('acknowledged'),

@@ -187,4 +187,58 @@ class ReassignReminderTest extends TestCase
         $this->assertDatabaseHas('notifications', ['user_id' => $from->id, 'type' => 'handover.incomplete', 'resolved_at' => null]);
         $this->assertDatabaseHas('notifications', ['user_id' => $admin->id, 'type' => 'handover.incomplete', 'resolved_at' => null]);
     }
+
+    /**
+     * The closing episode is discharged and drops off the board/inbox (Admission::active() and
+     * scopeNeedsHandoverToday() both exclude it), so a reminder anchored there is a dead end after
+     * the outgoing consultant's 7-day "My outgoing" window lapses. The reminder must target the
+     * NEW active episode instead — that's the one clinicians can actually see and act on.
+     */
+    public function test_specialty_transfer_reminder_targets_the_new_active_episode_not_the_closed_one(): void
+    {
+        [$admin, $from, $to, $admission] = $this->reassignFixture();
+        $spec = Specialty::create(['name' => 'Cardiology', 'is_subspecialty' => true]);
+        $to->forceFill(['specialty_id' => $spec->id])->save();
+
+        $this->actingAs($admin)->post("/admissions/{$admission->id}/transfer", [
+            'mode' => 'specialty', 'specialty_id' => $spec->id, 'consultant_id' => $to->id,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $closed = $admission->fresh();
+        $new = Admission::where('patient_id', $admission->patient_id)->where('id', '!=', $admission->id)->firstOrFail();
+
+        $this->assertNotNull($closed->discharge_date, 'the outgoing episode must close');
+        $this->assertNull($new->discharge_date, 'the new episode must be active so the board/inbox can surface it');
+
+        $reminders = Notification::where('type', 'handover.incomplete')->whereNull('resolved_at')->get();
+        $this->assertNotEmpty($reminders);
+        foreach ($reminders as $n) {
+            $this->assertSame((string) $new->id, (string) data_get($n->payload, 'admission_id'),
+                'every handover.incomplete reminder must point at the new active episode');
+            $this->assertNotSame((string) $closed->id, (string) data_get($n->payload, 'admission_id'),
+                'no reminder may reference the closed episode — it is unreachable from the board/inbox');
+        }
+    }
+
+    /** End-to-end proof the reminder isn't a dead end: the receiving consultant can resolve it. */
+    public function test_saving_a_handover_on_the_new_episode_resolves_the_specialty_transfer_reminders(): void
+    {
+        [$admin, $from, $to, $admission] = $this->reassignFixture();
+        $spec = Specialty::create(['name' => 'Cardiology', 'is_subspecialty' => true]);
+        $to->forceFill(['specialty_id' => $spec->id])->save();
+
+        $this->actingAs($admin)->post("/admissions/{$admission->id}/transfer", [
+            'mode' => 'specialty', 'specialty_id' => $spec->id, 'consultant_id' => $to->id,
+        ])->assertRedirect();
+
+        $new = Admission::where('patient_id', $admission->patient_id)->where('id', '!=', $admission->id)->firstOrFail();
+        $this->assertGreaterThan(0, Notification::where('type', 'handover.incomplete')->whereNull('resolved_at')
+            ->where('payload->admission_id', (string) $new->id)->count());
+
+        $this->actingAs($to)->postJson("/admissions/{$new->id}/handover", ['body' => 'Handover reviewed.'])->assertOk();
+
+        $this->assertSame(0, Notification::where('type', 'handover.incomplete')->whereNull('resolved_at')
+            ->where('payload->admission_id', (string) $new->id)->count(),
+            'saving a handover note on the new episode must resolve its reminders for every recipient');
+    }
 }
