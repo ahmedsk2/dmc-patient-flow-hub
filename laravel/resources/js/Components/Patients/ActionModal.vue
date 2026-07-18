@@ -5,19 +5,28 @@ import BaseModal from '@/Components/BaseModal.vue';
 import IdentityChip from '@/Components/IdentityChip.vue';
 import ErrorSummary from '@/Components/ErrorSummary.vue';
 import AdmissionSummary from '@/Components/Patients/AdmissionSummary.vue';
+import HandoverCapture from '@/Components/Patients/HandoverCapture.vue';
 import { useHandover } from '@/composables/useHandover';
 import { useConfirm } from '@/composables/useConfirm';
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
 import { consultantOptions, DISCHARGE_DESTINATIONS, OUTCOME_STATUSES, guardSubmit } from '@/lib/ui.js';
+import { withCheckpointDefaults } from '@/lib/handover.js';
 
 /**
  * Per-patient action modal (Wave 3, Item 4) — extracted verbatim from Patients/Index.vue. Hosts the
  * five flow sub-forms (assign / medical-discharge / complete-discharge / ICU-discharge / the 3-mode
  * transfer) + the read-only AdmissionSummary review block, each owning its own useForm. Behavior is
  * preserved exactly: same endpoints, same prefills, same Dead→Mortuary locking, same transferReady
- * gate, and — critically — the HANDOVER GATE-THEN-RETRY clinical safety control (assign-to-a-
- * different-consultant and specialty-transfer require today's handover; on the server's 'handover'
- * validation error the inline editor opens, saves via useHandover, then retries the original action).
+ * gate.
+ *
+ * HC-T6: the handover control is now PROACTIVE, not reactive. The old mechanism (gateBody/gateBusy/
+ * saveGateThen) only appeared AFTER the server rejected a submit with a 'handover' validation error —
+ * the requirement was invisible until the user had already pressed the button, and the editor always
+ * opened blank. The server no longer blocks any consultant-changing path (HC-T2/HC-T3 softened both),
+ * so that reactive gate was dead weight AND wrong. Instead: the moment the chosen consultant differs
+ * from the patient's CURRENT one (`changingConsultant`), a full <HandoverCapture> panel appears right
+ * in the form, pre-loaded via useHandover().fetchHandover(). "Save handover & assign/transfer" saves
+ * it (best-effort — the move proceeds either way) then fires the original submit.
  *
  * Open/close + a11y (focus-trap / aria-modal / Esc / return-focus) come from BaseModal. On a
  * successful submit the form emits `saved` (Index reloads/flashes); Cancel/Esc/backdrop emit `close`.
@@ -30,8 +39,8 @@ import { consultantOptions, DISCHARGE_DESTINATIONS, OUTCOME_STATUSES, guardSubmi
  *
  * Error summary + focus-jump ids (Item 4): each mode's fields carry a stable id (`am-<uid>-<mode>-
  * <field>`) with aria-describedby → its own message; `modeErrors` maps the ACTIVE form's `.errors`
- * onto those ids for <ErrorSummary>. The handover-gate error is excluded — it already has its own
- * dedicated inline block just below.
+ * onto those ids for <ErrorSummary> (still excluding a 'handover' key, though the server no longer
+ * sends one — see the HC-T6 note above).
  *
  * Double-submit guard (Item 5): every submit* handler is wrapped in guardSubmit() (in addition to
  * the existing `:disabled="…Form.processing"` on each button) so a race can't fire the POST twice.
@@ -47,7 +56,7 @@ const props = defineProps({
 });
 const emit = defineEmits(['saved', 'close']);
 
-const { saveHandover } = useHandover();
+const { fetchHandover, saveHandover } = useHandover();
 
 const aForm = useForm({ consultant_id: '', mark_new: true });
 const mdForm = useForm({ outcome: 'Alive', medical_discharge_date: props.today, discharge_to: '', delay_reason: '', complete: false });
@@ -55,10 +64,35 @@ const cdForm = useForm({ discharge_date: props.today, outcome: '', discharge_to:
 const icuForm = useForm({ outcome: 'Alive', discharge_date: props.today, discharge_to: '' });
 const tForm = useForm({ mode: 'location', target: 'ICU', specialty_id: '', consultant_id: '', service: '' });
 
-// inline gate editor (assign + specialty-transfer): when the server rejects with the handover error,
-// write today's handover right here, save, then retry the original submit.
-const gateBody = ref('');
-const gateBusy = ref(false);
+// Proactive handover panel — shown the moment the chosen consultant differs from the current one,
+// never as a reaction to a rejected submit (the old behaviour: the requirement was invisible until
+// the user had already pressed the button).
+const ho = ref(null);            // null | { body, checkpoints, today, updated_at, revisions }
+const hoBody = ref('');
+const hoCheckpoints = ref(withCheckpointDefaults(null));
+const hoSaving = ref(false);
+
+// true only when the SELECTED consultant differs from the patient's current one — a no-op
+// reassign (re-picking the same consultant) is not a handoff, so no panel appears.
+const changingConsultant = computed(() =>
+    (props.mode === 'assign' && !!aForm.consultant_id && Number(aForm.consultant_id) !== Number(props.patient?.consultant_id))
+    || (props.mode === 'transfer' && tForm.mode === 'specialty' && !!tForm.consultant_id));
+
+watch(changingConsultant, async (on) => {
+    if (!on || !props.patient) { ho.value = null; return; }
+    const d = await fetchHandover(props.patient.id);
+    ho.value = d;
+    hoBody.value = d?.body || '';
+    hoCheckpoints.value = withCheckpointDefaults(d?.checkpoints);
+});
+
+/** Save the handover, then run the original submit. */
+const saveHandoverThen = async (retry) => {
+    if (!hoBody.value.trim()) { retry(); return; }
+    hoSaving.value = true;
+    try { await saveHandover(props.patient.id, hoBody.value.trim(), hoCheckpoints.value); ho.value = { ...ho.value, today: true }; retry(); }
+    finally { hoSaving.value = false; }
+};
 
 // prime the right sub-form when the modal opens for a (mode, patient). Mirrors the old openModal().
 watch(
@@ -66,7 +100,7 @@ watch(
     ([open]) => {
         if (!open || !props.patient) return;
         const row = props.patient;
-        gateBody.value = '';   // fresh inline-handover editor per patient
+        ho.value = null; hoBody.value = ''; hoCheckpoints.value = withCheckpointDefaults(null);   // fresh proactive panel per patient
         if (props.mode === 'assign') { aForm.consultant_id = row.consultant_id || ''; aForm.mark_new = true; aForm.clearErrors(); }
         if (props.mode === 'medical') mdForm.reset();   // never carry a previous patient's type/destination over
         if (props.mode === 'complete') { cdForm.reset(); cdForm.outcome = row.outcome || ''; cdForm.discharge_to = row.discharge_to || ''; }   // prefill the optional override from phase-1
@@ -118,8 +152,9 @@ const close = () => guardedClose(doClose);
 
 const uid = useId();
 const fid = (field) => `am-${uid}-${props.mode}-${field}`;
-// map the active form's errors onto this mode's field ids for <ErrorSummary>; 'handover' is excluded
-// — it already renders in its own dedicated gate block just below each affected form.
+// map the active form's errors onto this mode's field ids for <ErrorSummary>; 'handover' stays
+// excluded — the server no longer returns it (HC-T2/HC-T3 softened both paths), but the filter is
+// kept as a harmless belt-and-braces in case a future validator ever repurposes the key.
 const modeErrors = computed(() => Object.fromEntries(
     Object.entries(activeForm.value?.errors || {}).filter(([k]) => k !== 'handover').map(([k, v]) => [fid(k), v]),
 ));
@@ -131,23 +166,16 @@ const submitComplete = guardSubmit(cdForm, () => cdForm.post(`/admissions/${prop
 const submitIcu = guardSubmit(icuForm, () => icuForm.post(`/admissions/${props.patient.id}/icu-discharge`, opts));
 const submitTransfer = guardSubmit(tForm, () => tForm.post(`/admissions/${props.patient.id}/transfer`, opts));
 
-// gate-then-retry: save today's handover, then re-fire the original submit on success.
-const saveGateThen = async (retry) => {
-    const body = gateBody.value.trim();
-    if (!body || !props.patient) return;
-    gateBusy.value = true;
-    try { if (await saveHandover(props.patient.id, body)) { gateBody.value = ''; retry(); } } finally { gateBusy.value = false; }
-};
-
 defineExpose({
-    modalTitle, aForm, mdForm, cdForm, icuForm, tForm, gateBody,
+    modalTitle, aForm, mdForm, cdForm, icuForm, tForm,
     assignConsultants, specConsultants, transferReady, modalDirty, modeErrors, fid,
-    submitAssign, submitMedical, submitComplete, submitIcu, submitTransfer, saveGateThen,
+    submitAssign, submitMedical, submitComplete, submitIcu, submitTransfer,
+    changingConsultant, ho, hoBody, hoCheckpoints, hoSaving, saveHandoverThen,
 });
 </script>
 
 <template>
-    <BaseModal :open="open" :title="modalTitle" size="md" tall field-first :dirty="modalDirty" @close="close">
+    <BaseModal :open="open" :title="modalTitle" size="lg" tall field-first :dirty="modalDirty" @close="close">
         <!-- Wave 1 (EHC UI): the header carries the SAME identity tuple the user selected on —
              IdentityChip re-verifies name/MRN/age·sex/location at the moment of action. Data is
              unchanged; only the presentation moved from a plain-text subtitle to the chip. -->
@@ -158,16 +186,18 @@ defineExpose({
         </template>
         <template v-if="patient">
             <ErrorSummary :errors="modeErrors" />
-            <form v-if="mode === 'assign'" @submit.prevent="submitAssign" class="space-y-4">
+            <form v-if="mode === 'assign'" @submit.prevent="changingConsultant ? saveHandoverThen(submitAssign) : submitAssign()" class="space-y-4">
                 <div><label :for="fid('consultant_id')" class="sr-only">Consultant</label><select :id="fid('consultant_id')" v-model="aForm.consultant_id" title="On-service consultants only" :aria-describedby="aForm.errors.consultant_id ? fid('consultant_id') + '-err' : undefined" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select consultant…</option><option v-for="c in assignConsultants" :key="c.id" :value="c.id">{{ c.name }}{{ !c.on_service ? ' (off service)' : '' }}</option></select><p v-if="aForm.errors.consultant_id" :id="fid('consultant_id') + '-err'" class="mt-1 text-xs text-on-danger">{{ aForm.errors.consultant_id }}</p></div>
                 <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="aForm.mark_new" class="rounded text-brand-600" /> Mark as new patient <span class="text-xs text-ink-400">(uncheck for a quiet administrative move — no “New” badge)</span></label>
-                <!-- handover gate: write today's handover here, save, retry the assign -->
-                <div v-if="aForm.errors.handover" class="rounded-xl bg-tint-warning/60 p-3 ring-1 ring-warning-500/30">
-                    <p class="text-xs font-semibold text-on-warning">{{ aForm.errors.handover }}</p>
-                    <textarea v-model="gateBody" rows="3" maxlength="5000" placeholder="Write today's handover for this patient…" aria-label="Handover text" class="mt-2 w-full rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
-                    <div class="mt-2 flex justify-end"><button type="button" @click="saveGateThen(submitAssign)" :disabled="gateBusy || !gateBody.trim()" class="rounded-lg bg-brand-solid px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Save handover & assign</button></div>
+                <!-- proactive handover panel (HC-T6): appears the moment the picked consultant differs
+                     from the current one — never a reaction to a rejected submit -->
+                <div v-if="changingConsultant" class="rounded-xl bg-app/60 p-3 ring-1 ring-line">
+                    <HandoverCapture density="full" :label="patient?.name"
+                        :body="hoBody" :checkpoints="hoCheckpoints"
+                        :today="!!ho?.today" :updated-at="ho?.updated_at" :revisions="ho?.revisions || []"
+                        @update:body="hoBody = $event" @update:checkpoints="hoCheckpoints = $event" />
                 </div>
-                <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="aForm.processing || !aForm.consultant_id" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Assign</button></div>
+                <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="aForm.processing || !aForm.consultant_id || hoSaving" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">{{ changingConsultant ? 'Save handover & assign' : 'Assign' }}</button></div>
             </form>
             <form v-else-if="mode === 'medical'" @submit.prevent="submitMedical" class="space-y-4">
                 <!-- record-review step (J1-15c): legacy discharge embedded the admission record
@@ -251,7 +281,7 @@ defineExpose({
                 <div><label :for="fid('discharge_date')" class="mb-1 block text-sm font-semibold text-ink-700">Discharge date</label><input :id="fid('discharge_date')" v-model="icuForm.discharge_date" type="date" :max="today" :aria-describedby="icuForm.errors.discharge_date ? fid('discharge_date') + '-err' : undefined" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" /><p v-if="icuForm.errors.discharge_date" :id="fid('discharge_date') + '-err'" class="mt-1 text-xs text-on-danger">{{ icuForm.errors.discharge_date }}</p></div>
                 <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="icuForm.processing" class="rounded-xl bg-success-600 px-5 py-2 text-sm font-semibold text-white hover:bg-success-700 disabled:opacity-50">ICU discharge</button></div>
             </form>
-            <form v-else @submit.prevent="submitTransfer" class="space-y-4">
+            <form v-else @submit.prevent="changingConsultant ? saveHandoverThen(submitTransfer) : submitTransfer()" class="space-y-4">
                 <div class="flex gap-1 rounded-xl bg-app p-1 text-sm font-semibold">
                     <button v-for="m in [['location','Ward / ICU'],['specialty','Internal specialty'],['external','External service']]" :key="m[0]" type="button" @click="tForm.mode = m[0]"
                         class="flex-1 rounded-lg px-2 py-1.5 transition" :class="tForm.mode === m[0] ? 'bg-card text-brand-700 shadow-sm ring-1 ring-line' : 'text-ink-500 hover:text-ink-700'">{{ m[1] }}</button>
@@ -270,11 +300,12 @@ defineExpose({
                         <p v-if="tForm.specialty_id && !specConsultants.length" class="mt-1 text-xs text-on-warning">No on-service consultants under this specialty.</p>
                         <p v-if="tForm.errors.consultant_id" :id="fid('consultant_id') + '-err'" class="mt-1 text-xs text-on-danger">{{ tForm.errors.consultant_id }}</p></div>
                     <p class="text-xs text-ink-400">Closes this episode as a specialty handover and opens a new one under the chosen consultant.</p>
-                    <!-- handover gate: write today's handover here, save, retry the transfer -->
-                    <div v-if="tForm.errors.handover" class="rounded-xl bg-tint-warning/60 p-3 ring-1 ring-warning-500/30">
-                        <p class="text-xs font-semibold text-on-warning">{{ tForm.errors.handover }}</p>
-                        <textarea v-model="gateBody" rows="3" maxlength="5000" placeholder="Write today's handover for this patient…" aria-label="Handover text" class="mt-2 w-full rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
-                        <div class="mt-2 flex justify-end"><button type="button" @click="saveGateThen(submitTransfer)" :disabled="gateBusy || !gateBody.trim()" class="rounded-lg bg-brand-solid px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Save handover & transfer</button></div>
+                    <!-- proactive handover panel (HC-T6): same as the assign form, bound to the same refs -->
+                    <div v-if="changingConsultant" class="rounded-xl bg-app/60 p-3 ring-1 ring-line">
+                        <HandoverCapture density="full" :label="patient?.name"
+                            :body="hoBody" :checkpoints="hoCheckpoints"
+                            :today="!!ho?.today" :updated-at="ho?.updated_at" :revisions="ho?.revisions || []"
+                            @update:body="hoBody = $event" @update:checkpoints="hoCheckpoints = $event" />
                     </div>
                 </template>
                 <template v-else>
@@ -283,7 +314,7 @@ defineExpose({
                         <p v-if="tForm.errors.service" :id="fid('service') + '-err'" class="mt-1 text-xs text-on-danger">{{ tForm.errors.service }}</p></div>
                     <p class="text-xs text-ink-400">Closes this episode — the patient leaves the department (no new episode).</p>
                 </template>
-                <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="tForm.processing || !transferReady" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Transfer</button></div>
+                <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="tForm.processing || !transferReady || hoSaving" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">{{ changingConsultant ? 'Save handover & transfer' : 'Transfer' }}</button></div>
             </form>
         </template>
     </BaseModal>

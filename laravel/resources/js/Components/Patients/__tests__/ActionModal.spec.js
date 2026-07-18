@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
-import { reactive } from 'vue';
+import { reactive, nextTick } from 'vue';
 
 // ActionModal owns the per-patient flow forms (assign / medical / complete / icu / transfer) that
 // used to live on Patients/Index. These assertions are RELOCATED from PatientsIndex.wave2.test.js
@@ -22,9 +22,14 @@ vi.mock('@inertiajs/vue3', () => ({
         return f;
     },
 }));
-// gate-then-retry calls useHandover().saveHandover — make it a controllable spy.
-const { saveHandover } = vi.hoisted(() => ({ saveHandover: vi.fn(() => Promise.resolve(true)) }));
-vi.mock('@/composables/useHandover', () => ({ useHandover: () => ({ saveHandover, fetchHandover: vi.fn(), preflight: vi.fn() }) }));
+// HC-T6: the proactive panel calls useHandover().fetchHandover to preload, and saveHandoverThen
+// calls useHandover().saveHandover — both controllable spies. fetchHandover defaults to an
+// empty-but-shaped payload (mirrors the real GET /admissions/{id}/handover response).
+const { fetchHandover, saveHandover } = vi.hoisted(() => ({
+    fetchHandover: vi.fn(() => Promise.resolve({ body: '', checkpoints: null, today: false, updated_at: null, revisions: [] })),
+    saveHandover: vi.fn(() => Promise.resolve(true)),
+}));
+vi.mock('@/composables/useHandover', () => ({ useHandover: () => ({ saveHandover, fetchHandover, preflight: vi.fn() }) }));
 // the unsaved-changes guard's ask() — controllable per test (Wave 3, Item 1/2).
 const { ask } = vi.hoisted(() => ({ ask: vi.fn() }));
 vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => ({ ask }) }));
@@ -35,6 +40,8 @@ vi.mock('@/Components/BaseModal.vue', () => ({
 vi.mock('@/Components/Patients/AdmissionSummary.vue', () => ({ default: { template: '<div class="admission-summary" />' } }));
 
 import ActionModal from '@/Components/Patients/ActionModal.vue';
+import HandoverCapture from '@/Components/Patients/HandoverCapture.vue';
+import BaseModal from '@/Components/BaseModal.vue';
 
 const patient = { id: 7, name: 'Ali', mrn: '111', consultant_id: 5, location: 'Ward', outcome: '', discharge_to: '' };
 const consultants = [
@@ -50,7 +57,12 @@ const mountWith = (mode, p = patient, over = {}) => mount(ActionModal, {
     },
 });
 
-beforeEach(() => { posts.length = 0; saveHandover.mockClear(); saveHandover.mockResolvedValue(true); ask.mockReset(); });
+beforeEach(() => {
+    posts.length = 0;
+    saveHandover.mockClear(); saveHandover.mockResolvedValue(true);
+    fetchHandover.mockClear(); fetchHandover.mockResolvedValue({ body: '', checkpoints: null, today: false, updated_at: null, revisions: [] });
+    ask.mockReset();
+});
 
 describe('ActionModal — title map (relocated from PatientsIndex.wave2 Item 5)', () => {
     it('assign mode title is "Assign consultant"', () => {
@@ -131,31 +143,134 @@ describe('ActionModal — transferReady gate', () => {
     });
 });
 
-describe('ActionModal — HANDOVER GATE-THEN-RETRY (clinical safety control)', () => {
-    it('saveGateThen writes today\'s handover then re-fires the original submit', async () => {
-        const w = mountWith('assign');
-        w.vm.gateBody = 'on insulin, watch K+';
-        const retry = vi.fn();
-        await w.vm.saveGateThen(retry);
-        expect(saveHandover).toHaveBeenCalledWith(7, 'on insulin, watch K+');
-        expect(retry).toHaveBeenCalled();   // gate cleared → original action retried
-        expect(w.vm.gateBody).toBe('');     // editor cleared after a successful save
+// HC-T6: the old reactive gate (gateBody/gateBusy/saveGateThen, triggered only AFTER the server
+// rejected a submit with a 'handover' validation error) is GONE — the server no longer blocks any
+// consultant-changing path. In its place: a PROACTIVE panel that appears the moment the user's
+// selection differs from the patient's current consultant, pre-loaded via fetchHandover(), well
+// before any submit is attempted.
+describe('ActionModal — proactive handover panel (HC-T6)', () => {
+    it('assign: shows the handover editor as soon as a DIFFERENT consultant is picked, before any submit', async () => {
+        const w = mountWith('assign');   // patient.consultant_id === 5
+        expect(w.findComponent(HandoverCapture).exists()).toBe(false);
+        expect(fetchHandover).not.toHaveBeenCalled();
+
+        w.vm.aForm.consultant_id = 6;
+        await nextTick(); await nextTick();   // watch(changingConsultant) + fetchHandover resolution
+
+        const cap = w.findComponent(HandoverCapture);
+        expect(cap.exists()).toBe(true);
+        expect(cap.props('density')).toBe('full');
+        expect(fetchHandover).toHaveBeenCalledWith(7);
     });
-    it('does NOT retry when the handover save fails', async () => {
+
+    it('assign: does NOT show the handover editor when re-picking the SAME consultant', async () => {
+        const w = mountWith('assign');
+        w.vm.aForm.consultant_id = 5;   // unchanged — a no-op assign is not a handoff
+        await nextTick(); await nextTick();
+        expect(w.findComponent(HandoverCapture).exists()).toBe(false);
+        expect(fetchHandover).not.toHaveBeenCalled();
+    });
+
+    it('assign: hides the panel again if the user reverts to the original consultant', async () => {
+        const w = mountWith('assign');
+        w.vm.aForm.consultant_id = 6;
+        await nextTick(); await nextTick();
+        expect(w.findComponent(HandoverCapture).exists()).toBe(true);
+        w.vm.aForm.consultant_id = 5;
+        await nextTick(); await nextTick();
+        expect(w.findComponent(HandoverCapture).exists()).toBe(false);
+    });
+
+    it('assign: prefills body/checkpoints/today from the fetched handover payload', async () => {
+        fetchHandover.mockResolvedValueOnce({ body: 'prior note', checkpoints: { high_risk: true }, today: true, updated_at: '2026-06-01T10:00:00Z', revisions: [] });
+        const w = mountWith('assign');
+        w.vm.aForm.consultant_id = 6;
+        await nextTick(); await nextTick();
+        const cap = w.findComponent(HandoverCapture);
+        expect(cap.props('body')).toBe('prior note');
+        expect(cap.props('today')).toBe(true);
+        expect(cap.props('checkpoints').high_risk).toBe(true);
+    });
+
+    it('specialty transfer: shows the panel once a receiving consultant is chosen', async () => {
+        const w = mountWith('transfer');
+        w.vm.tForm.mode = 'specialty';
+        await nextTick();
+        expect(w.findComponent(HandoverCapture).exists()).toBe(false);
+        w.vm.tForm.specialty_id = 1;
+        // the specialty_id watcher resets consultant_id to '' — let it flush BEFORE picking one
+        // (same ordering the pre-existing "specialty mode needs both" transferReady test uses).
+        await nextTick();
+        w.vm.tForm.consultant_id = 5;
+        await nextTick(); await nextTick();
+        expect(w.findComponent(HandoverCapture).exists()).toBe(true);
+    });
+
+    it('location / external transfer modes never show the panel', async () => {
+        const w = mountWith('transfer');
+        w.vm.tForm.mode = 'location'; w.vm.tForm.target = 'ICU';
+        await nextTick();
+        expect(w.findComponent(HandoverCapture).exists()).toBe(false);
+        w.vm.tForm.mode = 'external'; w.vm.tForm.service = 'Surgery';
+        await nextTick();
+        expect(w.findComponent(HandoverCapture).exists()).toBe(false);
+    });
+
+    it('assign submit button reads "Save handover & assign" while changing consultant, "Assign" otherwise', async () => {
+        const w = mountWith('assign');
+        expect(w.find('form button[type="submit"]').text()).toBe('Assign');
+        w.vm.aForm.consultant_id = 6;
+        await nextTick(); await nextTick();
+        expect(w.find('form button[type="submit"]').text()).toBe('Save handover & assign');
+    });
+
+    it('specialty transfer submit button reads "Save handover & transfer" while changing consultant', async () => {
+        const w = mountWith('transfer');
+        w.vm.tForm.mode = 'specialty'; w.vm.tForm.specialty_id = 1;
+        await nextTick();   // let the specialty_id→consultant_id reset watcher flush first
+        w.vm.tForm.consultant_id = 6;
+        await nextTick(); await nextTick();
+        expect(w.find('form button[type="submit"]').text()).toBe('Save handover & transfer');
+    });
+
+    it('widens the modal to size="lg" (was "md") for room for the panel', () => {
+        expect(mountWith('assign').findComponent(BaseModal).props('size')).toBe('lg');
+    });
+});
+
+describe('ActionModal — saveHandoverThen (HC-T6 replacement for saveGateThen)', () => {
+    it('saves the handover, marks it current, then re-fires the original submit', async () => {
+        const w = mountWith('assign');
+        w.vm.aForm.consultant_id = 6;
+        await nextTick(); await nextTick();
+        w.vm.hoBody = 'on insulin, watch K+';
+        const retry = vi.fn();
+        await w.vm.saveHandoverThen(retry);
+        expect(saveHandover).toHaveBeenCalledWith(7, 'on insulin, watch K+', w.vm.hoCheckpoints);
+        expect(retry).toHaveBeenCalled();
+        expect(w.vm.ho.today).toBe(true);
+    });
+
+    // Unlike the old gate, an empty body is NOT a hard stop — this is a proactive best-effort save,
+    // not a blocking requirement, so the original action still proceeds.
+    it('skips the save but still retries when the body is empty (no forced bypass button needed)', async () => {
+        const w = mountWith('assign');
+        const retry = vi.fn();
+        w.vm.hoBody = '   ';
+        await w.vm.saveHandoverThen(retry);
+        expect(saveHandover).not.toHaveBeenCalled();
+        expect(retry).toHaveBeenCalled();
+    });
+
+    // Unlike the old gate (which only retried on a truthy saveHandover result), the move is never
+    // blocked by a failed handover save — the server-side gate is gone, so this is best-effort only.
+    it('still retries even when the handover save reports failure', async () => {
         saveHandover.mockResolvedValueOnce(false);
         const w = mountWith('assign');
-        w.vm.gateBody = 'note';
+        w.vm.hoBody = 'note';
         const retry = vi.fn();
-        await w.vm.saveGateThen(retry);
-        expect(retry).not.toHaveBeenCalled();
-    });
-    it('does NOT save with an empty body', async () => {
-        const w = mountWith('assign');
-        w.vm.gateBody = '   ';
-        const retry = vi.fn();
-        await w.vm.saveGateThen(retry);
-        expect(saveHandover).not.toHaveBeenCalled();
-        expect(retry).not.toHaveBeenCalled();
+        await w.vm.saveHandoverThen(retry);
+        expect(retry).toHaveBeenCalled();
     });
 });
 
@@ -303,12 +418,15 @@ describe('ActionModal — ErrorSummary wiring', () => {
         expect(w.get(`#${href}`).attributes('aria-describedby')).toBe(`${href}-err`);
     });
 
-    it('excludes the handover-gate error from the summary (it has its own inline block)', async () => {
+    // HC-T6: the dedicated inline gate block that used to render this error is GONE — the server no
+    // longer sends a 'handover' key at all. The filter itself is kept as a harmless defensive no-op
+    // (see the modeErrors comment in ActionModal.vue), so a stray 'handover' key still never reaches
+    // the summary — it just isn't rendered anywhere else either now.
+    it('excludes a handover error key from the summary (legacy defensive filter; server no longer sends it)', async () => {
         const w = mountWith('assign');
         w.vm.aForm.errors = { handover: 'Handover is stale' };
         await w.vm.$nextTick();
         expect(w.find('[role="alert"]').exists()).toBe(false);
-        expect(w.text()).toContain('Handover is stale');   // still shown, just not via the summary
     });
 });
 
