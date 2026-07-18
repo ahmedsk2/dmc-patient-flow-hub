@@ -419,18 +419,17 @@ class PatientActionController extends Controller
             // caller point an unassigned patient at an inactive or non-consultant account (N1-7)
             'consultant_id' => ['required', self::activeConsultantRule()],
             'mark_new' => ['nullable', 'boolean'],
+            'acknowledged' => ['sometimes', 'boolean'],
         ]);
         // mark_new=false (legacy "New Patient?" unchecked) = quiet administrative assignment:
         // the new-assignment fields are left UNTOUCHED, preserving any existing assigned_at
         $markNew = $request->boolean('mark_new', true);
 
-        // moving an ALREADY-assigned patient to a different consultant is a handover —
-        // gated on a same-day handover note; first assignments are not
+        // moving an ALREADY-assigned patient to a different consultant is a handover; first
+        // assignments are not. Soft gate (owner-approved, HC-T2): a stale/missing handover no
+        // longer blocks the move — it raises a persistent reminder below instead.
         $oldConsultant = $admission->consultant_id ? (int) $admission->consultant_id : null;
         $gated = $oldConsultant !== null && $oldConsultant !== (int) $data['consultant_id'];
-        if ($gated) {
-            $this->assertHandoverToday($admission);
-        }
 
         $sig = DB::transaction(function () use ($admission, $data, $markNew, $gated, $oldConsultant) {
             $admission->update(['consultant_id' => $data['consultant_id']]
@@ -452,6 +451,16 @@ class PatientActionController extends Controller
         Audit::log('admission.assign', 'admission', (string) $admission->id, ['consultant_id' => $data['consultant_id'], 'mark_new' => $markNew]
             + ($sig ? ['handover_signature_id' => $sig->id] : []));
         $this->bustDashboardCache();
+
+        if ($gated && ! Handover::updatedToday($admission->id)) {
+            $admission->loadMissing('patient:id,name,mrn');
+            $this->raiseIncompleteHandoverReminders(
+                [$admission],
+                (int) $oldConsultant,
+                (int) $data['consultant_id'],
+                $request->boolean('acknowledged'),
+            );
+        }
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultant assigned.']);
     }

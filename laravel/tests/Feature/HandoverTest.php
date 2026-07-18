@@ -129,22 +129,29 @@ class HandoverTest extends TestCase
     }
 
     // ---- 2. same-day gate on assign ------------------------------------------------------------
+    // HC-T2: the same-day handover gate on single-patient assign is now a SOFT gate (matching
+    // bulkReassign, HO-T5) — a stale/missing handover no longer blocks the move. It proceeds and
+    // raises a persistent `handover.incomplete` reminder to the actor and the outgoing consultant
+    // instead (see tests/Feature/ReassignReminderTest.php for the dedicated reminder coverage).
 
-    public function test_assign_to_different_consultant_blocked_without_today_handover(): void
+    public function test_assign_to_different_consultant_proceeds_without_today_handover_and_raises_a_reminder(): void
     {
         $from = $this->user();
         $to = $this->user();
         $a = $this->admission(['consultant_id' => $from->id]);
+        $admin = $this->user(['role' => User::ROLE_ADMIN]);
 
-        $this->actingAs($this->user(['role' => User::ROLE_ADMIN]))
+        $this->actingAs($admin)
             ->post("/admissions/{$a->id}/assign", ['consultant_id' => $to->id])
-            ->assertSessionHasErrors('handover');
+            ->assertRedirect()->assertSessionHasNoErrors();
 
-        $this->assertSame($from->id, (int) $a->fresh()->consultant_id, 'transfer must not happen');
-        $this->assertSame(0, HandoverSignature::count());
+        $this->assertSame($to->id, (int) $a->fresh()->consultant_id, 'the move proceeds despite the missing handover');
+        $this->assertSame(1, HandoverSignature::count(), 'a gated move still creates the receiver signature, same as before');
+        $this->assertDatabaseHas('notifications', ['user_id' => $admin->id, 'type' => 'handover.incomplete', 'resolved_at' => null]);
+        $this->assertDatabaseHas('notifications', ['user_id' => $from->id, 'type' => 'handover.incomplete', 'resolved_at' => null]);
     }
 
-    public function test_assign_blocked_when_handover_is_stale(): void
+    public function test_assign_proceeds_and_raises_a_reminder_when_handover_is_stale(): void
     {
         $from = $this->user();
         $to = $this->user();
@@ -154,8 +161,10 @@ class HandoverTest extends TestCase
 
         $this->actingAs($this->user(['role' => User::ROLE_ADMIN]))
             ->post("/admissions/{$a->id}/assign", ['consultant_id' => $to->id])
-            ->assertSessionHasErrors('handover');
-        $this->assertSame($from->id, (int) $a->fresh()->consultant_id);
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame($to->id, (int) $a->fresh()->consultant_id);
+        // two distinct recipients here (a fresh admin actor + the outgoing consultant)
+        $this->assertSame(2, Notification::where('type', 'handover.incomplete')->count());
     }
 
     public function test_assign_with_today_handover_creates_signature_and_notification_and_supersedes(): void

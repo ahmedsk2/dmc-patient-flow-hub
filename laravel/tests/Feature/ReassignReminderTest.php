@@ -137,4 +137,32 @@ class ReassignReminderTest extends TestCase
         $this->assertLessThanOrEqual(1, $forAdmission($x->id));
         $this->assertLessThanOrEqual(1, $forAdmission($y->id));
     }
+
+    // ---- HC-T2: single-patient assign now uses the same soft gate as bulkReassign ----------------
+
+    public function test_single_assign_to_a_different_consultant_proceeds_with_a_stale_handover(): void
+    {
+        [$admin, $from, $to, $admission] = $this->reassignFixture();
+
+        $this->actingAs($admin)->post("/admissions/{$admission->id}/assign", [
+            'consultant_id' => $to->id,
+        ])->assertRedirect()->assertSessionHasNoErrors();   // NO 422 — the hard gate is gone
+
+        $this->assertSame($to->id, (int) $admission->fresh()->consultant_id);
+        $this->assertDatabaseHas('notifications', ['user_id' => $admin->id, 'type' => 'handover.incomplete', 'resolved_at' => null]);
+        $this->assertDatabaseHas('notifications', ['user_id' => $from->id, 'type' => 'handover.incomplete', 'resolved_at' => null]);
+    }
+
+    public function test_single_assign_records_the_acknowledgement_in_the_audit_trail(): void
+    {
+        [$admin, $from, $to, $admission] = $this->reassignFixture();
+
+        $this->actingAs($admin)->post("/admissions/{$admission->id}/assign", [
+            'consultant_id' => $to->id, 'acknowledged' => true,
+        ])->assertRedirect();
+
+        $row = \App\Models\AuditLog::where('action', 'handover.reassign_incomplete')->latest('id')->first();
+        $this->assertNotNull($row);
+        $this->assertTrue((bool) ($row->details['acknowledged'] ?? false));
+    }
 }
