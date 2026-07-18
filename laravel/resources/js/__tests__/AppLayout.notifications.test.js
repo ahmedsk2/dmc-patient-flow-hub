@@ -114,6 +114,36 @@ describe('AppLayout notifications', () => {
         // the actionable link target appears exactly once in the DOM (pinned only, no duplicate row)
         expect(w.html().split('/patients?highlight=42').length - 1).toBe(1);
     });
+
+    // TD-T6: the panel previously had no max-height and only the feed <ul> scrolled
+    // (max-h-80 overflow-auto) — the pinned "Needs attention" group sat OUTSIDE it, so a long
+    // actionable list grew the panel past the viewport and only the page itself could scroll.
+    // Fix: the panel is capped at 70vh and BOTH groups live inside one scroll container.
+    it('caps the panel height and scrolls both groups inside one container', async () => {
+        const actionableItem = { id: 1, type: 'handover.incomplete', payload: { admission_id: 42 }, read_at: null, resolved_at: null, created_at: new Date().toISOString() };
+        const ordinary = [2, 3, 4].map((id) => ({ id, type: 'handover.transfer', payload: { from_name: 'Dr X' }, read_at: null, created_at: new Date().toISOString() }));
+        global.fetch
+            .mockResolvedValueOnce({ json: async () => ({ notifications: ordinary, actionable: [actionableItem], unread: 4 }) })  // /api/notifications
+            .mockResolvedValueOnce({ ok: true, json: async () => ({}) });                                                          // /notifications/read-all
+        const w = mountLayout();
+        await w.vm.toggleBell();
+        await w.vm.$nextTick();
+
+        const panel = w.find('#notifications-panel');
+        expect(panel.classes().join(' ')).toMatch(/max-h-\[70vh\]/);
+
+        const scroller = panel.find('[data-notif-scroll]');
+        expect(scroller.exists()).toBe(true);
+        expect(scroller.classes()).toContain('overflow-y-auto');
+        expect(scroller.classes()).toContain('overscroll-contain');
+
+        // BOTH groups live inside that one scroller
+        expect(scroller.text()).toContain('Needs attention');
+        expect(scroller.find('ul').exists()).toBe(true);
+
+        // the old inner cap is gone
+        expect(panel.html()).not.toContain('max-h-80');
+    });
 });
 
 describe('AppLayout flash toast roles', () => {

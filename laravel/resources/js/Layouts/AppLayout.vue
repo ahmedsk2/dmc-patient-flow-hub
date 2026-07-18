@@ -505,13 +505,19 @@ onUnmounted(() => {
                             <span v-if="unread > 0" class="nums absolute -end-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-danger-600 px-1 text-[10px] font-bold leading-none text-white">{{ unread > 9 ? '9+' : unread }}</span>
                         </button>
                         <div v-if="bellOpen" class="fixed inset-0 z-40" @click="bellOpen = false"></div>
-                        <div v-if="bellOpen" id="notifications-panel" role="dialog" aria-label="Notifications" :ref="focusFirstBell" @keydown.esc="bellOpen = false" class="absolute end-0 top-11 z-50 w-80 overflow-hidden rounded-2xl bg-card shadow-2xl ring-1 ring-line">
-                            <div class="flex items-center justify-between border-b border-line px-4 py-2.5">
+                        <div v-if="bellOpen" id="notifications-panel" role="dialog" aria-label="Notifications" :ref="focusFirstBell" @keydown.esc="bellOpen = false" class="absolute end-0 top-11 z-50 flex max-h-[70vh] w-80 flex-col overflow-hidden rounded-2xl bg-card shadow-2xl ring-1 ring-line">
+                            <div class="shrink-0 flex items-center justify-between border-b border-line px-4 py-2.5">
                                 <span class="text-sm font-bold text-ink-800">Notifications</span>
                                 <button @click="goInbox" class="text-xs font-semibold text-brand-600 hover:underline">Handover inbox →</button>
                             </div>
                             <div v-if="bellLoading" class="px-4 py-6 text-center text-sm text-ink-400">Loading…</div>
-                            <template v-else>
+                            <!-- TD-T6: both the pinned group and the feed live inside ONE scroll container so a
+                                 long actionable list can't push the panel (and page) past the viewport — the
+                                 panel itself is capped at 70vh above. `min-h-0` lets this flex child actually
+                                 shrink below its content (a flex child's default min-height is its content
+                                 size, which would defeat the max-height cap); `overscroll-contain` stops
+                                 scroll chaining to the page once this list hits its end — the reported bug. -->
+                            <div v-else data-notif-scroll class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
                             <!-- HO-T7: pinned "Needs attention" group — persistent handover.incomplete
                                  reminders that stay lit until resolved server-side (a note is saved), not
                                  dismissed by read-all. Links by admission id (?highlight=), NOT by MRN —
@@ -526,7 +532,7 @@ onUnmounted(() => {
                                 </Link>
                             </div>
                             <!-- non-actionable feed (actionable ids are pinned above, so they're filtered out here) -->
-                            <ul v-if="feedNotifications.length" class="max-h-80 divide-y divide-line overflow-auto">
+                            <ul v-if="feedNotifications.length" class="divide-y divide-line">
                                 <li v-for="n in feedNotifications" :key="n.id">
                                     <button @click="goInbox" class="w-full px-4 py-3 text-start transition hover:bg-brand-50/40" :class="{ 'bg-brand-50/30': !n.read_at }">
                                         <p class="text-sm leading-snug text-ink-700">{{ notifText(n) }}</p>
@@ -536,7 +542,7 @@ onUnmounted(() => {
                             </ul>
                             <!-- empty state ONLY when neither group has anything (a lone pinned group must not trigger it) -->
                             <div v-if="!actionable.length && !feedNotifications.length" class="px-4 py-6 text-center text-sm text-ink-400">No notifications yet.</div>
-                            </template>
+                            </div>
                         </div>
                     </div>
                     <div class="flex items-center gap-3 border-s border-line ps-3">
