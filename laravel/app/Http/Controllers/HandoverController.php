@@ -95,8 +95,10 @@ class HandoverController extends Controller
         Audit::log('handover.update', 'admission', (string) $admission->id, ['revision_id' => HandoverRevision::latestIdFor($admission->id)]);
 
         // Resolve any persistent "incomplete handover" reminders for this admission (all recipients).
+        // Keyed on the indexed admission_id column — the previous JSON payload compare required a
+        // (string) cast to match at all, which was a real bug once.
         Notification::where('type', 'handover.incomplete')->whereNull('resolved_at')
-            ->where('payload->admission_id', (string) $admission->id)->update(['resolved_at' => now()]);
+            ->where('admission_id', $admission->id)->update(['resolved_at' => now()]);
 
         return $request->expectsJson()
             ? response()->json(['saved' => true, 'updated_at' => now()->toIso8601String()])

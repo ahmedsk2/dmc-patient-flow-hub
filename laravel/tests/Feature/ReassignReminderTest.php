@@ -241,4 +241,22 @@ class ReassignReminderTest extends TestCase
             ->where('payload->admission_id', (string) $new->id)->count(),
             'saving a handover note on the new episode must resolve its reminders for every recipient');
     }
+
+    public function test_reminders_are_written_with_the_admission_id_column_and_resolve_by_it(): void
+    {
+        [$admin, $from, $to, $admission] = $this->reassignFixture();
+
+        $this->actingAs($admin)->post('/admissions/reassign', [
+            'from_consultant_id' => $from->id, 'to_consultant_id' => $to->id, 'admission_ids' => [$admission->id],
+        ])->assertRedirect();
+
+        // every reminder carries the column, not just the JSON payload
+        $this->assertSame(2, \App\Models\Notification::where('type', 'handover.incomplete')
+            ->where('admission_id', $admission->id)->whereNull('resolved_at')->count());
+
+        // saving the note resolves them THROUGH the column
+        $this->actingAs($to)->postJson("/admissions/{$admission->id}/handover", ['body' => 'done'])->assertOk();
+        $this->assertSame(0, \App\Models\Notification::where('type', 'handover.incomplete')
+            ->where('admission_id', $admission->id)->whereNull('resolved_at')->count());
+    }
 }
