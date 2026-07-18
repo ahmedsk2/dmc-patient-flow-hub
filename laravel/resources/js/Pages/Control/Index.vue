@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BaseModal from '@/Components/BaseModal.vue';
+import SearchableSelect from '@/Components/SearchableSelect.vue';
 import Tabs from '@/Components/Tabs.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
@@ -404,7 +405,7 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
                         <label class="flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" v-model="uForm.on_service" class="rounded text-brand-600" /> On service</label>
                     </div>
                     <label v-if="uForm.role === 3" class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Specialty</span>
-                        <select v-model="uForm.specialty_id" :class="field"><option value="">—</option><option v-for="s in specialties.filter((x) => !x.is_external)" :key="s.id" :value="s.id">{{ s.name }}</option></select>
+                        <SearchableSelect v-model="uForm.specialty_id" :input-class="field" placeholder="—" :options="specialties.filter((x) => !x.is_external)" />
                     </label>
                     <div class="grid grid-cols-2 gap-2">
                         <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_assign" class="rounded text-brand-600" /> Can assign</label>

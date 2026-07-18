@@ -3,6 +3,7 @@ import { useId, computed } from 'vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
 import DxChips from '@/Components/DxChips.vue';
 import ErrorSummary from '@/Components/ErrorSummary.vue';
+import SearchableSelect from '@/Components/SearchableSelect.vue';
 import { FIELD, ADMIT_FROM_OPTIONS, consultantOptions } from '@/lib/ui.js';
 
 /**
@@ -38,6 +39,9 @@ const emit = defineEmits(['add-dx', 'remove-dx']);
 
 // on-service consultants for the select; the current assignee stays selectable (keepId)
 const consultantList = () => consultantOptions(props.consultants || [], { keepId: props.form.consultant_id });
+// SearchableSelect renders o.name verbatim — precompute the "(off service)" suffix here rather
+// than teaching the component about it (consultantList() can include the kept off-service one).
+const consultantListLabelled = () => consultantList().map((c) => ({ ...c, name: c.on_service ? c.name : `${c.name} (off service)` }));
 const uid = useId();
 const dlId = `admit-from-${uid}`;
 const fid = (name) => `patient-form-${uid}-${name}`;
@@ -69,10 +73,7 @@ const summaryErrors = computed(() => Object.fromEntries(
         <div><label :for="fid('current_location')" class="mb-1 block text-sm font-semibold text-ink-700">Location</label><select :id="fid('current_location')" v-model="form.current_location" :aria-describedby="form.errors.current_location ? fid('current_location') + '-err' : undefined" :class="fieldClass"><option>ER</option><option>Ward</option><option>ICU</option></select><p v-if="form.errors.current_location" :id="fid('current_location') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.current_location }}</p></div>
         <div class="sm:col-span-2"><label :for="fid('admitted_from')" class="mb-1 block text-sm font-semibold text-ink-700">Admitted from</label><input :id="fid('admitted_from')" v-model="form.admitted_from" :list="dlId" placeholder="ER, Clinic, Referral…" :aria-describedby="form.errors.admitted_from ? fid('admitted_from') + '-err' : undefined" :class="fieldClass" /><datalist :id="dlId"><option v-for="o in admitFromOptions" :key="o" :value="o" /></datalist><p v-if="form.errors.admitted_from" :id="fid('admitted_from') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.admitted_from }}</p></div>
         <div v-if="consultants" class="sm:col-span-2"><label :for="fid('consultant_id')" class="mb-1 block text-sm font-semibold text-ink-700">Consultant <span class="font-normal text-ink-400">(quiet change — no “New” badge)</span></label>
-            <select :id="fid('consultant_id')" v-model="form.consultant_id" title="On-service consultants only" :aria-describedby="form.errors.consultant_id ? fid('consultant_id') + '-err' : undefined" :class="fieldClass">
-                <option value="">— no change —</option>
-                <option v-for="c in consultantList()" :key="c.id" :value="c.id">{{ c.name }}{{ !c.on_service ? ' (off service)' : '' }}</option>
-            </select>
+            <SearchableSelect :id="fid('consultant_id')" v-model="form.consultant_id" title="On-service consultants only" :aria-describedby="form.errors.consultant_id ? fid('consultant_id') + '-err' : undefined" :input-class="fieldClass" placeholder="— no change —" :options="consultantListLabelled()" />
             <p v-if="form.errors.consultant_id" :id="fid('consultant_id') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.consultant_id }}</p></div>
     </div>
     <div>

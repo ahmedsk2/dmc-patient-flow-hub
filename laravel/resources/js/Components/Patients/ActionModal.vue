@@ -4,6 +4,7 @@ import { useForm } from '@inertiajs/vue3';
 import BaseModal from '@/Components/BaseModal.vue';
 import IdentityChip from '@/Components/IdentityChip.vue';
 import ErrorSummary from '@/Components/ErrorSummary.vue';
+import SearchableSelect from '@/Components/SearchableSelect.vue';
 import AdmissionSummary from '@/Components/Patients/AdmissionSummary.vue';
 import HandoverCapture from '@/Components/Patients/HandoverCapture.vue';
 import { useHandover } from '@/composables/useHandover';
@@ -189,6 +190,10 @@ const specConsultants = computed(() => consultantOptions(props.consultants, { sp
 // single-assign modal: on-service only too, but keep the CURRENT assignee selectable even when
 // they just went off service (so the prefilled selection isn't silently dropped) — J1-15a
 const assignConsultants = computed(() => consultantOptions(props.consultants, { keepId: props.patient?.consultant_id }));
+// SearchableSelect renders o.name verbatim — precompute the "(off service)" suffix here rather
+// than teaching the component about it (assignConsultants can include the kept off-service one).
+const assignConsultantsLabelled = computed(() =>
+    assignConsultants.value.map((c) => ({ ...c, name: c.on_service ? c.name : `${c.name} (off service)` })));
 watch(() => tForm.specialty_id, () => (tForm.consultant_id = ''));
 const transferReady = computed(() =>
     tForm.mode === 'location' ? !!tForm.target
@@ -249,7 +254,7 @@ defineExpose({
         <template v-if="patient">
             <ErrorSummary :errors="modeErrors" />
             <form v-if="mode === 'assign'" @submit.prevent="changingConsultant ? submitWithHandoverGuard(submitAssign, aForm) : submitAssign()" class="space-y-4">
-                <div><label :for="fid('consultant_id')" class="sr-only">Consultant</label><select :id="fid('consultant_id')" v-model="aForm.consultant_id" title="On-service consultants only" :aria-describedby="aForm.errors.consultant_id ? fid('consultant_id') + '-err' : undefined" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select consultant…</option><option v-for="c in assignConsultants" :key="c.id" :value="c.id">{{ c.name }}{{ !c.on_service ? ' (off service)' : '' }}</option></select><p v-if="aForm.errors.consultant_id" :id="fid('consultant_id') + '-err'" class="mt-1 text-xs text-on-danger">{{ aForm.errors.consultant_id }}</p></div>
+                <div><label :for="fid('consultant_id')" class="sr-only">Consultant</label><SearchableSelect :id="fid('consultant_id')" v-model="aForm.consultant_id" title="On-service consultants only" :aria-describedby="aForm.errors.consultant_id ? fid('consultant_id') + '-err' : undefined" input-class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" placeholder="Select consultant…" :options="assignConsultantsLabelled" /><p v-if="aForm.errors.consultant_id" :id="fid('consultant_id') + '-err'" class="mt-1 text-xs text-on-danger">{{ aForm.errors.consultant_id }}</p></div>
                 <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="aForm.mark_new" class="rounded text-brand-600" /> Mark as new patient <span class="text-xs text-ink-400">(uncheck for a quiet administrative move — no “New” badge)</span></label>
                 <!-- proactive handover panel (HC-T6): appears the moment the picked consultant differs
                      from the current one — never a reaction to a rejected submit -->
@@ -359,7 +364,7 @@ defineExpose({
                         <select :id="fid('specialty_id')" v-model="tForm.specialty_id" :aria-describedby="tForm.errors.specialty_id ? fid('specialty_id') + '-err' : undefined" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select specialty…</option><option v-for="s in specialties" :key="s.id" :value="s.id">{{ s.name }}</option></select>
                         <p v-if="tForm.errors.specialty_id" :id="fid('specialty_id') + '-err'" class="mt-1 text-xs text-on-danger">{{ tForm.errors.specialty_id }}</p></div>
                     <div><label :for="fid('consultant_id')" class="mb-1 block text-sm font-semibold text-ink-700">Receiving consultant <span class="font-normal text-ink-400">(on-service only)</span></label>
-                        <select :id="fid('consultant_id')" v-model="tForm.consultant_id" :disabled="!tForm.specialty_id" title="On-service consultants only" :aria-describedby="tForm.errors.consultant_id ? fid('consultant_id') + '-err' : undefined" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">Select consultant…</option><option v-for="c in specConsultants" :key="c.id" :value="c.id">{{ c.name }}</option></select>
+                        <SearchableSelect :id="fid('consultant_id')" v-model="tForm.consultant_id" :disabled="!tForm.specialty_id" title="On-service consultants only" :aria-describedby="tForm.errors.consultant_id ? fid('consultant_id') + '-err' : undefined" input-class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50" placeholder="Select consultant…" :options="specConsultants" />
                         <p v-if="tForm.specialty_id && !specConsultants.length" class="mt-1 text-xs text-on-warning">No on-service consultants under this specialty.</p>
                         <p v-if="tForm.errors.consultant_id" :id="fid('consultant_id') + '-err'" class="mt-1 text-xs text-on-danger">{{ tForm.errors.consultant_id }}</p></div>
                     <p class="text-xs text-ink-400">Closes this episode as a specialty handover and opens a new one under the chosen consultant.</p>

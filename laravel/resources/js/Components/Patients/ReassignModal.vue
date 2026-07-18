@@ -3,6 +3,7 @@ import { ref, computed, watch, nextTick } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import BaseModal from '@/Components/BaseModal.vue';
 import IdentityChip from '@/Components/IdentityChip.vue';
+import SearchableSelect from '@/Components/SearchableSelect.vue';
 import HandoverCapture from '@/Components/Patients/HandoverCapture.vue';
 import { useHandover } from '@/composables/useHandover';
 import { useConfirm } from '@/composables/useConfirm';
@@ -134,8 +135,8 @@ defineExpose({
 <template>
     <BaseModal :open="open" title="Reassign a consultant's patients" subtitle="Moves the selected active patients from one consultant to another." size="wide" tall field-first :closable="false" :dirty="modalDirty" @close="close">
         <form @submit.prevent="confirmThenSubmit" class="space-y-4">
-            <div><label class="mb-1 block text-sm font-semibold text-ink-700">From</label><select v-model="rForm.from_consultant_id" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select…</option><option v-for="c in consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
-            <div><label class="mb-1 block text-sm font-semibold text-ink-700">To <span class="font-normal text-ink-400">(on-service only)</span></label><select v-model="rForm.to_consultant_id" title="On-service consultants only" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select…</option><option v-for="c in onServiceConsultants" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
+            <div><label class="mb-1 block text-sm font-semibold text-ink-700">From</label><SearchableSelect v-model="rForm.from_consultant_id" input-class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" placeholder="Select…" :options="consultants" /></div>
+            <div><label class="mb-1 block text-sm font-semibold text-ink-700">To <span class="font-normal text-ink-400">(on-service only)</span></label><SearchableSelect v-model="rForm.to_consultant_id" title="On-service consultants only" input-class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" placeholder="Select…" :options="onServiceConsultants" /></div>
             <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="rForm.mark_new" class="rounded text-brand-600" /> Mark as new patients <span class="text-xs text-ink-400">(uncheck to keep their current “New” status)</span></label>
 
             <!-- preflight: pick WHO moves (all checked by default); every SELECTED patient

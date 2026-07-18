@@ -3,6 +3,7 @@ import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
+import SearchableSelect from '@/Components/SearchableSelect.vue';
 import ActivityPanel from '@/Components/ActivityPanel.vue';
 import SortableTh from '@/Components/SortableTh.vue';
 import { useConfirm } from '@/composables/useConfirm';
@@ -190,7 +191,7 @@ const toggleExpand = (id) => {
             <div v-if="mode === 'admissions'" class="space-y-3">
                 <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
                     <input v-model="f.search" v-focus @keyup.enter="apply" :class="fld" aria-label="Search admissions by name or MRN" placeholder="Name or MRN" autocomplete="off" />
-                    <select v-model="f.consultant_id" :class="fld" aria-label="Filter by consultant"><option value="">Any consultant</option><option v-for="c in options.consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select>
+                    <SearchableSelect v-model="f.consultant_id" :input-class="fld" aria-label="Filter by consultant" placeholder="Any consultant" :options="options.consultants" />
                     <select v-model="f.gender" :class="fld" aria-label="Filter by gender"><option value="">Any gender</option><option>Male</option><option>Female</option></select>
                     <input v-model="f.nationality" :class="fld" list="natlist" placeholder="Nationality" aria-label="Filter by nationality" /><datalist id="natlist"><option v-for="c in options.countries" :key="c" :value="c" /></datalist>
                     <select v-model="f.location" :class="fld" aria-label="Filter by location"><option value="">Any location</option><option v-for="l in options.locations" :key="l">{{ l }}</option></select>
@@ -229,7 +230,7 @@ const toggleExpand = (id) => {
             <div v-else-if="mode === 'consultations'" class="space-y-3">
                 <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
                     <input v-model="f.search" v-focus @keyup.enter="apply" :class="fld" aria-label="Search consultations by name or MRN" placeholder="Name or MRN" autocomplete="off" />
-                    <select v-model="f.consultant_id" :class="fld" aria-label="Filter by consultant"><option value="">Any consultant</option><option v-for="c in options.consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select>
+                    <SearchableSelect v-model="f.consultant_id" :input-class="fld" aria-label="Filter by consultant" placeholder="Any consultant" :options="options.consultants" />
                     <input v-model="f.consultation_from" :class="fld" placeholder="From service" aria-label="Filter by referring service" />
                     <input v-model="f.to_service" :class="fld" placeholder="To service" aria-label="Filter by consulted service" />
                     <div class="flex gap-2"><input v-model="f.age_from" :class="fld" placeholder="Age ≥" inputmode="numeric" aria-label="Minimum age" /><input v-model="f.age_to" :class="fld" placeholder="Age ≤" inputmode="numeric" aria-label="Maximum age" /></div>
