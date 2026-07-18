@@ -9,6 +9,7 @@ import PatientCard from '@/Components/Patients/PatientCard.vue';
 import ActionModal from '@/Components/Patients/ActionModal.vue';
 import ReassignModal from '@/Components/Patients/ReassignModal.vue';
 import HandoverModal from '@/Components/Patients/HandoverModal.vue';
+import FlowAlert from '@/Components/FlowAlert.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { usePatientEdit } from '@/composables/usePatientEdit';
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
@@ -21,7 +22,7 @@ const { ask } = useConfirm();
 // reloads/flashes on each child's `saved` emit. Each child owns its own useForm(s) + a11y via
 // BaseModal. The Modify modal still uses the canonical PatientForm + usePatientEdit here.
 
-const props = defineProps({ groups: Array, filters: Object, stats: Object, consultants: Array, specialties: Array, externalServices: Array, readmitWindow: Number, countries: Array, fallback: { type: Object, default: null }, highlight: { type: Number, default: null } });
+const props = defineProps({ groups: Array, filters: Object, stats: Object, consultants: Array, specialties: Array, externalServices: Array, readmitWindow: Number, countries: Array, fallback: { type: Object, default: null }, highlight: { type: Number, default: null }, needsHandoverCount: { type: Number, default: 0 } });
 
 const page = usePage();
 const me = computed(() => page.props.auth.user);
@@ -39,6 +40,9 @@ const view = ref(props.filters.view || '');
 // through apply() so toolbar changes don't drop them; a Clear-filters chip resets everything.
 const consultantId = ref(props.filters.consultant_id || '');
 const specialtyId = ref(props.filters.specialty_id || '');
+// HC-T9: "Needs handover" board chip — round-trips filters.needs_handover exactly like the
+// location/view chips (server whitelists it in PatientsController::index).
+const needsHandover = ref(props.filters.needs_handover ? '1' : '');
 let timer = null;
 // SPC-TM-011 (Wave 1): the free-text term is patient name/MRN, so a term-carrying visit POSTs it
 // in the body (non-PII filters ride the query string and stay shareable); a term-less visit keeps
@@ -46,6 +50,7 @@ let timer = null;
 const nonPiiFilters = () => ({
     location: location.value || undefined, view: view.value || undefined,
     consultant_id: consultantId.value || undefined, specialty_id: specialtyId.value || undefined,
+    needs_handover: needsHandover.value || undefined,
 });
 const apply = () => {
     const opts = { preserveState: true, replace: true, preserveScroll: true };
@@ -59,6 +64,7 @@ const apply = () => {
 watch(search, () => { clearTimeout(timer); timer = setTimeout(apply, 300); });
 const setLocation = (l) => { location.value = location.value === l ? '' : l; apply(); };
 const setView = (v) => { view.value = view.value === v ? '' : v; apply(); };
+const setNeedsHandover = () => { needsHandover.value = needsHandover.value ? '' : '1'; apply(); };
 
 // board density — Comfortable/Compact, persisted per-browser (night-shift census fits more
 // per screen). Pure presentation: a class on the board container, no data/request change.
@@ -96,13 +102,14 @@ const allPatients = computed(() => visibleGroups.value.flatMap((g) => g.patients
 // clear ALL filters (incl. the dashboard drill-through ones) — reset to the default board
 const clearFilters = () => {
     search.value = ''; location.value = ''; view.value = ''; consultantId.value = ''; specialtyId.value = '';
+    needsHandover.value = '';
     apply();
 };
 // collapsible consultant sections — expanded when a filter is active, else collapsed.
 // Wave 2, Item 7: the expanded Set is persisted per-browser ('dmc-board-open') so a consultant's
 // collapses survive navigation; restored in onMounted (intersected with the current group ids).
 const filtering = computed(() => !!(props.filters.search || props.filters.view || props.filters.location
-    || props.filters.consultant_id || props.filters.specialty_id));
+    || props.filters.consultant_id || props.filters.specialty_id || props.filters.needs_handover));
 const open = ref(new Set(filtering.value ? props.groups.map((g) => g.id) : []));
 const persistOpen = () => localStorage.setItem('dmc-board-open', JSON.stringify([...open.value]));
 // group-section element refs (grouped view) — used to bring a consultant's cards into view + move
@@ -238,6 +245,14 @@ const closeModify = () => guardModify(() => { editing.value = null; });
 
 <template>
     <AppLayout title="Active Patients">
+        <!-- HC-T9: pinned "needs handover" banner — owner decision: NOT dismissible, clears only when
+             the personal count reaches zero. Always the viewer's OWN count (even for admins), so it
+             stays a personal nudge rather than a unit-wide alarm. -->
+        <FlowAlert v-if="needsHandoverCount > 0" tone="warning"
+                   :title="`${needsHandoverCount} of your patients have no handover today`" class="mb-4">
+            <Link href="/patients?needs_handover=1" class="font-semibold underline">Show them</Link>
+        </FlowAlert>
+
         <!-- result-count announcement for screen readers (filters change the visible groups) -->
         <span class="sr-only" aria-live="polite" aria-atomic="true">
             {{ groups.length ? `${groups.length} consultant group(s) shown` : 'No results' }}
@@ -275,6 +290,8 @@ const closeModify = () => guardModify(() => { editing.value = null; });
             <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line">
                 <button v-for="l in ['Ward','ICU','ER']" :key="l" @click="setLocation(l)" class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="location === l ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">{{ l }}</button>
                 <button v-for="v in [['longterm','Long-term'],['tb','TB'],['boarding','Boarding']]" :key="v[0]" @click="setView(v[0])" class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="view === v[0] ? 'bg-accent-500 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ v[1] }}</button>
+                <!-- HC-T9: "Needs handover" board chip — round-trips filters.needs_handover -->
+                <button @click="setNeedsHandover" class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="needsHandover ? 'bg-tint-warning text-on-warning' : 'text-ink-500 hover:bg-ink-50'">Needs handover ({{ needsHandoverCount }})</button>
             </div>
             <!-- a dashboard drill-through (consultant/specialty) or any filter shows a Clear chip -->
             <button v-if="filtering" @click="clearFilters" class="inline-flex items-center gap-1.5 rounded-xl bg-ink-100 px-3 py-2 text-sm font-semibold text-ink-600 transition hover:bg-ink-200">

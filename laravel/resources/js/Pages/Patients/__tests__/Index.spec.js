@@ -86,3 +86,25 @@ describe('Patients/Index — ?highlight deep-link (Fix B)', () => {
         expect(w.find('[data-admission-id="42"]').classes()).not.toContain('outline-brand-500');
     });
 });
+
+// HC-T9: pinned "needs handover" banner — NOT dismissible, clears only when the personal count
+// (needsHandoverCount, always the viewer's OWN count) reaches zero.
+describe('Patients/Index — needs-handover banner (HC-T9)', () => {
+    beforeEach(() => {
+        pageProps = { auth: { user: { id: 1, role: 0, is_admin: true, can: { assign: true, manage: true, modify: true } } } };
+        localStorage.clear();
+        if (!window.matchMedia) window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+    });
+
+    it('pins the needs-handover banner whenever the personal count is above zero', async () => {
+        const w = mount(Index, { props: baseProps({ needsHandoverCount: 3 }) });
+        await flushPromises();
+        expect(w.text()).toMatch(/3 of your patients/i);
+    });
+
+    it('renders no banner when the count is zero', async () => {
+        const w = mount(Index, { props: baseProps({ needsHandoverCount: 0 }) });
+        await flushPromises();
+        expect(w.text()).not.toMatch(/of your patients/i);
+    });
+});

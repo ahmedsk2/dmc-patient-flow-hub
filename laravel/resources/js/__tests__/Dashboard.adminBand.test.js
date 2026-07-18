@@ -62,15 +62,17 @@ const mountAs = (user, over = {}) => {
 };
 
 describe('Dashboard — admin landing band (Wave 1, Item 7)', () => {
-    const adminBand = { dqIssues: 2, securityAnomalies: 5, recentlyDeleted: 1, pendingHandovers: 3 };
+    // HC-T9: a 5th card, "Handover Due (unit)", joins the band (urgent, deep-links into the
+    // needs_handover board filter).
+    const adminBand = { dqIssues: 2, securityAnomalies: 5, recentlyDeleted: 1, pendingHandovers: 3, handoverDueUnit: 4 };
 
-    it('renders the Administrative section with four cards for an admin', () => {
+    it('renders the Administrative section with five cards for an admin', () => {
         const w = mountAs({ role: 0, is_admin: true }, { adminBand });
         expect(w.find('section[aria-label="Administrative overview"]').exists()).toBe(true);
-        expect(w.findAllComponents(AdminBandCard)).toHaveLength(4);
+        expect(w.findAllComponents(AdminBandCard)).toHaveLength(5);
     });
 
-    it('passes the urgent flag only to Data Quality + Security', () => {
+    it('passes the urgent flag to Data Quality + Security + Handover Due (unit)', () => {
         const w = mountAs({ role: 0, is_admin: true }, { adminBand });
         const cards = w.findAllComponents(AdminBandCard);
         const byLabel = Object.fromEntries(cards.map((c) => [c.props('label'), c.props('urgent')]));
@@ -78,6 +80,7 @@ describe('Dashboard — admin landing band (Wave 1, Item 7)', () => {
         expect(byLabel['Security Anomalies']).toBe(true);
         expect(byLabel['Recently Deleted']).toBe(false);
         expect(byLabel['Pending Handovers']).toBe(false);
+        expect(byLabel['Handover Due (unit)']).toBe(true);
     });
 
     it('does NOT render the band for a non-admin', () => {
@@ -109,16 +112,18 @@ describe('Dashboard — admin landing band (Wave 1, Item 7)', () => {
 // (same pattern as `--color-ink-50`) with real dark values; see app.css for the derivation.
 // text-ink-900 on bg-brand-50: light 13.86:1 (unchanged), dark 14.41:1 (up from 1.01:1).
 describe('Dashboard — "My unit today" tiles (W0-T3i)', () => {
-    const myUnit = { total: 12, ward: 9, icu: 3, boarding: 2, new: 4, myConsults: 5, signPending: 0 };
+    // HC-T9: a 7th tile, "Handover due", joins the row right after Boarding (personal count,
+    // deep-links into the needs_handover board filter — same warning tint as Boarding).
+    const myUnit = { total: 12, ward: 9, icu: 3, boarding: 2, handoverDue: 6, new: 4, myConsults: 5, signPending: 0 };
     // label -> class list. The label is the second <p> in each tile button.
     const tiles = (w) => Object.fromEntries(
         w.findAll('.grid-cols-3 button').map((b) => [b.findAll('p')[1].text(), b.classes()]),
     );
     const mountConsultant = () => mountAs({ role: 3, is_admin: false }, { myUnit });
 
-    it('renders all six tiles for a consultant', () => {
+    it('renders all seven tiles for a consultant', () => {
         expect(Object.keys(tiles(mountConsultant()))).toEqual(
-            ['Active', 'Ward', 'ICU', 'Boarding', 'New (24h)', 'Consults'],
+            ['Active', 'Ward', 'ICU', 'Boarding', 'Handover due', 'New (24h)', 'Consults'],
         );
     });
 
@@ -135,7 +140,7 @@ describe('Dashboard — "My unit today" tiles (W0-T3i)', () => {
         // `grid-cols-2` typo), `tiles()` would return `{}` and the loop below would iterate zero
         // times and pass vacuously, even though three OTHER tests in this block would rightly
         // redden. Pin the tile count so an empty selector match fails HERE too.
-        expect(Object.keys(t)).toHaveLength(6);
+        expect(Object.keys(t)).toHaveLength(7);
         for (const [label, classes] of Object.entries(t)) {
             // Broadened from a hardcoded (danger|warning|info|success) family list: that list only
             // ever protected against families that were undeclared on the day it was written, and

@@ -1,13 +1,13 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { router, useForm } from '@inertiajs/vue3';
+import { Link, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import CheckpointChips from '@/Components/Patients/CheckpointChips.vue';
 import { useConfirm } from '@/composables/useConfirm';
 
 const { ask } = useConfirm();
 
-const props = defineProps({ awaiting: Array, outgoing: Array });
+const props = defineProps({ awaiting: Array, outgoing: Array, needsHandover: { type: Array, default: () => [] } });
 
 const tab = ref('awaiting');
 
@@ -56,8 +56,9 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
             <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line w-fit">
                 <button @click="tab = 'awaiting'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="tab === 'awaiting' ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">Awaiting my signature ({{ awaiting.length }})</button>
                 <button @click="tab = 'outgoing'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="tab === 'outgoing' ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">My outgoing ({{ outgoing.length }})</button>
+                <button @click="tab = 'needs'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="tab === 'needs' ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">Needs handover ({{ needsHandover.length }})</button>
             </div>
-            <span class="text-sm text-ink-400">{{ tab === 'awaiting' ? 'patients handed over to you — review and sign' : 'patients you handed over in the last 7 days' }}</span>
+            <span class="text-sm text-ink-400">{{ tab === 'awaiting' ? 'patients handed over to you — review and sign' : tab === 'outgoing' ? 'patients you handed over in the last 7 days' : 'patients with no handover saved today' }}</span>
             <button v-if="tab === 'awaiting' && awaiting.length > 1" @click="signAll" class="ml-auto rounded-xl bg-brand-solid px-4 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover">Sign all ({{ awaiting.length }})</button>
         </div>
 
@@ -133,6 +134,33 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
                         </td>
                     </tr>
                     <tr v-if="!outgoing.length"><td colspan="5" class="px-5 py-10 text-center text-ink-400">No outgoing handovers in the last 7 days.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <!-- needs handover: active admissions with no handover note saved today (HC-T9) -->
+        <div v-show="tab === 'needs'" class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
+            <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
+                    <th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Bed</th><th scope="col" class="px-3 py-3">Consultant</th><th scope="col" class="px-3 py-3">Last updated</th><th scope="col" class="px-5 py-3 text-right">Action</th>
+                </tr></thead>
+                <tbody class="divide-y divide-line">
+                    <tr v-for="s in needsHandover" :key="s.admission_id" class="align-top hover:bg-brand-50/40">
+                        <td class="px-5 py-3">
+                            <div class="font-semibold text-ink-800">{{ s.patient }}</div>
+                            <div class="nums text-xs text-ink-400">MRN {{ s.mrn }}</div>
+                            <CheckpointChips :checkpoints="s.checkpoints" class="mt-1" />
+                        </td>
+                        <td class="nums px-3 py-3 text-ink-600">{{ s.bed || '—' }}</td>
+                        <td class="px-3 py-3 text-ink-600">Dr. {{ s.consultant }}</td>
+                        <td class="nums px-3 py-3 text-ink-500" :title="fmt(s.last_updated)">{{ relTime(s.last_updated) }}</td>
+                        <td class="px-5 py-3 text-right">
+                            <Link :href="`/patients?highlight=${s.admission_id}`" class="rounded-lg bg-brand-solid px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-solid-hover">Write</Link>
+                        </td>
+                    </tr>
+                    <tr v-if="!needsHandover.length"><td colspan="5" class="px-5 py-10 text-center text-ink-400">No patients are missing a handover today.</td></tr>
                 </tbody>
             </table>
             </div>

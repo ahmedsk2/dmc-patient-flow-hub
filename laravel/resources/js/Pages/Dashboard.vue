@@ -60,6 +60,7 @@ const adminBandCards = computed(() => props.adminBand ? [
     { label: 'Security Anomalies', count: props.adminBand.securityAnomalies ?? 0, href: '/security', iconPath: bandIcons.security, urgent: true },
     { label: 'Recently Deleted', count: props.adminBand.recentlyDeleted ?? 0, href: '/trashed', iconPath: bandIcons.trash, urgent: false },
     { label: 'Pending Handovers', count: props.adminBand.pendingHandovers ?? 0, href: '/handovers', iconPath: bandIcons.handover, urgent: false },
+    { label: 'Handover Due (unit)', count: props.adminBand.handoverDueUnit ?? 0, href: '/patients?needs_handover=1', iconPath: bandIcons.handover, urgent: true },
 ] : []);
 
 // ── Drill-through (Item 3) ───────────────────────────────────────────────────────────────────
@@ -125,6 +126,7 @@ const myUnitCards = computed(() => props.myUnit ? [
     ['Ward', props.myUnit.ward, 'bg-ink-50', '/patients?location=Ward'],
     ['ICU', props.myUnit.icu, 'bg-tint-danger/30', '/patients?location=ICU'],
     ['Boarding', props.myUnit.boarding, 'bg-tint-warning/30', '/patients?view=boarding'],
+    ['Handover due', props.myUnit.handoverDue, 'bg-tint-warning/30', '/patients?needs_handover=1'],
     ['New (24h)', props.myUnit.new, 'bg-tint-info/30', null],
     ['Consults', props.myUnit.myConsults, 'bg-accent-300/20', '/consultations'],
 ] : []);
