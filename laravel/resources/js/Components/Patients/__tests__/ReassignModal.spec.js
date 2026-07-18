@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
+import { nextTick } from 'vue';
 
 // ReassignModal owns the bulk-reassign flow that used to live on Patients/Index: rForm, selectedIds,
 // the preflight load (per-patient handover_today), staleRows, uncheckAllStale, saveAllStale, and the
@@ -32,6 +33,8 @@ vi.mock('@/Components/BaseModal.vue', () => ({
 }));
 
 import ReassignModal from '@/Components/Patients/ReassignModal.vue';
+import HandoverCapture from '@/Components/Patients/HandoverCapture.vue';
+import { withCheckpointDefaults } from '@/lib/handover.js';
 
 const consultants = [
     { id: 5, name: 'Dr Five', on_service: true },
@@ -124,9 +127,35 @@ describe('ReassignModal — saveAllStale unlocks the gate', () => {
         w.vm.preflightBodies[1] = 'fresh note';
         await w.vm.saveAllStale();
         await w.vm.$nextTick();
-        expect(saveHandover).toHaveBeenCalledWith(1, 'fresh note');
+        // HC-T5: saveAllStale now sends the per-row checkpoints map too (defaulted, since row 1 had none).
+        expect(saveHandover).toHaveBeenCalledWith(1, 'fresh note', withCheckpointDefaults(null));
         expect([...w.vm.selectedIds].sort()).toEqual([1, 2]);   // picks restored after reload
         expect(w.vm.preflightReady).toBe(true);
+    });
+});
+
+describe('ReassignModal — compact HandoverCapture per stale row (HC-T5)', () => {
+    it('renders a compact HandoverCapture per stale row and sends checkpoints on save-all', async () => {
+        // first load: id 1 stale + selected, id 2 current + selected; after saving, the re-check
+        // returns id 1 current — mirrors the neighbouring saveAllStale test's mock-driven reload.
+        preflight.mockResolvedValueOnce(rows)
+                 .mockResolvedValueOnce([{ ...rows[0], handover_today: true, body: 'today note' }, rows[1]]);
+        const w = mountWith();
+        await w.vm.loadPreflight(5);
+        await nextTick();
+
+        const caps = w.findAllComponents(HandoverCapture);
+        expect(caps).toHaveLength(1);   // only row 1 (id 1) is stale
+        expect(caps[0].props('density')).toBe('compact');
+
+        caps[0].vm.$emit('update:body', 'today note');
+        caps[0].vm.$emit('update:checkpoints', { ...withCheckpointDefaults(null), high_risk: true });
+        await nextTick();
+
+        await w.vm.saveAllStale();
+        // the THIRD argument is the point of this test — checkpoints now travel with the note
+        expect(saveHandover).toHaveBeenCalledWith(1, 'today note', expect.objectContaining({ high_risk: true }));
+        w.unmount();
     });
 });
 

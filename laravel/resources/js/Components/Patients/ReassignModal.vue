@@ -3,10 +3,12 @@ import { ref, computed, watch, nextTick } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import BaseModal from '@/Components/BaseModal.vue';
 import IdentityChip from '@/Components/IdentityChip.vue';
+import HandoverCapture from '@/Components/Patients/HandoverCapture.vue';
 import { useHandover } from '@/composables/useHandover';
 import { useConfirm } from '@/composables/useConfirm';
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
 import { consultantOptions, guardSubmit } from '@/lib/ui.js';
+import { withCheckpointDefaults } from '@/lib/handover.js';
 
 /**
  * Bulk-reassign modal (Wave 3, Item 4) — extracted verbatim from Patients/Index.vue. Owns the rForm,
@@ -52,18 +54,20 @@ const openModal = (fromId = '') => { rForm.from_consultant_id = fromId; rForm.to
 // preflight: lists the consultant's patients with per-patient CHECKBOXES (all checked by default —
 // uncheck to leave someone behind). A stale SELECTED handover no longer blocks Confirm (soft gate,
 // HO-T5) — it just surfaces a warning; Confirm unlocks once preflight has loaded and ≥1 is selected.
-const preflight = ref(null);   // null | { loading, rows: [{id,name,mrn,handover_today,body}] }
+const preflight = ref(null);   // null | { loading, rows: [{id,name,mrn,handover_today,body,checkpoints}] }
 const preflightBodies = ref({});
+const preflightCheckpoints = ref({});
 const selectedIds = ref(new Set());
 const toggleSelected = (id) => { selectedIds.value.has(id) ? selectedIds.value.delete(id) : selectedIds.value.add(id); selectedIds.value = new Set(selectedIds.value); };
 const loadPreflight = async (id) => {
     preflight.value = { loading: true, rows: [] };
     const rows = await preflightHandover(id);
     preflightBodies.value = Object.fromEntries(rows.filter((r) => !r.handover_today).map((r) => [r.id, r.body || '']));
+    preflightCheckpoints.value = Object.fromEntries(rows.filter((r) => !r.handover_today).map((r) => [r.id, withCheckpointDefaults(r.checkpoints)]));
     selectedIds.value = new Set(rows.map((r) => r.id));   // all checked by default (legacy move-everything)
     preflight.value = { loading: false, rows };
     // Wave 2, Item 9: jump straight to the first handover that needs today's note (no scrolling).
-    nextTick(() => document.querySelector('[data-stale-textarea]')?.focus());
+    nextTick(() => document.querySelector('[data-stale-capture] textarea')?.focus());
 };
 // Wave 2, Item 9: exclude all stale rows from the move set — the user accepts those patients won't
 // be reassigned in this batch (valid when partial reassignment is intended). preflightReady no longer
@@ -82,7 +86,7 @@ const saveAllStale = async () => {
     savingAll.value = true;
     try {
         const keep = new Set(selectedIds.value);
-        for (const r of staleRows.value) await saveHandover(r.id, preflightBodies.value[r.id].trim());
+        for (const r of staleRows.value) await saveHandover(r.id, preflightBodies.value[r.id].trim(), preflightCheckpoints.value[r.id]);
         await loadPreflight(rForm.from_consultant_id);   // re-check — flips handover_today, unlocks Confirm
         selectedIds.value = keep;                        // reload defaults to all — restore the user's picks
     } finally { savingAll.value = false; }
@@ -100,7 +104,7 @@ const submitReassign = guardSubmit(rForm, () => {
 });
 
 defineExpose({
-    rForm, onServiceConsultants, openModal, preflight, preflightBodies, selectedIds,
+    rForm, onServiceConsultants, openModal, preflight, preflightBodies, preflightCheckpoints, selectedIds,
     toggleSelected, loadPreflight, uncheckAllStale, staleRows, preflightReady, allStaleFilled,
     savingAll, saveAllStale, submitReassign, modalDirty,
 });
@@ -133,9 +137,14 @@ defineExpose({
                     <template v-if="staleRows.length">
                         <!-- HO-T5: soft gate — the move is allowed; this warns rather than blocks -->
                         <p class="mt-3 rounded-lg bg-tint-warning px-2.5 py-1.5 text-sm font-semibold text-on-warning">{{ staleRows.length }} of {{ selectedIds.size }} selected patient(s) will move with an incomplete handover — a reminder will be sent to you and the outgoing consultant until each is completed. You can write the note(s) below now, or proceed.</p>
-                        <div v-for="(r, i) in staleRows" :key="'h' + r.id" class="mt-2">
+                        <div v-for="(r, i) in staleRows" :key="'h' + r.id" class="mt-2" :data-stale-capture="i === 0 ? '' : undefined">
                             <p class="text-xs font-semibold text-ink-700"><IdentityChip :name="r.name" :mrn="String(r.mrn ?? '')" /></p>
-                            <textarea v-model="preflightBodies[r.id]" :data-stale-textarea="i === 0 ? '' : undefined" rows="2" maxlength="5000" :aria-label="`Handover for ${r.name}`" placeholder="Write today's handover…" class="mt-1 w-full rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
+                            <HandoverCapture density="compact" :label="r.name"
+                                :body="preflightBodies[r.id] || ''"
+                                :checkpoints="preflightCheckpoints[r.id]"
+                                :today="false"
+                                @update:body="preflightBodies[r.id] = $event"
+                                @update:checkpoints="preflightCheckpoints[r.id] = $event" />
                         </div>
                         <div class="mt-2 flex justify-end gap-2">
                             <!-- Item 9: skip note-writing for stale rows by dropping them from the move set -->
