@@ -133,10 +133,11 @@ class HandoverController extends Controller
             'outgoing' => HandoverSignature::where('from_consultant_id', $me)
                 ->where('required_at', '>=', now()->subDays(7))
                 ->with($with)->orderByDesc('required_at')->get()->map($shape)->values(),
-            // HC-T8: the inbox "Needs handover" tab — active admissions with no note saved today,
-            // scoped by the SAME D1 own-only predicate as the board (User::seesOwnPatientsOnly):
-            // own patients only for a plain consultant, unit-wide for admin/registrar/resident/observer.
-            'needsHandover' => Admission::needsHandoverToday()
+            // TD-T3: the inbox "Needs handover" tab — active admissions carrying an unresolved
+            // transfer-driven reminder (Admission::handoverPending), scoped by the SAME D1 own-only
+            // predicate as the board (User::seesOwnPatientsOnly): own patients only for a plain
+            // consultant, unit-wide for admin/registrar/resident/observer.
+            'needsHandover' => Admission::handoverPending()
                 ->when(Auth::user()->seesOwnPatientsOnly(), fn ($q) => $q->where('consultant_id', Auth::id()))
                 ->with(['patient:id,mrn,name', 'handover', 'consultant:id,name,full_name'])
                 ->orderBy('admit_date')->get()

@@ -569,60 +569,82 @@ class HandoverTest extends TestCase
             }));
     }
 
-    // ---- 9. needs-handover scope, counts, filter, tab dataset -----------------------------------
+    // ---- 9. needs-handover scope, counts, filter, tab dataset (transfer-driven, TD-T3) ------------
 
-    public function test_needs_handover_count_is_personal_and_excludes_patients_with_a_note_today(): void
+    /** Was: "...excludes_patients_with_a_note_today" (staleness-driven). Now: only an admission
+     *  carrying an UNRESOLVED handover.incomplete reminder counts — a resolved reminder or none
+     *  at all does not, regardless of how old the note is. */
+    public function test_needs_handover_count_is_personal_and_excludes_resolved_reminders(): void
     {
         $me = $this->user();
-        $this->admission(['consultant_id' => $me->id]);                    // stale → counts
-        $fresh = $this->admission(['consultant_id' => $me->id]);
-        $this->freshHandover($fresh, $me);                                 // current today → does not count
+        $flagged = $this->admission(['consultant_id' => $me->id]);
+        Notification::create(['user_id' => $me->id, 'type' => 'handover.incomplete',
+            'created_at' => now(), 'admission_id' => $flagged->id, 'payload' => ['admission_id' => $flagged->id]]);   // unresolved → counts
+
+        $resolved = $this->admission(['consultant_id' => $me->id]);
+        Notification::create(['user_id' => $me->id, 'type' => 'handover.incomplete', 'resolved_at' => now(),
+            'created_at' => now(), 'admission_id' => $resolved->id, 'payload' => ['admission_id' => $resolved->id]]); // resolved → does not count
+
         $other = $this->user();
-        $this->admission(['consultant_id' => $other->id]);                 // someone else's → does not count
+        $theirs = $this->admission(['consultant_id' => $other->id]);
+        Notification::create(['user_id' => $other->id, 'type' => 'handover.incomplete',
+            'created_at' => now(), 'admission_id' => $theirs->id, 'payload' => ['admission_id' => $theirs->id]]);    // someone else's → does not count
 
         $this->actingAs($me)->get('/patients')->assertOk()
             ->assertInertia(fn ($p) => $p->where('needsHandoverCount', 1));
     }
 
-    public function test_needs_handover_tab_lists_only_stale_active_admissions(): void
+    /** Was: "...lists_only_stale_active_admissions". Now: lists only admissions with an unresolved
+     *  reminder — an untouched admission (no transfer, no reminder ever raised) is NOT pending,
+     *  no matter how long ago (or never) its note was last saved. */
+    public function test_needs_handover_tab_lists_only_admissions_with_an_unresolved_reminder(): void
     {
         $me = $this->user();
-        $stale = $this->admission(['consultant_id' => $me->id]);
-        $fresh = $this->admission(['consultant_id' => $me->id]);
-        $this->freshHandover($fresh, $me);
+        $flagged = $this->admission(['consultant_id' => $me->id]);
+        Notification::create(['user_id' => $me->id, 'type' => 'handover.incomplete',
+            'created_at' => now(), 'admission_id' => $flagged->id, 'payload' => ['admission_id' => $flagged->id]]);
+        $this->admission(['consultant_id' => $me->id]);   // untouched → not pending
 
         $this->actingAs($me)->get('/handovers')->assertOk()
             ->assertInertia(fn ($p) => $p->has('needsHandover', 1)
-                ->where('needsHandover.0.admission_id', $stale->id));
+                ->where('needsHandover.0.admission_id', $flagged->id));
     }
 
+    /** The board filter must narrow to reminder-flagged admissions only — an untouched admission
+     *  never appears, regardless of note freshness (was staleness-driven; see test rename above). */
     public function test_board_filter_narrows_to_patients_needing_a_handover(): void
     {
         $me = $this->user();
-        $stale = $this->admission(['consultant_id' => $me->id]);
-        $fresh = $this->admission(['consultant_id' => $me->id]);
-        $this->freshHandover($fresh, $me);
+        $flagged = $this->admission(['consultant_id' => $me->id]);
+        Notification::create(['user_id' => $me->id, 'type' => 'handover.incomplete',
+            'created_at' => now(), 'admission_id' => $flagged->id, 'payload' => ['admission_id' => $flagged->id]]);
+        $untouched = $this->admission(['consultant_id' => $me->id]);
 
-        // with the filter on, only the stale admission may appear anywhere in the board groups
+        // with the filter on, only the flagged admission may appear anywhere in the board groups
         $res = $this->actingAs($me)->get('/patients?needs_handover=1')->assertOk();
         $ids = collect(data_get($res->viewData('page')['props'], 'groups.*.patients.*.id'))->flatten()->all();
-        $this->assertContains($stale->id, $ids);
-        $this->assertNotContains($fresh->id, $ids);
+        $this->assertContains($flagged->id, $ids);
+        $this->assertNotContains($untouched->id, $ids);
     }
 
     // ---- 10. needs-handover own-only vs unit-wide scoping (User::seesOwnPatientsOnly) ------------
 
     /** Registrar/Resident are NOT consultant-owned (consultant_id can only ever be a Consultant's
      *  id), so the D1 board convention treats them as unit-wide viewers — same as admin/observer.
-     *  Only a plain Consultant is restricted to their own admissions. */
+     *  Only a plain Consultant is restricted to their own admissions. Fixtures now carry an
+     *  unresolved reminder each (transfer-driven) rather than relying on staleness. */
     public function test_needs_handover_tab_is_unit_wide_for_registrar_and_resident_but_own_only_for_consultant(): void
     {
         $registrar = $this->user(['role' => User::ROLE_REGISTRAR]);
         $resident = $this->user(['role' => User::ROLE_RESIDENT]);
         $me = $this->user();
         $other = $this->user();
-        $mine = $this->admission(['consultant_id' => $me->id]);      // stale, mine
-        $theirs = $this->admission(['consultant_id' => $other->id]); // stale, someone else's
+        $mine = $this->admission(['consultant_id' => $me->id]);
+        Notification::create(['user_id' => $me->id, 'type' => 'handover.incomplete',
+            'created_at' => now(), 'admission_id' => $mine->id, 'payload' => ['admission_id' => $mine->id]]);
+        $theirs = $this->admission(['consultant_id' => $other->id]);
+        Notification::create(['user_id' => $other->id, 'type' => 'handover.incomplete',
+            'created_at' => now(), 'admission_id' => $theirs->id, 'payload' => ['admission_id' => $theirs->id]]);
 
         $this->actingAs($registrar)->get('/handovers')->assertOk()
             ->assertInertia(fn (AssertableInertia $p) => $p->has('needsHandover', 2));
@@ -636,14 +658,19 @@ class HandoverTest extends TestCase
     }
 
     /** The board chip must always agree with what needsHandover/the needs_handover filter return —
-     *  same scope, same number, for every role (regression for the "chip disagrees with filter" bug). */
+     *  same scope, same number, for every role (regression for the "chip disagrees with filter" bug).
+     *  Fixtures now carry an unresolved reminder each rather than relying on staleness. */
     public function test_needs_handover_count_on_board_matches_the_same_scope_for_registrar_and_consultant(): void
     {
         $registrar = $this->user(['role' => User::ROLE_REGISTRAR]);
         $me = $this->user();
         $other = $this->user();
-        $this->admission(['consultant_id' => $me->id]);      // stale, mine
-        $this->admission(['consultant_id' => $other->id]);   // stale, someone else's
+        $mine = $this->admission(['consultant_id' => $me->id]);
+        Notification::create(['user_id' => $me->id, 'type' => 'handover.incomplete',
+            'created_at' => now(), 'admission_id' => $mine->id, 'payload' => ['admission_id' => $mine->id]]);
+        $theirs = $this->admission(['consultant_id' => $other->id]);
+        Notification::create(['user_id' => $other->id, 'type' => 'handover.incomplete',
+            'created_at' => now(), 'admission_id' => $theirs->id, 'payload' => ['admission_id' => $theirs->id]]);
 
         $this->actingAs($registrar)->get('/patients')->assertOk()
             ->assertInertia(fn (AssertableInertia $p) => $p->where('needsHandoverCount', 2));
@@ -658,9 +685,11 @@ class HandoverTest extends TestCase
      *  preflight() (the bulk Reassign modal's per-row panel) and the needsHandover inbox dataset.
      *  NOTE: preflight() has no staleness filter — it lists every ACTIVE admission under the given
      *  consultant regardless of freshness (see HandoverController::preflight, Admission::active()
-     *  with no needsHandoverToday() scope) — so the fixture doesn't need to be stale for preflight
-     *  to return the row. It IS made stale here anyway so the SAME fixture also satisfies the
-     *  needsHandoverToday() scope used by the inbox dataset. */
+     *  with no handoverPending() scope) — so the fixture doesn't need a reminder for preflight to
+     *  return the row. The handover IS aged here anyway (preflight's own 'handover_today' flag is
+     *  a separate, unrelated freshness indicator, unaffected by this rename) and an unresolved
+     *  handover.incomplete reminder is seeded separately so the SAME fixture also satisfies the
+     *  handoverPending() scope used by the inbox dataset. */
     public function test_checkpoints_round_trip_in_preflight_and_needs_handover_dataset(): void
     {
         $from = $this->user();
@@ -672,8 +701,12 @@ class HandoverTest extends TestCase
             'checkpoints' => ['code_status' => 'dnr', 'high_risk' => true],
         ])->assertRedirect()->assertSessionHasNoErrors();
 
-        // age it so it also qualifies as "needs handover today"
+        // age it so preflight's own (unrelated) 'handover_today' freshness flag reads false
         Handover::where('admission_id', $a->id)->update(['updated_at' => now()->subDay()]);
+
+        // flag it with an unresolved transfer reminder so it ALSO satisfies handoverPending()
+        Notification::create(['user_id' => $from->id, 'type' => 'handover.incomplete',
+            'created_at' => now(), 'admission_id' => $a->id, 'payload' => ['admission_id' => $a->id]]);
 
         $pre = $this->actingAs($admin)
             ->getJson("/handovers/preflight?from_consultant_id={$from->id}")
@@ -688,5 +721,52 @@ class HandoverTest extends TestCase
             ->assertInertia(fn (AssertableInertia $p) => $p
                 ->where('needsHandover.0.checkpoints.code_status', 'dnr')
                 ->where('needsHandover.0.checkpoints.high_risk', true));
+    }
+
+    // ---- 12. handoverPending is transfer-driven, not calendar-driven ------------------------------
+
+    public function test_handover_pending_is_zero_when_no_transfer_has_raised_a_reminder(): void
+    {
+        $me = $this->user();
+        $this->admission(['consultant_id' => $me->id]);   // active, NO handover note at all
+        $this->admission(['consultant_id' => $me->id]);
+
+        // the OLD definition counted both; transfer-driven counts none — this IS the backlog reset
+        $this->assertSame(0, \App\Models\Admission::handoverPending()->count());
+    }
+
+    public function test_handover_pending_counts_only_admissions_with_an_unresolved_reminder(): void
+    {
+        $me = $this->user();
+        $flagged = $this->admission(['consultant_id' => $me->id]);
+        $this->admission(['consultant_id' => $me->id]);   // untouched → not pending
+
+        \App\Models\Notification::create(['user_id' => $me->id, 'type' => 'handover.incomplete',
+            'created_at' => now(), 'admission_id' => $flagged->id, 'payload' => ['admission_id' => $flagged->id]]);
+
+        $this->assertSame([$flagged->id], \App\Models\Admission::handoverPending()->pluck('id')->all());
+    }
+
+    public function test_resolving_the_reminder_clears_the_admission_from_pending(): void
+    {
+        $me = $this->user();
+        $a = $this->admission(['consultant_id' => $me->id]);
+        \App\Models\Notification::create(['user_id' => $me->id, 'type' => 'handover.incomplete',
+            'created_at' => now(), 'admission_id' => $a->id, 'payload' => ['admission_id' => $a->id]]);
+        $this->assertSame(1, \App\Models\Admission::handoverPending()->count());
+
+        \App\Models\Notification::where('admission_id', $a->id)->update(['resolved_at' => now()]);
+        $this->assertSame(0, \App\Models\Admission::handoverPending()->count());
+    }
+
+    public function test_a_discharged_admission_is_never_pending(): void
+    {
+        $me = $this->user();
+        $a = $this->admission(['consultant_id' => $me->id]);
+        \App\Models\Notification::create(['user_id' => $me->id, 'type' => 'handover.incomplete',
+            'created_at' => now(), 'admission_id' => $a->id, 'payload' => ['admission_id' => $a->id]]);
+        $a->update(['discharge_date' => now()->toDateString()]);
+
+        $this->assertSame(0, \App\Models\Admission::handoverPending()->count());
     }
 }

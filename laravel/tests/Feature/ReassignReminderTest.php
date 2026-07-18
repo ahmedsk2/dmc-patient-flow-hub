@@ -190,7 +190,7 @@ class ReassignReminderTest extends TestCase
 
     /**
      * The closing episode is discharged and drops off the board/inbox (Admission::active() and
-     * scopeNeedsHandoverToday() both exclude it), so a reminder anchored there is a dead end after
+     * scopeHandoverPending() both exclude it), so a reminder anchored there is a dead end after
      * the outgoing consultant's 7-day "My outgoing" window lapses. The reminder must target the
      * NEW active episode instead — that's the one clinicians can actually see and act on.
      */

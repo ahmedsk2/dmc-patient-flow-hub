@@ -59,10 +59,10 @@ class PatientsController extends Controller
             // client which already-visible admission to expand/scroll/flash to.
             'highlight' => $request->integer('highlight') ?: null,
             'readmitWindow' => $readmitWindow,
-            // "needs handover" count (HC-T8): SAME predicate as the needs_handover board filter
+            // "needs handover" count (TD-T3): SAME predicate as the needs_handover board filter
             // above (own-only for a plain consultant, unit-wide otherwise) — the chip, the pinned
             // banner and the filtered result must always agree on what "the number" means.
-            'needsHandoverCount' => Admission::needsHandoverToday()
+            'needsHandoverCount' => Admission::handoverPending()
                 ->when($request->user()->seesOwnPatientsOnly(), fn ($q) => $q->where('consultant_id', $request->user()->id))
                 ->count(),
             'consultants' => User::consultantOptions(),
@@ -261,8 +261,8 @@ class PatientsController extends Controller
                 $q->whereHas('consultant', fn ($u) => $u->where('specialty_id', (int) $id)))
             ->when($filters['search'] ?? null, fn ($q, $s) => $q->whereHas('patient',
                 fn ($p) => $p->where('name', 'like', "%{$s}%")->orWhere('mrn', 'like', "%{$s}%")))
-            // needs-handover filter (HC-T8): active admissions with no handover saved today
-            ->when($filters['needs_handover'] ?? null, fn ($q) => $q->needsHandoverToday())
+            // needs-handover filter (TD-T3): active admissions carrying an unresolved transfer-driven reminder
+            ->when($filters['needs_handover'] ?? null, fn ($q) => $q->handoverPending())
             ->orderBy('admit_date')
             ->get();
 

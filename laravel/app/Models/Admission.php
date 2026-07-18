@@ -130,10 +130,22 @@ class Admission extends Model
     /** Currently admitted (file not closed). */
     public function scopeActive(Builder $q): Builder { return $q->whereNull('discharge_date'); }
 
-    /** Active admissions with no handover saved today — the canonical "needs handover" definition. */
-    public function scopeNeedsHandoverToday(Builder $q): Builder
+    /**
+     * Handover PENDING (transfer-driven): an ACTIVE admission carrying at least one UNRESOLVED
+     * `handover.incomplete` reminder — i.e. a transfer moved this patient and the note was never
+     * written. Held by ANY recipient (initiator or outgoing consultant): the ADMISSION is the unit
+     * of "pending", not the person.
+     *
+     * This deliberately replaced "no note saved today", which matched every active patient every
+     * morning and drowned the alerts. The board card's amber handover icon still shows daily
+     * currency — it is informational and no longer raises an alarm.
+     */
+    public function scopeHandoverPending(Builder $q): Builder
     {
-        return $q->active()->whereDoesntHave('handover', fn ($h) => $h->whereDate('updated_at', today()));
+        return $q->active()->whereExists(fn ($s) => $s->selectRaw('1')->from('notifications')
+            ->whereColumn('notifications.admission_id', 'admissions.id')
+            ->where('notifications.type', 'handover.incomplete')
+            ->whereNull('notifications.resolved_at'));
     }
 
     public function scopeNonIcu(Builder $q): Builder
