@@ -178,8 +178,7 @@ class DashboardController extends Controller
             ->leftJoin('admissions as a', fn ($j) => $j->on('u.id', '=', 'a.consultant_id')->whereNull('a.discharge_date')->whereNull('a.deleted_at'))
             ->where('u.active', 1)
             ->whereNull('u.deleted_at')   // Phase 4 — Item 1: a soft-deleted consultant drops off the board
-            // "Patient count per consultant" lists only consultants who actually hold patients — the
-            // legacy members-list behaviour (every on-service consultant, zeros included) was noise.
+            // only consultants who actually hold patients (rationale above)
             ->whereExists(fn ($s) => $s->selectRaw('1')->from('admissions as ax')
                 ->whereColumn('ax.consultant_id', 'u.id')->whereNull('ax.discharge_date')->whereNull('ax.deleted_at'))
             ->selectRaw("u.id, COALESCE(u.full_name, u.name) consultant, u.on_service, u.specialty_id,
