@@ -48,3 +48,6 @@ composer-setup.php
 Thumbs.db
 .DS_Store
 *.swp
+
+# superpowers brainstorming visual companion (local only)
+.superpowers/
