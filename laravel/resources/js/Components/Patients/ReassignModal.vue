@@ -40,8 +40,9 @@ const props = defineProps({
 const emit = defineEmits(['saved', 'close']);
 
 const { saveHandover, preflight: preflightHandover } = useHandover();
+const { ask } = useConfirm();
 
-const rForm = useForm({ from_consultant_id: '', to_consultant_id: '', mark_new: true, admission_ids: [] });
+const rForm = useForm({ from_consultant_id: '', to_consultant_id: '', mark_new: true, admission_ids: [], acknowledged: false });
 
 // bulk reassign: the RECEIVING consultant must be on service ('from' stays unfiltered — patients
 // may be moved away from someone who just went off service)
@@ -92,7 +93,6 @@ const saveAllStale = async () => {
     } finally { savingAll.value = false; }
 };
 
-const { ask } = useConfirm();
 const modalDirty = computed(() => !!rForm.isDirty);
 const { guardedClose } = useUnsavedGuard(modalDirty, ask);
 const doClose = () => emit('close');
@@ -103,16 +103,37 @@ const submitReassign = guardSubmit(rForm, () => {
     rForm.post('/admissions/reassign', { preserveScroll: true, onSuccess: () => { emit('saved'); rForm.reset(); selectedIds.value = new Set(); } });
 });
 
+/**
+ * HC-T7: the single Confirm action's interception point. There is deliberately NO visible
+ * "reassign without handover" bypass button (owner's decision) — with no stale rows selected the
+ * move proceeds straight through. Otherwise ONE dialog covers the WHOLE batch (never one per
+ * patient): "Complete handover now" leaves the panel open and focuses the first stale row's
+ * editor; "I'm aware — proceed" sets `acknowledged: true` on rForm (so the server raises the
+ * persistent reminder to the actor + outgoing consultant for each still-incomplete patient) and
+ * submits.
+ */
+const confirmThenSubmit = async () => {
+    if (staleRows.value.length === 0) { submitReassign(); return; }
+    const ok = await ask(
+        'Handover not complete',
+        `${staleRows.value.length} of ${selectedIds.value.size} selected patient(s) have no handover saved today. A reminder will be sent to you and the outgoing consultant until each is completed.`,
+        'warning',
+    );
+    if (!ok) { document.querySelector('[data-stale-capture] textarea')?.focus(); return; }
+    rForm.acknowledged = true;
+    submitReassign();
+};
+
 defineExpose({
     rForm, onServiceConsultants, openModal, preflight, preflightBodies, preflightCheckpoints, selectedIds,
     toggleSelected, loadPreflight, uncheckAllStale, staleRows, preflightReady, allStaleFilled,
-    savingAll, saveAllStale, submitReassign, modalDirty,
+    savingAll, saveAllStale, submitReassign, confirmThenSubmit, modalDirty,
 });
 </script>
 
 <template>
     <BaseModal :open="open" title="Reassign a consultant's patients" subtitle="Moves the selected active patients from one consultant to another." size="wide" tall field-first :closable="false" :dirty="modalDirty" @close="close">
-        <form @submit.prevent="submitReassign" class="space-y-4">
+        <form @submit.prevent="confirmThenSubmit" class="space-y-4">
             <div><label class="mb-1 block text-sm font-semibold text-ink-700">From</label><select v-model="rForm.from_consultant_id" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select…</option><option v-for="c in consultants" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
             <div><label class="mb-1 block text-sm font-semibold text-ink-700">To <span class="font-normal text-ink-400">(on-service only)</span></label><select v-model="rForm.to_consultant_id" title="On-service consultants only" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select…</option><option v-for="c in onServiceConsultants" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
             <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="rForm.mark_new" class="rounded text-brand-600" /> Mark as new patients <span class="text-xs text-ink-400">(uncheck to keep their current “New” status)</span></label>

@@ -198,6 +198,56 @@ describe('ReassignModal — confirm submit (SUBSET move)', () => {
     });
 });
 
+// HC-T7: ONE acknowledgement dialog covers the WHOLE batch — never one per patient. Confirming
+// sets `acknowledged: true` on the submitted form; cancelling leaves the move un-submitted.
+describe('ReassignModal — acknowledgement dialog (HC-T7)', () => {
+    const rows3 = [
+        { id: 1, name: 'A', mrn: '1', handover_today: false, body: '' },
+        { id: 2, name: 'B', mrn: '2', handover_today: false, body: '' },
+        { id: 3, name: 'C', mrn: '3', handover_today: true, body: 'ok' },
+    ];
+
+    it('asks ONCE for the whole batch when stale rows remain, and posts acknowledged=true on confirm', async () => {
+        preflight.mockResolvedValue(rows3);
+        ask.mockResolvedValue(true);
+        const w = mountWith();
+        await w.vm.loadPreflight(5);
+        await w.vm.$nextTick();
+        w.vm.rForm.to_consultant_id = 6;
+        await w.vm.confirmThenSubmit();
+        expect(ask).toHaveBeenCalledTimes(1);
+        expect(ask.mock.calls[0][1]).toContain('2 of');   // 2 stale of 3 selected
+        expect(w.vm.rForm.acknowledged).toBe(true);
+        expect(posts.length).toBe(1);
+        expect(posts[0].url).toBe('/admissions/reassign');
+    });
+
+    it('does not submit when the user cancels the acknowledgement', async () => {
+        preflight.mockResolvedValue(rows3);
+        ask.mockResolvedValue(false);
+        const w = mountWith();
+        await w.vm.loadPreflight(5);
+        await w.vm.$nextTick();
+        w.vm.rForm.to_consultant_id = 6;
+        await w.vm.confirmThenSubmit();
+        expect(ask).toHaveBeenCalledTimes(1);
+        expect(posts.length).toBe(0);
+    });
+
+    it('does not ask at all when no stale rows are selected', async () => {
+        preflight.mockResolvedValue(rows3);
+        const w = mountWith();
+        await w.vm.loadPreflight(5);
+        await w.vm.$nextTick();
+        w.vm.uncheckAllStale();   // leaves only the current row (id 3) selected
+        await w.vm.$nextTick();
+        w.vm.rForm.to_consultant_id = 6;
+        await w.vm.confirmThenSubmit();
+        expect(ask).not.toHaveBeenCalled();
+        expect(posts[0]?.form.admission_ids).toEqual([3]);
+    });
+});
+
 // Wave 3, Item 1/2: unsaved-changes guard, keyed off rForm.isDirty, shared by BaseModal's :dirty
 // prop and the Cancel button via the same useUnsavedGuard instance.
 describe('ReassignModal — unsaved-changes guard', () => {

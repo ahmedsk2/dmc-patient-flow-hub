@@ -57,12 +57,13 @@ const props = defineProps({
 const emit = defineEmits(['saved', 'close']);
 
 const { fetchHandover, saveHandover } = useHandover();
+const { ask } = useConfirm();
 
-const aForm = useForm({ consultant_id: '', mark_new: true });
+const aForm = useForm({ consultant_id: '', mark_new: true, acknowledged: false });
 const mdForm = useForm({ outcome: 'Alive', medical_discharge_date: props.today, discharge_to: '', delay_reason: '', complete: false });
 const cdForm = useForm({ discharge_date: props.today, outcome: '', discharge_to: '' });
 const icuForm = useForm({ outcome: 'Alive', discharge_date: props.today, discharge_to: '' });
-const tForm = useForm({ mode: 'location', target: 'ICU', specialty_id: '', consultant_id: '', service: '' });
+const tForm = useForm({ mode: 'location', target: 'ICU', specialty_id: '', consultant_id: '', service: '', acknowledged: false });
 
 // Proactive handover panel — shown the moment the chosen consultant differs from the current one,
 // never as a reaction to a rejected submit (the old behaviour: the requirement was invisible until
@@ -92,6 +93,28 @@ const saveHandoverThen = async (retry) => {
     hoSaving.value = true;
     try { await saveHandover(props.patient.id, hoBody.value.trim(), hoCheckpoints.value); ho.value = { ...ho.value, today: true }; retry(); }
     finally { hoSaving.value = false; }
+};
+
+/**
+ * HC-T7: the single primary action's interception point. There is deliberately NO visible
+ * "assign/transfer without handover" bypass button (owner's decision) — if the handover is
+ * already current (a note was just written, or it was already saved today) the move proceeds
+ * straight through saveHandoverThen exactly as before. Otherwise an explicit confirm dialog
+ * intercepts: "Complete handover now" leaves the panel open and does NOT submit; "I'm aware —
+ * proceed" sets `acknowledged: true` on the form being submitted (so the server can raise the
+ * persistent reminder to the actor + outgoing consultant) and retries the original submit.
+ */
+const submitWithHandoverGuard = async (retry, formRef) => {
+    const complete = !!ho.value?.today || !!hoBody.value.trim();
+    if (complete) { await saveHandoverThen(retry); return; }
+    const ok = await ask(
+        'Handover not complete',
+        `${props.patient?.name || 'This patient'} has no handover saved today. A reminder will be sent to you and the outgoing consultant until it is completed.`,
+        'warning',
+    );
+    if (!ok) return;   // "Complete handover now" — stay put, the panel is already open
+    formRef.acknowledged = true;   // "I'm aware — proceed"
+    retry();
 };
 
 // prime the right sub-form when the modal opens for a (mode, patient). Mirrors the old openModal().
@@ -142,7 +165,6 @@ const modalTitle = computed(() => ({
     transfer: 'Transfer',
 }[props.mode] ?? ''));
 
-const { ask } = useConfirm();
 // the ACTIVE mode's own form is the one the user could actually be editing right now
 const activeForm = computed(() => ({ assign: aForm, medical: mdForm, complete: cdForm, icu: icuForm, transfer: tForm }[props.mode]));
 const modalDirty = computed(() => !!activeForm.value?.isDirty);
@@ -170,7 +192,7 @@ defineExpose({
     modalTitle, aForm, mdForm, cdForm, icuForm, tForm,
     assignConsultants, specConsultants, transferReady, modalDirty, modeErrors, fid,
     submitAssign, submitMedical, submitComplete, submitIcu, submitTransfer,
-    changingConsultant, ho, hoBody, hoCheckpoints, hoSaving, saveHandoverThen,
+    changingConsultant, ho, hoBody, hoCheckpoints, hoSaving, saveHandoverThen, submitWithHandoverGuard,
 });
 </script>
 
@@ -186,7 +208,7 @@ defineExpose({
         </template>
         <template v-if="patient">
             <ErrorSummary :errors="modeErrors" />
-            <form v-if="mode === 'assign'" @submit.prevent="changingConsultant ? saveHandoverThen(submitAssign) : submitAssign()" class="space-y-4">
+            <form v-if="mode === 'assign'" @submit.prevent="changingConsultant ? submitWithHandoverGuard(submitAssign, aForm) : submitAssign()" class="space-y-4">
                 <div><label :for="fid('consultant_id')" class="sr-only">Consultant</label><select :id="fid('consultant_id')" v-model="aForm.consultant_id" title="On-service consultants only" :aria-describedby="aForm.errors.consultant_id ? fid('consultant_id') + '-err' : undefined" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select consultant…</option><option v-for="c in assignConsultants" :key="c.id" :value="c.id">{{ c.name }}{{ !c.on_service ? ' (off service)' : '' }}</option></select><p v-if="aForm.errors.consultant_id" :id="fid('consultant_id') + '-err'" class="mt-1 text-xs text-on-danger">{{ aForm.errors.consultant_id }}</p></div>
                 <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="aForm.mark_new" class="rounded text-brand-600" /> Mark as new patient <span class="text-xs text-ink-400">(uncheck for a quiet administrative move — no “New” badge)</span></label>
                 <!-- proactive handover panel (HC-T6): appears the moment the picked consultant differs
@@ -281,7 +303,7 @@ defineExpose({
                 <div><label :for="fid('discharge_date')" class="mb-1 block text-sm font-semibold text-ink-700">Discharge date</label><input :id="fid('discharge_date')" v-model="icuForm.discharge_date" type="date" :max="today" :aria-describedby="icuForm.errors.discharge_date ? fid('discharge_date') + '-err' : undefined" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" /><p v-if="icuForm.errors.discharge_date" :id="fid('discharge_date') + '-err'" class="mt-1 text-xs text-on-danger">{{ icuForm.errors.discharge_date }}</p></div>
                 <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="icuForm.processing" class="rounded-xl bg-success-600 px-5 py-2 text-sm font-semibold text-white hover:bg-success-700 disabled:opacity-50">ICU discharge</button></div>
             </form>
-            <form v-else @submit.prevent="changingConsultant ? saveHandoverThen(submitTransfer) : submitTransfer()" class="space-y-4">
+            <form v-else @submit.prevent="changingConsultant ? submitWithHandoverGuard(submitTransfer, tForm) : submitTransfer()" class="space-y-4">
                 <div class="flex gap-1 rounded-xl bg-app p-1 text-sm font-semibold">
                     <button v-for="m in [['location','Ward / ICU'],['specialty','Internal specialty'],['external','External service']]" :key="m[0]" type="button" @click="tForm.mode = m[0]"
                         class="flex-1 rounded-lg px-2 py-1.5 transition" :class="tForm.mode === m[0] ? 'bg-card text-brand-700 shadow-sm ring-1 ring-line' : 'text-ink-500 hover:text-ink-700'">{{ m[1] }}</button>

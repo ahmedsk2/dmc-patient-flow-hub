@@ -274,6 +274,61 @@ describe('ActionModal — saveHandoverThen (HC-T6 replacement for saveGateThen)'
     });
 });
 
+// HC-T7: the acknowledgement dialog is the single primary action's interception point — there is
+// deliberately NO visible "assign without handover" bypass button. Confirming proceeds (and sets
+// `acknowledged: true` on the submitted form so the server can raise the persistent reminder);
+// declining aborts the submit entirely and leaves the user on the panel to write the note.
+describe('ActionModal — acknowledgement dialog (HC-T7)', () => {
+    it('asks for acknowledgement when assigning with an incomplete handover, and aborts on Cancel', async () => {
+        ask.mockResolvedValue(false);
+        const w = mountWith('assign');
+        w.vm.aForm.consultant_id = 6;
+        await nextTick(); await nextTick();
+        // hoBody left empty — the handover is not complete
+        await w.vm.submitWithHandoverGuard(w.vm.submitAssign, w.vm.aForm);
+        expect(ask).toHaveBeenCalledTimes(1);
+        expect(posts.length).toBe(0);   // the underlying submit did NOT fire
+    });
+
+    it('submits with acknowledged=true when the user confirms', async () => {
+        ask.mockResolvedValue(true);
+        const w = mountWith('assign');
+        w.vm.aForm.consultant_id = 6;
+        await nextTick(); await nextTick();
+        await w.vm.submitWithHandoverGuard(w.vm.submitAssign, w.vm.aForm);
+        expect(w.vm.aForm.acknowledged).toBe(true);
+        expect(posts[0]?.url).toBe('/admissions/7/assign');
+    });
+
+    it('does NOT ask when the handover is complete (note written or already today)', async () => {
+        const w = mountWith('assign');
+        w.vm.aForm.consultant_id = 6;
+        await nextTick(); await nextTick();
+        w.vm.hoBody = 'today note';
+        await w.vm.submitWithHandoverGuard(w.vm.submitAssign, w.vm.aForm);
+        expect(ask).not.toHaveBeenCalled();
+        expect(saveHandover).toHaveBeenCalled();       // saveHandoverThen path used instead
+        expect(posts[0]?.url).toBe('/admissions/7/assign');
+    });
+
+    // The template only routes assign/specialty-transfer through the guard when changingConsultant
+    // is true; location and external transfer never touch it — same submit as before this task.
+    it('location and external transfer submit directly, never asking for acknowledgement', async () => {
+        const w = mountWith('transfer');
+        w.vm.tForm.mode = 'location'; w.vm.tForm.target = 'ICU';
+        await nextTick();
+        await w.find('form').trigger('submit');
+        expect(ask).not.toHaveBeenCalled();
+        expect(posts.pop()?.url).toBe('/admissions/7/transfer');
+
+        w.vm.tForm.mode = 'external'; w.vm.tForm.service = 'Surgery';
+        await nextTick();
+        await w.find('form').trigger('submit');
+        expect(ask).not.toHaveBeenCalled();
+        expect(posts.pop()?.url).toBe('/admissions/7/transfer');
+    });
+});
+
 // The medical-discharge submit button is reachable because BaseModal is mocked to render its slot
 // unconditionally (above), so no contortion is needed to assert on it.
 //
