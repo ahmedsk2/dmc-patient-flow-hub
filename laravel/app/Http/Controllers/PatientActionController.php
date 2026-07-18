@@ -96,6 +96,54 @@ class PatientActionController extends Controller
         ]);
     }
 
+    /**
+     * Soft handover gate (owner-approved): a consultant-changing move is NEVER blocked by a stale
+     * handover. Instead raise a PERSISTENT `handover.incomplete` reminder to the acting user AND the
+     * outgoing consultant for every moved patient whose handover wasn't current today; it clears when
+     * a note is saved (HandoverController::save). At most ONE unresolved reminder per (user, admission).
+     *
+     * $acknowledged records that the actor explicitly confirmed the "handover not complete" dialog,
+     * so the audit trail distinguishes a conscious clinical decision from an accident.
+     */
+    private function raiseIncompleteHandoverReminders(
+        iterable $staleAdmissions,
+        int $fromConsultantId,
+        int $toConsultantId,
+        bool $acknowledged = false
+    ): void {
+        $stale = collect($staleAdmissions);
+        if ($stale->isEmpty()) {
+            return;
+        }
+        $recipients = collect([Auth::id(), $fromConsultantId])->unique()->values();
+        $fromName = $this->consultantName($fromConsultantId);
+        $toName = $this->consultantName($toConsultantId);
+
+        foreach ($stale as $a) {
+            // recipients who ALREADY hold an unresolved reminder for this admission — don't duplicate.
+            // The `payload->admission_id` comparison MUST cast to string: a raw int does not match the
+            // stored JSON value (regression fixed previously — do not "simplify" this).
+            $existing = Notification::where('type', 'handover.incomplete')->whereNull('resolved_at')
+                ->where('payload->admission_id', (string) $a->id)
+                ->whereIn('user_id', $recipients)->pluck('user_id')->all();
+            foreach ($recipients as $uid) {
+                if (in_array((int) $uid, array_map('intval', $existing), true)) {
+                    continue;
+                }
+                Notification::create(['user_id' => $uid, 'type' => 'handover.incomplete', 'created_at' => now(), 'payload' => [
+                    'admission_id' => $a->id, 'patient_name' => $a->patient?->name, 'mrn' => $a->patient?->mrn,
+                    'from_name' => $fromName, 'to_name' => $toName,
+                ]]);
+            }
+        }
+
+        Audit::log('handover.reassign_incomplete', 'consultant', (string) $fromConsultantId, [
+            'admission_ids' => $stale->pluck('id')->all(),
+            'recipients' => $recipients->all(),
+            'acknowledged' => $acknowledged,
+        ]);
+    }
+
     /** Display name for notification payloads. */
     private function consultantName(?int $id): ?string
     {
@@ -331,32 +379,13 @@ class PatientActionController extends Controller
                 'handover_signature_ids' => $sigIds]);
         $this->bustDashboardCache();
 
-        // Soft gate (owner-approved): the move is NOT blocked by a stale handover. Instead, raise a
-        // PERSISTENT reminder (handover.incomplete) to the actor AND the from-consultant for every moved
-        // patient whose handover wasn't current today; it clears when a note is saved (HandoverController).
         $stale = $moving->reject(fn ($a) => $freshIds->has($a->id));
-        if ($stale->isNotEmpty()) {
-            $recipients = collect([Auth::id(), (int) $data['from_consultant_id']])->unique()->values();
-            $fromName = $this->consultantName((int) $data['from_consultant_id']);
-            $toName = $this->consultantName((int) $data['to_consultant_id']);
-            foreach ($stale as $a) {
-                // recipients who ALREADY hold an unresolved reminder for this admission — don't duplicate
-                $existing = Notification::where('type', 'handover.incomplete')->whereNull('resolved_at')
-                    ->where('payload->admission_id', (string) $a->id)
-                    ->whereIn('user_id', $recipients)->pluck('user_id')->all();
-                foreach ($recipients as $uid) {
-                    if (in_array((int) $uid, array_map('intval', $existing), true)) {
-                        continue;
-                    }
-                    Notification::create(['user_id' => $uid, 'type' => 'handover.incomplete', 'created_at' => now(), 'payload' => [
-                        'admission_id' => $a->id, 'patient_name' => $a->patient?->name, 'mrn' => $a->patient?->mrn,
-                        'from_name' => $fromName, 'to_name' => $toName,
-                    ]]);
-                }
-            }
-            Audit::log('handover.reassign_incomplete', 'consultant', (string) $data['from_consultant_id'],
-                ['admission_ids' => $stale->pluck('id')->all(), 'recipients' => $recipients->all()]);
-        }
+        $this->raiseIncompleteHandoverReminders(
+            $stale,
+            (int) $data['from_consultant_id'],
+            (int) $data['to_consultant_id'],
+            $request->boolean('acknowledged'),
+        );
 
         return back()->with('flash', ['type' => 'success', 'message' => "Reassigned {$count} patient(s)."]);
     }
