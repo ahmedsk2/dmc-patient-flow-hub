@@ -64,19 +64,7 @@ class PatientActionController extends Controller
         \App\Support\DashboardCache::bust();
     }
 
-    // ---- same-day handover gate (consultant-changing moves only) --------------------------------
-
-    /**
-     * A patient may only move to a DIFFERENT consultant when their handover was updated TODAY —
-     * no admin override. First assignments, shuffle, self-assign, ICU pull, location/external
-     * transfers and discharges are NOT gated.
-     */
-    private function assertHandoverToday(Admission $a): void
-    {
-        if (! Handover::updatedToday($a->id)) {
-            throw ValidationException::withMessages(['handover' => 'Handover must be updated today before transfer.']);
-        }
-    }
+    // ---- handover signature + soft gate (consultant-changing moves only) ------------------------
 
     /**
      * Record the receiving consultant's pending signature for a gated transfer (call INSIDE the
@@ -710,15 +698,15 @@ class PatientActionController extends Controller
             'specialty_id' => ['required', Rule::exists('specialties', 'id')->where('is_external', false)],
             // the receiving consultant must be an ACTIVE consultant (N1-7)
             'consultant_id' => ['required', self::activeConsultantRule()],
+            'acknowledged' => ['sometimes', 'boolean'],
         ]);
         $specialty = \App\Models\Specialty::findOrFail($data['specialty_id']);
 
-        // an internal handover to a DIFFERENT consultant is gated on a same-day handover note
+        // an internal handover to a DIFFERENT consultant used to be gated on a same-day handover
+        // note. Soft gate (owner-approved, HC-T3): a stale/missing handover no longer blocks the
+        // move — it raises a persistent reminder below instead.
         $oldConsultant = $admission->consultant_id ? (int) $admission->consultant_id : null;
         $gated = $oldConsultant !== null && $oldConsultant !== (int) $data['consultant_id'];
-        if ($gated) {
-            $this->assertHandoverToday($admission);
-        }
 
         $sig = null;
         $new = DB::transaction(function () use ($admission, $data, $specialty, $gated, $oldConsultant, &$sig) {
@@ -776,6 +764,16 @@ class PatientActionController extends Controller
             'consultant_id' => (int) $data['consultant_id'], 'new_admission_id' => $new->id,
         ] + ($sig ? ['handover_signature_id' => $sig->id] : []));
         $this->bustDashboardCache();
+
+        if ($gated && $oldConsultant !== null && ! Handover::updatedToday($admission->id)) {
+            $admission->loadMissing('patient:id,name,mrn');
+            $this->raiseIncompleteHandoverReminders(
+                [$admission],
+                $oldConsultant,
+                (int) $data['consultant_id'],
+                $request->boolean('acknowledged'),
+            );
+        }
 
         return back()->with('flash', ['type' => 'success', 'message' => "Patient transferred to {$specialty->name}."]);
     }

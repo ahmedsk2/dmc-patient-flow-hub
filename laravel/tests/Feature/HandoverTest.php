@@ -272,18 +272,27 @@ class HandoverTest extends TestCase
 
     // ---- 4. same-day gate on specialty transfer -------------------------------------------------
 
-    public function test_specialty_transfer_blocked_without_today_handover(): void
+    // HC-T3: the same-day handover gate on specialty transfer is now a SOFT gate (matching assign,
+    // HC-T2, and bulkReassign, HO-T5) — a stale/missing handover no longer blocks the move. It
+    // proceeds and raises a persistent `handover.incomplete` reminder to the actor and the outgoing
+    // consultant instead (see tests/Feature/ReassignReminderTest.php for the dedicated coverage).
+    public function test_specialty_transfer_proceeds_without_today_handover_and_raises_a_reminder(): void
     {
         $spec = Specialty::create(['name' => 'Cardiology', 'is_subspecialty' => true]);
         $cardio = $this->user(['specialty_id' => $spec->id]);
-        $a = $this->admission(['consultant_id' => $this->user()->id]);
+        $from = $this->user();
+        $a = $this->admission(['consultant_id' => $from->id]);
+        $admin = $this->user(['role' => User::ROLE_ADMIN]);
 
-        $this->actingAs($this->user(['role' => User::ROLE_ADMIN]))
+        $this->actingAs($admin)
             ->post("/admissions/{$a->id}/transfer", ['mode' => 'specialty', 'specialty_id' => $spec->id, 'consultant_id' => $cardio->id])
-            ->assertSessionHasErrors('handover');
+            ->assertRedirect()->assertSessionHasNoErrors();
 
-        $this->assertNull($a->fresh()->discharge_date, 'episode must stay open');
-        $this->assertSame(1, Admission::where('patient_id', $a->patient_id)->count());
+        $this->assertNotNull($a->fresh()->discharge_date, 'the episode closes despite the missing handover');
+        $this->assertSame(2, Admission::where('patient_id', $a->patient_id)->count(), 'a new episode still opens under the receiver');
+        $this->assertSame(1, HandoverSignature::count(), 'a gated move still creates the receiver signature, same as before');
+        $this->assertDatabaseHas('notifications', ['user_id' => $admin->id, 'type' => 'handover.incomplete', 'resolved_at' => null]);
+        $this->assertDatabaseHas('notifications', ['user_id' => $from->id, 'type' => 'handover.incomplete', 'resolved_at' => null]);
     }
 
     public function test_specialty_transfer_with_today_handover_creates_signature_for_receiver(): void

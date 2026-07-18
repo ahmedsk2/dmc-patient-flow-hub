@@ -6,6 +6,7 @@ use App\Models\Admission;
 use App\Models\Handover;
 use App\Models\Notification;
 use App\Models\Patient;
+use App\Models\Specialty;
 use App\Models\User;
 use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -164,5 +165,26 @@ class ReassignReminderTest extends TestCase
         $row = \App\Models\AuditLog::where('action', 'handover.reassign_incomplete')->latest('id')->first();
         $this->assertNotNull($row);
         $this->assertTrue((bool) ($row->details['acknowledged'] ?? false));
+    }
+
+    // ---- HC-T3: specialty transfer now uses the same soft gate ------------------------------------
+
+    public function test_specialty_transfer_proceeds_with_a_stale_handover_and_notifies(): void
+    {
+        [$admin, $from, $to, $admission] = $this->reassignFixture();
+        $spec = Specialty::create(['name' => 'Cardiology', 'is_subspecialty' => true]);
+        $to->forceFill(['specialty_id' => $spec->id])->save();
+
+        $this->actingAs($admin)->post("/admissions/{$admission->id}/transfer", [
+            'mode' => 'specialty', 'specialty_id' => $spec->id, 'consultant_id' => $to->id,
+        ])->assertRedirect()->assertSessionHasNoErrors();   // NO 422 — the hard gate is gone
+
+        $this->assertNotNull($admission->fresh()->discharge_date, 'the outgoing episode must close');
+        $newAdmission = Admission::where('patient_id', $admission->patient_id)->where('id', '!=', $admission->id)->first();
+        $this->assertNotNull($newAdmission, 'a new episode opens under the receiving consultant');
+        $this->assertSame($to->id, (int) $newAdmission->consultant_id);
+
+        $this->assertDatabaseHas('notifications', ['user_id' => $from->id, 'type' => 'handover.incomplete', 'resolved_at' => null]);
+        $this->assertDatabaseHas('notifications', ['user_id' => $admin->id, 'type' => 'handover.incomplete', 'resolved_at' => null]);
     }
 }
