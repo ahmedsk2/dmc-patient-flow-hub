@@ -164,10 +164,10 @@ class DashboardController extends Controller
                 'name' => $r->consultant, 'c' => (int) $r->c])->all();   // plain array of arrays — cache round-trip safe
 
         // per-consultant breakdown of the active census (legacy "Patient count per consultant").
-        // USERS-driven (left join) so an on-service consultant with ZERO patients still appears
-        // — like the legacy table built from the members list; off-service users only show
-        // while they still hold patients. The SUM cases guard a.id IS NOT NULL so the empty
-        // left-join row contributes nothing.
+        // USERS-driven (left join), but a row now REQUIRES at least one active admission (see the
+        // whereExists below): the legacy members-list behaviour — every on-service consultant
+        // listed, zeros included — was noise, so zero-patient consultants are hidden here, on the
+        // board and on the Active List alike. The SUM cases still guard a.id IS NOT NULL.
         $tbExists = "EXISTS (SELECT 1 FROM admission_diagnoses ad JOIN tb_diagnoses tb ON tb.icd10_code = ad.icd10_code WHERE ad.admission_id = a.id)";
         // "New" keys on the is_new_assignment FLAG (the managed legacy signal — set on assign /
         // handover / shuffle, cleared on discharge / reassign), NOT a rolling assigned_at >= now-24h
