@@ -197,13 +197,26 @@ describe('ActionModal — proactive handover panel (HC-T6)', () => {
         w.vm.tForm.mode = 'specialty';
         await nextTick();
         expect(w.findComponent(HandoverCapture).exists()).toBe(false);
-        w.vm.tForm.specialty_id = 1;
+        w.vm.tForm.specialty_id = 2;
         // the specialty_id watcher resets consultant_id to '' — let it flush BEFORE picking one
         // (same ordering the pre-existing "specialty mode needs both" transferReady test uses).
         await nextTick();
-        w.vm.tForm.consultant_id = 5;
+        // consultant 6 (specialty 2) — deliberately DIFFERENT from the patient's current consultant
+        // (5); a same-consultant pick is covered separately below (Fix 5: same-consultant guard).
+        w.vm.tForm.consultant_id = 6;
         await nextTick(); await nextTick();
         expect(w.findComponent(HandoverCapture).exists()).toBe(true);
+    });
+
+    it('specialty transfer: picking the SAME consultant as current does not show the panel', async () => {
+        const w = mountWith('transfer');
+        w.vm.tForm.mode = 'specialty';
+        w.vm.tForm.specialty_id = 1;
+        await nextTick();
+        w.vm.tForm.consultant_id = 5;   // patient.consultant_id === 5 — not a handoff
+        await nextTick(); await nextTick();
+        expect(w.findComponent(HandoverCapture).exists()).toBe(false);
+        expect(fetchHandover).not.toHaveBeenCalled();
     });
 
     it('location / external transfer modes never show the panel', async () => {
@@ -244,33 +257,54 @@ describe('ActionModal — saveHandoverThen (HC-T6 replacement for saveGateThen)'
         w.vm.aForm.consultant_id = 6;
         await nextTick(); await nextTick();
         w.vm.hoBody = 'on insulin, watch K+';
+        w.vm.hoDirty = true;   // a real user edit, not stale pre-filled text — see HC-T10 fix below
         const retry = vi.fn();
         await w.vm.saveHandoverThen(retry);
         expect(saveHandover).toHaveBeenCalledWith(7, 'on insulin, watch K+', w.vm.hoCheckpoints);
         expect(retry).toHaveBeenCalled();
         expect(w.vm.ho.today).toBe(true);
+        expect(w.vm.hoDirty).toBe(false);   // reset after a successful save
     });
 
     // Unlike the old gate, an empty body is NOT a hard stop — this is a proactive best-effort save,
-    // not a blocking requirement, so the original action still proceeds.
+    // not a blocking requirement, so the original action still proceeds. Skips even if dirty: there
+    // is nothing to save.
     it('skips the save but still retries when the body is empty (no forced bypass button needed)', async () => {
         const w = mountWith('assign');
         const retry = vi.fn();
+        w.vm.hoDirty = true;
         w.vm.hoBody = '   ';
         await w.vm.saveHandoverThen(retry);
         expect(saveHandover).not.toHaveBeenCalled();
         expect(retry).toHaveBeenCalled();
     });
 
-    // Unlike the old gate (which only retried on a truthy saveHandover result), the move is never
-    // blocked by a failed handover save — the server-side gate is gone, so this is best-effort only.
-    it('still retries even when the handover save reports failure', async () => {
+    // HC-T10 fix: unchanged (non-dirty) text is NEVER re-saved — a stale pre-filled note must not
+    // be silently stamped as "saved today". See "does NOT re-save a pre-filled stale note" below.
+    it('skips the save and just retries when the text is pre-filled but never edited by the user', async () => {
+        const w = mountWith('assign');
+        const retry = vi.fn();
+        w.vm.hoBody = 'prior note, never touched this session';   // pre-filled, hoDirty left false
+        await w.vm.saveHandoverThen(retry);
+        expect(saveHandover).not.toHaveBeenCalled();
+        expect(retry).toHaveBeenCalled();
+    });
+
+    // HC-T10 fix: a failed save is a transient technical error, not the removed policy gate — it
+    // must NOT be reported as success. The original "still retries even on failure" behaviour let a
+    // 422/5xx silently discard the clinician's text while the modal proceeded as if saved; now the
+    // move does not proceed, the text stays in the box, and an inline error is surfaced instead.
+    it('does NOT retry and surfaces an error when the handover save reports failure', async () => {
         saveHandover.mockResolvedValueOnce(false);
         const w = mountWith('assign');
         w.vm.hoBody = 'note';
+        w.vm.hoDirty = true;
         const retry = vi.fn();
         await w.vm.saveHandoverThen(retry);
-        expect(retry).toHaveBeenCalled();
+        expect(retry).not.toHaveBeenCalled();
+        expect(w.vm.ho?.today).toBeFalsy();
+        expect(w.vm.hoError).toBeTruthy();
+        expect(w.vm.hoBody).toBe('note');   // the typed text is not lost
     });
 });
 
@@ -300,11 +334,14 @@ describe('ActionModal — acknowledgement dialog (HC-T7)', () => {
         expect(posts[0]?.url).toBe('/admissions/7/assign');
     });
 
-    it('does NOT ask when the handover is complete (note written or already today)', async () => {
+    it('does NOT ask when the handover is complete (note actually edited this session, or already today)', async () => {
         const w = mountWith('assign');
         w.vm.aForm.consultant_id = 6;
         await nextTick(); await nextTick();
+        // hoDirty=true simulates a real user edit (see the HandoverCapture @update:body wiring) —
+        // merely setting hoBody without hoDirty is the STALE pre-filled case, covered separately.
         w.vm.hoBody = 'today note';
+        w.vm.hoDirty = true;
         await w.vm.submitWithHandoverGuard(w.vm.submitAssign, w.vm.aForm);
         expect(ask).not.toHaveBeenCalled();
         expect(saveHandover).toHaveBeenCalled();       // saveHandoverThen path used instead
@@ -326,6 +363,119 @@ describe('ActionModal — acknowledgement dialog (HC-T7)', () => {
         await w.find('form').trigger('submit');
         expect(ask).not.toHaveBeenCalled();
         expect(posts.pop()?.url).toBe('/admissions/7/transfer');
+    });
+});
+
+// HC-T10 fix: `hoBody` is pre-filled from the FETCHED (possibly weeks-old) handover, so treating
+// "there is text in the box" as "complete" defeated the whole mechanism for exactly the patients it
+// targets — a stale note never triggered the acknowledgement dialog, AND got silently re-saved
+// (stamping it current). Completeness now requires either `ho.today` OR a genuine in-session edit
+// (`hoDirty`), never merely non-empty pre-filled text.
+describe('ActionModal — stale pre-filled note is not "complete" (HC-T10 fix)', () => {
+    it('a STALE pre-filled note (today:false, non-empty body) still triggers the acknowledgement dialog, and confirming does NOT re-save the old text', async () => {
+        fetchHandover.mockResolvedValueOnce({ body: 'old stale note from last week', checkpoints: null, today: false, updated_at: '2026-06-01T10:00:00Z', revisions: [] });
+        ask.mockResolvedValue(true);
+        const w = mountWith('assign');
+        w.vm.aForm.consultant_id = 6;
+        await nextTick(); await nextTick();   // watch(changingConsultant) + fetchHandover resolution
+        expect(w.vm.hoBody).toBe('old stale note from last week');   // pre-filled, but never edited
+        expect(w.vm.hoDirty).toBe(false);
+
+        await w.vm.submitWithHandoverGuard(w.vm.submitAssign, w.vm.aForm);
+
+        expect(ask).toHaveBeenCalledTimes(1);          // stale text must not bypass the dialog
+        expect(saveHandover).not.toHaveBeenCalled();   // the old text is never re-saved
+        expect(w.vm.aForm.acknowledged).toBe(true);
+        expect(posts[0]?.url).toBe('/admissions/7/assign');
+    });
+
+    it('after the user actually EDITS the note, submitting saves the new text without asking', async () => {
+        fetchHandover.mockResolvedValueOnce({ body: 'old stale note', checkpoints: null, today: false, updated_at: '2026-06-01T10:00:00Z', revisions: [] });
+        const w = mountWith('assign');
+        w.vm.aForm.consultant_id = 6;
+        await nextTick(); await nextTick();
+        await w.findComponent(HandoverCapture).vm.$emit('update:body', 'fresh note from this session');
+        await nextTick();
+        expect(w.vm.hoDirty).toBe(true);
+
+        await w.vm.submitWithHandoverGuard(w.vm.submitAssign, w.vm.aForm);
+
+        expect(ask).not.toHaveBeenCalled();
+        expect(saveHandover).toHaveBeenCalledTimes(1);
+        expect(saveHandover).toHaveBeenCalledWith(7, 'fresh note from this session', w.vm.hoCheckpoints);
+        expect(posts[0]?.url).toBe('/admissions/7/assign');
+    });
+
+    it('a failed save does not proceed, does not mark today, and renders an inline error', async () => {
+        saveHandover.mockResolvedValueOnce(false);
+        const w = mountWith('assign');
+        w.vm.aForm.consultant_id = 6;
+        await nextTick(); await nextTick();
+        await w.findComponent(HandoverCapture).vm.$emit('update:body', 'important new note');
+        await nextTick();
+
+        await w.vm.submitWithHandoverGuard(w.vm.submitAssign, w.vm.aForm);
+        await nextTick();
+
+        expect(posts.length).toBe(0);              // the transfer/assign was NOT made
+        expect(w.vm.ho?.today).toBeFalsy();
+        expect(w.vm.hoBody).toBe('important new note');   // nothing was lost
+        expect(w.vm.hoError).toBeTruthy();
+        const err = w.find('.text-on-danger');
+        expect(err.exists()).toBe(true);
+        expect(err.text()).toBe(w.vm.hoError);
+    });
+
+    it('toggling the panel off and back on preserves an in-session edit (no refetch clobber)', async () => {
+        const w = mountWith('assign');
+        w.vm.aForm.consultant_id = 6;
+        await nextTick(); await nextTick();
+        await w.findComponent(HandoverCapture).vm.$emit('update:body', 'typed but not yet saved');
+        await nextTick();
+
+        w.vm.aForm.consultant_id = 5;   // revert to current consultant — panel hides
+        await nextTick();
+        expect(w.findComponent(HandoverCapture).exists()).toBe(false);
+
+        w.vm.aForm.consultant_id = 6;   // re-pick the same target — panel reappears
+        await nextTick(); await nextTick();
+        expect(w.vm.hoBody).toBe('typed but not yet saved');
+        expect(fetchHandover).toHaveBeenCalledTimes(1);   // no second fetch clobbering the edit
+    });
+
+    it('specialty transfer: picking the SAME consultant as current never shows the panel (transfer branch needed the same current-consultant comparison as assign)', async () => {
+        const w = mountWith('transfer');
+        w.vm.tForm.mode = 'specialty';
+        w.vm.tForm.specialty_id = 1;
+        await nextTick();
+        w.vm.tForm.consultant_id = 5;   // === patient.consultant_id
+        await nextTick(); await nextTick();
+        expect(w.findComponent(HandoverCapture).exists()).toBe(false);
+        expect(fetchHandover).not.toHaveBeenCalled();
+    });
+
+    // Fix 4: mirrors HandoverModal's requestId token — an older in-flight fetch resolving AFTER a
+    // newer one must not clobber it.
+    it('stale-response guard: an out-of-order fetch resolution does not clobber the latest one', async () => {
+        let resolveFirst, resolveSecond;
+        fetchHandover
+            .mockImplementationOnce(() => new Promise((r) => { resolveFirst = r; }))
+            .mockImplementationOnce(() => new Promise((r) => { resolveSecond = r; }));
+        const w = mountWith('assign');
+
+        w.vm.aForm.consultant_id = 6;   // starts fetch #1 (unresolved)
+        await nextTick();
+        w.vm.aForm.consultant_id = 5;   // panel hides; fetch #1 still pending
+        await nextTick();
+        w.vm.aForm.consultant_id = 6;   // starts fetch #2 (unresolved) — not dirty, so it refetches
+        await nextTick();
+
+        resolveSecond({ body: 'second (newer)', checkpoints: null, today: false, updated_at: null, revisions: [] });
+        await nextTick(); await nextTick();
+        resolveFirst({ body: 'first (stale)', checkpoints: null, today: false, updated_at: null, revisions: [] });
+        await nextTick(); await nextTick();
+
+        expect(w.vm.hoBody).toBe('second (newer)');
     });
 });
 

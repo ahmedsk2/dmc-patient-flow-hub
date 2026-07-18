@@ -72,27 +72,66 @@ const ho = ref(null);            // null | { body, checkpoints, today, updated_a
 const hoBody = ref('');
 const hoCheckpoints = ref(withCheckpointDefaults(null));
 const hoSaving = ref(false);
+// HC-T10 fix: `hoBody` is PRE-FILLED from the fetched (possibly weeks-old) handover, so "there is
+// text in the box" is true for any patient who has ever had one — it must never stand in for
+// "the user actually wrote something". hoDirty is set true ONLY by a real HandoverCapture edit
+// event (wired in the template below), and reset whenever the panel (re)loads a fetched handover
+// or a save succeeds.
+const hoDirty = ref(false);
+const hoError = ref('');
 
 // true only when the SELECTED consultant differs from the patient's current one — a no-op
-// reassign (re-picking the same consultant) is not a handoff, so no panel appears.
+// reassign (re-picking the same consultant) is not a handoff, so no panel appears. The transfer
+// branch mirrors the assign branch's current-consultant comparison (a specialty transfer that
+// keeps the same consultant is not a handoff either).
 const changingConsultant = computed(() =>
     (props.mode === 'assign' && !!aForm.consultant_id && Number(aForm.consultant_id) !== Number(props.patient?.consultant_id))
-    || (props.mode === 'transfer' && tForm.mode === 'specialty' && !!tForm.consultant_id));
+    || (props.mode === 'transfer' && tForm.mode === 'specialty' && !!tForm.consultant_id && Number(tForm.consultant_id) !== Number(props.patient?.consultant_id)));
+
+// stale-response guard (mirrors HandoverModal's requestId token): an older fetch resolving after a
+// newer one (rapid consultant switching) must not clobber the latest result.
+let hoRequestId = 0;
 
 watch(changingConsultant, async (on) => {
     if (!on || !props.patient) { ho.value = null; return; }
-    const d = await fetchHandover(props.patient.id);
+    if (hoDirty.value) return;   // an in-session edit survives a toggle off/on — never clobber it
+    const patientId = props.patient.id;
+    const my = ++hoRequestId;
+    const d = await fetchHandover(patientId);
+    // drop an out-of-order response, and never overwrite text the user started typing meanwhile
+    if (my !== hoRequestId || hoDirty.value || props.patient?.id !== patientId) return;
     ho.value = d;
     hoBody.value = d?.body || '';
     hoCheckpoints.value = withCheckpointDefaults(d?.checkpoints);
+    hoDirty.value = false;
+    hoError.value = '';
 });
 
-/** Save the handover, then run the original submit. */
+// HC-T10 fix: completeness must mean "already current today" OR "the user actually wrote
+// something in THIS session" — never "there is old text in the box" (pre-filled from the fetch).
+const complete = computed(() => !!ho.value?.today || (hoDirty.value && !!hoBody.value.trim()));
+
+/**
+ * Save the handover, then run the original submit. Unchanged (non-dirty) text — i.e. a stale
+ * pre-filled note the user never touched — is never re-saved (that would silently stamp old text
+ * as "saved today" and suppress the persistent reminder for exactly the patients it targets).
+ */
 const saveHandoverThen = async (retry) => {
-    if (!hoBody.value.trim()) { retry(); return; }
-    hoSaving.value = true;
-    try { await saveHandover(props.patient.id, hoBody.value.trim(), hoCheckpoints.value); ho.value = { ...ho.value, today: true }; retry(); }
-    finally { hoSaving.value = false; }
+    if (!hoDirty.value || !hoBody.value.trim()) { retry(); return; }
+    hoSaving.value = true; hoError.value = '';
+    try {
+        const ok = await saveHandover(props.patient.id, hoBody.value.trim(), hoCheckpoints.value);
+        if (!ok) {
+            // A failed save is a transient technical error, not the removed policy gate — do NOT
+            // proceed with the move (the typed text stays in the box; the user can retry or go
+            // through the acknowledgement dialog instead of silently losing what they wrote).
+            hoError.value = 'Could not save the handover note — nothing was saved and the transfer was not made. Please try again.';
+            return;
+        }
+        ho.value = { ...ho.value, today: true };
+        hoDirty.value = false;
+        retry();
+    } finally { hoSaving.value = false; }
 };
 
 /**
@@ -105,8 +144,7 @@ const saveHandoverThen = async (retry) => {
  * persistent reminder to the actor + outgoing consultant) and retries the original submit.
  */
 const submitWithHandoverGuard = async (retry, formRef) => {
-    const complete = !!ho.value?.today || !!hoBody.value.trim();
-    if (complete) { await saveHandoverThen(retry); return; }
+    if (complete.value) { await saveHandoverThen(retry); return; }
     const ok = await ask(
         'Handover not complete',
         `${props.patient?.name || 'This patient'} has no handover saved today. A reminder will be sent to you and the outgoing consultant until it is completed.`,
@@ -123,7 +161,9 @@ watch(
     ([open]) => {
         if (!open || !props.patient) return;
         const row = props.patient;
+        hoRequestId++;   // invalidate any in-flight fetch tied to a previous patient/panel state
         ho.value = null; hoBody.value = ''; hoCheckpoints.value = withCheckpointDefaults(null);   // fresh proactive panel per patient
+        hoDirty.value = false; hoError.value = '';
         if (props.mode === 'assign') { aForm.consultant_id = row.consultant_id || ''; aForm.mark_new = true; aForm.clearErrors(); }
         if (props.mode === 'medical') mdForm.reset();   // never carry a previous patient's type/destination over
         if (props.mode === 'complete') { cdForm.reset(); cdForm.outcome = row.outcome || ''; cdForm.discharge_to = row.discharge_to || ''; }   // prefill the optional override from phase-1
@@ -192,7 +232,7 @@ defineExpose({
     modalTitle, aForm, mdForm, cdForm, icuForm, tForm,
     assignConsultants, specConsultants, transferReady, modalDirty, modeErrors, fid,
     submitAssign, submitMedical, submitComplete, submitIcu, submitTransfer,
-    changingConsultant, ho, hoBody, hoCheckpoints, hoSaving, saveHandoverThen, submitWithHandoverGuard,
+    changingConsultant, ho, hoBody, hoCheckpoints, hoSaving, hoDirty, hoError, complete, saveHandoverThen, submitWithHandoverGuard,
 });
 </script>
 
@@ -217,7 +257,8 @@ defineExpose({
                     <HandoverCapture density="full" :label="patient?.name"
                         :body="hoBody" :checkpoints="hoCheckpoints"
                         :today="!!ho?.today" :updated-at="ho?.updated_at" :revisions="ho?.revisions || []"
-                        @update:body="hoBody = $event" @update:checkpoints="hoCheckpoints = $event" />
+                        @update:body="hoBody = $event; hoDirty = true" @update:checkpoints="hoCheckpoints = $event; hoDirty = true" />
+                    <p v-if="hoError" class="mt-2 text-xs text-on-danger">{{ hoError }}</p>
                 </div>
                 <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="aForm.processing || !aForm.consultant_id || hoSaving" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">{{ changingConsultant ? 'Save handover & assign' : 'Assign' }}</button></div>
             </form>
@@ -327,7 +368,8 @@ defineExpose({
                         <HandoverCapture density="full" :label="patient?.name"
                             :body="hoBody" :checkpoints="hoCheckpoints"
                             :today="!!ho?.today" :updated-at="ho?.updated_at" :revisions="ho?.revisions || []"
-                            @update:body="hoBody = $event" @update:checkpoints="hoCheckpoints = $event" />
+                            @update:body="hoBody = $event; hoDirty = true" @update:checkpoints="hoCheckpoints = $event; hoDirty = true" />
+                        <p v-if="hoError" class="mt-2 text-xs text-on-danger">{{ hoError }}</p>
                     </div>
                 </template>
                 <template v-else>
