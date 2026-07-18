@@ -21,6 +21,7 @@ const props = defineProps({
     today: { type: Boolean, default: false },
     revisions: { type: Array, default: () => [] },
     label: { type: String, default: '' },   // patient name — disambiguates aria-labels in stacked rows
+    hideStatus: { type: Boolean, default: false },   // caller already shows this (e.g. a row pill + batch banner) — skip the redundant/stale-implying line
 });
 const emit = defineEmits(['update:body', 'update:checkpoints']);
 
@@ -33,7 +34,7 @@ const aria = (suffix) => (props.label ? `${suffix} for ${props.label}` : suffix)
 
 <template>
     <div>
-        <p class="mb-1 flex flex-wrap items-center gap-2 text-xs text-ink-400">
+        <p v-if="!hideStatus" class="mb-1 flex flex-wrap items-center gap-2 text-xs text-ink-400">
             <span v-if="updatedAt">Handover · last updated {{ fmtAt(updatedAt) }}</span>
             <span v-else>No handover recorded yet</span>
             <span v-if="!today" class="rounded-full bg-tint-warning px-2 py-0.5 text-[10px] font-semibold text-on-warning">stale</span>

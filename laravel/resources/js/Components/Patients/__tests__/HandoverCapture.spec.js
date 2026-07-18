@@ -45,4 +45,23 @@ describe('HandoverCapture', () => {
         expect(w.emitted('update:body').at(-1)[0]).toBe('today note');
         w.unmount();
     });
+
+    it('hideStatus: true suppresses the status line (stale pill + last-updated/no-handover text) even with a pre-filled note', () => {
+        const w = mount(HandoverCapture, {
+            props: { density: 'compact', body: 'prior note', checkpoints: cp, today: false, updatedAt: null, hideStatus: true },
+        });
+        expect(w.text()).not.toContain('stale');
+        expect(w.text()).not.toContain('No handover recorded yet');
+        expect(w.text()).not.toContain('last updated');
+        w.unmount();
+    });
+
+    it('hideStatus: false (default) still renders the status line', () => {
+        const w = mount(HandoverCapture, {
+            props: { density: 'compact', body: 'prior note', checkpoints: cp, today: false, updatedAt: null },
+        });
+        expect(w.text()).toContain('stale');
+        expect(w.text()).toContain('No handover recorded yet');
+        w.unmount();
+    });
 });

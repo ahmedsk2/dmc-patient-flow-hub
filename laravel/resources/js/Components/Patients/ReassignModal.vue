@@ -160,10 +160,11 @@ defineExpose({
                         <p class="mt-3 rounded-lg bg-tint-warning px-2.5 py-1.5 text-sm font-semibold text-on-warning">{{ staleRows.length }} of {{ selectedIds.size }} selected patient(s) will move with an incomplete handover — a reminder will be sent to you and the outgoing consultant until each is completed. You can write the note(s) below now, or proceed.</p>
                         <div v-for="(r, i) in staleRows" :key="'h' + r.id" class="mt-2" :data-stale-capture="i === 0 ? '' : undefined">
                             <p class="text-xs font-semibold text-ink-700"><IdentityChip :name="r.name" :mrn="String(r.mrn ?? '')" /></p>
-                            <HandoverCapture density="compact" :label="r.name"
+                            <HandoverCapture density="compact" :label="r.name" hide-status
                                 :body="preflightBodies[r.id] || ''"
                                 :checkpoints="preflightCheckpoints[r.id]"
                                 :today="false"
+                                :updated-at="r.updated_at"
                                 @update:body="preflightBodies[r.id] = $event"
                                 @update:checkpoints="preflightCheckpoints[r.id] = $event" />
                         </div>

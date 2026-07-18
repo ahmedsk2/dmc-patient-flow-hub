@@ -1,5 +1,10 @@
-// Canonical handover checkpoint shape — the ONE definition shared by HandoverCapture,
-// HandoverModal and CheckpointChips. Server mirror: HandoverController::normalizeCheckpoints().
+// Canonical handover checkpoint shape. Server mirror: HandoverController::normalizeCheckpoints().
+//
+// CHECKPOINT_FIELDS / CODE_STATUS_OPTIONS (the field/option LISTS, used to render labels) are shared
+// by HandoverCapture and CheckpointChips only. HandoverModal does NOT import them — its edit-mode
+// template hardcodes its own checkbox labels and <select> options inline; it, ActionModal, and
+// ReassignModal import only defaultCheckpoints()/withCheckpointDefaults() from here, for the
+// checkpoint SHAPE (defaults + null-safety), not the label strings.
 export const CHECKPOINT_FIELDS = [
     { key: 'vte_completed', label: 'VTE prophylaxis', short: 'VTE' },
     { key: 'ready_for_discharge', label: 'Ready for discharge', short: 'D/C ready' },

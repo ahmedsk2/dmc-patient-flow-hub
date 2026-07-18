@@ -45,7 +45,7 @@ const consultants = [
 const mountWith = (over = {}) => mount(ReassignModal, { props: { open: true, consultants, ...over } });
 
 const rows = [
-    { id: 1, name: 'A', mrn: '1', handover_today: false, body: '' },
+    { id: 1, name: 'A', mrn: '1', handover_today: false, body: '', updated_at: '2026-07-10T09:00:00+00:00' },
     { id: 2, name: 'B', mrn: '2', handover_today: true, body: 'ok' },
 ];
 
@@ -147,6 +147,10 @@ describe('ReassignModal — compact HandoverCapture per stale row (HC-T5)', () =
         const caps = w.findAllComponents(HandoverCapture);
         expect(caps).toHaveLength(1);   // only row 1 (id 1) is stale
         expect(caps[0].props('density')).toBe('compact');
+        // the row's own pill + the batch banner already say "stale" — the capture's redundant status
+        // line is suppressed, but it still receives the row's truthful updatedAt (not an implicit null)
+        expect(caps[0].props('hideStatus')).toBe(true);
+        expect(caps[0].props('updatedAt')).toBe('2026-07-10T09:00:00+00:00');
 
         caps[0].vm.$emit('update:body', 'today note');
         caps[0].vm.$emit('update:checkpoints', { ...withCheckpointDefaults(null), high_risk: true });

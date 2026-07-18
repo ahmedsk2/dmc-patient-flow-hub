@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { CHECKPOINT_FIELDS, CODE_STATUS_OPTIONS } from '@/lib/handover.js';
 
 /**
  * Shared handover-checkpoint chip row (spec §D4). Extracted verbatim from HandoverModal.vue's
@@ -8,31 +9,36 @@ import { computed } from 'vue';
  * affordance, and the Handovers inbox rows. Purely presentational: renders nothing when `checkpoints`
  * is null/empty (no handover row yet, or every flag unset).
  *
- * Token colours are reused verbatim from PatientFlags.vue (bg-tint-warning/text-on-warning,
- * bg-tint-danger/text-on-danger) and DxChips.vue (bg-brand-100/text-brand-700) — no new Tailwind
- * utilities introduced. Callers may add spacing (e.g. `class="mb-2"`) — it merges onto this root via
- * Vue's normal fallthrough-attribute behaviour.
+ * Flag keys + labels come from the shared CHECKPOINT_FIELDS/CODE_STATUS_OPTIONS (lib/handover.js) —
+ * this component no longer keeps its own copy of those strings. The colour mapping below is NOT
+ * derivable from that shared shape (it's a chip-display concern, not a field-definition one) and is
+ * intentionally kept local: high_risk uses the warning token, dnr/dni use the danger token, everything
+ * else uses the brand token. Token colours are reused verbatim from PatientFlags.vue
+ * (bg-tint-warning/text-on-warning, bg-tint-danger/text-on-danger) and DxChips.vue
+ * (bg-brand-100/text-brand-700) — no new Tailwind utilities introduced. Callers may add spacing (e.g.
+ * `class="mb-2"`) — it merges onto this root via Vue's normal fallthrough-attribute behaviour.
  */
 const props = defineProps({
     checkpoints: { type: Object, default: null },
 });
 
-const CODE_STATUS_LABEL = { full: 'Full', dnr: 'DNR', dni: 'DNI' };
+const WARNING_FLAG_KEYS = new Set(['high_risk']);
+const DANGER_CODE_STATUSES = new Set(['dnr', 'dni']);
 
 const chips = computed(() => {
     const cp = props.checkpoints;
     if (!cp) return [];
     const out = [];
-    if (cp.vte_completed) out.push({ key: 'vte', label: 'VTE', classes: 'bg-brand-100 text-brand-700' });
-    if (cp.ready_for_discharge) out.push({ key: 'dc', label: 'D/C ready', classes: 'bg-brand-100 text-brand-700' });
-    if (cp.high_risk) out.push({ key: 'hr', label: 'High-risk', classes: 'bg-tint-warning text-on-warning' });
-    if (cp.needs_workup) out.push({ key: 'nw', label: 'Needs workup', classes: 'bg-brand-100 text-brand-700' });
-    if (cp.workup_pending) out.push({ key: 'wp', label: 'Workup pending', classes: 'bg-brand-100 text-brand-700' });
+    for (const f of CHECKPOINT_FIELDS) {
+        if (!cp[f.key]) continue;
+        out.push({ key: f.key, label: f.short, classes: WARNING_FLAG_KEYS.has(f.key) ? 'bg-tint-warning text-on-warning' : 'bg-brand-100 text-brand-700' });
+    }
     if (cp.code_status) {
+        const opt = CODE_STATUS_OPTIONS.find((o) => o.value === cp.code_status);
         out.push({
             key: 'cs',
-            label: CODE_STATUS_LABEL[cp.code_status] || cp.code_status,
-            classes: cp.code_status === 'full' ? 'bg-brand-100 text-brand-700' : 'bg-tint-danger text-on-danger',
+            label: opt ? opt.label : cp.code_status,
+            classes: DANGER_CODE_STATUSES.has(cp.code_status) ? 'bg-tint-danger text-on-danger' : 'bg-brand-100 text-brand-700',
         });
     }
     return out;
