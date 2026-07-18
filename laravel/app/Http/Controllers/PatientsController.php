@@ -221,10 +221,10 @@ class PatientsController extends Controller
      * counts, ordered on-service hospitalists → on-service subspecialists → off-service.
      * Shared by the interactive board (index) and the printable census (activeList).
      *
-     * On the UNFILTERED board, active ON-SERVICE consultants with ZERO patients still get a
-     * group (legacy active-list built the table from the members list, so a freshly on-service
-     * consultant shows up with zeros); off-service consultants appear only while they hold
-     * patients (B9). $ownOnlyId keeps the injection inside the D1 consultant scope.
+     * A consultant appears only while they hold at least one matching admission — a consultant
+     * holding zero patients is hidden everywhere (TD-T5), even on-service ones. $ownOnlyId keeps
+     * the D1 consultant scope (unused now that the zero-census injection is gone, kept for the
+     * shared boardScope() call signature).
      *
      * @return array{0: array, 1: int} [$groups, $readmitWindow]
      */
@@ -356,27 +356,6 @@ class PatientsController extends Controller
             if ($isTb) $c['tb']++;
             if (! $discharged && ! $isIcu && ! $medDischarged && ! $a->is_longterm && ! $isTb) $c['active']++;
             unset($c);
-        }
-
-        // zero-census on-service consultants get an empty group on the UNFILTERED board only —
-        // a search / location / view / drill-through filter shouldn't drown its hits in empty sections
-        if (empty($filters['search']) && empty($filters['location']) && empty($filters['view'])
-            && empty($filters['consultant_id']) && empty($filters['specialty_id']) && empty($filters['needs_handover'])) {
-            $zeroCensus = User::where('role', User::ROLE_CONSULTANT)->where('active', 1)->where('on_service', 1)
-                ->when($ownOnlyId !== null, fn ($q) => $q->where('id', $ownOnlyId))
-                ->get(['id', 'full_name', 'name', 'specialty_id', 'on_service']);
-            foreach ($zeroCensus as $u) {
-                if (! isset($groups[$u->id])) {
-                    $groups[$u->id] = [
-                        'id' => (int) $u->id,
-                        'name' => $u->full_name ?: $u->name,
-                        'specialty_id' => (int) ($u->specialty_id ?? 0),
-                        'on_service' => true,
-                        'patients' => [],
-                        'counts' => ['new' => 0, 'old' => 0, 'active' => 0, 'ward' => 0, 'icu' => 0, 'tb' => 0, 'total' => 0],
-                    ];
-                }
-            }
         }
 
         // order: on-service hospitalist (specialty 1) → on-service subspecialty → off-service

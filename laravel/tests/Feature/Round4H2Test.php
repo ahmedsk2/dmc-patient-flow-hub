@@ -30,8 +30,9 @@ use Tests\TestCase;
  *  B7    New Admissions queue is FIFO (oldest first)
  *  B8    dashboard top-dx card = same calendar week-number across ALL years (legacy
  *        WEEK(ADMDATE) = WEEK(today)), top 5 — DELIBERATE definition change from last-7-days
- *  B9    zero-census on-service consultants appear (dashboard board + patients board);
- *        off-service consultants only when they hold patients
+ *  B9    SUPERSEDED by TD-T5: a consultant with zero patients — on- or off-service — is now
+ *        hidden everywhere (dashboard board, patients board, active list); a consultant
+ *        appears only while they hold at least one matching admission
  *  B10   census-by-service donut excludes unassigned rows (legacy INNER JOIN members)
  *  B11   printable active-list is NOT D1-scoped and carries the per-consultant counts table
  *  C1    remember-me recaller cookie lives 30 days (43200 min)
@@ -358,9 +359,9 @@ class Round4H2Test extends TestCase
                 ->has('topDxWeekNum'));
     }
 
-    // ---- B9: zero-census consultants --------------------------------------------------------------
+    // ---- B9 (superseded by TD-T5): zero-patient consultants are now hidden everywhere --------------
 
-    public function test_zero_census_on_service_consultant_appears_on_dashboard_and_board(): void
+    public function test_zero_patient_consultant_is_hidden_from_dashboard_and_board(): void
     {
         $zero = $this->user(User::ROLE_CONSULTANT, ['full_name' => 'Dr Zero Census', 'on_service' => 1, 'specialty_id' => 1]);
         $offZero = $this->user(User::ROLE_CONSULTANT, ['full_name' => 'Dr Off Empty', 'on_service' => 0]);
@@ -371,9 +372,10 @@ class Round4H2Test extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('consultantBoard', function ($cb) {
                     $cb = collect($cb);
-                    $zeroRow = $cb->firstWhere('name', 'Dr Zero Census');
 
-                    return $zeroRow && $zeroRow['total'] === 0 && $zeroRow['on_service'] === true
+                    // an on-service consultant holding ZERO patients no longer gets a row at all
+                    // (TD-T5) — only consultants with at least one active admission appear.
+                    return ! $cb->firstWhere('name', 'Dr Zero Census')
                         && $cb->firstWhere('name', 'Dr Loaded')
                         && ! $cb->firstWhere('name', 'Dr Off Empty');   // off-service only WITH patients
                 }));
@@ -383,8 +385,8 @@ class Round4H2Test extends TestCase
                 ->where('groups', function ($groups) {
                     $groups = collect($groups);
 
-                    return $groups->firstWhere('name', 'Dr Zero Census')
-                        && ($groups->firstWhere('name', 'Dr Zero Census')['counts']['total'] ?? null) === 0
+                    return ! $groups->firstWhere('name', 'Dr Zero Census')
+                        && $groups->firstWhere('name', 'Dr Loaded')
                         && ! $groups->firstWhere('name', 'Dr Off Empty');
                 }));
     }

@@ -769,4 +769,35 @@ class HandoverTest extends TestCase
 
         $this->assertSame(0, \App\Models\Admission::handoverPending()->count());
     }
+
+    // ---- TD-T5: consultants holding zero patients are hidden from the board/list/dashboard table --
+
+    public function test_a_consultant_with_no_patients_is_absent_from_the_board_and_active_list(): void
+    {
+        $busy = $this->user(['on_service' => 1]);
+        $idle = $this->user(['on_service' => 1]);          // on service, ZERO patients
+        $this->admission(['consultant_id' => $busy->id]);
+        $viewer = $this->user(['role' => \App\Models\User::ROLE_ADMIN]);
+
+        foreach (['/patients', '/active-list'] as $url) {
+            $res = $this->actingAs($viewer)->get($url)->assertOk();
+            $ids = collect(data_get($res->viewData('page')['props'], 'groups.*.id'))->all();
+            $this->assertContains($busy->id, $ids, "$url should list a consultant with patients");
+            $this->assertNotContains($idle->id, $ids, "$url must not list a zero-patient consultant");
+        }
+    }
+
+    public function test_dashboard_consultant_table_excludes_zero_patient_consultants(): void
+    {
+        \App\Support\DashboardCache::bust();
+        $busy = $this->user(['on_service' => 1]);
+        $idle = $this->user(['on_service' => 1]);
+        $this->admission(['consultant_id' => $busy->id]);
+        $admin = $this->user(['role' => \App\Models\User::ROLE_ADMIN]);
+
+        $res = $this->actingAs($admin)->get('/dashboard')->assertOk();
+        $ids = collect(data_get($res->viewData('page')['props'], 'consultantBoard.*.id'))->all();
+        $this->assertContains($busy->id, $ids);
+        $this->assertNotContains($idle->id, $ids);
+    }
 }

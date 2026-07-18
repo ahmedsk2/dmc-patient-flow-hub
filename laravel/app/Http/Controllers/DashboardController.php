@@ -178,10 +178,10 @@ class DashboardController extends Controller
             ->leftJoin('admissions as a', fn ($j) => $j->on('u.id', '=', 'a.consultant_id')->whereNull('a.discharge_date')->whereNull('a.deleted_at'))
             ->where('u.active', 1)
             ->whereNull('u.deleted_at')   // Phase 4 — Item 1: a soft-deleted consultant drops off the board
-            ->where(fn ($w) => $w
-                ->where(fn ($w2) => $w2->where('u.on_service', 1)->where('u.role', \App\Models\User::ROLE_CONSULTANT))
-                ->orWhereExists(fn ($s) => $s->selectRaw('1')->from('admissions as ax')
-                    ->whereColumn('ax.consultant_id', 'u.id')->whereNull('ax.discharge_date')->whereNull('ax.deleted_at')))
+            // "Patient count per consultant" lists only consultants who actually hold patients — the
+            // legacy members-list behaviour (every on-service consultant, zeros included) was noise.
+            ->whereExists(fn ($s) => $s->selectRaw('1')->from('admissions as ax')
+                ->whereColumn('ax.consultant_id', 'u.id')->whereNull('ax.discharge_date')->whereNull('ax.deleted_at'))
             ->selectRaw("u.id, COALESCE(u.full_name, u.name) consultant, u.on_service, u.specialty_id,
                 SUM(CASE WHEN a.id IS NOT NULL AND a.is_new_assignment = 1 THEN 1 ELSE 0 END) new,
                 SUM(CASE WHEN a.id IS NOT NULL AND a.is_new_assignment = 0 THEN 1 ELSE 0 END) old,
