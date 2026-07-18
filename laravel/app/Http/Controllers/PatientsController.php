@@ -30,7 +30,7 @@ class PatientsController extends Controller
         $settings = Setting::current();
         // consultant_id / specialty_id are dashboard drill-through filters (Phase 1, Item 3); they
         // apply ON TOP of the D1 consultant scope, never replacing it.
-        $filters = $request->only('search', 'location', 'view', 'consultant_id', 'specialty_id');
+        $filters = $request->only('search', 'location', 'view', 'consultant_id', 'specialty_id', 'needs_handover');
         [$scope, $ownOnlyId] = $this->boardScope($request);
         $tbExists = $this->tbExists();
         [$groups, $readmitWindow] = $this->boardGroups($filters, $settings, $scope, $tbExists, $ownOnlyId);
@@ -59,6 +59,9 @@ class PatientsController extends Controller
             // client which already-visible admission to expand/scroll/flash to.
             'highlight' => $request->integer('highlight') ?: null,
             'readmitWindow' => $readmitWindow,
+            // personal "needs handover" count (HC-T8) — always MY OWN admissions, regardless of the
+            // D1 board scope, so the dashboard tile / board filter / pinned banner all agree.
+            'needsHandoverCount' => Admission::needsHandoverToday()->where('consultant_id', $request->user()->id)->count(),
             'consultants' => User::consultantOptions(),
             'countries' => \App\Models\Country::orderBy('name')->pluck('name'),   // Modify modal nationality select
             'specialties' => Specialty::where('is_external', false)->orderBy('name')->get(['id', 'name']),
@@ -255,6 +258,8 @@ class PatientsController extends Controller
                 $q->whereHas('consultant', fn ($u) => $u->where('specialty_id', (int) $id)))
             ->when($filters['search'] ?? null, fn ($q, $s) => $q->whereHas('patient',
                 fn ($p) => $p->where('name', 'like', "%{$s}%")->orWhere('mrn', 'like', "%{$s}%")))
+            // needs-handover filter (HC-T8): active admissions with no handover saved today
+            ->when($filters['needs_handover'] ?? null, fn ($q) => $q->needsHandoverToday())
             ->orderBy('admit_date')
             ->get();
 
@@ -353,7 +358,7 @@ class PatientsController extends Controller
         // zero-census on-service consultants get an empty group on the UNFILTERED board only —
         // a search / location / view / drill-through filter shouldn't drown its hits in empty sections
         if (empty($filters['search']) && empty($filters['location']) && empty($filters['view'])
-            && empty($filters['consultant_id']) && empty($filters['specialty_id'])) {
+            && empty($filters['consultant_id']) && empty($filters['specialty_id']) && empty($filters['needs_handover'])) {
             $zeroCensus = User::where('role', User::ROLE_CONSULTANT)->where('active', 1)->where('on_service', 1)
                 ->when($ownOnlyId !== null, fn ($q) => $q->where('id', $ownOnlyId))
                 ->get(['id', 'full_name', 'name', 'specialty_id', 'on_service']);

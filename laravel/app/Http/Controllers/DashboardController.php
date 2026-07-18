@@ -368,6 +368,9 @@ class DashboardController extends Controller
                     ->where('hs.to_consultant_id', $myId)->whereNull('hs.signed_at')->whereNull('hs.voided_at')->count(),
                 'myConsults' => (int) DB::table('consultations')
                     ->where('consultant_id', $myId)->whereNull('signoff_date')->whereNull('deleted_at')->count(),
+                // HC-T8: personal "needs handover" count — active admissions of mine with no
+                // handover note saved today. Live tier (uncached), same as the rest of myUnit.
+                'handoverDue' => (int) Admission::needsHandoverToday()->where('consultant_id', $myId)->count(),
             ];
         }
 
@@ -401,12 +404,16 @@ class DashboardController extends Controller
                 + (int) User::onlyTrashed()->count();
 
             $pendingHandovers = (int) \App\Models\HandoverSignature::pending()->count();
+            // HC-T8: unit-wide "needs handover" count (all consultants) — live tier, uncached,
+            // matching pendingHandovers above (a different, narrower signature-based signal).
+            $handoverDueUnit = (int) Admission::needsHandoverToday()->count();
 
             $adminBand = [
                 'dqIssues' => (int) $dqIssues,
                 'securityAnomalies' => $securityAnomalies,
                 'recentlyDeleted' => $recentlyDeleted,
                 'pendingHandovers' => $pendingHandovers,
+                'handoverDueUnit' => $handoverDueUnit,
             ];
         }
 

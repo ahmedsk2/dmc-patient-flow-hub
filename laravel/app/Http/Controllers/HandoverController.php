@@ -131,6 +131,21 @@ class HandoverController extends Controller
             'outgoing' => HandoverSignature::where('from_consultant_id', $me)
                 ->where('required_at', '>=', now()->subDays(7))
                 ->with($with)->orderByDesc('required_at')->get()->map($shape)->values(),
+            // HC-T8: the inbox "Needs handover" tab — my own active admissions with no note saved
+            // today (admins see the whole unit, matching the D1 board-scope convention elsewhere).
+            'needsHandover' => Admission::needsHandoverToday()
+                ->when(! Auth::user()->isAdmin(), fn ($q) => $q->where('consultant_id', Auth::id()))
+                ->with(['patient:id,mrn,name', 'handover', 'consultant:id,name,full_name'])
+                ->orderBy('admit_date')->get()
+                ->map(fn ($a) => [
+                    'admission_id' => $a->id,
+                    'patient' => $a->patient?->name ?? 'Unknown',
+                    'mrn' => $a->patient?->mrn,
+                    'bed' => $a->bed,
+                    'consultant' => $a->consultant ? ($a->consultant->full_name ?: $a->consultant->name) : '—',
+                    'last_updated' => $a->handover?->updated_at?->toIso8601String(),
+                    'checkpoints' => $a->handover?->checkpoints,
+                ])->values(),
         ]);
     }
 
@@ -154,6 +169,7 @@ class HandoverController extends Controller
                 'mrn' => $a->patient?->mrn,
                 'handover_today' => $a->handover !== null && $a->handover->updated_at->isToday(),
                 'body' => $a->handover?->body,
+                'checkpoints' => $a->handover?->checkpoints,
             ])->values());
     }
 

@@ -130,6 +130,12 @@ class Admission extends Model
     /** Currently admitted (file not closed). */
     public function scopeActive(Builder $q): Builder { return $q->whereNull('discharge_date'); }
 
+    /** Active admissions with no handover saved today — the canonical "needs handover" definition. */
+    public function scopeNeedsHandoverToday(Builder $q): Builder
+    {
+        return $q->active()->whereDoesntHave('handover', fn ($h) => $h->whereDate('updated_at', today()));
+    }
+
     public function scopeNonIcu(Builder $q): Builder
     {
         return $q->where(fn ($w) => $w->where('current_location', '<>', 'ICU')->orWhereNull('current_location'));

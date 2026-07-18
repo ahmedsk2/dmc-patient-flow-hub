@@ -38,7 +38,9 @@ class DashboardAdminBandTest extends TestCase
                     ->has('dqIssues')
                     ->has('securityAnomalies')
                     ->has('recentlyDeleted')
-                    ->has('pendingHandovers')));
+                    ->has('pendingHandovers')
+                    // HC-T8: unit-wide "needs handover" count, added alongside pendingHandovers
+                    ->has('handoverDueUnit')));
     }
 
     public function test_non_admin_dashboard_has_null_admin_band(): void

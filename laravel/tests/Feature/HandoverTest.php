@@ -568,4 +568,45 @@ class HandoverTest extends TestCase
                     && ($byId[$bare->id]['sign_pending'] ?? null) === false;
             }));
     }
+
+    // ---- 9. needs-handover scope, counts, filter, tab dataset -----------------------------------
+
+    public function test_needs_handover_count_is_personal_and_excludes_patients_with_a_note_today(): void
+    {
+        $me = $this->user();
+        $this->admission(['consultant_id' => $me->id]);                    // stale → counts
+        $fresh = $this->admission(['consultant_id' => $me->id]);
+        $this->freshHandover($fresh, $me);                                 // current today → does not count
+        $other = $this->user();
+        $this->admission(['consultant_id' => $other->id]);                 // someone else's → does not count
+
+        $this->actingAs($me)->get('/patients')->assertOk()
+            ->assertInertia(fn ($p) => $p->where('needsHandoverCount', 1));
+    }
+
+    public function test_needs_handover_tab_lists_only_stale_active_admissions(): void
+    {
+        $me = $this->user();
+        $stale = $this->admission(['consultant_id' => $me->id]);
+        $fresh = $this->admission(['consultant_id' => $me->id]);
+        $this->freshHandover($fresh, $me);
+
+        $this->actingAs($me)->get('/handovers')->assertOk()
+            ->assertInertia(fn ($p) => $p->has('needsHandover', 1)
+                ->where('needsHandover.0.admission_id', $stale->id));
+    }
+
+    public function test_board_filter_narrows_to_patients_needing_a_handover(): void
+    {
+        $me = $this->user();
+        $stale = $this->admission(['consultant_id' => $me->id]);
+        $fresh = $this->admission(['consultant_id' => $me->id]);
+        $this->freshHandover($fresh, $me);
+
+        // with the filter on, only the stale admission may appear anywhere in the board groups
+        $res = $this->actingAs($me)->get('/patients?needs_handover=1')->assertOk();
+        $ids = collect(data_get($res->viewData('page')['props'], 'groups.*.patients.*.id'))->flatten()->all();
+        $this->assertContains($stale->id, $ids);
+        $this->assertNotContains($fresh->id, $ids);
+    }
 }
