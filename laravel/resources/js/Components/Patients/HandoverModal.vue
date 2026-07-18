@@ -4,6 +4,7 @@ import { useForm } from '@inertiajs/vue3';
 import BaseModal from '@/Components/BaseModal.vue';
 import CheckpointChips from '@/Components/Patients/CheckpointChips.vue';
 import { useHandover } from '@/composables/useHandover';
+import { defaultCheckpoints, withCheckpointDefaults } from '@/lib/handover.js';
 
 /**
  * Per-patient handover editor (Wave 3, Item 4) — extracted verbatim from Patients/Index.vue. On open
@@ -24,12 +25,6 @@ const emit = defineEmits(['saved', 'close']);
 
 const { fetchHandover } = useHandover();
 
-// canonical checkpoint shape — used both as the form default and as the fallback when a fetched
-// payload's checkpoints are null (no handover row yet) or partial (older revision row).
-const defaultCheckpoints = () => ({
-    vte_completed: false, ready_for_discharge: false, high_risk: false,
-    needs_workup: false, workup_pending: false, code_status: null,
-});
 const data = ref(null);          // null | { body, checkpoints, today, updated_at, updated_by_name, revisions }
 const hForm = useForm({ body: '', checkpoints: defaultCheckpoints() });
 const editing = ref(false);
@@ -51,7 +46,7 @@ watch(
         if (my === requestId && props.open && props.patient?.id === id) {
             data.value = d;
             hForm.body = d.body || '';
-            hForm.checkpoints = { ...defaultCheckpoints(), ...(d.checkpoints || {}) };
+            hForm.checkpoints = withCheckpointDefaults(d.checkpoints);
         }
     },
     { immediate: true },
