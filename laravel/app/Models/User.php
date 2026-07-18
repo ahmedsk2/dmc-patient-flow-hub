@@ -76,6 +76,17 @@ class User extends Authenticatable
     public function roleLabel(): string { return self::ROLE_LABELS[$this->role] ?? 'User'; }
 
     /**
+     * D1 (legacy endorsement scope [0,2,4]): true ONLY for a plain consultant — everyone else
+     * (admin, registrar, resident, observer) sees the whole unit. The ONE own-only predicate,
+     * shared by PatientsController::boardScope() and HandoverController's needs-handover
+     * dataset/count so the two conventions can never drift apart.
+     */
+    public function seesOwnPatientsOnly(): bool
+    {
+        return (int) $this->role === self::ROLE_CONSULTANT && ! $this->isAdmin();
+    }
+
+    /**
      * A user may manage (discharge/transfer/edit/undo) an admission when they are:
      *   - the admin, OR
      *   - have the can_manage capability flag, OR

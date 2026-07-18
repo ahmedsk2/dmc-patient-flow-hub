@@ -131,10 +131,11 @@ class HandoverController extends Controller
             'outgoing' => HandoverSignature::where('from_consultant_id', $me)
                 ->where('required_at', '>=', now()->subDays(7))
                 ->with($with)->orderByDesc('required_at')->get()->map($shape)->values(),
-            // HC-T8: the inbox "Needs handover" tab — my own active admissions with no note saved
-            // today (admins see the whole unit, matching the D1 board-scope convention elsewhere).
+            // HC-T8: the inbox "Needs handover" tab — active admissions with no note saved today,
+            // scoped by the SAME D1 own-only predicate as the board (User::seesOwnPatientsOnly):
+            // own patients only for a plain consultant, unit-wide for admin/registrar/resident/observer.
             'needsHandover' => Admission::needsHandoverToday()
-                ->when(! Auth::user()->isAdmin(), fn ($q) => $q->where('consultant_id', Auth::id()))
+                ->when(Auth::user()->seesOwnPatientsOnly(), fn ($q) => $q->where('consultant_id', Auth::id()))
                 ->with(['patient:id,mrn,name', 'handover', 'consultant:id,name,full_name'])
                 ->orderBy('admit_date')->get()
                 ->map(fn ($a) => [
@@ -170,6 +171,7 @@ class HandoverController extends Controller
                 'handover_today' => $a->handover !== null && $a->handover->updated_at->isToday(),
                 'body' => $a->handover?->body,
                 'checkpoints' => $a->handover?->checkpoints,
+                'updated_at' => $a->handover?->updated_at?->toIso8601String(),
             ])->values());
     }
 

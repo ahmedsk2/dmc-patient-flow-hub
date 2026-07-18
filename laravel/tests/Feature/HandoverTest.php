@@ -609,4 +609,84 @@ class HandoverTest extends TestCase
         $this->assertContains($stale->id, $ids);
         $this->assertNotContains($fresh->id, $ids);
     }
+
+    // ---- 10. needs-handover own-only vs unit-wide scoping (User::seesOwnPatientsOnly) ------------
+
+    /** Registrar/Resident are NOT consultant-owned (consultant_id can only ever be a Consultant's
+     *  id), so the D1 board convention treats them as unit-wide viewers — same as admin/observer.
+     *  Only a plain Consultant is restricted to their own admissions. */
+    public function test_needs_handover_tab_is_unit_wide_for_registrar_and_resident_but_own_only_for_consultant(): void
+    {
+        $registrar = $this->user(['role' => User::ROLE_REGISTRAR]);
+        $resident = $this->user(['role' => User::ROLE_RESIDENT]);
+        $me = $this->user();
+        $other = $this->user();
+        $mine = $this->admission(['consultant_id' => $me->id]);      // stale, mine
+        $theirs = $this->admission(['consultant_id' => $other->id]); // stale, someone else's
+
+        $this->actingAs($registrar)->get('/handovers')->assertOk()
+            ->assertInertia(fn (AssertableInertia $p) => $p->has('needsHandover', 2));
+
+        $this->actingAs($resident)->get('/handovers')->assertOk()
+            ->assertInertia(fn (AssertableInertia $p) => $p->has('needsHandover', 2));
+
+        $this->actingAs($me)->get('/handovers')->assertOk()
+            ->assertInertia(fn (AssertableInertia $p) => $p->has('needsHandover', 1)
+                ->where('needsHandover.0.admission_id', $mine->id));
+    }
+
+    /** The board chip must always agree with what needsHandover/the needs_handover filter return —
+     *  same scope, same number, for every role (regression for the "chip disagrees with filter" bug). */
+    public function test_needs_handover_count_on_board_matches_the_same_scope_for_registrar_and_consultant(): void
+    {
+        $registrar = $this->user(['role' => User::ROLE_REGISTRAR]);
+        $me = $this->user();
+        $other = $this->user();
+        $this->admission(['consultant_id' => $me->id]);      // stale, mine
+        $this->admission(['consultant_id' => $other->id]);   // stale, someone else's
+
+        $this->actingAs($registrar)->get('/patients')->assertOk()
+            ->assertInertia(fn (AssertableInertia $p) => $p->where('needsHandoverCount', 2));
+
+        $this->actingAs($me)->get('/patients')->assertOk()
+            ->assertInertia(fn (AssertableInertia $p) => $p->where('needsHandoverCount', 1));
+    }
+
+    // ---- 11. checkpoints round-trip in preflight + the needs-handover dataset ---------------------
+
+    /** Non-default checkpoints saved on a handover must come back byte-for-byte from BOTH
+     *  preflight() (the bulk Reassign modal's per-row panel) and the needsHandover inbox dataset.
+     *  NOTE: preflight() has no staleness filter — it lists every ACTIVE admission under the given
+     *  consultant regardless of freshness (see HandoverController::preflight, Admission::active()
+     *  with no needsHandoverToday() scope) — so the fixture doesn't need to be stale for preflight
+     *  to return the row. It IS made stale here anyway so the SAME fixture also satisfies the
+     *  needsHandoverToday() scope used by the inbox dataset. */
+    public function test_checkpoints_round_trip_in_preflight_and_needs_handover_dataset(): void
+    {
+        $from = $this->user();
+        $admin = $this->user(['role' => User::ROLE_ADMIN]);
+        $a = $this->admission(['consultant_id' => $from->id]);
+
+        $this->actingAs($from)->post("/admissions/{$a->id}/handover", [
+            'body' => 'DNR discussed with family.',
+            'checkpoints' => ['code_status' => 'dnr', 'high_risk' => true],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        // age it so it also qualifies as "needs handover today"
+        Handover::where('admission_id', $a->id)->update(['updated_at' => now()->subDay()]);
+
+        $pre = $this->actingAs($admin)
+            ->getJson("/handovers/preflight?from_consultant_id={$from->id}")
+            ->assertOk()->json();
+        $row = collect($pre)->firstWhere('id', $a->id);
+        $this->assertNotNull($row, 'preflight lists the row even though the handover is stale');
+        $this->assertSame('dnr', $row['checkpoints']['code_status']);
+        $this->assertTrue($row['checkpoints']['high_risk']);
+        $this->assertFalse($row['handover_today']);
+
+        $this->actingAs($from)->get('/handovers')->assertOk()
+            ->assertInertia(fn (AssertableInertia $p) => $p
+                ->where('needsHandover.0.checkpoints.code_status', 'dnr')
+                ->where('needsHandover.0.checkpoints.high_risk', true));
+    }
 }

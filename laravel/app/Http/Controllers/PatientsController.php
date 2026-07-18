@@ -59,9 +59,12 @@ class PatientsController extends Controller
             // client which already-visible admission to expand/scroll/flash to.
             'highlight' => $request->integer('highlight') ?: null,
             'readmitWindow' => $readmitWindow,
-            // personal "needs handover" count (HC-T8) — always MY OWN admissions, regardless of the
-            // D1 board scope, so the dashboard tile / board filter / pinned banner all agree.
-            'needsHandoverCount' => Admission::needsHandoverToday()->where('consultant_id', $request->user()->id)->count(),
+            // "needs handover" count (HC-T8): SAME predicate as the needs_handover board filter
+            // above (own-only for a plain consultant, unit-wide otherwise) — the chip, the pinned
+            // banner and the filtered result must always agree on what "the number" means.
+            'needsHandoverCount' => Admission::needsHandoverToday()
+                ->when($request->user()->seesOwnPatientsOnly(), fn ($q) => $q->where('consultant_id', $request->user()->id))
+                ->count(),
             'consultants' => User::consultantOptions(),
             'countries' => \App\Models\Country::orderBy('name')->pluck('name'),   // Modify modal nationality select
             'specialties' => Specialty::where('is_external', false)->orderBy('name')->get(['id', 'name']),
@@ -200,7 +203,7 @@ class PatientsController extends Controller
     private function boardScope(Request $request): array
     {
         $u = $request->user();
-        $ownOnly = (int) $u->role === User::ROLE_CONSULTANT && ! $u->isAdmin();
+        $ownOnly = $u->seesOwnPatientsOnly();
 
         return [fn ($q) => $ownOnly ? $q->where('consultant_id', $u->id) : $q, $ownOnly ? (int) $u->id : null];
     }
