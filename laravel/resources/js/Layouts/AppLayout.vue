@@ -245,14 +245,18 @@ const iconPath = (key) => icons[key] || icons.doc;
 
 // ---- notification bell (handover transfers) ---------------------------------------------------
 // Badge count comes from the shared `unreadNotifications` prop (refreshed by every Inertia visit —
-// no polling timer); opening the dropdown fetches the latest 15 and marks everything read.
+// no polling timer); opening the dropdown just fetches the latest unread items — it no longer
+// auto-marks them read (TD-T7). The feed is a to-do list now: it only ever shows unread ordinary
+// items (see HandoverController::notifications), so an auto-clear-on-open would empty it the
+// instant it was opened. The explicit "Clear" button (clearNotifications, below) is what marks
+// them read; it never deletes a row (notifications are a retained clinical-audit trail).
 const bellOpen = ref(false);
 const bellLoading = ref(false);
 const notifications = ref([]);
 // HO-T7: still-open "handover.incomplete" reminders — pinned "Needs attention" group, persists
-// across read-all (server only clears these via HandoverController::save's resolve step).
+// across read-all/Clear (server only clears these via HandoverController::save's resolve step).
 const actionable = ref([]);
-const readOverride = ref(false);   // optimistic zero after read-all, until the next shared-prop refresh
+const readOverride = ref(false);   // optimistic zero after Clear, until the next shared-prop refresh
 // HO-T7 (spec §C3): the /api/notifications feed includes ALL types (incl. handover.incomplete), so an
 // actionable item would otherwise show twice — once pinned above, once in the normal list. Drop the
 // pinned ids from the feed (keyed by id) so the normal list holds only the non-actionable items.
@@ -271,13 +275,23 @@ const toggleBell = async () => {
         const d = await (await fetch('/api/notifications', { headers: { Accept: 'application/json' } })).json();
         notifications.value = d.notifications || [];
         actionable.value = d.actionable || [];
-        if (d.unread > 0) {
-            await fetch('/notifications/read-all', { method: 'POST', headers: { Accept: 'application/json', 'X-XSRF-TOKEN': xsrf() } });
-        }
-        readOverride.value = true;
     } finally {
         bellLoading.value = false;
     }
+};
+const clearing = ref(false);
+/** TD-T7: Clear = mark ordinary notifications read. Handover alarms are excluded server-side and
+ *  stay pinned until the note is saved. Nothing is deleted (the reminder trail is retained for
+ *  audit — see docs/HANDOVER-COMPLIANCE.md). */
+const clearNotifications = async () => {
+    clearing.value = true;
+    try {
+        await fetch('/notifications/read-all', { method: 'POST', headers: { Accept: 'application/json', 'X-XSRF-TOKEN': xsrf() } });
+        readOverride.value = true;
+        const d = await (await fetch('/api/notifications', { headers: { Accept: 'application/json' } })).json();
+        notifications.value = d.notifications || [];
+        actionable.value = d.actionable || [];
+    } finally { clearing.value = false; }
 };
 const goInbox = () => { bellOpen.value = false; router.visit('/handovers'); };
 // focus the first actionable element in the bell dropdown when it mounts (a11y). Used as a
@@ -508,7 +522,13 @@ onUnmounted(() => {
                         <div v-if="bellOpen" id="notifications-panel" role="dialog" aria-label="Notifications" :ref="focusFirstBell" @keydown.esc="bellOpen = false" class="absolute end-0 top-11 z-50 flex max-h-[70vh] w-80 flex-col overflow-hidden rounded-2xl bg-card shadow-2xl ring-1 ring-line">
                             <div class="shrink-0 flex items-center justify-between border-b border-line px-4 py-2.5">
                                 <span class="text-sm font-bold text-ink-800">Notifications</span>
-                                <button @click="goInbox" class="text-xs font-semibold text-brand-600 hover:underline">Handover inbox →</button>
+                                <div class="flex items-center gap-3">
+                                    <!-- TD-T7: explicit, non-destructive Clear — marks ordinary items read;
+                                         unresolved handover alarms stay pinned (see clearNotifications()). -->
+                                    <button v-if="feedNotifications.length" type="button" @click="clearNotifications" :disabled="clearing"
+                                            class="text-xs font-semibold text-ink-500 transition hover:text-ink-700 disabled:opacity-50">{{ clearing ? 'Clearing…' : 'Clear' }}</button>
+                                    <button @click="goInbox" class="text-xs font-semibold text-brand-600 hover:underline">Handover inbox →</button>
+                                </div>
                             </div>
                             <div v-if="bellLoading" class="px-4 py-6 text-center text-sm text-ink-400">Loading…</div>
                             <!-- TD-T6: both the pinned group and the feed live inside ONE scroll container so a

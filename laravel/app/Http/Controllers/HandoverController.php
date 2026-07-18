@@ -242,10 +242,12 @@ class HandoverController extends Controller
     }
 
     /**
-     * GET /api/notifications — latest 15 for the bell dropdown + the still-open "actionable"
-     * (handover.incomplete) list + a resolved-aware unread count. Actionable reminders persist
-     * in both the dropdown and the badge count until resolved server-side (HandoverController::save),
-     * NOT dismissed by read-all — see readAll() below.
+     * GET /api/notifications — the unread ordinary items for the bell dropdown + the still-open
+     * "actionable" (handover.incomplete) list + a resolved-aware unread count. TD-T7: the feed is
+     * scoped to unread-only, so it acts as a to-do list — the explicit "Clear" action (readAll(),
+     * below) is what empties it, never an automatic mark-as-read on open. Actionable reminders
+     * persist in both the dropdown and the badge count until resolved server-side
+     * (HandoverController::save) — Clear never touches them either.
      */
     public function notifications(): JsonResponse
     {
@@ -253,8 +255,9 @@ class HandoverController extends Controller
         $actionable = fn ($q) => $q->where('type', 'handover.incomplete')->whereNull('resolved_at');
 
         return response()->json([
-            'notifications' => Notification::where('user_id', $me)->orderByDesc('id')->limit(15)
-                ->get(['id', 'type', 'payload', 'read_at', 'resolved_at', 'created_at']),
+            'notifications' => Notification::where('user_id', $me)->whereNull('read_at')
+                ->where('type', '!=', 'handover.incomplete')
+                ->orderByDesc('id')->limit(15)->get(['id', 'type', 'payload', 'read_at', 'resolved_at', 'created_at']),
             'actionable' => Notification::where('user_id', $me)->where($actionable)
                 ->orderByDesc('id')->get(['id', 'type', 'payload', 'created_at']),
             'unread' => Notification::where('user_id', $me)->where(fn ($q) => $q
@@ -263,7 +266,12 @@ class HandoverController extends Controller
         ]);
     }
 
-    /** POST /notifications/read-all — opening the bell marks everything read EXCEPT actionable reminders (those persist until resolved). */
+    /**
+     * POST /notifications/read-all — the "Clear" action: marks ordinary notifications read (so
+     * they drop out of the unread-only feed above) EXCEPT actionable reminders (those persist
+     * until resolved via HandoverController::save). Never deletes a row — notifications are a
+     * retained clinical-audit trail (see docs/HANDOVER-COMPLIANCE.md).
+     */
     public function readAll(Request $request)
     {
         Notification::where('user_id', Auth::id())->whereNull('read_at')

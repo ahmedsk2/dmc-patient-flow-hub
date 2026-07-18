@@ -501,6 +501,40 @@ class HandoverTest extends TestCase
             ->where('unreadNotifications', 1));
     }
 
+    /** TD-T7: the bell feed only ever shows unread ordinary notifications — a read (cleared) one
+     *  must leave it, otherwise a re-open of the bell would show it lingering again. */
+    public function test_the_feed_lists_only_unread_ordinary_notifications(): void
+    {
+        $me = $this->user();
+        $read = \App\Models\Notification::create(['user_id' => $me->id, 'type' => 'handover.transfer',
+            'created_at' => now(), 'read_at' => now(), 'payload' => []]);
+        $unread = \App\Models\Notification::create(['user_id' => $me->id, 'type' => 'handover.transfer',
+            'created_at' => now(), 'payload' => []]);
+
+        $ids = collect($this->actingAs($me)->getJson('/api/notifications')->json('notifications'))->pluck('id')->all();
+        $this->assertContains($unread->id, $ids);
+        $this->assertNotContains($read->id, $ids, 'a cleared (read) notification must leave the feed');
+    }
+
+    /** TD-T7: "Clear" (POST /notifications/read-all) marks ordinary notifications read so they drop
+     *  out of the feed, but a still-unresolved handover.incomplete alarm survives — and nothing is
+     *  ever deleted (the notifications table is a retained clinical-audit trail). */
+    public function test_clearing_empties_the_feed_but_keeps_unresolved_handover_alarms(): void
+    {
+        $me = $this->user();
+        \App\Models\Notification::create(['user_id' => $me->id, 'type' => 'handover.transfer', 'created_at' => now(), 'payload' => []]);
+        \App\Models\Notification::create(['user_id' => $me->id, 'type' => 'handover.incomplete',
+            'created_at' => now(), 'admission_id' => 7, 'payload' => ['admission_id' => 7]]);
+
+        $this->actingAs($me)->post('/notifications/read-all');
+
+        $body = $this->actingAs($me)->getJson('/api/notifications')->json();
+        $this->assertCount(0, $body['notifications'], 'ordinary items are cleared');
+        $this->assertCount(1, $body['actionable'], 'the handover alarm survives');
+        // nothing was deleted — the audit trail is intact
+        $this->assertSame(2, \App\Models\Notification::where('user_id', $me->id)->count());
+    }
+
     // ---- 8. inbox + preflight + board meta -------------------------------------------------------
 
     public function test_inbox_lists_awaiting_and_outgoing(): void

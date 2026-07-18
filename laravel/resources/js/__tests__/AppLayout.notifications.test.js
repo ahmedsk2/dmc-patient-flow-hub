@@ -47,31 +47,28 @@ describe('AppLayout notifications', () => {
         expect(w.vm.unread).toBe(3);
     });
 
-    it('toggleBell fetches notifications, POSTs read-all when unread>0, and zeroes the badge', async () => {
-        global.fetch
-            .mockResolvedValueOnce({ json: async () => ({ notifications: [{ id: 1 }], unread: 3 }) })  // /api/notifications
-            .mockResolvedValueOnce({ ok: true, json: async () => ({}) });                               // /notifications/read-all
-        const w = mountLayout();
-        await w.vm.toggleBell();
-
-        expect(global.fetch).toHaveBeenCalledTimes(2);
-        expect(global.fetch.mock.calls[0][0]).toBe('/api/notifications');
-        expect(global.fetch.mock.calls[1][0]).toBe('/notifications/read-all');
-        expect(global.fetch.mock.calls[1][1]).toMatchObject({ method: 'POST' });
-        expect(w.vm.notifications).toEqual([{ id: 1 }]);
-        // optimistic zero after read-all
-        expect(w.vm.unread).toBe(0);
-    });
-
-    it('toggleBell does NOT POST read-all when unread is 0', async () => {
-        global.fetch.mockResolvedValueOnce({ json: async () => ({ notifications: [], unread: 0 }) });
+    it('toggleBell fetches notifications and does not POST read-all', async () => {
+        global.fetch.mockResolvedValueOnce({ json: async () => ({ notifications: [{ id: 1 }], actionable: [], unread: 3 }) });  // /api/notifications
         const w = mountLayout();
         await w.vm.toggleBell();
 
         expect(global.fetch).toHaveBeenCalledTimes(1);
         expect(global.fetch.mock.calls[0][0]).toBe('/api/notifications');
-        // readOverride still set → badge zeroed
-        expect(w.vm.unread).toBe(0);
+        expect(w.vm.notifications).toEqual([{ id: 1 }]);
+    });
+
+    // TD-T7: opening the bell used to auto-mark everything read (`unread > 0` → POST read-all),
+    // which — now that the feed only ever shows unread items — would empty it the instant it was
+    // opened. Clearing is now an explicit action (see the "Clear" tests below).
+    it('does NOT auto-clear when the bell is opened', async () => {
+        global.fetch.mockResolvedValueOnce({ json: async () => ({ notifications: [{ id: 1 }], actionable: [], unread: 3 }) });
+        const w = mountLayout();
+        await w.vm.toggleBell();
+
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+        expect(global.fetch.mock.calls.some((c) => c[0] === '/notifications/read-all')).toBe(false);
+        // the badge is untouched — still reflects the shared prop, not zeroed by merely opening
+        expect(w.vm.unread).toBe(3);
     });
 
     it('closing the bell (second toggle) does not fetch again', async () => {
@@ -122,9 +119,7 @@ describe('AppLayout notifications', () => {
     it('caps the panel height and scrolls both groups inside one container', async () => {
         const actionableItem = { id: 1, type: 'handover.incomplete', payload: { admission_id: 42 }, read_at: null, resolved_at: null, created_at: new Date().toISOString() };
         const ordinary = [2, 3, 4].map((id) => ({ id, type: 'handover.transfer', payload: { from_name: 'Dr X' }, read_at: null, created_at: new Date().toISOString() }));
-        global.fetch
-            .mockResolvedValueOnce({ json: async () => ({ notifications: ordinary, actionable: [actionableItem], unread: 4 }) })  // /api/notifications
-            .mockResolvedValueOnce({ ok: true, json: async () => ({}) });                                                          // /notifications/read-all
+        global.fetch.mockResolvedValueOnce({ json: async () => ({ notifications: ordinary, actionable: [actionableItem], unread: 4 }) });  // /api/notifications
         const w = mountLayout();
         await w.vm.toggleBell();
         await w.vm.$nextTick();
@@ -143,6 +138,29 @@ describe('AppLayout notifications', () => {
 
         // the old inner cap is gone
         expect(panel.html()).not.toContain('max-h-80');
+    });
+
+    // TD-T7: explicit, non-destructive Clear — marks ordinary notifications read (they drop out of
+    // the unread-only feed on refetch) but never touches an unresolved handover alarm.
+    it('Clear empties the feed but leaves the pinned alarms', async () => {
+        const actionableItem = { id: 2, type: 'handover.incomplete', payload: { admission_id: 7 }, read_at: null, resolved_at: null, created_at: new Date().toISOString() };
+        const ordinary = { id: 1, type: 'handover.transfer', payload: { from_name: 'Dr X' }, read_at: null, created_at: new Date().toISOString() };
+        global.fetch.mockResolvedValueOnce({ json: async () => ({ notifications: [ordinary], actionable: [actionableItem], unread: 2 }) }); // open
+        const w = mountLayout();
+        await w.vm.toggleBell();
+        await w.vm.$nextTick();
+        expect(w.vm.feedNotifications).toHaveLength(1);
+
+        global.fetch
+            .mockResolvedValueOnce({ ok: true, json: async () => ({}) })                                                              // POST /notifications/read-all
+            .mockResolvedValueOnce({ json: async () => ({ notifications: [], actionable: [actionableItem], unread: 1 }) });            // refetch /api/notifications
+        await w.vm.clearNotifications();
+        await w.vm.$nextTick();
+
+        expect(global.fetch.mock.calls.some((c) => c[0] === '/notifications/read-all' && c[1]?.method === 'POST')).toBe(true);
+        expect(w.vm.feedNotifications).toHaveLength(0);
+        expect(w.vm.actionable).toHaveLength(1);
+        expect(w.text()).toContain('Needs attention');
     });
 });
 
