@@ -34,7 +34,9 @@ const replayTour = () => startTour(usePage().props.auth?.user || {}, { auto: fal
 // Persisted to localStorage('dmc-theme'); the no-flash bootstrap in app.blade.php applies the
 // initial .dark class before paint. Charts listen for the `dmc-theme-change` event to re-read
 // their CSS-var-driven colors (useChartTheme.js).
-const themePref = ref('system');
+// Default is LIGHT, not 'system': the unit's workstations sit under bright ward lighting and a
+// dark-mode OS profile should not decide the clinical UI. 'system' stays available via the toggle.
+const themePref = ref('light');
 const mql = typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 const isDark = computed(() =>
     themePref.value === 'dark' || (themePref.value === 'system' && (mql?.matches ?? false))
@@ -50,7 +52,7 @@ const cycleTheme = () => {
     applyTheme();
 };
 onMounted(() => {
-    themePref.value = localStorage.getItem('dmc-theme') || 'system';
+    themePref.value = localStorage.getItem('dmc-theme') || 'light';
     applyTheme();
     // when on "system", track OS changes live
     mql?.addEventListener('change', () => { if (themePref.value === 'system') applyTheme(); });

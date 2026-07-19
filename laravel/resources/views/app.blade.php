@@ -20,7 +20,7 @@
     <script nonce="{{ $cspNonce ?? '' }}">
         (function () {
             try {
-                var t = localStorage.getItem('dmc-theme') || 'system';
+                var t = localStorage.getItem('dmc-theme') || 'light';   // default LIGHT (must match AppLayout.vue)
                 var dark = t === 'dark' || (t === 'system' &&
                     window.matchMedia('(prefers-color-scheme: dark)').matches);
                 if (dark) document.documentElement.classList.add('dark');
