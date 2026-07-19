@@ -134,6 +134,11 @@ class MfaController extends Controller
         $request->validate(['code' => ['required', 'string'], 'trust_device' => ['nullable', 'boolean']]);
         $input = trim($request->input('code'));
 
+        // This field accepts EITHER a TOTP code or a recovery code, and the two are NOT equivalent
+        // credentials — a recovery code is single-use break-glass. Which one succeeded is carried
+        // forward: it decides whether a device may be trusted, and it is recorded in the audit row.
+        $viaRecovery = false;
+
         $counter = $user->mfa_secret ? Totp::verifyWithCounter($user->mfa_secret, $input) : null;
         if ($counter !== null) {
             // replay guard: a code (time-step) accepted once cannot be reused within its window
@@ -142,7 +147,14 @@ class MfaController extends Controller
                 throw ValidationException::withMessages(['code' => 'That code was already used — wait for the next one.']);
             }
             $user->update(['mfa_last_counter' => $counter]);
-        } elseif (! $this->consumeRecoveryCode($user, $input)) {
+        } elseif ($this->consumeRecoveryCode($user, $input)) {
+            $viaRecovery = true;
+            // Reaching for a backup code is the USER-side signal that the authenticator is lost or
+            // compromised. The admin-side signal (ControlController::resetMfa) already revokes every
+            // standing waiver; the user-side one must not be weaker, or a waiver granted against the
+            // very factor that just failed the user would keep skipping MFA on someone else's browser.
+            TrustedDevice::revokeAllFor($user->id);
+        } else {
             // Phase 4 — Item 3: a bad MFA code is a login.failed (identity is already known here)
             $this->auditFailed($user, 'bad_mfa_code', $attempts);
             throw ValidationException::withMessages(['code' => 'Invalid authentication code.']);
@@ -158,10 +170,12 @@ class MfaController extends Controller
         $request->session()->put('last_activity_at', now()->getTimestamp());
         // Phase 4 — Item 3: a successful MFA login is a login.success (mfa:true) — consistent with
         // the password-only path so the Security panel sees both kinds of successful sign-in.
+        // mfa stays true on BOTH paths (a second factor genuinely was presented); `via` distinguishes
+        // them, so the trail can answer "was this login backed by the authenticator or a backup code?"
         AuditLog::create([
             'actor_id' => $user->id, 'actor_name' => $user->name, 'action' => 'login.success',
             'entity_type' => 'user', 'entity_id' => (string) $user->id,
-            'details' => ['mfa' => true], 'ip' => request()->ip(),
+            'details' => ['mfa' => true, 'via' => $viaRecovery ? 'recovery_code' : 'totp'], 'ip' => request()->ip(),
         ]);
 
         $redirect = redirect()->intended(route('dashboard'));
@@ -170,12 +184,37 @@ class MfaController extends Controller
         // fixed window. Granted only by an explicit tick, and only while the admin window is
         // non-zero (0 = feature off). The cookie carries "selector:validator"; EncryptCookies then
         // AES-encrypts it in transit as a free extra layer (it is not in $except).
+        //
+        // NEVER on the recovery path. A recovery code is a printed, non-expiring, single-use
+        // credential kept near ward terminals; minting a multi-hour waiver from one would convert it
+        // into a standing second factor for whoever holds the printout — the exact single-use →
+        // reusable escalation mandatory MFA exists to prevent. Trust requires a real TOTP challenge.
         $hours = (int) (Setting::current()->mfa_trusted_device_hours ?? 0);
-        if ($request->boolean('trust_device') && $hours > 0) {
+        if (! $viaRecovery && $request->boolean('trust_device') && $hours > 0) {
             $raw = TrustedDevice::issue($user, (string) $request->userAgent(), $request->ip(), $hours);
+            // resolve the row by its (unique) selector rather than "the newest row" — deterministic
+            // under concurrent logins, and it keeps issue()'s raw-string contract unchanged
+            $device = TrustedDevice::where('selector', explode(':', $raw, 2)[0])->first();
             $redirect->withCookie(cookie()->make(
                 'dmc_trusted_device', $raw, $hours * 60, '/', null, config('session.secure'), true, false, 'lax'
             ));
+            // Granting a second-factor waiver is security-relevant in its own right. Never log the
+            // selector or the validator — the audit trail is not a place for credential material.
+            AuditLog::create([
+                'actor_id' => $user->id, 'actor_name' => $user->name, 'action' => 'mfa.device_trusted',
+                'entity_type' => 'user', 'entity_id' => (string) $user->id,
+                'details' => [
+                    'device_id' => $device?->id,
+                    'label' => $device?->label,
+                    'expires_at' => optional($device?->expires_at)->toIso8601String(),
+                ],
+                'ip' => request()->ip(),
+            ]);
+        } elseif ($viaRecovery && $request->boolean('trust_device') && $hours > 0) {
+            // Refusing the tick silently would leave the user believing this browser is trusted and
+            // expecting no prompt next time. Say so, and say what to do about it.
+            $redirect->with('flash', ['type' => 'error',
+                'message' => 'This device was not trusted — a recovery code cannot authorise it. Sign in with your authenticator app to trust this browser.']);
         }
 
         return $redirect;

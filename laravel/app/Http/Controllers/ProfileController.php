@@ -64,8 +64,18 @@ class ProfileController extends Controller
      */
     public function revokeTrustedDevice(Request $request, int $device): RedirectResponse
     {
-        TrustedDevice::query()->where('id', $device)->where('user_id', Auth::id())
+        $u = Auth::user();
+        $affected = TrustedDevice::query()->where('id', $device)->where('user_id', $u->id)
             ->whereNull('revoked_at')->update(['revoked_at' => now()]);
+
+        // Withdrawing a second-factor waiver is security-relevant — audit it so "who revoked this,
+        // and when" is answerable. Only on a real revocation: an id that matched nothing (someone
+        // else's device, or one already dead) is not an event. Never log selector/validator.
+        if ($affected > 0) {
+            AuditLog::create(['actor_id' => $u->id, 'actor_name' => $u->name, 'action' => 'mfa.device_revoked',
+                'entity_type' => 'user', 'entity_id' => (string) $u->id,
+                'details' => ['device_id' => $device], 'ip' => $request->ip()]);
+        }
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Device revoked — it will ask for a code next time.']);
     }
@@ -73,7 +83,16 @@ class ProfileController extends Controller
     /** Revoke every trusted device the caller holds (scoped to Auth::id(), same as above). */
     public function revokeAllTrustedDevices(Request $request): RedirectResponse
     {
-        TrustedDevice::revokeAllFor((int) Auth::id());
+        $u = Auth::user();
+        // count the live rows first — revokeAllFor() is void, and the count is what the trail records
+        $count = TrustedDevice::query()->where('user_id', $u->id)->whereNull('revoked_at')->count();
+        TrustedDevice::revokeAllFor((int) $u->id);
+
+        if ($count > 0) {
+            AuditLog::create(['actor_id' => $u->id, 'actor_name' => $u->name, 'action' => 'mfa.device_revoked',
+                'entity_type' => 'user', 'entity_id' => (string) $u->id,
+                'details' => ['count' => $count, 'scope' => 'all'], 'ip' => $request->ip()]);
+        }
 
         return back()->with('flash', ['type' => 'success', 'message' => 'All trusted devices revoked.']);
     }

@@ -171,7 +171,9 @@ Route::middleware(['auth', 'session.timeout', 'email.verify', 'mfa.enroll', 'pwd
     // Trusted devices (2026-07-19) — self-service revoke. Both are scoped to Auth::id() INSIDE the
     // controller, so the {device} segment is a filter, not an authorization claim.
     Route::delete('/profile/trusted-devices', [ProfileController::class, 'revokeAllTrustedDevices'])->name('profile.trustedDevices.destroyAll');
-    Route::delete('/profile/trusted-devices/{device}', [ProfileController::class, 'revokeTrustedDevice'])->name('profile.trustedDevices.destroy');
+    // whereNumber: the segment feeds an int-typed argument, so an unconstrained route turns
+    // /profile/trusted-devices/abc into an uncaught TypeError (500). Garbage in a URL is a 404.
+    Route::delete('/profile/trusted-devices/{device}', [ProfileController::class, 'revokeTrustedDevice'])->name('profile.trustedDevices.destroy')->whereNumber('device');
 
     // Two-factor (TOTP) enrollment. Self-DISABLE was removed (owner decision, J2-14):
     // once enrolled, only an admin can reset MFA (Control panel reset-mfa).
@@ -240,9 +242,11 @@ Route::middleware(['auth', 'session.timeout', 'email.verify', 'mfa.enroll', 'pwd
 
         // Phase 4 — Item 1: Recently Deleted (soft-delete) view + Restore actions
         Route::get('/trashed', [TrashedController::class, 'index'])->name('trashed.index');
-        Route::post('/trashed/admissions/{id}/restore', [TrashedController::class, 'restoreAdmission'])->name('trashed.admissions.restore');
-        Route::post('/trashed/consultations/{id}/restore', [TrashedController::class, 'restoreConsultation'])->name('trashed.consultations.restore');
-        Route::post('/trashed/users/{id}/restore', [TrashedController::class, 'restoreUser'])->name('trashed.users.restore');
+        // whereNumber for the same reason as the trusted-device route above: {id} feeds an int-typed
+        // argument, so a non-numeric segment would be a TypeError (500) rather than a 404.
+        Route::post('/trashed/admissions/{id}/restore', [TrashedController::class, 'restoreAdmission'])->name('trashed.admissions.restore')->whereNumber('id');
+        Route::post('/trashed/consultations/{id}/restore', [TrashedController::class, 'restoreConsultation'])->name('trashed.consultations.restore')->whereNumber('id');
+        Route::post('/trashed/users/{id}/restore', [TrashedController::class, 'restoreUser'])->name('trashed.users.restore')->whereNumber('id');
 
         // Phase 4 — Item 3: Security panel (read-only login-anomaly surfacing)
         Route::get('/security', [SecurityController::class, 'index'])->name('security.index');

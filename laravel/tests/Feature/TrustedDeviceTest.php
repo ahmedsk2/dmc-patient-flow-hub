@@ -99,6 +99,28 @@ class TrustedDeviceTest extends TestCase
         return $this->post('/login', ['username' => $user->username, 'password' => $password]);
     }
 
+    private function adminUser(): User
+    {
+        return User::create([
+            'username' => 'tdadm_' . substr(md5(uniqid('', true)), 0, 8),
+            'name' => 'TD Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
+            'email_verified_at' => now(), 'pass_exp_date' => now()->toDateString(),
+        ]);
+    }
+
+    /** The full Control user-edit payload, so a test can change ONE field without tripping validation. */
+    private function userPayload(User $user, array $overrides = []): array
+    {
+        return array_merge([
+            'username' => $user->username, 'full_name' => $user->full_name, 'email' => $user->email,
+            'role' => (int) $user->role, 'active' => (bool) $user->active, 'on_service' => (bool) $user->on_service,
+            'specialty_id' => $user->specialty_id, 'can_assign' => (bool) $user->can_assign,
+            'can_add' => (bool) $user->can_add, 'can_manage' => (bool) $user->can_manage,
+            'can_modify' => (bool) $user->can_modify,
+        ], $overrides);
+    }
+
     // ---------------------------------------------------------------- issuing
 
     public function test_ticking_the_box_issues_a_device_row_and_an_encrypted_cookie(): void
@@ -147,6 +169,68 @@ class TrustedDeviceTest extends TestCase
 
         $this->assertSame(0, TrustedDevice::count(), 'the feature is off — no row may be minted');
         $this->assertNull($this->rawCookieFrom($res));
+    }
+
+    // ---------------------------------------------------------------- recovery codes
+    //
+    // The challenge accepts a TOTP code OR a recovery code in the same field. A recovery code is a
+    // SINGLE-USE break-glass credential — printed, kept near ward terminals, never expiring. Letting
+    // one mint a 24-hour trusted device would convert it into a standing second-factor waiver held by
+    // whoever found the printout, which is exactly the escalation mandatory MFA exists to prevent.
+
+    public function test_a_recovery_code_login_cannot_grant_a_trusted_device(): void
+    {
+        [$user, , $plain] = $this->enrolledUser();
+
+        $res = $this->login($user)->assertRedirect(route('mfa.challenge'));
+        $res = $this->post('/mfa/challenge', ['code' => $plain[0], 'trust_device' => true]);
+
+        $res->assertRedirect(route('dashboard'));
+        $this->assertAuthenticatedAs($user);   // the login itself is fine — only the trust is refused
+        $this->assertSame(0, TrustedDevice::where('user_id', $user->id)->count(),
+            'a break-glass code must never mint a standing waiver of the factor it replaced');
+        $this->assertNull($this->rawCookieFrom($res), 'and no cookie may be queued either');
+
+        $log = AuditLog::where('action', 'login.success')->where('actor_id', $user->id)->latest('id')->firstOrFail();
+        $this->assertSame(['mfa' => true, 'via' => 'recovery_code'], $log->details,
+            'a second factor WAS presented, but the trail must say which one');
+    }
+
+    /** Refusing the tick must be VISIBLE — a silent refusal leaves the user expecting no next prompt. */
+    public function test_a_refused_trust_tick_tells_the_user_why(): void
+    {
+        [$user, , $plain] = $this->enrolledUser();
+        $this->login($user);
+
+        $this->post('/mfa/challenge', ['code' => $plain[0], 'trust_device' => true])
+            ->assertSessionHas('flash.type', 'error');
+    }
+
+    /**
+     * Needing a backup code is the user-side signal that the authenticator is lost or compromised.
+     * The admin-side equivalent (ControlController::resetMfa) already revokes everything; the
+     * user-side signal must not be weaker.
+     */
+    public function test_a_recovery_code_login_revokes_existing_trusted_devices(): void
+    {
+        [$user, , $plain] = $this->enrolledUser();
+        [$existing] = $this->deviceFor($user);
+
+        $this->login($user);
+        $this->post('/mfa/challenge', ['code' => $plain[0]])->assertRedirect(route('dashboard'));
+
+        $this->assertNotNull($existing->fresh()->revoked_at,
+            'reaching for a backup code means the factor is compromised — every waiver standing on it dies');
+    }
+
+    public function test_a_totp_login_records_the_factor_as_totp(): void
+    {
+        [$user, $secret] = $this->enrolledUser();
+        $this->login($user);
+        $this->post('/mfa/challenge', ['code' => $this->currentCode($secret)])->assertRedirect(route('dashboard'));
+
+        $log = AuditLog::where('action', 'login.success')->where('actor_id', $user->id)->latest('id')->firstOrFail();
+        $this->assertSame(['mfa' => true, 'via' => 'totp'], $log->details);
     }
 
     // ---------------------------------------------------------------- consuming
@@ -392,6 +476,69 @@ class TrustedDeviceTest extends TestCase
         $this->assertNotNull($device->fresh()->revoked_at, 're-enrolling a new second factor retires the old waivers');
     }
 
+    /**
+     * Deactivation is not revocation. AuthController::login filters on active=1, so a deactivated
+     * user's waiver is merely DORMANT — reactivating the account inside the window would silently
+     * restore a second-factor skip on a browser the admin believes they cut off.
+     */
+    public function test_deactivating_a_user_revokes_their_trusted_devices(): void
+    {
+        [$user] = $this->enrolledUser();
+        [$device] = $this->deviceFor($user);
+
+        $this->actingAs($this->adminUser())
+            ->put("/control/users/{$user->id}", $this->userPayload($user, ['active' => false]))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(0, (int) $user->fresh()->active, 'sanity: the account really was deactivated');
+        $this->assertNotNull($device->fresh()->revoked_at,
+            'a deactivated account must not keep a waiver that returns with it');
+    }
+
+    public function test_reactivating_a_user_does_not_resurrect_the_waiver(): void
+    {
+        [$user] = $this->enrolledUser();
+        [$device] = $this->deviceFor($user);
+        $admin = $this->adminUser();
+
+        $this->actingAs($admin)->put("/control/users/{$user->id}", $this->userPayload($user, ['active' => false]));
+        $this->actingAs($admin)->put("/control/users/{$user->id}", $this->userPayload($user->fresh(), ['active' => true]));
+
+        $this->assertNotNull($device->fresh()->revoked_at, 'revocation is permanent — it is not an active flag');
+    }
+
+    public function test_soft_deleting_a_user_revokes_their_trusted_devices(): void
+    {
+        [$user] = $this->enrolledUser();
+        [$device] = $this->deviceFor($user);
+
+        $this->actingAs($this->adminUser())
+            ->withSession(['stepup.verified_at' => now()->getTimestamp()])
+            ->delete("/control/users/{$user->id}")
+            ->assertSessionHasNoErrors();
+
+        $this->assertSoftDeleted('users', ['id' => $user->id]);
+        $this->assertNotNull($device->fresh()->revoked_at,
+            'a deleted account is restorable from /trashed — its waivers must not come back with it');
+    }
+
+    /**
+     * A role change is a CAPABILITY change, not a credential change — the password and the second
+     * factor behind the waiver are both untouched, so trust legitimately survives it. Pinned so a
+     * later "revoke on any user edit" broadening is a deliberate decision, not a drift.
+     */
+    public function test_changing_a_users_role_leaves_trusted_devices_alone(): void
+    {
+        [$user] = $this->enrolledUser();
+        [$device] = $this->deviceFor($user);
+
+        $this->actingAs($this->adminUser())
+            ->put("/control/users/{$user->id}", $this->userPayload($user, ['role' => User::ROLE_RESIDENT]))
+            ->assertSessionHasNoErrors();
+
+        $this->assertNull($device->fresh()->revoked_at);
+    }
+
     // ---------------------------------------------------------------- self-service revoke
 
     public function test_profile_lists_only_the_users_own_usable_devices(): void
@@ -461,6 +608,77 @@ class TrustedDeviceTest extends TestCase
         $this->delete("/profile/trusted-devices/{$device->id}")->assertRedirect(route('login'));
         $this->delete('/profile/trusted-devices')->assertRedirect(route('login'));
         $this->assertNull($device->fresh()->revoked_at);
+    }
+
+    /**
+     * The {device} segment is bound to an int-typed controller argument, so an unconstrained route
+     * hands "abc" to a TypeError — a 500 where a 404 belongs. Garbage in a URL is a not-found, and
+     * a stack trace is never the right answer to it.
+     */
+    public function test_a_non_numeric_device_segment_is_a_404(): void
+    {
+        [$user] = $this->enrolledUser();
+
+        $this->actingAs($user)->delete('/profile/trusted-devices/abc')->assertNotFound();
+    }
+
+    // ---------------------------------------------------------------- audit trail
+    //
+    // Granting a second-factor waiver and revoking one are both security-relevant acts, and this
+    // system's posture is that every such act is answerable from the append-only audit_log.
+
+    public function test_issuing_a_trusted_device_is_audited(): void
+    {
+        [$user, $secret] = $this->enrolledUser();
+        $this->login($user);
+        $this->withHeader('User-Agent', 'Mozilla/5.0 (Windows NT 10.0) Chrome/120.0 Safari/537.36')
+            ->post('/mfa/challenge', ['code' => $this->currentCode($secret), 'trust_device' => true]);
+
+        $device = TrustedDevice::where('user_id', $user->id)->firstOrFail();
+        $log = AuditLog::where('action', 'mfa.device_trusted')->where('actor_id', $user->id)->latest('id')->firstOrFail();
+
+        $this->assertSame($device->id, $log->details['device_id']);
+        $this->assertSame('Chrome on Windows', $log->details['label']);
+        $this->assertArrayHasKey('expires_at', $log->details);
+
+        $encoded = json_encode($log->details);
+        $this->assertStringNotContainsString($device->selector, $encoded, 'the selector is credential material');
+        $this->assertStringNotContainsString($device->validator_hash, $encoded, 'and so is the validator hash');
+    }
+
+    public function test_revoking_one_device_is_audited(): void
+    {
+        [$user] = $this->enrolledUser();
+        [$device] = $this->deviceFor($user);
+
+        $this->actingAs($user)->delete("/profile/trusted-devices/{$device->id}");
+
+        $log = AuditLog::where('action', 'mfa.device_revoked')->where('actor_id', $user->id)->latest('id')->firstOrFail();
+        $this->assertSame($device->id, $log->details['device_id']);
+        $this->assertStringNotContainsString($device->selector, json_encode($log->details));
+    }
+
+    public function test_revoking_all_devices_is_audited_with_a_count(): void
+    {
+        [$user] = $this->enrolledUser();
+        $this->deviceFor($user);
+        $this->deviceFor($user);
+        $this->deviceFor($user, ['revoked_at' => now()]);   // already dead — not part of the count
+
+        $this->actingAs($user)->delete('/profile/trusted-devices');
+
+        $log = AuditLog::where('action', 'mfa.device_revoked')->where('actor_id', $user->id)->latest('id')->firstOrFail();
+        $this->assertSame(2, $log->details['count'], 'only the devices this action actually revoked');
+    }
+
+    /** Revoking nothing is not an event — an empty list must not litter the trail. */
+    public function test_revoke_all_with_no_devices_writes_no_audit_row(): void
+    {
+        [$user] = $this->enrolledUser();
+
+        $this->actingAs($user)->delete('/profile/trusted-devices');
+
+        $this->assertSame(0, AuditLog::where('action', 'mfa.device_revoked')->count());
     }
 
     // ---------------------------------------------------------------- challenge prop + admin setting

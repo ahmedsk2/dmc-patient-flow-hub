@@ -294,6 +294,14 @@ class ControlController extends Controller
         $before = $user->only($fields);
         $escalated = (int) $data['role'] === User::ROLE_ADMIN && (int) ($before['role'] ?? 99) !== User::ROLE_ADMIN;
         $user->update($data);
+        // Deactivation must REVOKE the waivers, not merely park them. AuthController::login filters
+        // on active=1, so a deactivated user's trusted devices are only dormant — reactivating the
+        // account inside the window would silently restore a second-factor skip on a browser the
+        // admin believes they cut off. (Role changes deliberately do NOT revoke: that is a
+        // capability change, not a credential change.) No extra audit row — user.update covers it.
+        if (! $data['active']) {
+            TrustedDevice::revokeAllFor($user->id);
+        }
         $diff = AuditDiff::diff($before, $user->fresh()->only($fields), ['password']);
         // Phase 4 — Item 4: flag the step-up on a role-escalation update (admin grant)
         Audit::log('user.update', 'user', (string) $user->id, $diff + ($escalated ? $this->stepUpDetail() : []));
@@ -320,6 +328,9 @@ class ControlController extends Controller
         Audit::log('user.delete', 'user', (string) $user->id,
             ['username' => $user->username, 'name' => $user->full_name ?: $user->name, 'role' => (int) $user->role]
             + $this->stepUpDetail());
+        // Same reasoning as deactivation: the delete is SOFT and restorable from /trashed, so a live
+        // waiver would come back with the account. Revoke before deleting. (user.delete audits it.)
+        TrustedDevice::revokeAllFor($user->id);
         $user->delete();   // SoftDeletes — attribution survives; recover via /trashed
 
         return back()->with('flash', ['type' => 'success', 'message' => "Deleted {$user->username}."]);
