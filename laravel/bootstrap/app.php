@@ -12,6 +12,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Behind Cloudflare/Traefik TLS termination: trust forwarded headers so the app
+        // detects HTTPS and generates https:// URLs. Without this, absolute URLs (e.g. the
+        // /mfa/challenge endpoint the login JS calls) come out http:// and the browser
+        // blocks them as mixed content / CSP connect-src violations.
+        $middleware->trustProxies(at: '*');
+
         // Prod-readiness closeout, Item 1: CSP + static security headers on every web response.
         // PREPENDED (outermost web slice), not appended: error responses produced by inner
         // middleware — e.g. the 419 a CSRF token-mismatch renders at the ValidateCsrfToken
