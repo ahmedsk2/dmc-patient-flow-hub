@@ -135,4 +135,5 @@ class User extends Authenticatable
     public function specialty() { return $this->belongsTo(Specialty::class); }
     public function admissions(): HasMany { return $this->hasMany(Admission::class, 'consultant_id'); }
     public function consultations(): HasMany { return $this->hasMany(Consultation::class, 'consultant_id'); }
+    public function trustedDevices(): HasMany { return $this->hasMany(TrustedDevice::class); }
 }

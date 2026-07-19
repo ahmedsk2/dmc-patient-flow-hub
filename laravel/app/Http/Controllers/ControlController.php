@@ -91,6 +91,10 @@ class ControlController extends Controller
             'icu_beds' => ['required', 'integer', 'min:0', 'max:1000'],
             'readmission_window_days' => ['required', 'integer', 'min:0', 'max:30'],
             'mfa_enforcement' => ['required', 'integer', 'in:0,1,2'],
+            // Trusted device (2026-07-19) — TOTP-skip window in hours; 0 disables the feature.
+            // `sometimes`, not `required`: the Control form field ships in the follow-up UI task,
+            // and until then an omitted key must not fail the whole settings save.
+            'mfa_trusted_device_hours' => ['sometimes', 'integer', 'min:0', 'max:720'],
             // Phase 4, Item 2 — session timeout (idle min 5, max 8h; absolute 0=off, max 24h)
             'idle_timeout_minutes' => ['required', 'integer', 'min:5', 'max:480'],
             'abs_timeout_minutes' => ['required', 'integer', 'min:0', 'max:1440'],

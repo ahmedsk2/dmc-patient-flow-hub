@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
+use App\Models\Setting;
+use App\Models\TrustedDevice;
 use App\Models\User;
 use App\Support\Totp;
 use Illuminate\Http\RedirectResponse;
@@ -121,7 +123,8 @@ class MfaController extends Controller
         if ($attempts > self::MAX_ATTEMPTS) {
             return $this->rejectPending($request, 'Too many incorrect codes — please log in again.');
         }
-        $request->validate(['code' => ['required', 'string']]);
+        // trust_device is the opt-in trusted-device checkbox (2026-07-19) — absent/unticked is the default
+        $request->validate(['code' => ['required', 'string'], 'trust_device' => ['nullable', 'boolean']]);
         $input = trim($request->input('code'));
 
         $counter = $user->mfa_secret ? Totp::verifyWithCounter($user->mfa_secret, $input) : null;
@@ -154,7 +157,21 @@ class MfaController extends Controller
             'details' => ['mfa' => true], 'ip' => request()->ip(),
         ]);
 
-        return redirect()->intended(route('dashboard'));
+        $redirect = redirect()->intended(route('dashboard'));
+
+        // Trusted device (2026-07-19): waive the CODE — never the password — on THIS browser for a
+        // fixed window. Granted only by an explicit tick, and only while the admin window is
+        // non-zero (0 = feature off). The cookie carries "selector:validator"; EncryptCookies then
+        // AES-encrypts it in transit as a free extra layer (it is not in $except).
+        $hours = (int) (Setting::current()->mfa_trusted_device_hours ?? 0);
+        if ($request->boolean('trust_device') && $hours > 0) {
+            $raw = TrustedDevice::issue($user, (string) $request->userAgent(), $request->ip(), $hours);
+            $redirect->withCookie(cookie()->make(
+                'dmc_trusted_device', $raw, $hours * 60, '/', null, config('session.secure'), true, false, 'lax'
+            ));
+        }
+
+        return $redirect;
     }
 
     private function consumeRecoveryCode(User $user, string $input): bool

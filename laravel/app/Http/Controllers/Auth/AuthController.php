@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Notification;
 use App\Models\Setting;
+use App\Models\TrustedDevice;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -58,6 +59,38 @@ class AuthController extends Controller
         // "Remember me" is deliberately NOT carried over: MFA logins re-authenticate every
         // session (K1-5) — the challenge always calls Auth::login($user, false).
         if ($user->mfaEnabled()) {
+            // Trusted device (2026-07-19): a browser this user explicitly opted in on may skip the
+            // CODE for a bounded window. Reached only AFTER the password verified above, and
+            // resolved against THAT user — so a cookie belonging to someone else is inert here and
+            // a stolen cookie without the password never gets this far.
+            $hours = (int) (Setting::current()->mfa_trusted_device_hours ?? 0);
+            $device = $hours > 0 ? TrustedDevice::resolve($request->cookie('dmc_trusted_device'), $user) : null;
+            if ($device) {
+                // last_used_at ONLY — the window is fixed from when trust was granted and is never
+                // extended by use (owner decision; a sliding window would be a change here).
+                $device->forceFill(['last_used_at' => now()])->save();
+
+                // identical success sequence to MfaController::verifyChallenge, so session-timeout
+                // behaviour is the same on both paths
+                Auth::login($user, false);
+                $request->session()->regenerate();
+                $request->session()->put('session_started_at', now()->getTimestamp());
+                $request->session()->put('last_activity_at', now()->getTimestamp());
+                // mfa is recorded FALSE because no second factor was presented — claiming true
+                // would be a lie in the record; trusted_device explains the legitimate skip.
+                AuditLog::create([
+                    'actor_id' => $user->id,
+                    'actor_name' => $user->name,
+                    'action' => 'login.success',
+                    'entity_type' => 'user',
+                    'entity_id' => (string) $user->id,
+                    'details' => ['mfa' => false, 'trusted_device' => true],
+                    'ip' => $request->ip(),
+                ]);
+
+                return redirect()->intended(route('dashboard'));
+            }
+
             $request->session()->put('mfa.pending.id', $user->id);
             $request->session()->put('mfa.pending.at', now()->getTimestamp());
             $request->session()->put('mfa.pending.attempts', 0);
