@@ -2,7 +2,12 @@
 import { ref } from 'vue';
 import { Head, useForm } from '@inertiajs/vue3';
 
-const form = useForm({ code: '' });
+// trustedDeviceHours is the admin-configured window; 0 means the feature is off and the opt-in
+// checkbox is not rendered at all. It is NEVER pre-ticked — on a shared ward workstation an
+// automatic trust would silently waive the second factor for whoever sits down next.
+const props = defineProps({ trustedDeviceHours: { type: Number, default: 0 } });
+
+const form = useForm({ code: '', trust_device: false });
 const recovery = ref(false);
 const submit = () => form.post('/mfa/challenge', { onFinish: () => form.reset('code') });
 </script>
@@ -25,6 +30,16 @@ const submit = () => form.post('/mfa/challenge', { onFinish: () => form.reset('c
                     class="w-full rounded-xl border border-ink-200 px-4 py-3 text-center text-2xl font-bold tracking-[0.3em] text-ink-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                     :class="{ 'border-danger-500': form.errors.code }" />
                 <p v-if="form.errors.code" class="mt-2 text-center text-xs text-on-danger">{{ form.errors.code }}</p>
+
+                <div v-if="props.trustedDeviceHours > 0" class="mt-4">
+                    <div class="flex items-start gap-2.5">
+                        <input id="trust_device" v-model="form.trust_device" type="checkbox"
+                            class="mt-0.5 h-4 w-4 shrink-0 rounded border-ink-200 text-brand-600 focus:ring-2 focus:ring-brand-500/20" />
+                        <label for="trust_device" class="text-sm text-ink-700">Don't ask for a code on this device for the next {{ props.trustedDeviceHours }} hours.</label>
+                    </div>
+                    <p class="mt-1 pl-6 text-xs text-ink-400">Leave this unticked on a shared or ward computer.</p>
+                </div>
+
                 <button type="submit" :disabled="form.processing"
                     class="mt-4 w-full rounded-xl bg-gradient-to-r from-brand-500 to-brand-700 px-4 py-3 font-semibold text-white shadow-lg shadow-brand-900/20 transition hover:from-brand-600 hover:to-brand-800 disabled:opacity-60">
                     {{ form.processing ? 'Verifying…' : 'Verify' }}

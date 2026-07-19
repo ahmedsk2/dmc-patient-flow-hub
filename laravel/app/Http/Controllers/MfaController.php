@@ -64,6 +64,9 @@ class MfaController extends Controller
         // factor. New logins never issue a recaller (AuthController), so this only clears stale ones.
         $user->setRememberToken(\Illuminate\Support\Str::random(60));
         $user->save();
+        // Same reasoning for trusted devices: a waiver granted against the PREVIOUS second factor
+        // must not carry over to the new one (2026-07-19 trusted-device spec, "Revocation").
+        TrustedDevice::revokeAllFor($user->id);
         $request->session()->forget(['mfa.setup.secret', 'mfa.setup.codes']);
         $this->audit($user, 'mfa.enable');
 
@@ -105,7 +108,11 @@ class MfaController extends Controller
         if (! $this->pendingFresh($request)) {
             return $this->rejectPending($request, 'Your sign-in expired — please log in again.');
         }
-        return Inertia::render('Auth/MfaChallenge');
+        // The configured trusted-device window drives the opt-in checkbox: the page renders it only
+        // when this is > 0, and interpolates the number into the label. 0 = feature off.
+        return Inertia::render('Auth/MfaChallenge', [
+            'trustedDeviceHours' => (int) (Setting::current()->mfa_trusted_device_hours ?? 0),
+        ]);
     }
 
     public function verifyChallenge(Request $request): RedirectResponse

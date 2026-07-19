@@ -1,10 +1,25 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Link, useForm } from '@inertiajs/vue3';
+import { Link, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PasswordMeter from '@/Components/PasswordMeter.vue';
+import { useConfirm } from '@/composables/useConfirm';
+import { formatDate } from '@/lib/ui.js';
 
-const props = defineProps({ profile: Object });
+const props = defineProps({ profile: Object, trustedDevices: { type: Array, default: () => [] } });
+
+const { ask } = useConfirm();
+
+// Trusted devices: browsers this user opted to skip the two-factor code on. Revoking is the only
+// remedy for having ticked the box on the wrong machine, so it lives here rather than behind an
+// admin. "Revoke all" goes through the shared ConfirmDialog — it can log the user's phone out of
+// the waiver too, so it deserves the same gate as any other destructive action in the app.
+const revoke = (id) => router.delete(`/profile/trusted-devices/${id}`, { preserveScroll: true });
+const revokeAll = async () => {
+    if (await ask('Revoke all trusted devices', 'Every browser you trusted will ask for a two-factor code again next time you sign in.', 'danger')) {
+        router.delete('/profile/trusted-devices', { preserveScroll: true });
+    }
+};
 
 // MFA self-disable was removed (owner decision, J2-14) — enrolled users can only have their
 // two-factor reset by an admin from the Control panel.
@@ -86,6 +101,48 @@ const field = 'w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm out
                 <p v-if="profile.mfa_enabled" class="mt-4 border-t border-line pt-4 text-sm text-ink-400">
                     Two-factor can only be reset by an administrator — contact one if you lose your authenticator.
                 </p>
+            </section>
+
+            <!-- trusted devices -->
+            <section class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h3 class="font-bold text-ink-800">Trusted devices</h3>
+                        <p class="mt-1 max-w-md text-sm text-ink-400">Browsers that skip the two-factor code until their window ends. Your password is always still required.</p>
+                    </div>
+                    <button v-if="trustedDevices.length" type="button" @click="revokeAll"
+                        class="shrink-0 rounded-xl bg-navy-800 px-4 py-2 text-sm font-semibold text-white hover:bg-navy-900">Revoke all</button>
+                </div>
+
+                <p v-if="!trustedDevices.length" class="mt-4 border-t border-line pt-4 text-sm text-ink-400">
+                    No trusted devices. You'll be asked for a code every time you sign in.
+                </p>
+                <div v-else class="mt-4 overflow-x-auto border-t border-line pt-4">
+                    <table class="w-full min-w-md text-left text-sm">
+                        <thead>
+                            <tr class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+                                <th scope="col" class="pb-2 pr-4">Device</th>
+                                <th scope="col" class="pb-2 pr-4">Granted</th>
+                                <th scope="col" class="pb-2 pr-4">Expires</th>
+                                <th scope="col" class="pb-2 pr-4">Last used</th>
+                                <th scope="col" class="pb-2"><span class="sr-only">Actions</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="d in trustedDevices" :key="d.id" class="border-t border-line">
+                                <td class="py-2 pr-4 font-semibold text-ink-800">{{ d.label }}</td>
+                                <td class="py-2 pr-4 text-ink-500">{{ formatDate(d.granted_at) }}</td>
+                                <td class="py-2 pr-4 text-ink-500">{{ formatDate(d.expires_at) }}</td>
+                                <td class="py-2 pr-4 text-ink-500">{{ d.last_used_at ? formatDate(d.last_used_at) : '—' }}</td>
+                                <td class="py-2 text-right">
+                                    <button type="button" @click="revoke(d.id)"
+                                        class="rounded-lg px-3 py-1.5 text-sm font-semibold text-on-danger hover:bg-tint-danger"
+                                        :aria-label="`Revoke ${d.label}`">Revoke</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </section>
         </div>
     </AppLayout>

@@ -10,7 +10,9 @@ use App\Support\Totp;
 use Illuminate\Cookie\CookieValuePrefix;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
 use Tests\TestCase;
 
 /**
@@ -45,6 +47,8 @@ class TrustedDeviceTest extends TestCase
             'mfa_secret' => $secret,
             'mfa_recovery_codes' => array_map(fn ($c) => Hash::make($c), $plain),
             'mfa_enrolled_at' => now(),
+            // the authed route group gates on both — set them so actingAs() reaches /profile
+            'email_verified_at' => now(), 'pass_exp_date' => now()->toDateString(),
         ]);
 
         return [$user, $secret, $plain];
@@ -299,5 +303,200 @@ class TrustedDeviceTest extends TestCase
         $this->deviceFor($user, ['revoked_at' => now()]);
 
         $this->assertSame([$live->id], TrustedDevice::usable()->pluck('id')->all());
+    }
+
+    // ---------------------------------------------------------------- revocation sites
+    //
+    // Trust is a standing waiver of the second factor. It must die wherever the credentials or the
+    // second factor behind it change — otherwise a password reset (the recovery action a compromised
+    // user takes) would leave the attacker's browser still skipping MFA. One test per site.
+
+    private function seedSession(int $userId, string $id): void
+    {
+        DB::table('sessions')->insert([
+            'id' => $id, 'user_id' => $userId, 'ip_address' => '10.0.0.1',
+            'user_agent' => 'test', 'payload' => 'x', 'last_activity' => now()->getTimestamp(),
+        ]);
+    }
+
+    public function test_changing_the_password_revokes_trusted_devices(): void
+    {
+        [$user] = $this->enrolledUser();
+        [$device] = $this->deviceFor($user);
+
+        $this->actingAs($user)->put('/profile/password', [
+            'current_password' => 'secret12345',
+            'password' => 'BrandNew123', 'password_confirmation' => 'BrandNew123',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertNotNull($device->fresh()->revoked_at, 'a password change must kill every standing MFA waiver');
+    }
+
+    public function test_resetting_the_password_revokes_trusted_devices(): void
+    {
+        [$user] = $this->enrolledUser();
+        $user->update(['email' => 'td-reset@example.test']);
+        [$device] = $this->deviceFor($user);
+
+        $this->post('/reset-password', [
+            'token' => Password::createToken($user), 'email' => 'td-reset@example.test',
+            'password' => 'BrandNew123', 'password_confirmation' => 'BrandNew123',
+        ])->assertRedirect(route('login'));
+
+        $this->assertNotNull($device->fresh()->revoked_at, 'a reset is a recovery action — trust must not survive it');
+    }
+
+    /**
+     * The admin MFA reset used to touch NOTHING but the enrollment columns (pre-existing gap called
+     * out in the design spec): resetting someone's second factor while their live sessions, recaller
+     * and trusted devices all stayed valid. All three now die with it.
+     */
+    public function test_admin_mfa_reset_revokes_devices_purges_sessions_and_rotates_the_recaller(): void
+    {
+        [$user] = $this->enrolledUser();
+        [$device] = $this->deviceFor($user);
+        $user->forceFill(['remember_token' => 'stale-recaller-token'])->save();
+        $this->seedSession($user->id, 'td_stolen_session');
+
+        $admin = User::create([
+            'username' => 'tdadmin_' . substr(md5(uniqid('', true)), 0, 8),
+            'name' => 'TD Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
+            'email_verified_at' => now(), 'pass_exp_date' => now()->toDateString(),
+        ]);
+
+        $this->actingAs($admin)->post("/control/users/{$user->id}/reset-mfa")
+            ->assertRedirect()->assertSessionHas('flash.type', 'success');
+
+        $this->assertNotNull($device->fresh()->revoked_at, 'trusted devices must not outlive the second factor they waive');
+        $this->assertSame(0, DB::table('sessions')->where('user_id', $user->id)->count(),
+            'a live session must not survive an admin MFA reset');
+        $this->assertNotSame('stale-recaller-token', $user->fresh()->remember_token, 'the recaller must be rotated');
+        $this->assertDatabaseHas('audit_log', ['action' => 'user.reset_mfa', 'entity_id' => (string) $user->id]);
+    }
+
+    public function test_re_enrolling_mfa_revokes_trusted_devices(): void
+    {
+        [$user] = $this->enrolledUser();
+        [$device] = $this->deviceFor($user);
+        // confirm() only runs for a non-enrolled user — mimic the post-admin-reset state
+        $user->forceFill(['mfa_secret' => null, 'mfa_recovery_codes' => null, 'mfa_enrolled_at' => null])->save();
+
+        $secret = Totp::secret();
+        $this->actingAs($user->fresh())
+            ->withSession(['mfa.setup.secret' => $secret, 'mfa.setup.codes' => ['CCCC-DDDD']])
+            ->post('/mfa/confirm', ['code' => $this->currentCode($secret)])
+            ->assertSessionHasNoErrors();
+
+        $this->assertNotNull($user->fresh()->mfa_enrolled_at, 'sanity: re-enrolment succeeded');
+        $this->assertNotNull($device->fresh()->revoked_at, 're-enrolling a new second factor retires the old waivers');
+    }
+
+    // ---------------------------------------------------------------- self-service revoke
+
+    public function test_profile_lists_only_the_users_own_usable_devices(): void
+    {
+        [$user] = $this->enrolledUser();
+        [$bob] = $this->enrolledUser();
+        [$live] = $this->deviceFor($user, ['label' => 'Firefox on Linux']);
+        $this->deviceFor($user, ['expires_at' => now()->subMinute()]);
+        $this->deviceFor($user, ['revoked_at' => now()]);
+        $this->deviceFor($bob, ['label' => "Bob's phone"]);
+
+        $this->actingAs($user)->get('/profile')
+            ->assertInertia(fn ($page) => $page
+                ->has('trustedDevices', 1)
+                ->where('trustedDevices.0.id', $live->id)
+                ->where('trustedDevices.0.label', 'Firefox on Linux'));
+    }
+
+    public function test_a_user_can_revoke_one_of_their_own_devices(): void
+    {
+        [$user] = $this->enrolledUser();
+        [$one] = $this->deviceFor($user);
+        [$other] = $this->deviceFor($user);
+
+        $this->actingAs($user)->delete("/profile/trusted-devices/{$one->id}")->assertRedirect();
+
+        $this->assertNotNull($one->fresh()->revoked_at);
+        $this->assertNull($other->fresh()->revoked_at, 'revoking one device leaves the others alone');
+        $this->assertNotNull(TrustedDevice::find($one->id), 'revoked, never deleted — the trail survives');
+    }
+
+    /**
+     * Object-level authorization. The posted id is never trusted: the query is scoped to the
+     * authenticated user, so Bob asking to revoke Alice's device finds nothing and changes nothing.
+     */
+    public function test_a_user_cannot_revoke_another_users_device(): void
+    {
+        [$alice] = $this->enrolledUser();
+        [$bob] = $this->enrolledUser();
+        [$aliceDevice] = $this->deviceFor($alice);
+
+        $this->actingAs($bob)->delete("/profile/trusted-devices/{$aliceDevice->id}")->assertRedirect();
+
+        $this->assertNull($aliceDevice->fresh()->revoked_at, "another user's device must be untouchable");
+    }
+
+    public function test_a_user_can_revoke_all_of_their_own_devices(): void
+    {
+        [$alice] = $this->enrolledUser();
+        [$bob] = $this->enrolledUser();
+        [$a1] = $this->deviceFor($alice);
+        [$a2] = $this->deviceFor($alice);
+        [$bobDevice] = $this->deviceFor($bob);
+
+        $this->actingAs($alice)->delete('/profile/trusted-devices')->assertRedirect();
+
+        $this->assertNotNull($a1->fresh()->revoked_at);
+        $this->assertNotNull($a2->fresh()->revoked_at);
+        $this->assertNull($bobDevice->fresh()->revoked_at, "revoke-all is scoped to the caller");
+    }
+
+    public function test_trusted_device_routes_require_authentication(): void
+    {
+        [$user] = $this->enrolledUser();
+        [$device] = $this->deviceFor($user);
+
+        $this->delete("/profile/trusted-devices/{$device->id}")->assertRedirect(route('login'));
+        $this->delete('/profile/trusted-devices')->assertRedirect(route('login'));
+        $this->assertNull($device->fresh()->revoked_at);
+    }
+
+    // ---------------------------------------------------------------- challenge prop + admin setting
+
+    public function test_the_challenge_page_carries_the_window_only_when_the_feature_is_on(): void
+    {
+        [$user] = $this->enrolledUser();
+        Setting::current()->update(['mfa_trusted_device_hours' => 12]);
+
+        $this->login($user);
+        $this->get('/mfa/challenge')->assertInertia(fn ($page) => $page->where('trustedDeviceHours', 12));
+
+        Setting::current()->update(['mfa_trusted_device_hours' => 0]);
+        $this->get('/mfa/challenge')->assertInertia(fn ($page) => $page->where('trustedDeviceHours', 0));
+    }
+
+    public function test_an_admin_can_save_the_trusted_device_window(): void
+    {
+        $admin = User::create([
+            'username' => 'tdset_' . substr(md5(uniqid('', true)), 0, 8),
+            'name' => 'TD Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
+            'email_verified_at' => now(), 'pass_exp_date' => now()->toDateString(),
+        ]);
+        $s = Setting::current();
+
+        $payload = array_merge($s->only([
+            'min_hospitalist', 'max_hospitalist', 'min_subs', 'max_subs', 'short_los', 'long_los',
+            'ward_beds', 'icu_beds', 'readmission_window_days', 'mfa_enforcement',
+            'idle_timeout_minutes', 'abs_timeout_minutes', 'failed_login_notify_threshold',
+            'dq_los_multiplier', 'alert_overcensus_pct', 'alert_boarding_max',
+            'alert_readmit_rate_pct', 'alert_deaths_delta_pct',
+        ]), ['mfa_trusted_device_hours' => 48]);
+
+        $this->actingAs($admin)->put('/control/settings', $payload)->assertSessionHasNoErrors();
+
+        $this->assertSame(48, (int) Setting::current()->mfa_trusted_device_hours);
     }
 }

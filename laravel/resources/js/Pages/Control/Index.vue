@@ -23,6 +23,7 @@ const fieldLabels = {
     alert_readmit_rate_pct: 'Readmission-rate alert (%)', alert_deaths_delta_pct: 'Mortality-rise alert (%)',
     idle_timeout_minutes: 'Idle session timeout (min)', abs_timeout_minutes: 'Absolute session cap (min)',
     failed_login_notify_threshold: 'Failed-login alert threshold', dq_los_multiplier: 'Data-quality LOS multiplier',
+    mfa_trusted_device_hours: 'Trusted-device window (hours)',
 };
 
 const tab = ref('overview');
@@ -53,6 +54,8 @@ const sForm = useForm({
     abs_timeout_minutes: props.settings.abs_timeout_minutes ?? 0,
     failed_login_notify_threshold: props.settings.failed_login_notify_threshold ?? 5,
     dq_los_multiplier: props.settings.dq_los_multiplier ?? 2,
+    // Trusted device (2026-07-19) — hours a browser may skip the TOTP code for; 0 = feature off.
+    mfa_trusted_device_hours: props.settings.mfa_trusted_device_hours ?? 24,
 });
 const saveSettings = guardSubmit(sForm, () => sForm.put('/control/settings', { preserveScroll: true }));
 
@@ -213,6 +216,7 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
                 <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Absolute session cap (min)</span><input v-model="sForm.abs_timeout_minutes" type="number" min="0" max="1440" :class="field" /><span class="mt-1 block text-xs text-ink-400">Maximum session length regardless of activity; 0 disables it (default off).</span></label>
                 <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Failed-login alert threshold</span><input v-model="sForm.failed_login_notify_threshold" type="number" min="0" max="50" :class="field" /><span class="mt-1 block text-xs text-ink-400">Notify admins after this many failed logins for one account in 10 minutes; 0 disables it.</span></label>
                 <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Data-quality LOS multiplier</span><input v-model="sForm.dq_los_multiplier" type="number" min="1" max="10" :class="field" /><span class="mt-1 block text-xs text-ink-400">Flag active non-long-term episodes with LOS &gt; Long&nbsp;LOS × this (default 2).</span></label>
+                <label class="block sm:col-span-2"><span class="mb-1 block text-sm font-semibold text-ink-700">Trusted-device window (hours)</span><input v-model="sForm.mfa_trusted_device_hours" type="number" min="0" max="720" :class="field" /><span class="mt-1 block text-xs text-ink-400">0 turns the trusted-device option off. Changing this does not shorten windows already granted.</span></label>
             </div>
 
             <div class="mt-5 flex items-center gap-3">

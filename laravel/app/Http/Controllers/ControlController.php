@@ -7,6 +7,7 @@ use App\Models\ConsultationReason;
 use App\Models\ReportRecipient;
 use App\Models\Setting;
 use App\Models\Specialty;
+use App\Models\TrustedDevice;
 use App\Models\User;
 use App\Support\Audit;
 use App\Support\AuditDiff;
@@ -17,6 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -92,9 +94,10 @@ class ControlController extends Controller
             'readmission_window_days' => ['required', 'integer', 'min:0', 'max:30'],
             'mfa_enforcement' => ['required', 'integer', 'in:0,1,2'],
             // Trusted device (2026-07-19) — TOTP-skip window in hours; 0 disables the feature.
-            // `sometimes`, not `required`: the Control form field ships in the follow-up UI task,
-            // and until then an omitted key must not fail the whole settings save.
-            'mfa_trusted_device_hours' => ['sometimes', 'integer', 'min:0', 'max:720'],
+            // `required` like its neighbours now that the Control Settings form actually ships the
+            // field: the form submits a complete payload, so an omitted key means a malformed
+            // request, not a partial save.
+            'mfa_trusted_device_hours' => ['required', 'integer', 'min:0', 'max:720'],
             // Phase 4, Item 2 — session timeout (idle min 5, max 8h; absolute 0=off, max 24h)
             'idle_timeout_minutes' => ['required', 'integer', 'min:5', 'max:480'],
             'abs_timeout_minutes' => ['required', 'integer', 'min:0', 'max:1440'],
@@ -326,6 +329,14 @@ class ControlController extends Controller
     public function resetMfa(Request $request, User $user): RedirectResponse
     {
         $user->update(['mfa_secret' => null, 'mfa_recovery_codes' => null, 'mfa_enrolled_at' => null]);
+        // A reset is what an admin does when a user's second factor is lost OR compromised, so
+        // everything standing on that factor must fall with it. Before 2026-07-19 this method
+        // touched ONLY the columns above — the user's live sessions and recaller survived the
+        // reset, and (once trusted devices shipped) so would every MFA waiver. All three now die.
+        TrustedDevice::revokeAllFor($user->id);
+        DB::table('sessions')->where('user_id', $user->id)->delete();
+        $user->setRememberToken(Str::random(60));
+        $user->save();
         Audit::log('user.reset_mfa', 'user', (string) $user->id);
 
         return back()->with('flash', ['type' => 'success', 'message' => "Two-factor reset for {$user->username}."]);

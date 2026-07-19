@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\TrustedDevice;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -71,6 +72,9 @@ class PasswordResetController extends Controller
                 // compromised user takes — a stolen live session cookie must NOT survive it.
                 // (SESSION_DRIVER=database in prod; a no-op for other drivers.)
                 DB::table('sessions')->where('user_id', $user->id)->delete();
+                // Same reasoning for the standing MFA waivers: a reset must not leave the
+                // attacker's browser still skipping the second factor.
+                TrustedDevice::revokeAllFor($user->id);
             }
         );
 

@@ -580,6 +580,8 @@ class Phase1DashboardValueTest extends TestCase
             // Phase 4 thresholds (now required by updateSettings)
             'idle_timeout_minutes' => $s->idle_timeout_minutes ?? 30, 'abs_timeout_minutes' => $s->abs_timeout_minutes ?? 0,
             'failed_login_notify_threshold' => $s->failed_login_notify_threshold ?? 5, 'dq_los_multiplier' => $s->dq_los_multiplier ?? 2,
+            // trusted-device window (now required by updateSettings — the Control form ships it)
+            'mfa_trusted_device_hours' => $s->mfa_trusted_device_hours ?? 24,
         ];
 
         $this->actingAs($this->admin())->put('/control/settings', $payload)->assertRedirect();

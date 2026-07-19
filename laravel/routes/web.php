@@ -168,6 +168,10 @@ Route::middleware(['auth', 'session.timeout', 'email.verify', 'mfa.enroll', 'pwd
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('/profile', [ProfileController::class, 'updateProfile'])->name('profile.update');
     Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
+    // Trusted devices (2026-07-19) — self-service revoke. Both are scoped to Auth::id() INSIDE the
+    // controller, so the {device} segment is a filter, not an authorization claim.
+    Route::delete('/profile/trusted-devices', [ProfileController::class, 'revokeAllTrustedDevices'])->name('profile.trustedDevices.destroyAll');
+    Route::delete('/profile/trusted-devices/{device}', [ProfileController::class, 'revokeTrustedDevice'])->name('profile.trustedDevices.destroy');
 
     // Two-factor (TOTP) enrollment. Self-DISABLE was removed (owner decision, J2-14):
     // once enrolled, only an admin can reset MFA (Control panel reset-mfa).
