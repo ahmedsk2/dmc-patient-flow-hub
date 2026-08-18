@@ -12,11 +12,31 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // Behind Cloudflare/Traefik TLS termination: trust forwarded headers so the app
-        // detects HTTPS and generates https:// URLs. Without this, absolute URLs (e.g. the
-        // /mfa/challenge endpoint the login JS calls) come out http:// and the browser
-        // blocks them as mixed content / CSP connect-src violations.
-        $middleware->trustProxies(at: '*');
+        // Behind Cloudflare/Traefik TLS termination: trust forwarded headers so the app detects
+        // HTTPS and generates https:// URLs (without it the /mfa/challenge endpoint the login JS
+        // calls comes out http:// and the browser blocks it as mixed content / CSP violation).
+        //
+        // Pinned to a specific proxy set — NOT `at: '*'`. Trusting X-Forwarded-For from ANY source
+        // let a client that reaches the origin directly spoof its own IP: that defeats the
+        // IP-keyed login/MFA throttle (rotate the header, brute-force freely) and poisons the
+        // audit-log `ip`. We trust only (1) the local TLS-terminating reverse proxy (Traefik, on a
+        // private/loopback address) and (2) Cloudflare's published edge ranges in front of it. A
+        // request arriving straight from the internet has a non-Cloudflare PUBLIC source IP, so its
+        // forged XFF is ignored and $request->ip() falls back to the real peer.
+        //   Maintenance: refresh the Cloudflare CIDRs from https://www.cloudflare.com/ips/ if they
+        //   change (rare). Traefik must itself only accept/forward from Cloudflare — infra concern.
+        $middleware->trustProxies(at: [
+            // local reverse proxy (same host / private network)
+            '127.0.0.1', '::1', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', 'fc00::/7',
+            // Cloudflare IPv4 — https://www.cloudflare.com/ips-v4
+            '173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22',
+            '141.101.64.0/18', '108.162.192.0/18', '190.93.240.0/20', '188.114.96.0/20',
+            '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
+            '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22',
+            // Cloudflare IPv6 — https://www.cloudflare.com/ips-v6
+            '2400:cb00::/32', '2606:4700::/32', '2803:f800::/32', '2405:b500::/32',
+            '2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32',
+        ]);
 
         // Prod-readiness closeout, Item 1: CSP + static security headers on every web response.
         // PREPENDED (outermost web slice), not appended: error responses produced by inner
