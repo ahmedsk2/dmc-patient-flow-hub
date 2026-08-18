@@ -17,3 +17,8 @@ Schedule::call(function () {
 // Phase 4 — Item 6: daily data-quality digest for admins (one notification per run when anything
 // needs review). Read-only; no auto-fix.
 Schedule::command('dq:notify')->dailyAt('07:00')->name('data-quality-digest')->withoutOverlapping();
+
+// Task #231: nightly tamper-evident hash-chain integrity check. Runs before the 07:00 data-quality
+// digest so a broken chain is flagged as early as possible. Silent on success; on failure it
+// Log::critical's, notifies every active admin in-app, and best-effort emails report recipients.
+Schedule::command('audit:verify-daily')->dailyAt('02:30')->name('audit-integrity-check')->withoutOverlapping();
