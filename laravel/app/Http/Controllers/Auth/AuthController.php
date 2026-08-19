@@ -8,6 +8,7 @@ use App\Models\Notification;
 use App\Models\Setting;
 use App\Models\TrustedDevice;
 use App\Models\User;
+use App\Support\Audit;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -124,6 +125,10 @@ class AuthController extends Controller
 
     public function logout(Request $request): RedirectResponse
     {
+        // #233: audit BEFORE the session is torn down — Audit::log reads Auth::id()/Auth::user()
+        // internally, so it must run while the actor is still authenticated.
+        Audit::log('logout', 'user', (string) Auth::id());
+
         Auth::guard('web')->logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();

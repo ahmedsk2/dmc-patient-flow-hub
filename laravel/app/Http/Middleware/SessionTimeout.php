@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\Setting;
+use App\Support\Audit;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -39,6 +40,14 @@ class SessionTimeout
         $absExpired = $abs > 0 && $startedAt !== null && ($now - (int) $startedAt) > $abs * 60;
 
         if ($idleExpired || $absExpired) {
+            // #233: audit the forced eviction BEFORE logout/invalidate — Audit::log reads
+            // Auth::id()/Auth::user() internally, so the actor must still be resolvable from the
+            // session at the point this runs. Absolute takes precedence in the reason, matching the
+            // flash message below (a session can trip both checks at once).
+            Audit::log('session.timeout', 'user', (string) Auth::id(), [
+                'reason' => $absExpired ? 'absolute' : 'idle',
+            ]);
+
             Auth::guard('web')->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
