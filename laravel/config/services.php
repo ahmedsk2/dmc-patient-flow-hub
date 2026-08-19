@@ -35,4 +35,15 @@ return [
         ],
     ],
 
+    // Task #230: off-box audit-log archive (S3-compatible, path-style; target is OCI Object
+    // Storage but this is endpoint-agnostic — see App\Support\S3SigV4). Unset endpoint/keys means
+    // audit:ship no-ops (warns and exits 0) rather than failing the schedule.
+    'audit_archive' => [
+        'endpoint' => env('AUDIT_S3_ENDPOINT'),
+        'bucket' => env('AUDIT_S3_BUCKET'),
+        'region' => env('AUDIT_S3_REGION', 'me-riyadh-1'),
+        'access_key' => env('AUDIT_S3_ACCESS_KEY'),
+        'secret' => env('AUDIT_S3_SECRET'),
+    ],
+
 ];
