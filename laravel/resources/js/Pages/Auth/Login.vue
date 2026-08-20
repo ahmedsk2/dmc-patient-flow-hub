@@ -56,10 +56,10 @@ const flash = computed(() => usePage().props.flash);
 
                 <form @submit.prevent="submit" class="mt-8 space-y-5">
                     <div>
-                        <label class="mb-1.5 block text-sm font-semibold text-ink-700">Username</label>
+                        <label class="mb-1.5 block text-sm font-semibold text-ink-700">Username or email</label>
                         <input v-model="form.username" type="text" autofocus autocomplete="username"
                             class="w-full rounded-xl border border-ink-200 bg-card px-4 py-2.5 text-ink-800 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
-                            :class="{ 'border-danger-500': form.errors.username }" placeholder="e.g. e2e_admin" />
+                            :class="{ 'border-danger-500': form.errors.username }" placeholder="Username or you@dmc-im.com" />
                         <p v-if="form.errors.username" class="mt-1 text-xs text-on-danger">{{ form.errors.username }}</p>
                     </div>
                     <div>
@@ -78,7 +78,10 @@ const flash = computed(() => usePage().props.flash);
 
                 <div class="mt-6 flex items-center justify-between text-sm">
                     <Link href="/register" class="font-semibold text-brand-600 hover:text-brand-700">Create account</Link>
-                    <Link href="/forgot-password" class="font-semibold text-ink-500 hover:text-ink-700">Forgot password?</Link>
+                    <div class="flex flex-col items-end gap-1">
+                        <Link href="/forgot-password" class="font-semibold text-ink-500 hover:text-ink-700">Forgot password?</Link>
+                        <Link href="/forgot-username" class="font-semibold text-ink-500 hover:text-ink-700">Forgot username?</Link>
+                    </div>
                 </div>
                 <p class="mt-6 text-center text-xs text-ink-400">DMC Internal Medicine · secured access</p>
             </div>

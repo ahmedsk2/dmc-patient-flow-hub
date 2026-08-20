@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\RegisterController;
+use App\Http\Controllers\Auth\UsernameReminderController;
 use App\Http\Controllers\ConsultationsController;
 use App\Http\Controllers\ControlController;
 use App\Http\Controllers\DashboardController;
@@ -67,6 +68,8 @@ Route::middleware('guest')->group(function () {
     Route::post('/forgot-password', [PasswordResetController::class, 'email'])->name('password.email')->middleware('throttle:auth');
     Route::get('/reset-password/{token}', [PasswordResetController::class, 'reset'])->name('password.reset');
     Route::post('/reset-password', [PasswordResetController::class, 'update'])->name('password.update');
+    Route::get('/forgot-username', [UsernameReminderController::class, 'request'])->name('username.request');
+    Route::post('/forgot-username', [UsernameReminderController::class, 'email'])->name('username.email')->middleware('throttle:auth');
 });
 
 // CSP violation-report sink (SecurityHeaders adds `report-uri /csp-report` to the policy).

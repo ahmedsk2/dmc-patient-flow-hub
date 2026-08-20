@@ -32,9 +32,15 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        // Verify credentials (username, only ACTIVE accounts) WITHOUT logging in yet — so we can
-        // interpose a second factor before establishing the session.
-        $user = User::where('username', $data['username'])->where('active', 1)->first();
+        // Verify credentials (username or email, only ACTIVE accounts) WITHOUT logging in yet — so
+        // we can interpose a second factor before establishing the session.
+        $identifier = trim($data['username']);
+        $user = User::where('active', 1)
+            ->where(function ($q) use ($identifier) {
+                $q->where('username', $identifier)
+                    ->orWhere('email', strtolower($identifier));
+            })
+            ->first();
         if (! $user || ! Hash::check($data['password'], $user->password)) {
             // Phase 4 — Item 3: record the failed attempt (actor_name = the submitted username; no
             // actor_id since identity is unconfirmed) and notify admins on a consecutive-failure run.
