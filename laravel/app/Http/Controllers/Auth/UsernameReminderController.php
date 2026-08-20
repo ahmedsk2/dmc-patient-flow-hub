@@ -8,6 +8,7 @@ use App\Models\AuditLog;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -35,17 +36,24 @@ class UsernameReminderController extends Controller
             ->first();
 
         if ($user) {
-            Mail::to($user->email)->send(new UsernameReminderMail($user->username));
+            // Send inside try/catch: a mail-transport failure only occurs on the account-EXISTS
+            // branch, so letting it 500 would itself leak which emails are registered — swallow it
+            // (logged server-side) and still return the uniform generic response.
+            try {
+                Mail::to($user->email)->send(new UsernameReminderMail($user->username));
 
-            AuditLog::create([
-                'actor_id' => $user->id,
-                'actor_name' => $user->name,
-                'action' => 'username.reminder.sent',
-                'entity_type' => 'user',
-                'entity_id' => (string) $user->id,
-                'details' => ['email' => $user->email],
-                'ip' => $request->ip(),
-            ]);
+                AuditLog::create([
+                    'actor_id' => $user->id,
+                    'actor_name' => $user->name,
+                    'action' => 'username.reminder.sent',
+                    'entity_type' => 'user',
+                    'entity_id' => (string) $user->id,
+                    'details' => ['email' => $user->email],
+                    'ip' => $request->ip(),
+                ]);
+            } catch (\Throwable $e) {
+                Log::error('username reminder mail failed', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+            }
         }
 
         return back()->with('status', self::GENERIC_MESSAGE);

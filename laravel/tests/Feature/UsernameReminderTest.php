@@ -87,6 +87,21 @@ class UsernameReminderTest extends TestCase
             ->assertSessionHas('status', UsernameReminderController::GENERIC_MESSAGE);
     }
 
+    public function test_mail_failure_still_returns_generic_response_not_500(): void
+    {
+        // A transport failure only happens on the account-EXISTS branch; if it 500'd it would leak
+        // which emails are registered. The controller swallows it and returns the uniform response.
+        $user = $this->activeUser();
+        Mail::shouldReceive('to')->andThrow(new \RuntimeException('smtp down'));
+
+        $this->post('/forgot-username', ['email' => $user->email])
+            ->assertRedirect()
+            ->assertSessionHas('status', UsernameReminderController::GENERIC_MESSAGE);
+
+        // send threw before the audit write, so no 'sent' row is recorded
+        $this->assertDatabaseMissing('audit_log', ['action' => 'username.reminder.sent']);
+    }
+
     public function test_route_is_throttled(): void
     {
         $statuses = [];
