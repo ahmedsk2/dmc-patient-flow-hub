@@ -188,6 +188,51 @@ class ConsultationLedgerSchemaTest extends TestCase
         ]);
     }
 
+    public function test_the_same_consult_can_be_ticked_on_a_different_day(): void
+    {
+        // proves the unique key is the PAIR (consultation_id, followup_date), not consultation_id
+        // alone — a consult ticked "seen" on day one must still accept a tick on day two, or every
+        // follow-up after the first would be silently rejected forever.
+        $c = Consultation::create([
+            'mrn' => '77000006', 'patient_name' => 'Multi-day Pt', 'consultation_date' => '2024-03-05',
+            'to_service' => 'Cardiology', 'indication' => [],
+        ]);
+
+        DB::table('consultation_followups')->insert([
+            'consultation_id' => $c->id, 'followup_date' => '2026-08-20', 'note' => 'day one',
+        ]);
+        $secondId = DB::table('consultation_followups')->insertGetId([
+            'consultation_id' => $c->id, 'followup_date' => '2026-08-21', 'note' => 'day two',
+        ]);
+
+        $this->assertNotNull(DB::table('consultation_followups')->where('id', $secondId)->first());
+        $this->assertSame(2, DB::table('consultation_followups')->where('consultation_id', $c->id)->count());
+    }
+
+    public function test_a_different_consult_can_be_ticked_on_the_same_day(): void
+    {
+        // proves the unique key is the PAIR (consultation_id, followup_date), not followup_date
+        // alone — one team ticking their consult today must never block every other team's tick
+        // for the same day.
+        $c1 = Consultation::create([
+            'mrn' => '77000007', 'patient_name' => 'Same-day Pt A', 'consultation_date' => '2024-03-06',
+            'to_service' => 'Cardiology', 'indication' => [],
+        ]);
+        $c2 = Consultation::create([
+            'mrn' => '77000008', 'patient_name' => 'Same-day Pt B', 'consultation_date' => '2024-03-06',
+            'to_service' => 'Cardiology', 'indication' => [],
+        ]);
+
+        DB::table('consultation_followups')->insert([
+            'consultation_id' => $c1->id, 'followup_date' => '2026-08-21', 'note' => 'seen A',
+        ]);
+        $id = DB::table('consultation_followups')->insertGetId([
+            'consultation_id' => $c2->id, 'followup_date' => '2026-08-21', 'note' => 'seen B',
+        ]);
+
+        $this->assertNotNull(DB::table('consultation_followups')->where('id', $id)->first());
+    }
+
     public function test_followups_are_removed_with_their_consultation_row(): void
     {
         $c = Consultation::create([

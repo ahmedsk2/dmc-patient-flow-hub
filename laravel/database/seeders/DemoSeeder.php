@@ -134,7 +134,7 @@ class DemoSeeder extends Seeder
 
         // ── 0. reset (idempotent) ────────────────────────────────────────────────────────────
         Schema::disableForeignKeyConstraints();
-        foreach (['admission_diagnoses', 'admissions', 'consultations', 'patients',
+        foreach (['admission_diagnoses', 'admissions', 'consultation_followups', 'consultations', 'patients',
             'specialties', 'icd10', 'consultation_reasons', 'tb_diagnoses', 'countries'] as $t) {
             DB::table($t)->truncate();
         }

@@ -41,8 +41,9 @@ class LegacyImportTest extends TestCase
     {
         Schema::disableForeignKeyConstraints();
         foreach (['handover_signatures', 'handover_revisions', 'handovers', 'notifications',
-                  'admission_diagnoses', 'admissions', 'consultations', 'patients', 'icd10',
-                  'specialties', 'consultation_reasons', 'tb_diagnoses', 'countries', 'settings'] as $t) {
+                  'admission_diagnoses', 'admissions', 'consultation_followups', 'consultations',
+                  'patients', 'icd10', 'specialties', 'consultation_reasons', 'tb_diagnoses',
+                  'countries', 'settings'] as $t) {
             DB::table($t)->truncate();
         }
         DB::table('users')->whereNotNull('legacy_id')->delete();
@@ -382,6 +383,29 @@ class LegacyImportTest extends TestCase
         $this->assertSame(1, (int) DB::table('settings')->orderBy('id')->value('consultations_source_of_truth'));
     }
 
+    /**
+     * consultation_followups is a CHILD of consultations. When the flag is ON, consultations keep
+     * their existing ids untouched — so a follow-up tick recorded before the reload must still point
+     * at the SAME row afterwards, or every daily tick ever recorded would be silently erased on the
+     * next legacy data reload even though the consultations themselves survive.
+     */
+    public function test_followups_survive_when_consultations_are_preserved(): void
+    {
+        $this->seedLegacy();
+        [$cxId] = $this->seedNewSystemConsultation();
+        \App\Models\Setting::current()->update(['consultations_source_of_truth' => true]);
+
+        $followupId = DB::table('consultation_followups')->insertGetId([
+            'consultation_id' => $cxId, 'followup_date' => now()->toDateString(), 'note' => 'ticked pre-cutover',
+        ]);
+
+        $this->artisan('legacy:import')->assertSuccessful();
+
+        $this->assertSame(1, DB::table('consultation_followups')->where('id', $followupId)->count(),
+            'a follow-up tied to a preserved consultation must survive the import untouched');
+        $this->assertSame($cxId, (int) DB::table('consultation_followups')->where('id', $followupId)->value('consultation_id'));
+    }
+
     public function test_import_still_rebuilds_consultations_when_the_flag_is_off(): void
     {
         $this->seedLegacy();
@@ -394,6 +418,29 @@ class LegacyImportTest extends TestCase
             'unchanged behaviour: with the flag off the table is still rebuilt from legacy');
         $this->assertSame(1, DB::table('consultations')->where('legacy_id', 501)->count());
         $this->assertSame(0, (int) DB::table('settings')->orderBy('id')->value('consultations_source_of_truth'));
+    }
+
+    /**
+     * Reproduces the exact hazard: with FK checks disabled during the truncate loop, TRUNCATE
+     * consultations does NOT cascade to consultation_followups and AUTO_INCREMENT resets — so a
+     * surviving follow-up row would silently re-attach to whatever re-imported legacy consultation
+     * reclaims its old id, corrupting a DIFFERENT patient's "seen today" completeness count. The
+     * child table must be truncated in lockstep with its parent whenever the flag is off.
+     */
+    public function test_followups_do_not_survive_as_orphans_when_consultations_are_rebuilt(): void
+    {
+        $this->seedLegacy();
+        $this->seedLegacyConsultation();
+        [$cxId] = $this->seedNewSystemConsultation();   // flag left at its default (false)
+
+        DB::table('consultation_followups')->insert([
+            'consultation_id' => $cxId, 'followup_date' => now()->toDateString(), 'note' => 'ticked before reload',
+        ]);
+
+        $this->artisan('legacy:import')->assertSuccessful();
+
+        $this->assertSame(0, DB::table('consultation_followups')->count(),
+            'follow-up ticks must not survive as orphans when consultations are rebuilt from legacy');
     }
 
     public function test_import_refuses_a_forced_consultation_wipe_while_the_app_owns_them(): void

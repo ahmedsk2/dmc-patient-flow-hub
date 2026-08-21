@@ -59,12 +59,22 @@ class LegacyImport extends Command
         // they reference admissions/users by id, and a fresh import re-seeds those ids — TRUNCATE
         // (with FK checks off) bypasses the cascade, so stale rows would otherwise survive and
         // point at the wrong (or missing) episodes after a new legacy dump is loaded.
+        //
+        // consultation_followups is a CHILD of consultations and must always be truncated in lockstep
+        // with it: with FK checks disabled, TRUNCATE consultations does NOT cascade, so a follow-up
+        // tick would otherwise survive as an orphan pointing at whatever id AUTO_INCREMENT hands out
+        // next to a re-imported legacy consultation — silently re-attaching one patient's "seen today"
+        // tick to a different patient's consult and corrupting the ledger's completeness count.
         $tables = ['handover_signatures', 'handover_revisions', 'handovers', 'notifications',
-                   'admission_diagnoses', 'admissions', 'consultations', 'patients', 'icd10',
-                   'specialties', 'consultation_reasons', 'tb_diagnoses', 'countries', 'settings'];
+                   'admission_diagnoses', 'admissions', 'consultation_followups', 'consultations',
+                   'patients', 'icd10', 'specialties', 'consultation_reasons', 'tb_diagnoses',
+                   'countries', 'settings'];
         $consultationLinks = [];
         if ($preserveConsultations) {
-            $tables = array_values(array_diff($tables, ['consultations']));
+            // The gate is ON: consultations keep their existing ids, so the follow-ups that point at
+            // them must be kept too — truncating consultation_followups here would erase every tick
+            // ever recorded even though the consultations themselves survive untouched.
+            $tables = array_values(array_diff($tables, ['consultations', 'consultation_followups']));
             // Surviving rows point at patient/user ids that are about to be re-seeded. Capture their
             // natural keys now so they can be re-pointed after the rebuild (see relinkPreserved…).
             $consultationLinks = $this->captureConsultationLinks();
