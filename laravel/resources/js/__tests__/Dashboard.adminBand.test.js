@@ -39,6 +39,7 @@ vi.mock('@/Components/AdminBandCard.vue', () => ({ default: { name: 'AdminBandCa
 import Dashboard from '@/Pages/Dashboard.vue';
 import AdminBandCard from '@/Components/AdminBandCard.vue';
 import Sparkline from '@/Components/Sparkline.vue';
+import ChartFigure from '@/Components/ChartFigure.vue';
 import { deltaChipClass } from '@/lib/ui.js';
 import { router } from '@inertiajs/vue3';
 
@@ -236,6 +237,63 @@ describe('Dashboard — KPI triad, polarity & sparklines (W4)', () => {
     it('renders no Sparkline when the KPI series is empty', () => {
         const w = withDeltas({ trend: { labels: [], admissions: [], discharges: [] } });
         expect(w.find('[data-kpi="Admissions Today"]').findComponent(Sparkline).exists()).toBe(false);
+    });
+});
+
+// W0 Task 2 — the consultation donut was relabelled from a fake "24h" window to the honest
+// "today or yesterday" it actually measures, and its payload key renamed signed24h ->
+// signedTodayOrYesterday (Dashboard.vue reads props.consultDonut.signedTodayOrYesterday in the
+// series/guard/rows computeds and the template aria-label). Guards against a silent partial
+// revert: if any one of those four reads regressed to the old key, the value would be `undefined`,
+// hasConsultDonut would evaluate NaN > 0 = false, and the card would silently fall back to "No
+// data for this period." with a green suite and no console warning.
+describe('Dashboard — consultation donut relabel (W0 Task 2)', () => {
+    const findDonutFigure = (w) => w.findAllComponents(ChartFigure)
+        .find((f) => f.props('title').startsWith('Consultations — sign-offs'));
+
+    it('feeds the renamed signedTodayOrYesterday value into the accessible-alternative rows', () => {
+        const w = mountAs({ role: 0, is_admin: true }, {
+            consultDonut: { signedTodayOrYesterday: 3, active: 4 },
+        });
+        const figure = findDonutFigure(w);
+        expect(figure.exists()).toBe(true);
+        expect(figure.props('rows')).toEqual([
+            ['Signed off (today + yesterday)', 3],
+            ['Active', 4],
+        ]);
+    });
+
+    it('renders the apexchart with a series/aria-label built from signedTodayOrYesterday, not the old signed24h key', () => {
+        const w = mountAs({ role: 0, is_admin: true }, {
+            consultDonut: { signedTodayOrYesterday: 3, active: 4 },
+        });
+        const chart = w.find('apexchart-stub');
+        expect(chart.exists()).toBe(true);
+        // The stub reflects the `:series` array prop as its stringified DOM attribute — proves
+        // consultDonutSeries itself reads signedTodayOrYesterday, not just the template aria-label.
+        expect(chart.attributes('series')).toBe('3,4');
+        expect(chart.attributes('aria-label')).toBe(
+            'Donut chart: 3 consultations signed off today or yesterday, 4 active',
+        );
+    });
+
+    it('treats consultDonut.signed24h (the old key) as absent: renders "No data", not the stale value', () => {
+        // A partial revert would leave the old key on the payload but stop populating the new one.
+        const w = mountAs({ role: 0, is_admin: true }, {
+            consultDonut: { signed24h: 3, active: 4 },
+        });
+        const figure = findDonutFigure(w);
+        expect(figure.props('rows')).toEqual([]);
+        expect(w.find('apexchart-stub').exists()).toBe(false);
+        expect(w.text()).toContain('No data for this period.');
+    });
+
+    it('hasConsultDonut is false and the donut is hidden when both counts are zero', () => {
+        const w = mountAs({ role: 0, is_admin: true }, {
+            consultDonut: { signedTodayOrYesterday: 0, active: 0 },
+        });
+        expect(findDonutFigure(w).props('rows')).toEqual([]);
+        expect(w.find('apexchart-stub').exists()).toBe(false);
     });
 });
 
