@@ -112,19 +112,39 @@ class ConsultationLedgerModelTest extends TestCase
         $cardioUser = $this->user(User::ROLE_CONSULTANT, ['specialty_id' => $cardio->id]);
         $coordinator = $this->user(User::ROLE_REGISTRAR, ['can_coordinate_consultations' => true]);
         $admin = $this->user(User::ROLE_ADMIN);
+        // unrelated to every fixture row below: no specialty, not a consultant/entered_by on any of them
+        $otherUser = $this->user(User::ROLE_CONSULTANT);
 
         $base = ['consultation_date' => '2026-08-06', 'indication' => []];
         Consultation::create([...$base, 'mrn' => '76000020', 'patient_name' => 'Cardio Pt', 'owning_specialty_id' => $cardio->id]);
         Consultation::create([...$base, 'mrn' => '76000021', 'patient_name' => 'Nephro Pt', 'owning_specialty_id' => $nephro->id]);
         Consultation::create([...$base, 'mrn' => '76000022', 'patient_name' => 'Unassigned Pt', 'owning_specialty_id' => null]);
         Consultation::create([...$base, 'mrn' => '76000023', 'patient_name' => 'Assigned To Me', 'owning_specialty_id' => $nephro->id, 'consultant_id' => $cardioUser->id]);
+        // entered_by is the visibility-WIDENING term on the scope (mirrors canSeeConsultation's own
+        // entered_by clause) — a different specialty's row, no consultant_id, must still surface for
+        // the person who typed it, and must NOT surface for someone with no relation to it at all.
+        Consultation::create([...$base, 'mrn' => '76000024', 'patient_name' => 'Entered By Me', 'owning_specialty_id' => $nephro->id, 'entered_by' => $cardioUser->id]);
 
-        // own specialty + anything assigned to me; NOT another team's book, NOT the Unassigned bucket
+        // own specialty + anything assigned to or entered by me; NOT another team's book, NOT the Unassigned bucket
         $this->assertSame(
-            ['76000020', '76000023'],
+            ['76000020', '76000023', '76000024'],
             Consultation::visibleTo($cardioUser)->orderBy('mrn')->pluck('mrn')->all()
         );
-        $this->assertSame(4, Consultation::visibleTo($coordinator)->count());
-        $this->assertSame(4, Consultation::visibleTo($admin)->count());
+        $this->assertNotContains('76000024', Consultation::visibleTo($otherUser)->pluck('mrn')->all(), 'entered_by must not leak to an unrelated user');
+        $this->assertSame(5, Consultation::visibleTo($coordinator)->count());
+        $this->assertSame(5, Consultation::visibleTo($admin)->count());
+    }
+
+    public function test_visible_to_excludes_observers_even_within_their_own_specialty(): void
+    {
+        $cardio = Specialty::create(['name' => 'Cardiology', 'is_subspecialty' => true, 'is_external' => false]);
+        $observer = $this->user(User::ROLE_OBSERVER, ['specialty_id' => $cardio->id]);
+
+        Consultation::create([
+            'mrn' => '76000030', 'patient_name' => 'Observed Pt', 'consultation_date' => '2026-08-07',
+            'indication' => [], 'owning_specialty_id' => $cardio->id,
+        ]);
+
+        $this->assertSame(0, Consultation::visibleTo($observer)->count(), 'the consultations workspace is closed to Observers, mirroring canSeeConsultation()');
     }
 }

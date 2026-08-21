@@ -58,9 +58,21 @@ class Consultation extends Model
     public function signedOffBy(): BelongsTo { return $this->belongsTo(User::class, 'signed_off_by'); }
     public function admission(): BelongsTo { return $this->belongsTo(Admission::class); }
 
+    /**
+     * LEGACY/COMPAT scope, pre-dating the ledger. `signoff_date IS NULL` and `status <>
+     * 'signed_off'` (scopeOpen, below) are meant to be kept in lockstep by every W2 status
+     * transition — a signoff must never write one without the other, or this scope and scopeOpen
+     * silently disagree about which rows are "closed". Nothing in app/ still calls this scope
+     * (grep confirms), but statistics/dashboard code outside this model reads signoff_date
+     * directly, so it stays until that is migrated over to `status`. Prefer scopeOpen in new code.
+     */
     public function scopeActive(Builder $q): Builder { return $q->whereNull('signoff_date'); }
 
-    /** Everything still on the books — the three non-closed states. */
+    /**
+     * Everything still on the books — the three non-closed states. Kept in lockstep with
+     * scopeActive (above) by the invariant `status = 'signed_off' <=> signoff_date IS NOT NULL`;
+     * W2's sign-off/reversal code must always write both columns in the same update.
+     */
     public function scopeOpen(Builder $q): Builder
     {
         return $q->where('status', '<>', self::STATUS_SIGNED_OFF);
@@ -68,7 +80,11 @@ class Consultation extends Model
 
     /**
      * Specialty scoping — the ONE visibility rule, mirroring User::canSeeConsultation() so the list
-     * query and the per-row predicate can never drift apart.
+     * query and the per-row predicate can never drift apart. A scope must never return a row that
+     * the matching per-row predicate would refuse.
+     *
+     * Observers are excluded first, before anything else — the consultations workspace is closed
+     * to them entirely (mirrors User::canSeeConsultation()'s own first check).
      *
      * Admins and coordinators see everything (including the Unassigned bucket). Everyone else sees
      * their own specialty's book, plus any consult assigned to them or entered by them — ownership
@@ -78,6 +94,10 @@ class Consultation extends Model
      */
     public function scopeVisibleTo(Builder $q, User $u): Builder
     {
+        if ($u->isObserver()) {
+            return $q->whereRaw('1 = 0');
+        }
+
         if ($u->isAdmin() || $u->canCoordinateConsultations()) {
             return $q;
         }
