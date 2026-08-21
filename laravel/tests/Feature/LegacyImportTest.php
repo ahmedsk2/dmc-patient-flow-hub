@@ -594,6 +594,27 @@ class LegacyImportTest extends TestCase
         $this->assertNotNull(DB::table('users')->where('legacy_id', 7)->value('id'));
     }
 
+    public function test_import_preserves_coordinator_grants_across_a_reimport(): void
+    {
+        $this->seedLegacy();
+        $this->artisan('legacy:import')->assertSuccessful();
+
+        // an admin grants coordinator access in Control -> Users, AFTER this import already ran
+        $userId = DB::table('users')->where('legacy_id', 7)->value('id');
+        DB::table('users')->where('id', $userId)->update(['can_coordinate_consultations' => 1]);
+
+        // a later data reload rebuilds `users` from legacy `members`, which has no source column for
+        // this flag (see importUsers()) -- the grant must survive by legacy_id, not get silently
+        // reset to 0 the way it would if nothing carried it across the rebuild.
+        $this->artisan('legacy:import')->assertSuccessful();
+
+        $this->assertSame(
+            1,
+            (int) DB::table('users')->where('legacy_id', 7)->value('can_coordinate_consultations'),
+            'a coordinator grant made in Control -> Users must survive a legacy data reload'
+        );
+    }
+
     // ============================================================================================
     // Phase 4 — Item 8: expanded ImportController validator coverage. These exercise the bulk-import
     // CSV parser/committer (NOT the legacy:import command) — they call ImportController::parse via

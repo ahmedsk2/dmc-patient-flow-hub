@@ -80,6 +80,15 @@ class LegacyImport extends Command
             $consultationLinks = $this->captureConsultationLinks();
         }
 
+        // Coordinator grants (`users.can_coordinate_consultations`) are ADMIN-MADE state living on a
+        // row this delete is about to remove. Snapshot by legacy_id (a natural key that survives the
+        // rebuild) BEFORE the delete — see restoreCoordinatorGrants() for why this is needed.
+        $coordinatorLegacyIds = DB::table('users')
+            ->whereNotNull('legacy_id')
+            ->where('can_coordinate_consultations', 1)
+            ->pluck('legacy_id')
+            ->all();
+
         Schema::disableForeignKeyConstraints();
         foreach ($tables as $t) {
             DB::table($t)->truncate();
@@ -89,6 +98,7 @@ class LegacyImport extends Command
 
         $this->importReference();
         $userMap = $this->importUsers();
+        $this->restoreCoordinatorGrants($coordinatorLegacyIds, $userMap);
         $patientMap = $this->importPatients();
         $this->importAdmissions($userMap, $patientMap);
         if ($preserveConsultations) {
@@ -358,6 +368,44 @@ class LegacyImport extends Command
         $map = DB::table('users')->whereNotNull('legacy_id')->pluck('id', 'legacy_id')->all();
         $this->info('  users imported: ' . count($map));
         return $map;
+    }
+
+    /**
+     * Re-apply coordinator grants (`users.can_coordinate_consultations`) after importUsers() rebuilds
+     * the `users` table from legacy `members`. That rebuild reads an explicit column list — username,
+     * role, can_assign, can_add, can_manage, can_modify, ... — and legacy `members` has no source
+     * column this flag could be re-derived from, unlike the other four capability flags. Without this
+     * step, every coordinator grant an admin makes in Control -> Users is silently reset to 0 on the
+     * next `legacy:import`, even though the flag is documented (see the migration's docblock) as a
+     * durable, per-user grant.
+     *
+     * Snapshot/restore by `legacy_id` — the same natural-key technique appOwnedSettings() uses for
+     * `settings` and captureConsultationLinks() uses for preserved consultations — because both the
+     * old and new `id` values are meaningless across the rebuild.
+     *
+     * A user created inside this app (no legacy_id) is never touched by the `users` delete above, so
+     * its flag is untouched already and needs no restoring here.
+     *
+     * @param array $legacyIds legacy_id values that had the flag ON, captured BEFORE the users delete
+     * @param array $userMap   legacy_id => new id, as returned by importUsers()
+     */
+    private function restoreCoordinatorGrants(array $legacyIds, array $userMap): void
+    {
+        if ($legacyIds === []) {
+            return;
+        }
+
+        $ids = collect($legacyIds)
+            ->map(fn ($legacyId) => $userMap[$legacyId] ?? null)
+            ->filter()
+            ->values()
+            ->all();
+
+        if ($ids === []) {
+            return;
+        }
+
+        DB::table('users')->whereIn('id', $ids)->update(['can_coordinate_consultations' => 1]);
     }
 
     private function importPatients(): array
