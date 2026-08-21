@@ -161,6 +161,8 @@ class ConsultationsController extends Controller
         $consultation->delete();
         Audit::log('consultation.delete', 'consultation', (string) $id);
 
-        return back()->with('flash', ['type' => 'success', 'message' => 'Consultation deleted.']);
+        // W0: soft delete — say so, so nobody believes the record is gone for good.
+        return back()->with('flash', ['type' => 'success',
+            'message' => 'Consultation removed from the ledger. An admin can restore it from Recently Deleted.']);
     }
 }

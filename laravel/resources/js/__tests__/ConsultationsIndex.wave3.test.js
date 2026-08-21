@@ -161,15 +161,19 @@ describe('Consultations/Index — edit-consultation modal: dirty guard + ErrorSu
 });
 
 describe('Consultations/Index — deleteConsult copy (Wave 3, Item 6)', () => {
+    // W0 (consultation ledger): this used to pin the old "permanently … cannot be undone" copy,
+    // which was a lie — the delete is a soft delete restorable from Recently Deleted. Updated in
+    // lockstep with the corrected copy in ConsultationsIndex.w0DeleteCopy.test.js.
     it('states patient name + MRN and the exact effect', async () => {
         ask.mockResolvedValue(true);
         const w = mountWith();
         await w.vm.deleteConsult({ id: 7, name: 'Ali', mrn: '111', date: '2026-06-01' });
         const [title, body, tone] = ask.mock.calls[0];
-        expect(title).toMatch(/delete/i);
+        expect(title).toMatch(/remove/i);
         expect(body).toContain('Ali');
         expect(body).toContain('111');
-        expect(body).toMatch(/cannot be undone/i);
+        expect(body).toMatch(/restore/i);
+        expect(body).not.toMatch(/cannot be undone/i);
         expect(tone).toBe('danger');
     });
 });

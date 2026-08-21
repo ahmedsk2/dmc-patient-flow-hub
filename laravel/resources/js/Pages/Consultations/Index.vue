@@ -110,11 +110,20 @@ const cInternal = computed(() => isInternalService(cForm.to_service));
 const eInternal = computed(() => isInternalService(eForm.to_service));
 watch(cInternal, (v) => { if (!v) cForm.consultant_id = ''; });
 watch(eInternal, (v) => { if (!v) eForm.consultant_id = ''; });
-const deleteConsult = async (c) => { if (await ask('Delete consultation', `Permanently delete the consultation for ${c.name} (MRN ${c.mrn}), entered ${c.date || 'recently'}. This removes it from the consultation registry entirely and cannot be undone.`, 'danger')) router.delete(`/consultations/${c.id}`, { preserveScroll: true }); };
+// W0: this used to promise a permanent, irreversible deletion. It is a SOFT delete — the row keeps
+// its deleted_at and an admin restores it from Recently Deleted (/trashed) — so the copy now says
+// what actually happens. The danger tone stays: it is still a guarded action.
+const deleteConsult = async (c) => {
+    const body = `Remove the consultation for ${c.name} (MRN ${c.mrn}), entered ${c.date || 'recently'}? `
+        + 'It leaves the consultation ledger and stops counting anywhere, but it is kept — '
+        + 'an administrator can restore it from Recently Deleted.';
+    if (await ask('Remove consultation', body, 'danger')) router.delete(`/consultations/${c.id}`, { preserveScroll: true });
+};
 
 // sign off — Wave 2, Item 4: no confirm. A single sign-off is reversible (the reverse-signoff
 // button, already instant) and low-stakes; the server flash is the feedback. deleteConsult keeps
-// its danger confirm (irreversible). Sign-all stays confirmed on the Handovers page (bulk).
+// its danger confirm because removing a consult from the ledger changes every count, even though
+// it is recoverable. Sign-all stays confirmed on the Handovers page (bulk).
 const signoff = (row) => router.post(`/consultations/${row.id}/signoff`, {}, { preserveScroll: true });
 const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20';
 </script>
