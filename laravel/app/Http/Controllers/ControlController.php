@@ -36,7 +36,8 @@ class ControlController extends Controller
                 'id' => $u->id, 'name' => $u->full_name ?: $u->name, 'full_name' => $u->full_name, 'username' => $u->username, 'email' => $u->email,
                 'role' => (int) $u->role, 'role_label' => $u->roleLabel(), 'active' => (bool) $u->active,
                 'on_service' => (bool) $u->on_service, 'specialty_id' => $u->specialty_id, 'mfa' => (bool) $u->mfa_enrolled_at,
-                'can' => ['assign' => (bool) $u->can_assign, 'add' => (bool) $u->can_add, 'manage' => (bool) $u->can_manage, 'modify' => (bool) $u->can_modify],
+                'can' => ['assign' => (bool) $u->can_assign, 'add' => (bool) $u->can_add, 'manage' => (bool) $u->can_manage, 'modify' => (bool) $u->can_modify,
+                    'coordinate' => (bool) $u->can_coordinate_consultations],
             ]);
 
         $s = Setting::current();
@@ -259,6 +260,10 @@ class ControlController extends Controller
             'can_add' => ['required', 'boolean'],
             'can_manage' => ['required', 'boolean'],
             'can_modify' => ['required', 'boolean'],
+            // 'sometimes', not 'required': a payload that predates this flag (older callers and the
+            // existing Control tests) must leave the grant UNCHANGED rather than silently revoke it.
+            // The Control form always sends it, so the admin UI is unaffected.
+            'can_coordinate_consultations' => ['sometimes', 'boolean'],
         ]);
 
         // Phase 4 — Item 4: granting admin (role -> 0 on a non-admin) is a highest-risk action and
@@ -290,7 +295,8 @@ class ControlController extends Controller
         // audit detail shows only what CHANGED (role 4 → 0, can_manage false → true), not the whole
         // payload. Passwords are not edited here, but omit defensively.
         $fields = ['username', 'full_name', 'email', 'role', 'active', 'on_service',
-            'specialty_id', 'can_assign', 'can_add', 'can_manage', 'can_modify'];
+            'specialty_id', 'can_assign', 'can_add', 'can_manage', 'can_modify',
+            'can_coordinate_consultations'];
         $before = $user->only($fields);
         $escalated = (int) $data['role'] === User::ROLE_ADMIN && (int) ($before['role'] ?? 99) !== User::ROLE_ADMIN;
         $user->update($data);

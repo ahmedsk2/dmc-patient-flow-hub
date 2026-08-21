@@ -96,7 +96,7 @@ const sortedUsers = computed(() => {
 });
 
 const editing = ref(null);
-const uForm = useForm({ username: '', full_name: '', email: '', role: 5, active: true, on_service: false, specialty_id: '', can_assign: false, can_add: false, can_manage: false, can_modify: false });
+const uForm = useForm({ username: '', full_name: '', email: '', role: 5, active: true, on_service: false, specialty_id: '', can_assign: false, can_add: false, can_manage: false, can_modify: false, can_coordinate_consultations: false });
 // Wave 3, Item 1/2: unsaved-changes guard on the edit-user modal. defaults() re-anchors Inertia's
 // own isDirty baseline to the JUST-LOADED user, same idea as Consultations' edit form.
 const { guardedClose: guardedCloseEditUser } = useUnsavedGuard(() => uForm.isDirty, ask);
@@ -108,6 +108,7 @@ const editUser = (u) => {
     uForm.username = u.username || ''; uForm.full_name = u.full_name || ''; uForm.email = u.email || '';
     uForm.role = u.role; uForm.active = u.active; uForm.on_service = u.on_service; uForm.specialty_id = u.specialty_id || '';
     uForm.can_assign = u.can.assign; uForm.can_add = u.can.add; uForm.can_manage = u.can.manage; uForm.can_modify = u.can.modify;
+    uForm.can_coordinate_consultations = !!u.can.coordinate;
     uForm.defaults?.();
 };
 const saveUser = guardSubmit(uForm, () => uForm.put(`/control/users/${editing.value.id}`, { preserveScroll: true, onSuccess: doCloseEditUser }));
@@ -261,7 +262,7 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
                     <option value="">Any service</option><option value="on">On service</option><option value="off">Off service</option>
                 </select>
                 <select v-model="capFilter" aria-label="Filter by capability" class="rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
-                    <option value="">Any capability</option><option value="assign">Can assign</option><option value="add">Can add</option><option value="manage">Can manage</option><option value="modify">Can modify</option>
+                    <option value="">Any capability</option><option value="assign">Can assign</option><option value="add">Can add</option><option value="manage">Can manage</option><option value="modify">Can modify</option><option value="coordinate">Can coordinate consults</option>
                 </select>
                 <button v-if="anyUserFilter" @click="clearUserFilters" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 ring-1 ring-line transition hover:bg-ink-50">Clear</button>
                 <span class="ms-auto text-sm text-ink-400" aria-live="polite"><span class="nums font-semibold text-ink-600">{{ sortedUsers.length }}</span> of {{ users.length }} user(s)</span>
@@ -416,6 +417,7 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
                         <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_add" class="rounded text-brand-600" /> Can add</label>
                         <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_manage" class="rounded text-brand-600" /> Can manage</label>
                         <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_modify" class="rounded text-brand-600" /> Can modify</label>
+                        <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_coordinate_consultations" class="rounded text-brand-600" /> Can coordinate consults</label>
                     </div>
                 </div>
                 <div class="mt-6 flex items-center justify-end gap-2">

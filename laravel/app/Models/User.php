@@ -65,6 +65,7 @@ class User extends Authenticatable
             'can_add' => 'boolean',
             'can_manage' => 'boolean',
             'can_modify' => 'boolean',
+            'can_coordinate_consultations' => 'boolean',
             'role' => 'integer',
         ];
     }
@@ -117,6 +118,59 @@ class User extends Authenticatable
 
         return $this->isAdmin() || $this->can_manage || (int) $c->consultant_id === (int) $this->id;
     }
+
+    /**
+     * Consultation COORDINATOR (W1): may book a consult into any specialty, see every consult and
+     * modify every consult. Deliberately NOT a sign-off grant — see canManageConsultation(), which
+     * remains the sign-off gate (owning consultant / can_manage / admin). Observers are rejected
+     * FIRST, so the read-only guarantee can never be bought with a capability flag.
+     */
+    public function canCoordinateConsultations(): bool
+    {
+        if ($this->isObserver()) {
+            return false;
+        }
+
+        return $this->isAdmin() || (bool) $this->can_coordinate_consultations;
+    }
+
+    /**
+     * May this user SEE a consultation? Ownership is `owning_specialty_id` + `consultant_id` and is
+     * independent of `entered_by` — but you always keep sight of a consult you entered or that is
+     * assigned to you, otherwise a registrar who books one loses it the moment they save.
+     * Unassigned rows (NULL owning specialty) are visible to admins and coordinators only.
+     * Observers are excluded: the consultations workspace is a clinical-role page (J2-12).
+     */
+    public function canSeeConsultation(Consultation $c): bool
+    {
+        if ($this->isObserver()) {
+            return false;
+        }
+        if ($this->isAdmin() || $this->canCoordinateConsultations()) {
+            return true;
+        }
+        if ($this->specialty_id !== null && (int) $c->owning_specialty_id === (int) $this->specialty_id) {
+            return true;
+        }
+
+        return (int) $c->consultant_id === (int) $this->id || (int) $c->entered_by === (int) $this->id;
+    }
+
+    /**
+     * May this user EDIT a consultation? Coordinators modify all; everyone else may edit what they
+     * can see. NOTE: W1 defines this predicate but deliberately does NOT wire it into
+     * ConsultationsController::update(), which keeps its legacy-open gate (J1-10: legacy modify had
+     * no ownership check, pinned by Round5J1Test). W2 flips update() over to this predicate.
+     */
+    public function canModifyConsultation(Consultation $c): bool
+    {
+        if ($this->isObserver()) {
+            return false;
+        }
+
+        return $this->isAdmin() || $this->canCoordinateConsultations() || $this->canSeeConsultation($c);
+    }
+
     public function mfaEnabled(): bool { return $this->mfa_secret !== null && $this->mfa_enrolled_at !== null; }
 
     /**
