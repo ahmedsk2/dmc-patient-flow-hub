@@ -36,7 +36,7 @@ class ConsultationRequest extends FormRequest
             // for an unrelated edit; a CHANGED date still cannot be in the future.
             'consultation_date' => $this->consultationDateRules(),
             'consultation_from' => ['required', 'string', 'max:128'],
-            'to_service' => ['required', 'string', 'max:128'],
+            'to_service' => array_merge(['required', 'string', 'max:128'], $this->ownSpecialtyRule()),
             // a receiving consultant only exists for an INTERNAL specialty; external / free-text
             // services store none (legacy shape — imported NULL-consultant rows stay re-savable)
             'consultant_id' => [$this->toServiceIsInternal() ? 'required' : 'nullable', 'exists:users,id'],
@@ -50,6 +50,42 @@ class ConsultationRequest extends FormRequest
         ];
 
         return $rules;
+    }
+
+    /**
+     * W1 scoping: a consult belongs to the team it is booked into, so a plain clinical user may
+     * only create into their OWN specialty. Coordinators (can_coordinate_consultations) and admins
+     * may book into any specialty — that is exactly what the capability is for.
+     *
+     * Deliberately CREATE-only. UPDATE keeps the legacy-open modify semantics (J1-10: legacy modify
+     * carried no ownership check, pinned by Round5J1Test), and moving a consult between teams gets
+     * its own explicit reassign action in W2 rather than riding on a generic edit.
+     *
+     * An unmatched / external / free-text service is unowned and stays creatable by anyone: those
+     * referrals belong to no IM team and land in the Unassigned bucket.
+     *
+     * @return array<int, \Closure>
+     */
+    private function ownSpecialtyRule(): array
+    {
+        if ($this->route('consultation') !== null) {
+            return [];   // UPDATE — unchanged by W1
+        }
+
+        $user = $this->user();
+        if ($user->isAdmin() || $user->canCoordinateConsultations()) {
+            return [];
+        }
+
+        return [function (string $attribute, mixed $value, \Closure $fail) use ($user) {
+            $targetId = \App\Http\Controllers\ConsultationsController::resolveOwningSpecialtyId((string) $value);
+            if ($targetId === null) {
+                return;   // external / free-text service — unowned
+            }
+            if ((int) $user->specialty_id !== $targetId) {
+                $fail('You may only create consultations for your own specialty. Ask a consultation coordinator to book this one.');
+            }
+        }];
     }
 
     /**

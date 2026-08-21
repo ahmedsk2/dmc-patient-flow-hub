@@ -101,7 +101,9 @@ class ResidualR3Test extends TestCase
 
     public function test_consultation_store_accepts_a_full_legacy_payload(): void
     {
-        $this->actingAs($this->user(User::ROLE_REGISTRAR))
+        // W1: booking into a specialty you do not belong to is the COORDINATOR capability. A unit
+        // registrar who books consults for every team is precisely who gets the flag.
+        $this->actingAs($this->user(User::ROLE_REGISTRAR, ['can_coordinate_consultations' => true]))
             ->post('/consultations', $this->consultationPayload())
             ->assertRedirect()->assertSessionHasNoErrors();
 

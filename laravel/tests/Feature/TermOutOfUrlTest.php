@@ -134,11 +134,15 @@ class TermOutOfUrlTest extends TestCase
 
     public function test_consultations_term_posts_to_the_search_sibling_and_legacy_get_redirects(): void
     {
-        $consultant = $this->user(User::ROLE_CONSULTANT);
+        // W1 scoping: the workspace is scoped to the viewer's specialty, so this fixture now states
+        // the team explicitly. What the test pins — the search TERM riding in a POST body, never a
+        // URL — is unchanged.
+        $cardio = \App\Models\Specialty::create(['name' => 'Cardiology', 'is_subspecialty' => true, 'is_external' => false]);
+        $consultant = $this->user(User::ROLE_CONSULTANT, ['specialty_id' => $cardio->id]);
         Consultation::create(['mrn' => '70000006', 'patient_name' => 'Cons Findme', 'consultation_date' => now()->toDateString(),
-            'indication' => [], 'current_location' => 'Ward']);
+            'indication' => [], 'current_location' => 'Ward', 'owning_specialty_id' => $cardio->id]);
         Consultation::create(['mrn' => '70000007', 'patient_name' => 'Cons Other', 'consultation_date' => now()->toDateString(),
-            'indication' => [], 'current_location' => 'Ward']);
+            'indication' => [], 'current_location' => 'Ward', 'owning_specialty_id' => $cardio->id]);
 
         $this->actingAs($consultant)
             ->post('/consultations/search?status=active', ['search' => 'Findme'])

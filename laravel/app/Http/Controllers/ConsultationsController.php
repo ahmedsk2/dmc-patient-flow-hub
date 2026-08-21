@@ -37,7 +37,11 @@ class ConsultationsController extends Controller
         $mine = ($filters['scope'] ?? '') === 'mine';
         $reasons = ConsultationReason::pluck('name', 'id');
 
+        // W1: specialty scoping is enforced HERE, server-side. The UI never decides who sees what.
+        $viewer = Auth::user();
+
         $consultations = Consultation::query()
+            ->visibleTo($viewer)
             ->with('consultant:id,full_name,name')
             ->when($status === 'active', fn ($q) => $q->whereNull('signoff_date'))
             ->when($status === 'signed', fn ($q) => $q->whereNotNull('signoff_date'))
@@ -72,10 +76,13 @@ class ConsultationsController extends Controller
             // INTERNAL specialty when "to service" matches one
             'specialties' => Specialty::orderBy('name')->get(['id', 'name', 'is_external']),
             'stats' => [
-                'active' => Consultation::whereNull('signoff_date')->count(),
-                'total' => Consultation::count(),
+                // every counter is scoped the same way as the list — a headline the viewer cannot
+                // drill into would be a lie about their own book
+                'active' => Consultation::visibleTo($viewer)->whereNull('signoff_date')->count(),
+                'total' => Consultation::visibleTo($viewer)->count(),
                 // personal counter for consultant-role viewers (K1-13): own active out of total active
-                'mine_active' => Consultation::whereNull('signoff_date')->where('consultant_id', Auth::id())->count(),
+                'mine_active' => Consultation::visibleTo($viewer)->whereNull('signoff_date')
+                    ->where('consultant_id', Auth::id())->count(),
             ],
             'reasons' => $reasons->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
             'consultants' => User::consultantOptions(),
@@ -88,11 +95,16 @@ class ConsultationsController extends Controller
         $data = $request->validated();
 
         $patient = Patient::where('mrn', $data['mrn'])->first();
+        // W1: the owning team is RESOLVED server-side from to_service (internal specialties only).
+        // An external/free-text service resolves to NULL — the Unassigned bucket. Never guessed,
+        // and never accepted from the payload.
         $c = Consultation::create([
             ...$data,
             'patient_id' => $patient?->id,
+            'owning_specialty_id' => self::resolveOwningSpecialtyId($data['to_service'] ?? null),
+            'requested_at' => now(),                     // REAL request time — cutover onward only
             'indication' => $data['indication'] ?? [],
-            'entered_by' => Auth::id(),                  // session-sourced
+            'entered_by' => Auth::id(),                  // session-sourced, immutable
         ]);
         Audit::log('consultation.create', 'consultation', (string) $c->id, ['mrn' => $data['mrn']]);
 
@@ -164,5 +176,24 @@ class ConsultationsController extends Controller
         // W0: soft delete — say so, so nobody believes the record is gone for good.
         return back()->with('flash', ['type' => 'success',
             'message' => 'Consultation removed from the ledger. An admin can restore it from Recently Deleted.']);
+    }
+
+    /**
+     * Map a `to_service` name onto the owning IM subspecialty (case-insensitive, internal only) —
+     * the same matching rule as the W1 backfill migration, so a row created today and a row
+     * backfilled yesterday land in the same book. Anything unmatched (external services, free text)
+     * returns NULL: Unassigned. Shared with ConsultationRequest's own-specialty rule.
+     */
+    public static function resolveOwningSpecialtyId(?string $toService): ?int
+    {
+        $wanted = mb_strtolower(trim((string) $toService));
+        if ($wanted === '') {
+            return null;
+        }
+
+        $match = Specialty::where('is_external', false)->get(['id', 'name'])
+            ->first(fn (Specialty $s) => mb_strtolower(trim((string) $s->name)) === $wanted);
+
+        return $match?->id;
     }
 }
