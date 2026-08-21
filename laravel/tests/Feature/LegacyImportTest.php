@@ -453,6 +453,96 @@ class LegacyImportTest extends TestCase
             'a specialty that no longer exists after the rebuild becomes NULL (Unassigned), never a different team');
     }
 
+    /**
+     * The ledger added three more id-bearing columns that a rebuild invalidates just as thoroughly
+     * as patient_id/consultant_id/entered_by:
+     *   - owning_specialty_id — external services are re-inserted at FRESH auto-increment ids, so a
+     *     stored id can point at a different service afterwards. Re-resolve by NAME.
+     *   - admission_id — `admissions` is rebuilt wholesale; only rows carrying a legacy_id can be
+     *     found again. An app-created admission does not survive, so NULL is the honest answer.
+     *   - signed_off_by — a user id, needing exactly the same users.legacy_id remap as consultant_id.
+     * Missing any of these is worse than deletion: the row still looks correct while pointing at the
+     * wrong specialty, the wrong stay, or the wrong signing clinician.
+     */
+    public function test_preserved_consultations_relink_specialty_admission_and_signer(): void
+    {
+        $this->seedLegacy();
+        $L = DB::connection('legacy');
+        // The natural keys this test re-resolves against must EXIST in the rebuilt data, so seed the
+        // legacy rows the rebuild will recreate them from.
+        $L->table('other_specialities')->insert([['id' => 1, 'specilaity' => 'Dietary']]);
+        $L->table('members')->insert([
+            'member_id' => 4242, 'member_name' => 'doc4242', 'full_name' => 'Dr Signer',
+            'member_password' => '$2y$04$abcdefghijklmnopqrstuv', 'position' => 3,
+            'specialty_id' => 1, 'active' => 1, 'on_service' => 1,
+        ]);
+        $L->table('picupatients')->insert([
+            'ID' => 990001, 'MRN' => '77001122', 'PNAME' => 'Relink Pt', 'ADMDATE' => '2024-03-01',
+            'current_location' => 'Ward',
+        ]);
+
+        // An EXTERNAL specialty: re-inserted with a FRESH auto-increment id by importReference(),
+        // so its id before and after the import differ — the case a naive id-carry would corrupt.
+        $extId = DB::table('specialties')->insertGetId([
+            'name' => 'Dietary', 'is_subspecialty' => true, 'is_external' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $signer = \App\Models\User::create([
+            'username' => 'w1a_signer', 'name' => 'W1a Signer', 'email' => 'w1a.signer@test.local',
+            'password' => 'secret12345', 'role' => \App\Models\User::ROLE_CONSULTANT, 'active' => 1,
+            'legacy_id' => 4242,                          // a LEGACY user — its id WILL be re-seeded
+        ]);
+        $patient = \App\Models\Patient::create(['mrn' => '77001122', 'name' => 'Relink Pt']);
+        $legacyAdm = \App\Models\Admission::create([
+            'patient_id' => $patient->id, 'admit_date' => '2024-03-01', 'legacy_id' => 990001,
+        ]);
+        $appAdm = \App\Models\Admission::create([
+            'patient_id' => $patient->id, 'admit_date' => '2024-03-02',   // no legacy_id — cannot survive
+        ]);
+
+        $withLegacyAdm = \App\Models\Consultation::create([
+            'mrn' => '77001122', 'patient_id' => $patient->id, 'patient_name' => 'Relink Pt',
+            'indication' => [], 'to_service' => 'Dietary', 'owning_specialty_id' => $extId,
+            'admission_id' => $legacyAdm->id, 'signed_off_by' => $signer->id,
+            'signoff_date' => '2024-03-05', 'status' => \App\Models\Consultation::STATUS_SIGNED_OFF,
+        ]);
+        $withAppAdm = \App\Models\Consultation::create([
+            'mrn' => '77001122', 'patient_id' => $patient->id, 'patient_name' => 'Relink Pt',
+            'indication' => [], 'to_service' => 'Dietary', 'owning_specialty_id' => $extId,
+            'admission_id' => $appAdm->id, 'status' => \App\Models\Consultation::STATUS_ONGOING,
+        ]);
+        \App\Models\Setting::current()->update(['consultations_source_of_truth' => true]);
+
+        $this->artisan('legacy:import')->assertExitCode(0);
+
+        $a = DB::table('consultations')->where('id', $withLegacyAdm->id)->first();
+        $b = DB::table('consultations')->where('id', $withAppAdm->id)->first();
+
+        // specialty re-resolved BY NAME onto whatever id the rebuild assigned
+        $newExtId = DB::table('specialties')->whereRaw('LOWER(name) = ?', ['dietary'])->value('id');
+        $this->assertNotNull($newExtId);
+        $this->assertNotSame($extId, (int) $newExtId,
+            'precondition: the rebuild must actually move the external service to a different id');
+        $this->assertSame((int) $newExtId, (int) $a->owning_specialty_id,
+            'owning_specialty_id must follow the specialty NAME across a rebuild, not its old id');
+
+        // admission re-resolved via admissions.legacy_id
+        $newAdmId = DB::table('admissions')->where('legacy_id', 990001)->value('id');
+        $this->assertNotNull($newAdmId);
+        $this->assertSame((int) $newAdmId, (int) $a->admission_id);
+
+        // an app-created admission does not survive the rebuild — NULL, never a stale/wrong id
+        $this->assertNull($b->admission_id,
+            'a consult pointing at an app-created admission must be NULLed, not left pointing at a rebuilt row');
+
+        // signer remapped by users.legacy_id, exactly like consultant_id
+        $newSignerId = DB::table('users')->where('legacy_id', 4242)->value('id');
+        $this->assertNotNull($newSignerId);
+        $this->assertNotSame($signer->id, (int) $newSignerId,
+            'precondition: the rebuild must actually re-seed the signing user id');
+        $this->assertSame((int) $newSignerId, (int) $a->signed_off_by);
+    }
+
     public function test_import_still_rebuilds_consultations_when_the_flag_is_off(): void
     {
         $this->seedLegacy();

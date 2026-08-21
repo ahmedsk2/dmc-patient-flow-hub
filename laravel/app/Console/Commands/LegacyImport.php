@@ -134,17 +134,27 @@ class LegacyImport extends Command
      * auto-increment reaches next. Carrying the raw id across would silently hand a preserved
      * consult to a different team, which is precisely how a patient gets hidden from the team that
      * is actually seeing them.
+     *
+     * `signed_off_by` is a user id and needs exactly the same users.legacy_id remap as
+     * `consultant_id`. `admission_id` points into a table that is rebuilt wholesale, so capture the
+     * admission's own legacy_id — the only key that can find the same stay again. Both columns look
+     * correct after a rebuild while silently naming the wrong clinician or the wrong stay, which is
+     * worse than losing them outright.
      */
     private function captureConsultationLinks(): array
     {
         return DB::table('consultations as c')
             ->leftJoin('users as cu', 'cu.id', '=', 'c.consultant_id')
             ->leftJoin('users as eu', 'eu.id', '=', 'c.entered_by')
+            ->leftJoin('users as su', 'su.id', '=', 'c.signed_off_by')
             ->leftJoin('specialties as os', 'os.id', '=', 'c.owning_specialty_id')
-            ->selectRaw('c.id, c.mrn, c.patient_id, c.consultant_id, c.entered_by,
+            ->leftJoin('admissions as ad', 'ad.id', '=', 'c.admission_id')
+            ->selectRaw('c.id, c.mrn, c.patient_id, c.consultant_id, c.entered_by, c.signed_off_by,
                          c.owning_specialty_id, os.name owning_specialty_name,
+                         c.admission_id, ad.legacy_id admission_legacy_id,
                          cu.id consultant_row_id, cu.legacy_id consultant_legacy_id,
-                         eu.id entered_by_row_id, eu.legacy_id entered_by_legacy_id')
+                         eu.id entered_by_row_id, eu.legacy_id entered_by_legacy_id,
+                         su.id signed_off_by_row_id, su.legacy_id signed_off_by_legacy_id')
             ->get()->map(fn ($r) => (array) $r)->all();
     }
 
@@ -192,18 +202,32 @@ class LegacyImport extends Command
             return $key === '' ? null : ($specialtyByName[$key] ?? null);
         };
 
-        $fields = ['patient_id', 'consultant_id', 'entered_by', 'owning_specialty_id'];
+        // Admissions are rebuilt wholesale from the legacy dump; only rows carrying a legacy_id can
+        // be found again. An admission this application created itself is absent from the dump and
+        // simply does not survive — NULL is the honest answer, because the id it used to hold now
+        // belongs to some other patient's stay.
+        $admissionByLegacy = DB::table('admissions')->whereNotNull('legacy_id')
+            ->pluck('id', 'legacy_id')->all();
+        $remapAdmission = function ($currentId, $legacyId) use ($admissionByLegacy) {
+            if ($currentId === null || $legacyId === null) { return null; }
+            return $admissionByLegacy[(int) $legacyId] ?? null;
+        };
+
+        $fields = ['patient_id', 'consultant_id', 'entered_by', 'signed_off_by',
+            'owning_specialty_id', 'admission_id'];
         $changed = 0;
         $lost = array_fill_keys($fields, []);
 
-        DB::transaction(function () use ($links, $remapUser, $remapSpecialty, $id, $fields, $patientMap, &$changed, &$lost) {
+        DB::transaction(function () use ($links, $remapUser, $remapSpecialty, $remapAdmission, $id, $fields, $patientMap, &$changed, &$lost) {
             foreach ($links as $l) {
                 $mrn = mb_substr(trim((string) ($l['mrn'] ?? '')), 0, 64);
                 $new = [
                     'patient_id' => $mrn === '' ? null : ($patientMap[$mrn] ?? null),
                     'consultant_id' => $remapUser($l['consultant_id'], $l['consultant_row_id'], $l['consultant_legacy_id']),
                     'entered_by' => $remapUser($l['entered_by'], $l['entered_by_row_id'], $l['entered_by_legacy_id']),
+                    'signed_off_by' => $remapUser($l['signed_off_by'], $l['signed_off_by_row_id'], $l['signed_off_by_legacy_id']),
                     'owning_specialty_id' => $remapSpecialty($l['owning_specialty_id'], $l['owning_specialty_name']),
+                    'admission_id' => $remapAdmission($l['admission_id'], $l['admission_legacy_id']),
                 ];
                 $unchanged = true;
                 foreach ($fields as $field) {
@@ -220,7 +244,7 @@ class LegacyImport extends Command
             }
         });
 
-        $this->info("  preserved consultations re-linked: {$changed} row(s) re-pointed at the rebuilt patient/user/specialty ids");
+        $this->info("  preserved consultations re-linked: {$changed} row(s) re-pointed at the rebuilt patient/user/specialty/admission ids");
 
         foreach ($lost as $field => $ids) {
             if ($ids === []) { continue; }
@@ -230,8 +254,9 @@ class LegacyImport extends Command
                 . ' row(s) — consultation id(s) ' . implode(', ', $shown)
                 . ($more > 0 ? " … and {$more} more" : '') . '. '
                 . 'The record each pointed at no longer exists after the rebuild and has no natural-key '
-                . 'match in the new data (patients match on mrn, users on legacy_id, specialties on '
-                . 'name — anything created inside THIS app is absent from the legacy dump), so the link '
+                . 'match in the new data (patients match on mrn, users and admissions on legacy_id, '
+                . 'specialties on name — anything created inside THIS app is absent from the legacy '
+                . 'dump), so the link '
                 . 'was set to NULL instead of left pointing at a different record. The consultations '
                 . 'themselves are intact (mrn/patient_name/to_service survive); re-link them once the '
                 . 'missing record exists again. Until then, ledger queries that join on this column '
