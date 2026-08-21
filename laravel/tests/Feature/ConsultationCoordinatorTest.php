@@ -78,6 +78,52 @@ class ConsultationCoordinatorTest extends TestCase
         $this->assertTrue($coordinator->canModifyConsultation($c), 'coordinators modify all');
         $this->assertFalse($nephroUser->canModifyConsultation($c));
         $this->assertFalse($observer->canModifyConsultation($c));
+
+        // ---- the NULL-specialty leak guard ------------------------------------------------------
+        // 294 of 331 live users have no specialty_id and 119 of 1,283 live consultations have no
+        // owning_specialty_id (the backfill resolves owning specialty by name; unmatched rows stay
+        // NULL). Drop the `specialty_id !== null` guard in canSeeConsultation() and NULL === NULL
+        // matches, handing every one of those users every one of those consults. Unassigned rows are
+        // for admins and coordinators only.
+        $noSpecialtyUser = $this->user(User::ROLE_CONSULTANT);
+        $unassigned = Consultation::create([
+            'mrn' => '79000003', 'patient_name' => 'Unassigned Pt', 'consultation_date' => '2024-05-01',
+            'to_service' => 'Cardiology', 'owning_specialty_id' => null, 'indication' => [],
+            'entered_by' => $coordinator->id,
+        ]);
+
+        $this->assertNull($noSpecialtyUser->specialty_id);
+        $this->assertNull($unassigned->owning_specialty_id);
+        $this->assertFalse(
+            $noSpecialtyUser->canSeeConsultation($unassigned),
+            'a user with no specialty must not match a consult with no owning specialty'
+        );
+        $this->assertFalse($noSpecialtyUser->canModifyConsultation($unassigned));
+
+        // ---- the ownership fallback (deliberately WIDER than the specialty rule) -----------------
+        // You keep sight of a consult assigned to you, or one you entered, even from another team —
+        // otherwise a registrar who books one loses it the moment they save.
+        $assignedConsultant = $this->user(User::ROLE_CONSULTANT, ['specialty_id' => $nephro->id]);
+        $assignedToMe = Consultation::create([
+            'mrn' => '79000004', 'patient_name' => 'Assigned Pt', 'consultation_date' => '2024-05-01',
+            'to_service' => 'Cardiology', 'owning_specialty_id' => $cardio->id, 'indication' => [],
+            'consultant_id' => $assignedConsultant->id, 'entered_by' => $coordinator->id,
+        ]);
+        $this->assertTrue(
+            $assignedConsultant->canSeeConsultation($assignedToMe),
+            'the assigned consultant keeps sight of it even from another specialty'
+        );
+
+        $enterer = $this->user(User::ROLE_REGISTRAR, ['specialty_id' => $nephro->id]);
+        $enteredByMe = Consultation::create([
+            'mrn' => '79000005', 'patient_name' => 'Entered Pt', 'consultation_date' => '2024-05-01',
+            'to_service' => 'Cardiology', 'owning_specialty_id' => $cardio->id, 'indication' => [],
+            'entered_by' => $enterer->id,
+        ]);
+        $this->assertTrue(
+            $enterer->canSeeConsultation($enteredByMe),
+            'whoever booked it keeps sight of it even from another specialty'
+        );
     }
 
     public function test_a_coordinator_does_not_gain_sign_off(): void
