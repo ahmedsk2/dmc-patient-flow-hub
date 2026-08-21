@@ -31,10 +31,12 @@ class LegacyImport extends Command
         $this->ensureMemory('1024M');
 
         // ── Consultation ledger W0: cutover safety gate ────────────────────────────────────────
-        // Read the flag BEFORE anything is truncated: `settings` is itself rebuilt below, so this is
-        // the last moment the stored value is readable. Query the table directly rather than through
+        // Read `settings` BEFORE anything is truncated: the table is itself rebuilt below, so this is
+        // the last moment the stored values are readable. Query the table directly rather than through
         // Setting::current(), which memoises per-request and would go stale across the rebuild.
-        $preserveConsultations = (bool) DB::table('settings')->orderBy('id')->value('consultations_source_of_truth');
+        $settingsRow = DB::table('settings')->orderBy('id')->first();
+        $preserveConsultations = (bool) ($settingsRow->consultations_source_of_truth ?? false);
+        $carriedSettings = $this->appOwnedSettings($settingsRow);
 
         if ($this->option('wipe-consultations') && $preserveConsultations) {
             $this->error('Refusing to wipe consultations: settings.consultations_source_of_truth is ON, '
@@ -88,7 +90,7 @@ class LegacyImport extends Command
         } else {
             $this->importConsultations($userMap, $patientMap);
         }
-        $this->importSettings($preserveConsultations);
+        $this->importSettings($carriedSettings);
 
         $this->newLine();
         $this->info('✔ Import complete.');
@@ -111,7 +113,8 @@ class LegacyImport extends Command
             ->leftJoin('users as cu', 'cu.id', '=', 'c.consultant_id')
             ->leftJoin('users as eu', 'eu.id', '=', 'c.entered_by')
             ->selectRaw('c.id, c.mrn, c.patient_id, c.consultant_id, c.entered_by,
-                         cu.legacy_id consultant_legacy_id, eu.legacy_id entered_by_legacy_id')
+                         cu.id consultant_row_id, cu.legacy_id consultant_legacy_id,
+                         eu.id entered_by_row_id, eu.legacy_id entered_by_legacy_id')
             ->get()->map(fn ($r) => (array) $r)->all();
     }
 
@@ -119,33 +122,95 @@ class LegacyImport extends Command
      * Re-point preserved consultations at the rebuilt rows. Writes through the query builder on
      * purpose: this is a mechanical re-link, not a clinical edit, so it must not touch updated_at,
      * fire model events, or bust caches. An unresolvable reference becomes NULL (the columns are all
-     * nullable, nullOnDelete) rather than a dangling id pointing at a different human being.
+     * nullable, nullOnDelete) rather than a dangling id pointing at a different human being — and
+     * every reference that is nulled this way is reported loudly, because a lost link is a real (if
+     * recoverable) data change, not a successful re-link.
+     *
+     * The loop runs in ONE transaction. `legacy:import` as a whole cannot be transactional (TRUNCATE
+     * forces an implicit commit) and this natural-key snapshot lives only in memory, so a crash
+     * part-way through would leave some rows re-pointed and some not, with no way to reconstruct the
+     * mapping on a retry. All-or-nothing at least keeps the surviving state coherent. See
+     * docs/DEPLOY-LARAVEL.md §3(b): a failed import while the gate is ON requires a database restore
+     * before retrying.
      */
     private function relinkPreservedConsultations(array $links, array $userMap, array $patientMap): void
     {
-        $remapUser = function ($currentId, $legacyId) use ($userMap) {
-            if ($currentId === null) { return null; }
+        // A NULL join row-id means the referenced user does not exist AT ALL (a dangling id, e.g. left
+        // behind by a half-finished earlier run). That is unresolvable — it is NOT "app-created user,
+        // keep the id", which is the case where the row exists but carries no legacy_id.
+        $remapUser = function ($currentId, $rowId, $legacyId) use ($userMap) {
+            if ($currentId === null || $rowId === null) { return null; }
             if ($legacyId === null) { return (int) $currentId; }   // app-created user — its id survived
             return $userMap[(int) $legacyId] ?? null;              // legacy user — new id, or gone
         };
+        $id = fn ($v) => $v === null ? null : (int) $v;
 
         $changed = 0;
-        foreach ($links as $l) {
-            $mrn = mb_substr(trim((string) ($l['mrn'] ?? '')), 0, 64);
-            $new = [
-                'patient_id' => $mrn === '' ? null : ($patientMap[$mrn] ?? null),
-                'consultant_id' => $remapUser($l['consultant_id'], $l['consultant_legacy_id']),
-                'entered_by' => $remapUser($l['entered_by'], $l['entered_by_legacy_id']),
-            ];
-            if ((int) $new['patient_id'] === (int) $l['patient_id']
-                && (int) $new['consultant_id'] === (int) $l['consultant_id']
-                && (int) $new['entered_by'] === (int) $l['entered_by']) {
-                continue;
+        $lost = ['patient_id' => [], 'consultant_id' => [], 'entered_by' => []];
+
+        DB::transaction(function () use ($links, $remapUser, $id, $patientMap, &$changed, &$lost) {
+            foreach ($links as $l) {
+                $mrn = mb_substr(trim((string) ($l['mrn'] ?? '')), 0, 64);
+                $new = [
+                    'patient_id' => $mrn === '' ? null : ($patientMap[$mrn] ?? null),
+                    'consultant_id' => $remapUser($l['consultant_id'], $l['consultant_row_id'], $l['consultant_legacy_id']),
+                    'entered_by' => $remapUser($l['entered_by'], $l['entered_by_row_id'], $l['entered_by_legacy_id']),
+                ];
+                foreach (['patient_id', 'consultant_id', 'entered_by'] as $field) {
+                    if ($id($l[$field]) !== null && $id($new[$field]) === null) {
+                        $lost[$field][] = (int) $l['id'];
+                    }
+                }
+                if ($id($new['patient_id']) === $id($l['patient_id'])
+                    && $id($new['consultant_id']) === $id($l['consultant_id'])
+                    && $id($new['entered_by']) === $id($l['entered_by'])) {
+                    continue;
+                }
+                DB::table('consultations')->where('id', $l['id'])->update($new);
+                $changed++;
             }
-            DB::table('consultations')->where('id', $l['id'])->update($new);
-            $changed++;
-        }
+        });
+
         $this->info("  preserved consultations re-linked: {$changed} row(s) re-pointed at the rebuilt patient/user ids");
+
+        foreach ($lost as $field => $ids) {
+            if ($ids === []) { continue; }
+            $shown = array_slice($ids, 0, 50);
+            $more = count($ids) - count($shown);
+            $this->warn('  ⚠ preserved consultations that lost their ' . $field . ': ' . count($ids)
+                . ' row(s) — consultation id(s) ' . implode(', ', $shown)
+                . ($more > 0 ? " … and {$more} more" : '') . '. '
+                . 'The record each pointed at no longer exists after the rebuild and has no natural-key '
+                . 'match in the new data (patients match on mrn, users on legacy_id — anything created '
+                . 'inside THIS app is absent from the legacy dump), so the link was set to NULL instead '
+                . 'of left pointing at a different record. The consultations themselves are intact '
+                . '(mrn/patient_name survive); re-link them once the missing patient/user exists again. '
+                . 'Ledger queries that join on this column will skip these rows until then.');
+        }
+    }
+
+    /** `settings` columns re-derived from the legacy dump on every import — everything else is ours. */
+    private const LEGACY_SETTING_COLUMNS = ['min_hospitalist', 'max_hospitalist', 'min_subs',
+        'max_subs', 'short_los', 'long_los', 'mfa_enforcement'];
+
+    /**
+     * Snapshot of every `settings` column this application owns, taken BEFORE the rebuild. The legacy
+     * settings table carries only the operational thresholds, but this one has since grown ~15 more
+     * columns (encrypted SMTP credentials, timezone/app basics, alert thresholds, session timeout,
+     * failed-login threshold, bed counts, readmission window, audit ship/retention, and the
+     * consultation source-of-truth gate). `importSettings()` truncates and re-inserts the single row,
+     * so any column not carried across silently reverts to its schema DEFAULT — which is how a data
+     * reload would wipe the SMTP password and quietly break password-reset email.
+     */
+    private function appOwnedSettings(?object $row): array
+    {
+        if ($row === null) {
+            return [];
+        }
+
+        return collect((array) $row)
+            ->except(array_merge(self::LEGACY_SETTING_COLUMNS, ['id', 'created_at', 'updated_at']))
+            ->all();
     }
 
     private function importReference(): void
@@ -426,15 +491,16 @@ class LegacyImport extends Command
     }
 
     /**
-     * Rebuild the single settings row from legacy. `consultations_source_of_truth` has no legacy
-     * counterpart, so it is CARRIED THROUGH from the value read at the top of handle(); otherwise
-     * the first import would silently reset the gate to false and the second would destroy the
-     * ledger it was installed to protect.
+     * Rebuild the single settings row from legacy. Only LEGACY_SETTING_COLUMNS come from the dump;
+     * every app-owned column is CARRIED THROUGH from the snapshot taken at the top of handle()
+     * (see appOwnedSettings()). That is what stops the first import silently resetting
+     * `consultations_source_of_truth` to false — after which the second would destroy the ledger the
+     * gate was installed to protect — and equally what stops it wiping the encrypted SMTP password.
      */
-    private function importSettings(bool $preserveConsultations): void
+    private function importSettings(array $carried): void
     {
         $s = $this->legacy->table('settings')->where('id', 0)->first();
-        DB::table('settings')->insert([
+        DB::table('settings')->insert(array_merge($carried, [
             'id' => 1,
             'min_hospitalist' => (int) ($s->min_hospitalist ?? 6),
             'max_hospitalist' => (int) ($s->max_hospitalist ?? 30),
@@ -443,10 +509,9 @@ class LegacyImport extends Command
             'short_los' => (int) ($s->short_los ?? 5),
             'long_los' => (int) ($s->long_los ?? 11),
             'mfa_enforcement' => (int) ($s->mfa_enforcement ?? 0),
-            'consultations_source_of_truth' => $preserveConsultations,
             'created_at' => now(), 'updated_at' => now(),
-        ]);
-        $this->info('  settings imported');
+        ]));
+        $this->info('  settings imported (' . count($carried) . ' app-owned column(s) carried through)');
     }
 
     /** Legacy nationality strings are kept as-is (dirty values stay editable) — blank becomes NULL. */

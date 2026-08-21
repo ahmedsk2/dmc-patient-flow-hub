@@ -68,6 +68,23 @@ Pick **one**:
   refresh an already-populated target with a newer legacy dump, just re-run `legacy:import` (it
   truncates and re-derives).
 
+> **Consultation cutover gate.** Once the doctors enter consultations *here* rather than in the legacy
+> app, set `settings.consultations_source_of_truth = 1` (Control -> System). With the gate ON,
+> `legacy:import` no longer truncates or re-imports `consultations`: it preserves them and re-points
+> each one at the rebuilt patient/user rows by natural key (`patients.mrn`, `users.legacy_id`).
+> App-owned `settings` columns (SMTP credentials, timezone, thresholds, the gate itself) are likewise
+> carried across the rebuild. Two operational rules follow:
+>
+> - **Read the import output.** Any consultation whose patient or user cannot be resolved after the
+>   rebuild is reported as `preserved consultations that lost their <column>` with the affected
+>   consultation ids, and that link is set to NULL. This is expected for patients created inside this
+>   app (they are not in the legacy dump). The rows keep their `mrn`/`patient_name` and can be
+>   re-linked, but ledger reports that join on the column skip them until you do.
+> - **A FAILED import while the gate is ON requires a database restore before retrying.** The command
+>   cannot run in one transaction (TRUNCATE forces a commit) and the re-link mapping is held only in
+>   memory, so a crash after the user rebuild leaves preserved consultations pointing at the previous
+>   generation's ids - and a retry cannot recover the mapping. Always take a `mysqldump` first.
+
 ## 4. First-login / app configuration (in the UI, as an admin)
 
 - [ ] **Control â†’ Settings:** set the real **Licensed ward beds** and **ICU beds** (occupancy is wrong

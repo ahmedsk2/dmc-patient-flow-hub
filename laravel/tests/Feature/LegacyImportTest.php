@@ -406,8 +406,83 @@ class LegacyImportTest extends TestCase
             ->expectsOutputToContain('Refusing to wipe consultations')
             ->assertFailed();
 
-        // fail loudly and change NOTHING — not even the rest of the import
+        // Fail loudly and change NOTHING — not even the rest of the import. The refusal has to come
+        // BEFORE the truncate loop and the legacy-user delete, or the command would destroy the whole
+        // database and then abort into an unrecoverable half-state. Pin every table the truncate loop
+        // would have emptied, not just `consultations` (which is excluded from that loop anyway
+        // whenever the flag is on, so it can never detect the guard moving).
         $this->assertSame(1, DB::table('consultations')->where('id', $cxId)->count());
+        $this->assertSame(2, DB::table('patients')->count(), 'patients were not truncated');
+        $this->assertSame(0, DB::table('admissions')->count(), 'nothing was imported');
+        $this->assertSame(0, DB::table('specialties')->count(), 'the reference import never ran');
+        $this->assertNotNull(DB::table('users')->where('legacy_id', 7)->value('id'),
+            'legacy-sourced users were not deleted');
+    }
+
+    public function test_import_nulls_unresolvable_links_and_reports_them_loudly(): void
+    {
+        $this->seedLegacy();
+        [$cxId, $appUserId] = $this->seedNewSystemConsultation();
+
+        // (a) a consultation for a patient that exists ONLY in this app — its MRN is absent from the
+        //     legacy dump, so rebuilding `patients` destroys the row it points at. Post-cutover this
+        //     is the normal case (the app creates patients itself), and it must be reported, never
+        //     silently reported as a successful re-link.
+        $appOnlyPatient = \App\Models\Patient::create(['mrn' => '77777', 'name' => 'App Only Pt']);
+        $appCx = \App\Models\Consultation::create([
+            'mrn' => '77777', 'patient_id' => $appOnlyPatient->id, 'patient_name' => 'App Only Cx',
+            'consultation_date' => now()->toDateString(), 'indication' => [],
+            'to_service' => 'Hospitalist', 'entered_by' => $appUserId,
+        ]);
+
+        // (b) a DANGLING consultant_id: no `users` row carries that id (the state a half-finished
+        //     earlier import leaves behind). A missing join row must not be mistaken for
+        //     "app-created user, keep the id" — carrying it forward would attach the consult to
+        //     whoever inherits that id later, or blow up the FK.
+        Schema::disableForeignKeyConstraints();
+        DB::table('consultations')->where('id', $cxId)->update(['consultant_id' => 999999]);
+        Schema::enableForeignKeyConstraints();
+
+        \App\Models\Setting::current()->update(['consultations_source_of_truth' => true]);
+
+        $this->artisan('legacy:import')
+            ->expectsOutputToContain('lost their patient_id')
+            ->expectsOutputToContain('lost their consultant_id')
+            ->assertSuccessful();
+
+        $this->assertNull(DB::table('consultations')->where('id', $appCx->id)->value('patient_id'),
+            'a patient that only ever existed in this app is gone after the rebuild');
+        $this->assertSame('77777', DB::table('consultations')->where('id', $appCx->id)->value('mrn'),
+            'mrn/patient_name survive, so the link is recoverable once the patient exists again');
+        $this->assertNull(DB::table('consultations')->where('id', $cxId)->value('consultant_id'),
+            'a dangling user id is nulled, never carried forward verbatim');
+    }
+
+    public function test_import_carries_through_every_app_owned_settings_column(): void
+    {
+        $this->seedLegacy();
+        \App\Models\Setting::current()->update([
+            'consultations_source_of_truth' => true,
+            'app_timezone' => 'Asia/Riyadh',
+            'mail_host' => 'smtp.example.test',
+            'mail_password' => 'super-secret',
+            'audit_retention_years' => 9,
+        ]);
+        $encrypted = DB::table('settings')->orderBy('id')->value('mail_password');
+
+        $this->artisan('legacy:import')->assertSuccessful();
+
+        // `settings` is truncated and rebuilt from the legacy row, which has none of these columns.
+        // Every app-owned column must be carried across the rebuild — wiping mail_password would
+        // silently break password-reset email on the next data reload.
+        $row = DB::table('settings')->orderBy('id')->first();
+        $this->assertSame(1, (int) $row->consultations_source_of_truth);
+        $this->assertSame('Asia/Riyadh', $row->app_timezone);
+        $this->assertSame('smtp.example.test', $row->mail_host);
+        $this->assertSame($encrypted, $row->mail_password, 'the encrypted SMTP password survives verbatim');
+        $this->assertSame(9, (int) $row->audit_retention_years);
+        // legacy-sourced operational thresholds still come from the legacy row
+        $this->assertSame(6, (int) $row->min_hospitalist);
     }
 
     public function test_import_still_imports_everything_else_while_consultations_are_preserved(): void
