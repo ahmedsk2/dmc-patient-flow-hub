@@ -2,8 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\Admission;
 use App\Models\Consultation;
+use App\Models\Patient;
 use App\Models\Specialty;
+use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -71,5 +75,78 @@ class ConsultationLedgerSchemaTest extends TestCase
         // the consult row SURVIVES with a NULL owner (Unassigned) — clinical data is never destroyed
         $this->assertNotNull(DB::table('consultations')->where('id', $c->id)->first());
         $this->assertNull(DB::table('consultations')->where('id', $c->id)->value('owning_specialty_id'));
+    }
+
+    public function test_admission_deletion_nulls_the_fk_without_destroying_the_consultation(): void
+    {
+        $patient = Patient::create(['mrn' => (string) random_int(10000000, 99999999), 'name' => 'FK Admission Pt']);
+        $admission = Admission::create([
+            'patient_id' => $patient->id, 'admit_date' => now()->subDays(3)->toDateString(),
+            'current_location' => 'Ward', 'is_longterm' => 0, 'is_new_assignment' => 0,
+        ]);
+
+        $c = Consultation::create([
+            'mrn' => '77000003', 'patient_name' => 'Admission-linked Pt', 'consultation_date' => '2024-03-03',
+            'to_service' => 'Cardiology', 'indication' => [], 'admission_id' => $admission->id,
+        ]);
+
+        DB::table('admissions')->where('id', $admission->id)->delete();
+
+        // the consult row SURVIVES with a NULL admission link — deleting the stay must not
+        // hard-delete the consultation (admissions are soft-deleted in app code; this proves the
+        // DB-level FK action itself is SET NULL, not CASCADE).
+        $this->assertNotNull(DB::table('consultations')->where('id', $c->id)->first());
+        $this->assertNull(DB::table('consultations')->where('id', $c->id)->value('admission_id'));
+    }
+
+    public function test_signed_off_by_user_deletion_nulls_the_fk_without_destroying_the_consultation(): void
+    {
+        $signer = User::create([
+            'username' => 'ledger_fk_' . substr(md5(uniqid('', true)), 0, 10),
+            'name' => 'Ledger FK Signer', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT,
+            'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
+        ]);
+
+        $c = Consultation::create([
+            'mrn' => '77000004', 'patient_name' => 'Signed-off-by-linked Pt', 'consultation_date' => '2024-03-04',
+            'to_service' => 'Cardiology', 'indication' => [], 'signed_off_by' => $signer->id,
+        ]);
+
+        DB::table('users')->where('id', $signer->id)->delete();
+
+        // the consult row SURVIVES with a NULL signed_off_by — deleting the signing user must not
+        // hard-delete the consultation (users are soft-deleted in app code; this proves the
+        // DB-level FK action itself is SET NULL, not CASCADE).
+        $this->assertNotNull(DB::table('consultations')->where('id', $c->id)->first());
+        $this->assertNull(DB::table('consultations')->where('id', $c->id)->value('signed_off_by'));
+    }
+
+    public function test_requested_at_and_signed_off_at_retain_the_time_component(): void
+    {
+        // requested_at/signed_off_at exist precisely because consultation_date/signoff_date are
+        // DATE columns that cannot carry a clock time (the W4 time-to-response medians depend on
+        // it). A round-trip through a plain string DATE (or VARCHAR) column would truncate the
+        // time to midnight; this pins that the columns are real DATETIMEs.
+        $id = DB::table('consultations')->insertGetId([
+            'mrn' => '77000005', 'patient_name' => 'Timed Pt', 'age' => 40, 'bed' => 'W-2',
+            'current_location' => 'Ward', 'consultation_date' => '2024-03-01',
+            'consultation_from' => 'ER', 'to_service' => 'Cardiology', 'indication' => '[]',
+            'requested_at' => '2024-03-01 14:37:00',
+            'signed_off_at' => '2024-03-02 09:05:30',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $row = DB::table('consultations')->where('id', $id)->first();
+
+        $this->assertSame(
+            '2024-03-01 14:37:00',
+            (string) $row->requested_at,
+            'requested_at must be a real datetime — the time component must survive the round-trip'
+        );
+        $this->assertSame(
+            '2024-03-02 09:05:30',
+            (string) $row->signed_off_at,
+            'signed_off_at must be a real datetime — the time component must survive the round-trip'
+        );
     }
 }
