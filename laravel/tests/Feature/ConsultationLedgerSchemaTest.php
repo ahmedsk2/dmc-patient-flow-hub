@@ -249,4 +249,33 @@ class ConsultationLedgerSchemaTest extends TestCase
 
         $this->assertSame(0, DB::table('consultation_followups')->where('consultation_id', $c->id)->count());
     }
+
+    // ---- Task 7: the coordinator capability flag ------------------------------------------------
+
+    public function test_users_have_a_coordinator_flag_that_defaults_off(): void
+    {
+        $this->assertTrue(Schema::hasColumn('users', 'can_coordinate_consultations'));
+
+        $u = \App\Models\User::create([
+            'username' => 'w1_default_' . substr(md5(uniqid('', true)), 0, 8),
+            'name' => 'W1 Default', 'password' => 'secret12345',
+            'role' => \App\Models\User::ROLE_CONSULTANT, 'active' => 1,
+            'mfa_secret' => \App\Support\Totp::secret(), 'mfa_enrolled_at' => now(),
+        ]);
+
+        // default OFF: granting coordination is an explicit administrative act
+        $this->assertSame(0, (int) DB::table('users')->where('id', $u->id)->value('can_coordinate_consultations'));
+    }
+
+    public function test_existing_users_are_unaffected_by_the_new_flag(): void
+    {
+        // a row written the way the legacy importer writes users (no capability columns at all)
+        $id = DB::table('users')->insertGetId([
+            'username' => 'w1_legacy_' . substr(md5(uniqid('', true)), 0, 8),
+            'name' => 'W1 Legacy', 'password' => 'x', 'role' => 4, 'active' => 1,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->assertSame(0, (int) DB::table('users')->where('id', $id)->value('can_coordinate_consultations'));
+    }
 }
