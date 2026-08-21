@@ -56,6 +56,8 @@ const sForm = useForm({
     dq_los_multiplier: props.settings.dq_los_multiplier ?? 2,
     // Trusted device (2026-07-19) — hours a browser may skip the TOTP code for; 0 = feature off.
     mfa_trusted_device_hours: props.settings.mfa_trusted_device_hours ?? 24,
+    // Consultation ledger cutover gate — see ControlController::updateSettings().
+    consultations_source_of_truth: props.settings.consultations_source_of_truth ?? false,
 });
 const saveSettings = guardSubmit(sForm, () => sForm.put('/control/settings', { preserveScroll: true }));
 
@@ -218,6 +220,12 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
                 <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Failed-login alert threshold</span><input v-model="sForm.failed_login_notify_threshold" type="number" min="0" max="50" :class="field" /><span class="mt-1 block text-xs text-ink-400">Notify admins after this many failed logins for one account in 10 minutes; 0 disables it.</span></label>
                 <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Data-quality LOS multiplier</span><input v-model="sForm.dq_los_multiplier" type="number" min="1" max="10" :class="field" /><span class="mt-1 block text-xs text-ink-400">Flag active non-long-term episodes with LOS &gt; Long&nbsp;LOS × this (default 2).</span></label>
                 <label class="block sm:col-span-2"><span class="mb-1 block text-sm font-semibold text-ink-700">Trusted-device window (hours)</span><input v-model="sForm.mfa_trusted_device_hours" type="number" min="0" max="720" :class="field" /><span class="mt-1 block text-xs text-ink-400">0 turns the trusted-device option off. Changing this does not shorten windows already granted.</span></label>
+            </div>
+
+            <!-- Consultation ledger cutover gate -->
+            <h4 class="mb-1 mt-6 font-bold text-ink-800">Consultation ledger</h4>
+            <div class="grid gap-4 sm:grid-cols-2">
+                <label class="block sm:col-span-2"><span class="mb-1 flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" v-model="sForm.consultations_source_of_truth" class="rounded text-brand-600" /> Consultations: this system is the source of truth</span><span class="mt-1 block text-xs text-ink-400">When on, importing legacy data preserves the consultation ledger instead of rebuilding it. Turn this on at cutover.</span></label>
             </div>
 
             <div class="mt-5 flex items-center gap-3">

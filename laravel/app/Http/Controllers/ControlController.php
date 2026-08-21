@@ -108,6 +108,10 @@ class ControlController extends Controller
             'dq_los_multiplier' => ['required', 'integer', 'min:1', 'max:10'],
             // Phase 2, Item 3 — break-glass: also log per-record detail opens (default off)
             'log_record_opens' => ['sometimes', 'boolean'],
+            // The consultation-ledger cutover gate. When true, `legacy:import` preserves the
+            // consultations table instead of truncating it (see LegacyImport::handle()). Flipping this
+            // ON is what makes the new system the source of truth for consultations.
+            'consultations_source_of_truth' => ['sometimes', 'boolean'],
             // Phase 1, Item 4 — dashboard alert thresholds (clinician-tunable)
             'alert_overcensus_pct' => ['required', 'integer', 'min:50', 'max:200'],
             'alert_boarding_max' => ['required', 'integer', 'min:0', 'max:100'],
