@@ -39,9 +39,18 @@ class DashboardController extends Controller
         $admissionsToday = (int) DB::table('admissions')->whereDate('admit_date', $today)->whereRaw($this->nonIcu)->whereNull('deleted_at')->count();
         $dischargesToday = (int) DB::table('admissions')->whereDate('discharge_date', $today)->whereRaw($this->nonIcu)->whereNull('deleted_at')->count();
         $activeConsults = (int) DB::table('consultations')->whereNull('signoff_date')->whereNull('deleted_at')->count();
-        // consultation donut = [signed-off in the last 24h, active] — legacy dashboard/1.php
-        // (`signoff_date + INTERVAL 1 DAY >= CURDATE()`, i.e. yesterday + today) (J2-5)
-        $signed24h = (int) DB::table('consultations')->where('signoff_date', '>=', Carbon::yesterday()->toDateString())->whereNull('deleted_at')->count();
+        // Consultation donut, first slice. `signoff_date` is a DATE column — there is no time of day
+        // anywhere in the data — so a true rolling 24-hour window is NOT computable, and the old
+        // `signed24h` name plus the "(24h)" label claimed a precision the column cannot carry (the
+        // real window is 24-48h wide depending on the hour). W0 relabels instead of faking: the key,
+        // the donut label, the heading and the caption now all say "today or yesterday", which is
+        // exactly the legacy dashboard/1.php population (`signoff_date + INTERVAL 1 DAY >= CURDATE()`,
+        // i.e. yesterday + today) (J2-5). Bounded at BOTH ends so the label is literally true: a
+        // future-dated signoff_date (only reachable through legacy data — sign-off writes CURDATE())
+        // no longer counts toward a figure captioned "today or yesterday".
+        $signedTodayOrYesterday = (int) DB::table('consultations')
+            ->whereBetween('signoff_date', [Carbon::yesterday()->toDateString(), $today])
+            ->whereNull('deleted_at')->count();
         $deathsMonth = (int) DB::table('admissions')->where('outcome', 'Dead')->whereBetween('discharge_date', [$monthStart, $today])->whereNull('deleted_at')->count();
 
         // ── Boarding (Phase 1, Item 1) ─────────────────────────────────────────────────────────
@@ -436,7 +445,7 @@ class DashboardController extends Controller
             ],
             'trend' => $trend,
             'consults' => $cons,
-            'consultDonut' => ['signed24h' => $signed24h, 'active' => $activeConsults],
+            'consultDonut' => ['signedTodayOrYesterday' => $signedTodayOrYesterday, 'active' => $activeConsults],
             'los' => ['labels' => array_keys($losBuckets), 'data' => array_values($losBuckets)],
             'mix' => ['hospitalist' => (int) ($mix['hosp'] ?? 0), 'subspecialty' => (int) ($mix['subs'] ?? 0), 'longterm' => (int) ($mix['longterm'] ?? 0)],
             'donutTotal' => $donutTotal,

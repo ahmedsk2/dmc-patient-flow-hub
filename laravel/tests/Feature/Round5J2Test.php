@@ -226,7 +226,7 @@ class Round5J2Test extends TestCase
 
         $this->actingAs($this->admin())->get('/')
             ->assertInertia(fn (AssertableInertia $p) => $p
-                ->where('consultDonut.signed24h', 1)   // legacy: signoff_date + 1 day >= today
+                ->where('consultDonut.signedTodayOrYesterday', 1)   // legacy: signoff_date + 1 day >= today
                 ->where('consultDonut.active', 1)
                 ->where('donutTb', 1)                  // donut title TB count = assigned non-ICU TB
                 ->where('donutTotal', 1)               // donut population excludes the unassigned row

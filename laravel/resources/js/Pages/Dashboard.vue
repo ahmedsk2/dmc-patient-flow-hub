@@ -286,17 +286,19 @@ const donutOptions = computed(() => ({
 }));
 const donutSeries = computed(() => [props.mix.hospitalist, props.mix.subspecialty, props.mix.longterm]);
 
-// consultation donut — legacy dashboard/1.php pair: [signed off in the last 24h, active] (J2-5)
+// consultation donut — legacy dashboard/1.php pair: [signed off today or yesterday, active] (J2-5).
+// W0: the slice used to be captioned 24h while the query spanned today + yesterday. signoff_date is
+// a date, not a timestamp, so the honest name is the one below.
 const consultDonutOptions = computed(() => ({
     chart: { type: 'donut', toolbar: dlToolbar, fontFamily: 'inherit', animations: chartAnimations(reduced) },
     colors: [series.value.accent, series.value.primary],
-    labels: ['Signed off (24h)', 'Active'],
+    labels: ['Signed off (today + yesterday)', 'Active'],
     legend: { ...donutLegend, labels: { colors: axisColor.value } },
     dataLabels: { enabled: true, formatter: (v, o) => o.w.globals.series[o.seriesIndex] },
     stroke: { width: 2, colors: [strokeColor.value] },
     plotOptions: { pie: { donut: { size: '70%' } } },
 }));
-const consultDonutSeries = computed(() => [props.consultDonut.signed24h, props.consultDonut.active]);
+const consultDonutSeries = computed(() => [props.consultDonut.signedTodayOrYesterday, props.consultDonut.active]);
 
 const consultantMax = computed(() => Math.max(1, ...props.perConsultant.map((c) => c.c)));
 
@@ -322,7 +324,7 @@ const hasTrend = computed(() => props.trend.labels.length > 0);
 const hasConsults = computed(() => props.consults.labels.length > 0);
 const hasLos = computed(() => props.los.labels.length > 0);
 const hasMix = computed(() => props.donutTotal > 0);
-const hasConsultDonut = computed(() => (props.consultDonut.signed24h + props.consultDonut.active) > 0);
+const hasConsultDonut = computed(() => (props.consultDonut.signedTodayOrYesterday + props.consultDonut.active) > 0);
 const hasAct24 = computed(() => props.activity24h.length > 0);
 
 const trendRows = computed(() => (hasTrend.value
@@ -334,7 +336,7 @@ const losRows = computed(() => (hasLos.value
 const mixRows = computed(() => (hasMix.value
     ? [['Hospitalist', props.mix.hospitalist], ['Sub-specialty', props.mix.subspecialty], ['Long-term', props.mix.longterm]] : []));
 const consultDonutRows = computed(() => (hasConsultDonut.value
-    ? [['Signed off (24h)', props.consultDonut.signed24h], ['Active', props.consultDonut.active]] : []));
+    ? [['Signed off (today + yesterday)', props.consultDonut.signedTodayOrYesterday], ['Active', props.consultDonut.active]] : []));
 const act24Rows = computed(() => (hasAct24.value
     ? props.activity24h.map((r) => [r.name, r.admissions, r.discharges]) : []));
 
@@ -546,11 +548,11 @@ onUnmounted(() => clearInterval(autoRefresh));
                     <p v-else class="grid h-[260px] place-items-center text-sm text-ink-400">No data for this period.</p>
                 </ChartFigure>
             </div>
-            <!-- legacy dashboard/1.php consultation donut: signed off in the last 24h vs active (J2-5) -->
+            <!-- legacy dashboard/1.php consultation donut: signed off today or yesterday vs active (J2-5) -->
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-                <h2 class="mb-2 font-semibold text-ink-700">Consultations <span class="font-normal text-ink-400">(24h sign-offs vs active)</span></h2>
-                <ChartFigure title="Consultations — 24h sign-offs vs active" caption="Consultations signed off in the last 24 hours versus those still active." :columns="['Status', 'Count']" :rows="consultDonutRows">
-                    <apexchart v-if="hasConsultDonut" type="donut" height="260" :options="consultDonutOptions" :series="consultDonutSeries" :aria-label="`Donut chart: ${consultDonut.signed24h} consultations signed off in the last 24 hours, ${consultDonut.active} active`" />
+                <h2 class="mb-2 font-semibold text-ink-700">Consultations <span class="font-normal text-ink-400">(sign-offs today + yesterday vs active)</span></h2>
+                <ChartFigure title="Consultations — sign-offs today and yesterday vs active" caption="Consultations signed off today or yesterday, versus those still awaiting sign-off. Sign-off is recorded as a calendar date with no time of day, so this counts two calendar days rather than a rolling 24 hours." :columns="['Status', 'Count']" :rows="consultDonutRows">
+                    <apexchart v-if="hasConsultDonut" type="donut" height="260" :options="consultDonutOptions" :series="consultDonutSeries" :aria-label="`Donut chart: ${consultDonut.signedTodayOrYesterday} consultations signed off today or yesterday, ${consultDonut.active} active`" />
                     <p v-else class="grid h-[260px] place-items-center text-sm text-ink-400">No data for this period.</p>
                 </ChartFigure>
             </div>

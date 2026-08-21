@@ -48,7 +48,7 @@ const baseProps = (over = {}) => ({
     kpis: emptyKpis, boardingCount: 0, boardingWorklist: [], deltas: {}, alerts: [], myUnit: null,
     loadBands: { minHosp: 0, maxHosp: 0, minSubs: 0, maxSubs: 0 },
     trend: { labels: [], admissions: [], discharges: [] }, consults: { labels: [], new: [], signed: [] },
-    consultDonut: { signed24h: 0, active: 0 }, los: { labels: [], data: [] },
+    consultDonut: { signedTodayOrYesterday: 0, active: 0 }, los: { labels: [], data: [] },
     mix: { hospitalist: 0, subspecialty: 0, longterm: 0 }, donutTotal: 0, donutTb: 0,
     perConsultant: [], consultantBoard: [], activity24h: [], ytd: { admissions: 0, discharges: 0, consultations: 0, signoffs: 0 },
     topDxWeek: [], topDxWeekNum: 0, recent: [], generatedAt: 'now',
