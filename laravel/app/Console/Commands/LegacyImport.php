@@ -70,6 +70,7 @@ class LegacyImport extends Command
                    'patients', 'icd10', 'specialties', 'consultation_reasons', 'tb_diagnoses',
                    'countries', 'settings'];
         $consultationLinks = [];
+        $followupLinks = [];
         if ($preserveConsultations) {
             // The gate is ON: consultations keep their existing ids, so the follow-ups that point at
             // them must be kept too — truncating consultation_followups here would erase every tick
@@ -78,6 +79,8 @@ class LegacyImport extends Command
             // Surviving rows point at patient/user ids that are about to be re-seeded. Capture their
             // natural keys now so they can be re-pointed after the rebuild (see relinkPreserved…).
             $consultationLinks = $this->captureConsultationLinks();
+            // The surviving follow-up ticks carry an author user id that the same rebuild invalidates.
+            $followupLinks = $this->captureFollowupLinks();
         }
 
         // Coordinator grants (`users.can_coordinate_consultations`) are ADMIN-MADE state living on a
@@ -106,7 +109,7 @@ class LegacyImport extends Command
             $this->warn("  consultations preserved: {$kept} row(s) kept and NOT re-imported — "
                 . 'settings.consultations_source_of_truth is ON, so this application owns the '
                 . 'consultation ledger and the legacy table is ignored.');
-            $this->relinkPreservedConsultations($consultationLinks, $userMap, $patientMap);
+            $this->relinkPreservedConsultations($consultationLinks, $followupLinks, $userMap, $patientMap);
         } else {
             $this->importConsultations($userMap, $patientMap);
         }
@@ -159,6 +162,24 @@ class LegacyImport extends Command
     }
 
     /**
+     * The same natural-key snapshot for the follow-up ticks that ride along with the preserved
+     * consultations. `consultation_followups.author_id` is a `users` id, and the legacy-user delete
+     * runs with `Schema::disableForeignKeyConstraints()` active — so the column's declared
+     * `nullOnDelete` never fires and the tick would keep an id that belongs to nobody, or (once
+     * AUTO_INCREMENT reaches it again) to a DIFFERENT clinician. Either outcome silently rewrites
+     * "who ticked this follow-up" on an append-only clinical log, and leaves a row violating its own
+     * FK that survives only until something revalidates the constraint.
+     */
+    private function captureFollowupLinks(): array
+    {
+        return DB::table('consultation_followups as f')
+            ->leftJoin('users as au', 'au.id', '=', 'f.author_id')
+            ->whereNotNull('f.author_id')
+            ->selectRaw('f.id, f.author_id, au.id author_row_id, au.legacy_id author_legacy_id')
+            ->get()->map(fn ($r) => (array) $r)->all();
+    }
+
+    /**
      * Re-point preserved consultations at the rebuilt rows. Writes through the query builder on
      * purpose: this is a mechanical re-link, not a clinical edit, so it must not touch updated_at,
      * fire model events, or bust caches. An unresolvable reference becomes NULL (the columns are all
@@ -172,8 +193,13 @@ class LegacyImport extends Command
      * mapping on a retry. All-or-nothing at least keeps the surviving state coherent. See
      * docs/DEPLOY-LARAVEL.md §3(b): a failed import while the gate is ON requires a database restore
      * before retrying.
+     *
+     * The preserved consultations' follow-up ticks are re-linked in the SAME transaction: their
+     * author is a user id invalidated by exactly the same rebuild, and a half-applied mix of
+     * re-pointed consults and stale tick authors is precisely the incoherent state this
+     * all-or-nothing boundary exists to prevent.
      */
-    private function relinkPreservedConsultations(array $links, array $userMap, array $patientMap): void
+    private function relinkPreservedConsultations(array $links, array $followupLinks, array $userMap, array $patientMap): void
     {
         // A NULL join row-id means the referenced user does not exist AT ALL (a dangling id, e.g. left
         // behind by a half-finished earlier run). That is unresolvable — it is NOT "app-created user,
@@ -216,9 +242,11 @@ class LegacyImport extends Command
         $fields = ['patient_id', 'consultant_id', 'entered_by', 'signed_off_by',
             'owning_specialty_id', 'admission_id'];
         $changed = 0;
+        $followupsChanged = 0;
         $lost = array_fill_keys($fields, []);
+        $lostAuthors = [];
 
-        DB::transaction(function () use ($links, $remapUser, $remapSpecialty, $remapAdmission, $id, $fields, $patientMap, &$changed, &$lost) {
+        DB::transaction(function () use ($links, $followupLinks, $remapUser, $remapSpecialty, $remapAdmission, $id, $fields, $patientMap, &$changed, &$followupsChanged, &$lost, &$lostAuthors) {
             foreach ($links as $l) {
                 $mrn = mb_substr(trim((string) ($l['mrn'] ?? '')), 0, 64);
                 $new = [
@@ -242,9 +270,36 @@ class LegacyImport extends Command
                 DB::table('consultations')->where('id', $l['id'])->update($new);
                 $changed++;
             }
+
+            // The ticks hanging off those consultations carry an author id from the same re-seeded
+            // `users` table. Same remap, same rule: never leave a dangling id, and never let one
+            // clinician's tick be re-attributed to whoever inherits their old id.
+            foreach ($followupLinks as $f) {
+                $author = $remapUser($f['author_id'], $f['author_row_id'], $f['author_legacy_id']);
+                if ($id($author) === $id($f['author_id'])) {
+                    continue;
+                }
+                if ($author === null) {
+                    $lostAuthors[] = (int) $f['id'];
+                }
+                DB::table('consultation_followups')->where('id', $f['id'])->update(['author_id' => $author]);
+                $followupsChanged++;
+            }
         });
 
         $this->info("  preserved consultations re-linked: {$changed} row(s) re-pointed at the rebuilt patient/user/specialty/admission ids");
+        $this->info("  preserved follow-up ticks re-linked: {$followupsChanged} row(s) re-pointed at the rebuilt author ids");
+
+        if ($lostAuthors !== []) {
+            $shown = array_slice($lostAuthors, 0, 50);
+            $more = count($lostAuthors) - count($shown);
+            $this->warn('  ⚠ preserved follow-up ticks that lost their author_id: ' . count($lostAuthors)
+                . ' row(s) — consultation_followups id(s) ' . implode(', ', $shown)
+                . ($more > 0 ? " … and {$more} more" : '') . '. '
+                . 'The account that recorded the tick has no legacy_id match in the new data, so the '
+                . 'attribution was set to NULL rather than left pointing at whoever inherited that id. '
+                . 'The ticks themselves are intact — only "who ticked it" is lost.');
+        }
 
         foreach ($lost as $field => $ids) {
             if ($ids === []) { continue; }

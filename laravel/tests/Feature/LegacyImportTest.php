@@ -499,6 +499,14 @@ class LegacyImportTest extends TestCase
         $appAdm = \App\Models\Admission::create([
             'patient_id' => $patient->id, 'admit_date' => '2024-03-02',   // no legacy_id — cannot survive
         ]);
+        // A legacy-derived admission whose episode is GONE from the new dump (990002 is deliberately
+        // NOT seeded into legacy picupatients above). The legacy app hard-deletes patient rows and
+        // partial/filtered dumps happen, so this is the realistic hazard: the legacy_id is present,
+        // resolves to nothing, and a "keep the current id" fallback would leave the consult attached
+        // to whatever stay now holds that id — A DIFFERENT PATIENT'S ADMISSION.
+        $ghostAdm = \App\Models\Admission::create([
+            'patient_id' => $patient->id, 'admit_date' => '2024-03-03', 'legacy_id' => 990002,
+        ]);
 
         $withLegacyAdm = \App\Models\Consultation::create([
             'mrn' => '77001122', 'patient_id' => $patient->id, 'patient_name' => 'Relink Pt',
@@ -510,6 +518,11 @@ class LegacyImportTest extends TestCase
             'mrn' => '77001122', 'patient_id' => $patient->id, 'patient_name' => 'Relink Pt',
             'indication' => [], 'to_service' => 'Dietary', 'owning_specialty_id' => $extId,
             'admission_id' => $appAdm->id, 'status' => \App\Models\Consultation::STATUS_ONGOING,
+        ]);
+        $withGhostAdm = \App\Models\Consultation::create([
+            'mrn' => '77001122', 'patient_id' => $patient->id, 'patient_name' => 'Relink Pt',
+            'indication' => [], 'to_service' => 'Dietary', 'owning_specialty_id' => $extId,
+            'admission_id' => $ghostAdm->id, 'status' => \App\Models\Consultation::STATUS_ONGOING,
         ]);
         \App\Models\Setting::current()->update(['consultations_source_of_truth' => true]);
 
@@ -535,12 +548,66 @@ class LegacyImportTest extends TestCase
         $this->assertNull($b->admission_id,
             'a consult pointing at an app-created admission must be NULLed, not left pointing at a rebuilt row');
 
+        // a LEGACY-derived admission whose episode is absent from the new dump is equally unresolvable:
+        // its legacy_id finds nothing, so the answer is NULL — never the id it happened to hold, which
+        // now belongs to some other patient's stay.
+        $c = DB::table('consultations')->where('id', $withGhostAdm->id)->first();
+        $this->assertNull($c->admission_id,
+            'an admission whose legacy episode is gone after the rebuild becomes NULL, never a different stay');
+
         // signer remapped by users.legacy_id, exactly like consultant_id
         $newSignerId = DB::table('users')->where('legacy_id', 4242)->value('id');
         $this->assertNotNull($newSignerId);
         $this->assertNotSame($signer->id, (int) $newSignerId,
             'precondition: the rebuild must actually re-seed the signing user id');
         $this->assertSame((int) $newSignerId, (int) $a->signed_off_by);
+    }
+
+    /**
+     * `consultation_followups.author_id` is a user id living on rows the flag DELIBERATELY preserves,
+     * so the same rebuild that re-seeds `users` invalidates it. The FK's declared nullOnDelete cannot
+     * save it: the legacy-user delete runs with `Schema::disableForeignKeyConstraints()` active, so no
+     * cascade fires and the tick keeps an id that either belongs to nobody or — once auto-increment
+     * reaches it again — to a DIFFERENT clinician. That silently rewrites "who ticked this follow-up"
+     * on an append-only clinical log, and persists a row that violates its own FK (written with checks
+     * off, it survives until some later ALTER/dump-restore revalidates and aborts).
+     */
+    public function test_preserved_followup_authors_are_relinked_after_a_rebuild(): void
+    {
+        $this->seedLegacy();                                  // legacy member_id 7 gets re-imported
+        [$cxId, $appUserId] = $this->seedNewSystemConsultation();
+        $legacyAuthorId = (int) DB::table('users')->where('legacy_id', 7)->value('id');
+        \App\Models\Setting::current()->update(['consultations_source_of_truth' => true]);
+
+        $byLegacyAuthor = DB::table('consultation_followups')->insertGetId([
+            'consultation_id' => $cxId, 'followup_date' => '2024-01-01',
+            'note' => 'ticked by a legacy-sourced user', 'author_id' => $legacyAuthorId,
+        ]);
+        $byAppAuthor = DB::table('consultation_followups')->insertGetId([
+            'consultation_id' => $cxId, 'followup_date' => '2024-01-02',
+            'note' => 'ticked by an app-created user', 'author_id' => $appUserId,
+        ]);
+
+        $this->artisan('legacy:import')->assertSuccessful();
+
+        $newAuthorId = (int) DB::table('users')->where('legacy_id', 7)->value('id');
+        $this->assertNotSame($legacyAuthorId, $newAuthorId,
+            'precondition: the rebuild must actually re-seed the legacy author id');
+        $this->assertSame($newAuthorId,
+            (int) DB::table('consultation_followups')->where('id', $byLegacyAuthor)->value('author_id'),
+            'a preserved follow-up must follow its author across the rebuild, not keep a re-seeded id');
+        $this->assertSame($appUserId,
+            (int) DB::table('consultation_followups')->where('id', $byAppAuthor)->value('author_id'),
+            'an app-created author is never deleted, so its attribution must be left untouched');
+
+        // and nothing may be left violating the FK the truncate/delete ran with checks disabled
+        $dangling = DB::table('consultation_followups as f')
+            ->whereNotNull('f.author_id')
+            ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('users')
+                ->whereColumn('users.id', 'f.author_id'))
+            ->count();
+        $this->assertSame(0, $dangling,
+            'no preserved follow-up may keep an author_id that no longer exists in users');
     }
 
     public function test_import_still_rebuilds_consultations_when_the_flag_is_off(): void
