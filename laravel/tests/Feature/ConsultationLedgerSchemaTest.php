@@ -149,4 +149,59 @@ class ConsultationLedgerSchemaTest extends TestCase
             'signed_off_at must be a real datetime — the time component must survive the round-trip'
         );
     }
+
+    // ---- Task 5: consultation_followups (append-only, one tick per consult per day) -------------
+
+    public function test_followups_table_is_append_only(): void
+    {
+        $this->assertTrue(Schema::hasTable('consultation_followups'));
+
+        foreach (['id', 'consultation_id', 'followup_date', 'note', 'author_id', 'created_at'] as $column) {
+            $this->assertTrue(
+                Schema::hasColumn('consultation_followups', $column),
+                "consultation_followups is missing {$column}"
+            );
+        }
+
+        // append-only: a follow-up tick is a fact that happened, it is never edited
+        $this->assertFalse(
+            Schema::hasColumn('consultation_followups', 'updated_at'),
+            'consultation_followups is append-only and must have no updated_at'
+        );
+    }
+
+    public function test_a_consult_cannot_be_ticked_twice_on_the_same_day(): void
+    {
+        $c = Consultation::create([
+            'mrn' => '77000003', 'patient_name' => 'Tick Pt', 'consultation_date' => '2024-03-03',
+            'to_service' => 'Cardiology', 'indication' => [],
+        ]);
+
+        DB::table('consultation_followups')->insert([
+            'consultation_id' => $c->id, 'followup_date' => '2026-08-21', 'note' => 'seen',
+        ]);
+
+        // the unique index IS the correctness guarantee behind "seen 8 of 12 today"
+        $this->expectException(\Illuminate\Database\QueryException::class);
+        DB::table('consultation_followups')->insert([
+            'consultation_id' => $c->id, 'followup_date' => '2026-08-21', 'note' => 'seen again',
+        ]);
+    }
+
+    public function test_followups_are_removed_with_their_consultation_row(): void
+    {
+        $c = Consultation::create([
+            'mrn' => '77000004', 'patient_name' => 'Cascade Pt', 'consultation_date' => '2024-03-04',
+            'to_service' => 'Cardiology', 'indication' => [],
+        ]);
+        DB::table('consultation_followups')->insert([
+            'consultation_id' => $c->id, 'followup_date' => '2026-08-20',
+        ]);
+
+        // NOTE: Consultation soft-deletes, so $c->delete() only stamps deleted_at and the follow-ups
+        // correctly stay. This asserts the FK itself, on a HARD delete of the underlying row.
+        DB::table('consultations')->where('id', $c->id)->delete();
+
+        $this->assertSame(0, DB::table('consultation_followups')->where('consultation_id', $c->id)->count());
+    }
 }
