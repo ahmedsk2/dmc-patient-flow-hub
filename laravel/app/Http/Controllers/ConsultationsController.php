@@ -154,9 +154,22 @@ class ConsultationsController extends Controller
         $data = $request->validated();
         // field-level diff (Item 4): snapshot the editable fields before the update, diff after
         $fields = ['patient_name', 'mrn', 'age', 'bed', 'current_location',
-            'consultation_from', 'to_service', 'consultant_id', 'indication', 'other_indication'];
+            'consultation_from', 'to_service', 'consultant_id', 'indication', 'other_indication',
+            // an ownership move is a clinical fact about who is carrying the patient — it belongs in
+            // the diff, not just in the hidden column
+            'owning_specialty_id'];
         $before = $consultation->only($fields);
-        $consultation->update([...$data, 'indication' => $data['indication'] ?? []]);
+        $payload = [...$data, 'indication' => $data['indication'] ?? []];
+        // W1: `to_service` is the routing label the clinician reads; `owning_specialty_id` is the
+        // book that actually controls visibility. Move one and the other MUST follow, or the consult
+        // displays as one team's while living in another's — cluttering the book it left and never
+        // appearing in the one it names. Re-resolved only when the label actually changes, so an
+        // ownership set deliberately elsewhere is never clobbered by an unrelated edit.
+        if (array_key_exists('to_service', $data)
+            && (string) $data['to_service'] !== (string) $consultation->to_service) {
+            $payload['owning_specialty_id'] = self::resolveOwningSpecialtyId($data['to_service']);
+        }
+        $consultation->update($payload);
         $diff = AuditDiff::diff($before, $consultation->fresh()->only($fields));
         Audit::log('consultation.modify', 'consultation', (string) $consultation->id, $diff);
 

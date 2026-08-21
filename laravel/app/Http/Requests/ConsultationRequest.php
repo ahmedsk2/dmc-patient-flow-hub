@@ -57,24 +57,34 @@ class ConsultationRequest extends FormRequest
      * only create into their OWN specialty. Coordinators (can_coordinate_consultations) and admins
      * may book into any specialty — that is exactly what the capability is for.
      *
-     * Deliberately CREATE-only. UPDATE keeps the legacy-open modify semantics (J1-10: legacy modify
-     * carried no ownership check, pinned by Round5J1Test), and moving a consult between teams gets
-     * its own explicit reassign action in W2 rather than riding on a generic edit.
+     * On UPDATE the rule is VALIDATE-ON-CHANGE (the same idiom as consultationDateRules below): an
+     * ordinary edit that leaves `to_service` alone keeps the legacy-open modify semantics (J1-10:
+     * legacy modify carried no ownership check, pinned by Round5J1Test), but CHANGING the service is
+     * a re-routing, and re-routing into a team you do not belong to is exactly the coordinator
+     * capability. Without this, the create gate could simply be laundered through an edit — the
+     * controller moves `owning_specialty_id` with the label, so the change is real, not cosmetic.
+     * A wholesale reassignment UI still gets its own explicit action in W2.
      *
      * An unmatched / external / free-text service is unowned and stays creatable by anyone: those
      * referrals belong to no IM team and land in the Unassigned bucket.
+     *
+     * A user with NO specialty matches no team book. That refusal is deliberate — the way out is the
+     * coordinator capability, which migration 2026_08_21_000500 grants at cutover to every
+     * unaffiliated clinical account (on the real data, all 121 registrars and residents).
      *
      * @return array<int, \Closure>
      */
     private function ownSpecialtyRule(): array
     {
-        if ($this->route('consultation') !== null) {
-            return [];   // UPDATE — unchanged by W1
-        }
-
         $user = $this->user();
         if ($user->isAdmin() || $user->canCoordinateConsultations()) {
             return [];
+        }
+
+        $consultation = $this->route('consultation');   // route-model-bound only on update
+        if ($consultation !== null
+            && (string) $this->input('to_service') === (string) $consultation->to_service) {
+            return [];   // UPDATE that does not touch the service — legacy-open modify, unchanged
         }
 
         return [function (string $attribute, mixed $value, \Closure $fail) use ($user) {
@@ -82,8 +92,13 @@ class ConsultationRequest extends FormRequest
             if ($targetId === null) {
                 return;   // external / free-text service — unowned
             }
+            if ($user->specialty_id === null) {
+                $fail('Your account is not attached to a specialty, so it cannot book a consultation into a team. Ask an administrator to set your specialty or to grant you the consultation-coordinator capability.');
+
+                return;
+            }
             if ((int) $user->specialty_id !== $targetId) {
-                $fail('You may only create consultations for your own specialty. Ask a consultation coordinator to book this one.');
+                $fail('You may only book consultations for your own specialty. Ask a consultation coordinator to book this one.');
             }
         }];
     }
