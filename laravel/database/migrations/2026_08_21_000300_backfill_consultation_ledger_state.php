@@ -30,13 +30,29 @@ use Illuminate\Support\Facades\DB;
  *
  * Raw query-builder / raw SQL is used deliberately: it bypasses the model's SoftDeletes global
  * scope, so soft-deleted historical rows are backfilled too and stay consistent if restored.
+ *
+ * LEGACY-ONLY, ON EVERY WRITE
+ *   `requested_at IS NULL` is the legacy discriminator on every statement here — this migration is
+ *   the thing that guarantees historical rows never get one, and the app sets it on everything it
+ *   creates. The two status writes add `status = 'new'` (still the schema default, i.e. nobody has
+ *   moved this row); the specialty write adds `owning_specialty_id IS NULL` instead, because the
+ *   status writes above have already moved `status` off 'new' by the time it runs.
+ *
+ *   Every historical row satisfies all of those at the one-time cutover run, and a consult the app
+ *   created afterwards satisfies none of them. Unguarded, a second run (migrate:refresh, a
+ *   rollback-and-replay, a manual require) would rewrite the WHOLE table and drag every consult a
+ *   team had moved to `active` back to `ongoing` — silently emptying every team's
+ *   must-be-seen-today list, the mirror image of the fabricated-worklist failure above, and with no
+ *   trace in the record because the query builder's update() does not touch `updated_at`.
  */
 return new class extends Migration
 {
     public function up(): void
     {
-        DB::table('consultations')->whereNotNull('signoff_date')->update(['status' => 'signed_off']);
-        DB::table('consultations')->whereNull('signoff_date')->update(['status' => 'ongoing']);
+        DB::table('consultations')->where('status', 'new')->whereNull('requested_at')
+            ->whereNotNull('signoff_date')->update(['status' => 'signed_off']);
+        DB::table('consultations')->where('status', 'new')->whereNull('requested_at')
+            ->whereNull('signoff_date')->update(['status' => 'ongoing']);
 
         DB::statement("
             UPDATE consultations c
@@ -45,6 +61,7 @@ return new class extends Migration
              AND s.is_external = 0
             SET c.owning_specialty_id = s.id
             WHERE c.owning_specialty_id IS NULL
+              AND c.requested_at IS NULL
               AND c.to_service IS NOT NULL
               AND TRIM(c.to_service) <> ''
         ");

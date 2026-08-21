@@ -116,13 +116,23 @@ class LegacyImport extends Command
      * sets of ids change; `patients.mrn` and `users.legacy_id` survive and let each row be re-pointed
      * afterwards. A user with NO legacy_id was created inside this application, is never deleted
      * here, and keeps its id — which is what preserves the immutable `entered_by` attribution.
+     *
+     * `specialties` is truncated and rebuilt too, so the ledger's ownership key needs the same
+     * treatment: capture the owning specialty's NAME. Internal legacy specialties are re-inserted
+     * at their ids verbatim, which hides the problem — but a specialty an admin created inside this
+     * app is absent from the legacy dump, so the id it held is handed to whatever external service
+     * auto-increment reaches next. Carrying the raw id across would silently hand a preserved
+     * consult to a different team, which is precisely how a patient gets hidden from the team that
+     * is actually seeing them.
      */
     private function captureConsultationLinks(): array
     {
         return DB::table('consultations as c')
             ->leftJoin('users as cu', 'cu.id', '=', 'c.consultant_id')
             ->leftJoin('users as eu', 'eu.id', '=', 'c.entered_by')
+            ->leftJoin('specialties as os', 'os.id', '=', 'c.owning_specialty_id')
             ->selectRaw('c.id, c.mrn, c.patient_id, c.consultant_id, c.entered_by,
+                         c.owning_specialty_id, os.name owning_specialty_name,
                          cu.id consultant_row_id, cu.legacy_id consultant_legacy_id,
                          eu.id entered_by_row_id, eu.legacy_id entered_by_legacy_id')
             ->get()->map(fn ($r) => (array) $r)->all();
@@ -155,25 +165,44 @@ class LegacyImport extends Command
         };
         $id = fn ($v) => $v === null ? null : (int) $v;
 
-        $changed = 0;
-        $lost = ['patient_id' => [], 'consultant_id' => [], 'entered_by' => []];
+        // Name -> id over the REBUILT specialties, case-insensitive and trimmed (the same match the
+        // ledger backfill uses). Lowest id wins if the rebuilt table holds a duplicate name, so the
+        // result is deterministic and prefers the internal legacy row, which keeps its id verbatim.
+        $specialtyByName = DB::table('specialties')->orderBy('id')->get(['id', 'name'])
+            ->reduce(function (array $map, $s) {
+                $key = mb_strtolower(trim((string) $s->name));
+                if ($key !== '' && ! isset($map[$key])) { $map[$key] = (int) $s->id; }
+                return $map;
+            }, []);
+        $remapSpecialty = function ($currentId, $name) use ($specialtyByName) {
+            if ($currentId === null) { return null; }
+            $key = mb_strtolower(trim((string) $name));
+            // A NULL/blank name means the referenced specialty no longer exists at all (a dangling
+            // id). Either way: no name match => NULL (Unassigned), never a stale id.
+            return $key === '' ? null : ($specialtyByName[$key] ?? null);
+        };
 
-        DB::transaction(function () use ($links, $remapUser, $id, $patientMap, &$changed, &$lost) {
+        $fields = ['patient_id', 'consultant_id', 'entered_by', 'owning_specialty_id'];
+        $changed = 0;
+        $lost = array_fill_keys($fields, []);
+
+        DB::transaction(function () use ($links, $remapUser, $remapSpecialty, $id, $fields, $patientMap, &$changed, &$lost) {
             foreach ($links as $l) {
                 $mrn = mb_substr(trim((string) ($l['mrn'] ?? '')), 0, 64);
                 $new = [
                     'patient_id' => $mrn === '' ? null : ($patientMap[$mrn] ?? null),
                     'consultant_id' => $remapUser($l['consultant_id'], $l['consultant_row_id'], $l['consultant_legacy_id']),
                     'entered_by' => $remapUser($l['entered_by'], $l['entered_by_row_id'], $l['entered_by_legacy_id']),
+                    'owning_specialty_id' => $remapSpecialty($l['owning_specialty_id'], $l['owning_specialty_name']),
                 ];
-                foreach (['patient_id', 'consultant_id', 'entered_by'] as $field) {
+                $unchanged = true;
+                foreach ($fields as $field) {
                     if ($id($l[$field]) !== null && $id($new[$field]) === null) {
                         $lost[$field][] = (int) $l['id'];
                     }
+                    $unchanged = $unchanged && $id($new[$field]) === $id($l[$field]);
                 }
-                if ($id($new['patient_id']) === $id($l['patient_id'])
-                    && $id($new['consultant_id']) === $id($l['consultant_id'])
-                    && $id($new['entered_by']) === $id($l['entered_by'])) {
+                if ($unchanged) {
                     continue;
                 }
                 DB::table('consultations')->where('id', $l['id'])->update($new);
@@ -181,7 +210,7 @@ class LegacyImport extends Command
             }
         });
 
-        $this->info("  preserved consultations re-linked: {$changed} row(s) re-pointed at the rebuilt patient/user ids");
+        $this->info("  preserved consultations re-linked: {$changed} row(s) re-pointed at the rebuilt patient/user/specialty ids");
 
         foreach ($lost as $field => $ids) {
             if ($ids === []) { continue; }
@@ -191,11 +220,13 @@ class LegacyImport extends Command
                 . ' row(s) — consultation id(s) ' . implode(', ', $shown)
                 . ($more > 0 ? " … and {$more} more" : '') . '. '
                 . 'The record each pointed at no longer exists after the rebuild and has no natural-key '
-                . 'match in the new data (patients match on mrn, users on legacy_id — anything created '
-                . 'inside THIS app is absent from the legacy dump), so the link was set to NULL instead '
-                . 'of left pointing at a different record. The consultations themselves are intact '
-                . '(mrn/patient_name survive); re-link them once the missing patient/user exists again. '
-                . 'Ledger queries that join on this column will skip these rows until then.');
+                . 'match in the new data (patients match on mrn, users on legacy_id, specialties on '
+                . 'name — anything created inside THIS app is absent from the legacy dump), so the link '
+                . 'was set to NULL instead of left pointing at a different record. The consultations '
+                . 'themselves are intact (mrn/patient_name/to_service survive); re-link them once the '
+                . 'missing record exists again. Until then, ledger queries that join on this column '
+                . 'skip these rows — a nulled owning_specialty_id lands the consult in the Unassigned '
+                . 'bucket, visible to coordinators and admins rather than to one team.');
         }
     }
 

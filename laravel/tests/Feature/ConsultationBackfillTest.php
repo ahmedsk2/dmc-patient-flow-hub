@@ -102,6 +102,64 @@ class ConsultationBackfillTest extends TestCase
         }
     }
 
+    /**
+     * The backfill writes only rows that are still untouched legacy rows (`status` still at its
+     * schema default AND no `requested_at`). Both hold for every one of the ~1,283 historical rows
+     * at the one-time cutover run, and neither holds for a consult the app created afterwards.
+     *
+     * Without that guard a second run (migrate:refresh, a rollback-and-replay, a manual require)
+     * would rewrite the WHOLE table: every consult a team had moved to `active` would silently drop
+     * back to `ongoing` — emptying every team's must-be-seen-today list, the mirror image of the
+     * fabricated-worklist failure this migration exists to prevent. And because the query builder's
+     * update() does not touch `updated_at`, it would leave no trace in the record.
+     */
+    public function test_a_re_run_never_clobbers_a_state_a_team_set_by_hand(): void
+    {
+        // an app-era consult: real requested_at, and a state a human moved it to
+        $appEra = $this->consult(['to_service' => 'Cardiology', 'signoff_date' => null]);
+        DB::table('consultations')->where('id', $appEra->id)
+            ->update(['status' => 'active', 'requested_at' => '2026-08-21 09:00:00']);
+
+        // an app-era consult a team signed off, whose sign-off is recorded in the new columns only
+        $appClosed = $this->consult(['to_service' => 'Cardiology', 'signoff_date' => null]);
+        DB::table('consultations')->where('id', $appClosed->id)
+            ->update(['status' => 'signed_off', 'requested_at' => '2026-08-21 09:00:00',
+                      'signed_off_at' => '2026-08-22 10:00:00']);
+
+        // and an untouched legacy row alongside them, to prove the guard is not over-restrictive
+        $legacy = $this->consult(['to_service' => 'Cardiology', 'signoff_date' => null]);
+
+        $this->runBackfill();
+
+        $status = fn ($c) => DB::table('consultations')->where('id', $c->id)->value('status');
+
+        $this->assertSame('active', $status($appEra),
+            'a re-run must not drag a hand-set `active` back to `ongoing` — that empties a live worklist');
+        $this->assertSame('signed_off', $status($appClosed));
+        $this->assertSame('ongoing', $status($legacy), 'untouched legacy rows are still backfilled');
+    }
+
+    /**
+     * The migration writes through the query builder specifically so it bypasses the model's
+     * SoftDeletes global scope. Pinned here because it is invisible: swapping DB::table() for
+     * Consultation::query() would look like a tidy-up, keep the whole suite green, and quietly skip
+     * every trashed row — so a consult restored from Recently Deleted would come back at status
+     * `new` with no owning team, sitting in a triage queue as if it had never been seen.
+     */
+    public function test_soft_deleted_historical_rows_are_backfilled_too(): void
+    {
+        $cardio = Specialty::create(['name' => 'Cardiology', 'is_subspecialty' => true, 'is_external' => false]);
+        $trashed = $this->consult(['to_service' => 'Cardiology', 'signoff_date' => null]);
+        $trashed->delete();
+
+        $this->runBackfill();
+
+        $row = DB::table('consultations')->where('id', $trashed->id)->first();
+        $this->assertNotNull($row->deleted_at, 'the row is still soft-deleted — the backfill does not restore it');
+        $this->assertSame('ongoing', $row->status, 'a trashed legacy row is backfilled too, so it is consistent if restored');
+        $this->assertSame($cardio->id, (int) $row->owning_specialty_id);
+    }
+
     public function test_backfill_touches_no_clinical_field(): void
     {
         $cardio = Specialty::create(['name' => 'Cardiology', 'is_subspecialty' => true, 'is_external' => false]);

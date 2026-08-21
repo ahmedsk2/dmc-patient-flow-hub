@@ -406,6 +406,53 @@ class LegacyImportTest extends TestCase
         $this->assertSame($cxId, (int) DB::table('consultation_followups')->where('id', $followupId)->value('consultation_id'));
     }
 
+    /**
+     * `owning_specialty_id` is the ledger's ownership key, and `specialties` is TRUNCATED and
+     * rebuilt on every import — so it must be re-resolved by NAME, exactly the way patients
+     * re-resolve on `mrn` and users on `legacy_id`. Internal legacy specialties are re-inserted at
+     * their ids verbatim, which hides the problem; an ADMIN-created specialty is not in the legacy
+     * dump at all, so the id it held is handed to whatever external service auto-increment reaches
+     * next. Carrying the raw id across would silently move a preserved consult to a different team
+     * — the exact harm the backfill migration refuses to risk ("a wrong owner would hide a patient
+     * from the team that is actually seeing them").
+     */
+    public function test_preserved_consultations_re_resolve_their_owning_specialty_by_name(): void
+    {
+        $this->seedLegacy();                                                   // legacy speciality id 1 = Hospitalist
+        DB::connection('legacy')->table('other_specialities')->insert([['id' => 1, 'specilaity' => 'Dietary']]);
+
+        $mkSpecialty = fn (string $name) => \App\Models\Specialty::create(
+            ['name' => $name, 'is_subspecialty' => true, 'is_external' => false]
+        );
+        $mkSpecialty('Extra Clinic');                     // id 1 pre-import — shifts the ids below
+        $hospitalist = $mkSpecialty('Hospitalist');       // id 2 pre-import; the rebuild puts it back at id 1
+        $ghost = $mkSpecialty('Ghost Clinic');            // admin-created; no legacy counterpart at all
+
+        [$cxId] = $this->seedNewSystemConsultation();
+        $orphan = \App\Models\Consultation::create([
+            'mrn' => '10001', 'patient_name' => 'Ghost Owned Cx',
+            'consultation_date' => now()->toDateString(), 'indication' => [], 'to_service' => 'Ghost Clinic',
+        ]);
+        DB::table('consultations')->where('id', $cxId)->update(['owning_specialty_id' => $hospitalist->id]);
+        DB::table('consultations')->where('id', $orphan->id)->update(['owning_specialty_id' => $ghost->id]);
+        \App\Models\Setting::current()->update(['consultations_source_of_truth' => true]);
+
+        $this->artisan('legacy:import')->assertSuccessful();
+
+        $rebuiltHospitalist = (int) DB::table('specialties')->where('name', 'Hospitalist')->value('id');
+        $this->assertNotSame($hospitalist->id, $rebuiltHospitalist,
+            'precondition: the rebuild must actually move Hospitalist to a different id');
+        $this->assertSame($hospitalist->id, (int) DB::table('specialties')->where('name', 'Dietary')->value('id'),
+            'precondition: the id the app-side Hospitalist held is now an unrelated EXTERNAL service');
+
+        $this->assertSame($rebuiltHospitalist,
+            (int) DB::table('consultations')->where('id', $cxId)->value('owning_specialty_id'),
+            'the preserved consult follows its team by NAME, it does not inherit a stale id belonging to another service');
+
+        $this->assertNull(DB::table('consultations')->where('id', $orphan->id)->value('owning_specialty_id'),
+            'a specialty that no longer exists after the rebuild becomes NULL (Unassigned), never a different team');
+    }
+
     public function test_import_still_rebuilds_consultations_when_the_flag_is_off(): void
     {
         $this->seedLegacy();
