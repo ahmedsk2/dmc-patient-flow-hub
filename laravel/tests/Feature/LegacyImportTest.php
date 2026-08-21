@@ -297,6 +297,135 @@ class LegacyImportTest extends TestCase
     }
 
     // ============================================================================================
+    // W0 — cutover safety gate: settings.consultations_source_of_truth. Once the Laravel app owns
+    // consultations, legacy:import must neither truncate nor re-import them — and must re-point the
+    // surviving rows at the REBUILT patient/user ids (patients restart at id 1; legacy-sourced users
+    // are deleted and re-inserted), or a preserved consult would silently attach to another patient.
+    // ============================================================================================
+
+    /** One legacy consultation row, so we can prove it is (or is not) re-imported. */
+    private function seedLegacyConsultation(): void
+    {
+        DB::connection('legacy')->table('consultations')->insert([
+            'id' => 501, 'MRN' => '10001', 'PNAME' => 'Legacy Cx', 'age' => '44', 'BED' => 'W-1',
+            'consultation_date' => '2024-01-02', 'consultation_from' => 'Ward', 'current_location' => 'Ward',
+            'indication' => '[]', 'consultant_id' => 7, 'entered_by_id' => 7, 'signoff_date' => null,
+            'other_ind' => null, 'consultation_to_service' => '1',
+        ]);
+    }
+
+    /**
+     * A consultation as the Laravel app would create it: linked to a patient by MRN, to a
+     * PREVIOUSLY-IMPORTED consultant (legacy_id 7 — the import will delete and re-insert that user
+     * with a new id), and entered by an APP-CREATED user (no legacy_id — its id must survive).
+     * Returns [consultation id, entered-by user id].
+     */
+    private function seedNewSystemConsultation(): array
+    {
+        $mk = fn (array $extra) => \App\Models\User::create(array_merge([
+            'username' => 'w0_' . substr(md5(uniqid('', true)), 0, 10),
+            'name' => 'W0 User', 'password' => 'secret12345',
+            'role' => \App\Models\User::ROLE_CONSULTANT, 'active' => 1,
+            'mfa_secret' => \App\Support\Totp::secret(), 'mfa_enrolled_at' => now(),
+        ], $extra));
+
+        $previouslyImported = $mk(['legacy_id' => 7]);      // will be deleted + re-inserted by the import
+        $appCreated = $mk([]);                               // no legacy_id -> the import never touches it
+
+        \App\Models\Patient::create(['mrn' => '99999', 'name' => 'Decoy Pt']);   // shifts the id the real patient gets
+        $patient = \App\Models\Patient::create(['mrn' => '10001', 'name' => 'Pt One']);
+
+        $c = \App\Models\Consultation::create([
+            'mrn' => '10001', 'patient_id' => $patient->id, 'patient_name' => 'New System Cx',
+            'consultation_date' => now()->toDateString(), 'indication' => [],
+            'to_service' => 'Hospitalist', 'consultant_id' => $previouslyImported->id,
+            'entered_by' => $appCreated->id,
+        ]);
+
+        return [$c->id, $appCreated->id];
+    }
+
+    public function test_import_preserves_and_relinks_consultations_when_the_flag_is_on(): void
+    {
+        $this->seedLegacy();
+        $this->seedLegacyConsultation();
+        [$cxId, $appUserId] = $this->seedNewSystemConsultation();
+        \App\Models\Setting::current()->update(['consultations_source_of_truth' => true]);
+
+        $this->artisan('legacy:import')
+            ->expectsOutputToContain('consultations preserved')
+            ->assertSuccessful();
+
+        // the app's consultation survived, and the legacy table was NOT replayed over it
+        $this->assertSame(1, DB::table('consultations')->count(), 'exactly the one app-owned row remains');
+        $this->assertSame(0, DB::table('consultations')->whereNotNull('legacy_id')->count(),
+            'legacy consultations are not re-imported while the app owns them');
+        $row = DB::table('consultations')->where('id', $cxId)->first();
+        $this->assertNotNull($row);
+        $this->assertSame('New System Cx', $row->patient_name);
+
+        // re-linked by natural key: still the SAME patient (patients were rebuilt with new ids)
+        $linkedMrn = DB::table('consultations as c')->join('patients as p', 'p.id', '=', 'c.patient_id')
+            ->where('c.id', $cxId)->value('p.mrn');
+        $this->assertSame('10001', $linkedMrn, 'preserved consult still points at ITS patient after the rebuild');
+
+        // consultant re-pointed at the re-imported legacy user (member_id 7)
+        $this->assertSame(
+            (int) DB::table('users')->where('legacy_id', 7)->value('id'),
+            (int) $row->consultant_id,
+            'consultant re-pointed at the rebuilt user row, not at whoever inherited the old id'
+        );
+        // entered_by is app-created -> its id never moved, so attribution is untouched
+        $this->assertSame($appUserId, (int) $row->entered_by, 'entered_by attribution survives the import');
+
+        // and the flag itself survives the settings rebuild (or the NEXT import would wipe everything)
+        $this->assertSame(1, (int) DB::table('settings')->orderBy('id')->value('consultations_source_of_truth'));
+    }
+
+    public function test_import_still_rebuilds_consultations_when_the_flag_is_off(): void
+    {
+        $this->seedLegacy();
+        $this->seedLegacyConsultation();
+        $this->seedNewSystemConsultation();   // flag left at its default (false)
+
+        $this->artisan('legacy:import')->assertSuccessful();
+
+        $this->assertSame(0, DB::table('consultations')->where('patient_name', 'New System Cx')->count(),
+            'unchanged behaviour: with the flag off the table is still rebuilt from legacy');
+        $this->assertSame(1, DB::table('consultations')->where('legacy_id', 501)->count());
+        $this->assertSame(0, (int) DB::table('settings')->orderBy('id')->value('consultations_source_of_truth'));
+    }
+
+    public function test_import_refuses_a_forced_consultation_wipe_while_the_app_owns_them(): void
+    {
+        $this->seedLegacy();
+        [$cxId] = $this->seedNewSystemConsultation();
+        \App\Models\Setting::current()->update(['consultations_source_of_truth' => true]);
+
+        $this->artisan('legacy:import', ['--wipe-consultations' => true])
+            ->expectsOutputToContain('Refusing to wipe consultations')
+            ->assertFailed();
+
+        // fail loudly and change NOTHING — not even the rest of the import
+        $this->assertSame(1, DB::table('consultations')->where('id', $cxId)->count());
+    }
+
+    public function test_import_still_imports_everything_else_while_consultations_are_preserved(): void
+    {
+        $this->seedLegacy();
+        $this->seedNewSystemConsultation();
+        \App\Models\Setting::current()->update(['consultations_source_of_truth' => true]);
+
+        $this->artisan('legacy:import')->assertSuccessful();
+
+        // admissions / patients / reference tables import exactly as they do today
+        $this->assertSame('Saudi Arabia', DB::table('patients')->where('mrn', '10001')->value('nationality'));
+        $this->assertSame(4, DB::table('admissions')->count());
+        $this->assertSame(1, DB::table('specialties')->where('name', 'Hospitalist')->count());
+        $this->assertNotNull(DB::table('users')->where('legacy_id', 7)->value('id'));
+    }
+
+    // ============================================================================================
     // Phase 4 — Item 8: expanded ImportController validator coverage. These exercise the bulk-import
     // CSV parser/committer (NOT the legacy:import command) — they call ImportController::parse via
     // reflection or POST the preview/store endpoints as an admin.

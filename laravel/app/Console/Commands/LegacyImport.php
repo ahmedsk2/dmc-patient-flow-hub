@@ -16,7 +16,9 @@ use Illuminate\Support\Str;
  */
 class LegacyImport extends Command
 {
-    protected $signature = 'legacy:import {--fresh : wipe new tables first (default true)}';
+    protected $signature = 'legacy:import
+        {--fresh : wipe new tables first (default true)}
+        {--wipe-consultations : rebuild consultations from legacy even though this app may own them — REFUSED while settings.consultations_source_of_truth is on}';
     protected $description = 'Import & transform the original DMC database into the new clean schema';
 
     private $legacy;
@@ -28,6 +30,22 @@ class LegacyImport extends Command
         // admin's already-higher (or unlimited) setting.
         $this->ensureMemory('1024M');
 
+        // ── Consultation ledger W0: cutover safety gate ────────────────────────────────────────
+        // Read the flag BEFORE anything is truncated: `settings` is itself rebuilt below, so this is
+        // the last moment the stored value is readable. Query the table directly rather than through
+        // Setting::current(), which memoises per-request and would go stale across the rebuild.
+        $preserveConsultations = (bool) DB::table('settings')->orderBy('id')->value('consultations_source_of_truth');
+
+        if ($this->option('wipe-consultations') && $preserveConsultations) {
+            $this->error('Refusing to wipe consultations: settings.consultations_source_of_truth is ON, '
+                . 'so THIS application — not the legacy database — owns the consultation ledger. '
+                . 'Nothing was imported. Turn the flag off in Control → System if you really mean to '
+                . 'rebuild consultations from the legacy dump (this destroys every consultation '
+                . 'entered here since cutover).');
+
+            return self::FAILURE;
+        }
+
         $this->legacy = DB::connection('legacy');
         $this->info('Importing from legacy connection: ' . $this->legacy->getDatabaseName());
 
@@ -35,14 +53,23 @@ class LegacyImport extends Command
         // letting an AUTO_INCREMENT column turn 0 into the next value.
         DB::statement("SET SESSION sql_mode='NO_AUTO_VALUE_ON_ZERO'");
 
-        Schema::disableForeignKeyConstraints();
         // Handover + notification tables MUST be truncated whenever admissions are re-imported:
         // they reference admissions/users by id, and a fresh import re-seeds those ids — TRUNCATE
         // (with FK checks off) bypasses the cascade, so stale rows would otherwise survive and
         // point at the wrong (or missing) episodes after a new legacy dump is loaded.
-        foreach (['handover_signatures', 'handover_revisions', 'handovers', 'notifications',
-                  'admission_diagnoses', 'admissions', 'consultations', 'patients', 'icd10',
-                  'specialties', 'consultation_reasons', 'tb_diagnoses', 'countries', 'settings'] as $t) {
+        $tables = ['handover_signatures', 'handover_revisions', 'handovers', 'notifications',
+                   'admission_diagnoses', 'admissions', 'consultations', 'patients', 'icd10',
+                   'specialties', 'consultation_reasons', 'tb_diagnoses', 'countries', 'settings'];
+        $consultationLinks = [];
+        if ($preserveConsultations) {
+            $tables = array_values(array_diff($tables, ['consultations']));
+            // Surviving rows point at patient/user ids that are about to be re-seeded. Capture their
+            // natural keys now so they can be re-pointed after the rebuild (see relinkPreserved…).
+            $consultationLinks = $this->captureConsultationLinks();
+        }
+
+        Schema::disableForeignKeyConstraints();
+        foreach ($tables as $t) {
             DB::table($t)->truncate();
         }
         DB::table('users')->whereNotNull('legacy_id')->delete();
@@ -52,14 +79,73 @@ class LegacyImport extends Command
         $userMap = $this->importUsers();
         $patientMap = $this->importPatients();
         $this->importAdmissions($userMap, $patientMap);
-        $this->importConsultations($userMap, $patientMap);
-        $this->importSettings();
+        if ($preserveConsultations) {
+            $kept = (int) DB::table('consultations')->count();
+            $this->warn("  consultations preserved: {$kept} row(s) kept and NOT re-imported — "
+                . 'settings.consultations_source_of_truth is ON, so this application owns the '
+                . 'consultation ledger and the legacy table is ignored.');
+            $this->relinkPreservedConsultations($consultationLinks, $userMap, $patientMap);
+        } else {
+            $this->importConsultations($userMap, $patientMap);
+        }
+        $this->importSettings($preserveConsultations);
 
         $this->newLine();
         $this->info('✔ Import complete.');
         $this->table(['Table', 'Rows'], collect(['users', 'patients', 'admissions', 'admission_diagnoses', 'consultations', 'icd10', 'specialties'])
             ->map(fn ($t) => [$t, number_format(DB::table($t)->count())])->all());
+
         return self::SUCCESS;
+    }
+
+    /**
+     * Natural-key snapshot of the surviving consultations' foreign keys, taken BEFORE the truncate.
+     * `patients` is rebuilt from scratch and legacy-sourced users are deleted + re-inserted, so both
+     * sets of ids change; `patients.mrn` and `users.legacy_id` survive and let each row be re-pointed
+     * afterwards. A user with NO legacy_id was created inside this application, is never deleted
+     * here, and keeps its id — which is what preserves the immutable `entered_by` attribution.
+     */
+    private function captureConsultationLinks(): array
+    {
+        return DB::table('consultations as c')
+            ->leftJoin('users as cu', 'cu.id', '=', 'c.consultant_id')
+            ->leftJoin('users as eu', 'eu.id', '=', 'c.entered_by')
+            ->selectRaw('c.id, c.mrn, c.patient_id, c.consultant_id, c.entered_by,
+                         cu.legacy_id consultant_legacy_id, eu.legacy_id entered_by_legacy_id')
+            ->get()->map(fn ($r) => (array) $r)->all();
+    }
+
+    /**
+     * Re-point preserved consultations at the rebuilt rows. Writes through the query builder on
+     * purpose: this is a mechanical re-link, not a clinical edit, so it must not touch updated_at,
+     * fire model events, or bust caches. An unresolvable reference becomes NULL (the columns are all
+     * nullable, nullOnDelete) rather than a dangling id pointing at a different human being.
+     */
+    private function relinkPreservedConsultations(array $links, array $userMap, array $patientMap): void
+    {
+        $remapUser = function ($currentId, $legacyId) use ($userMap) {
+            if ($currentId === null) { return null; }
+            if ($legacyId === null) { return (int) $currentId; }   // app-created user — its id survived
+            return $userMap[(int) $legacyId] ?? null;              // legacy user — new id, or gone
+        };
+
+        $changed = 0;
+        foreach ($links as $l) {
+            $mrn = mb_substr(trim((string) ($l['mrn'] ?? '')), 0, 64);
+            $new = [
+                'patient_id' => $mrn === '' ? null : ($patientMap[$mrn] ?? null),
+                'consultant_id' => $remapUser($l['consultant_id'], $l['consultant_legacy_id']),
+                'entered_by' => $remapUser($l['entered_by'], $l['entered_by_legacy_id']),
+            ];
+            if ((int) $new['patient_id'] === (int) $l['patient_id']
+                && (int) $new['consultant_id'] === (int) $l['consultant_id']
+                && (int) $new['entered_by'] === (int) $l['entered_by']) {
+                continue;
+            }
+            DB::table('consultations')->where('id', $l['id'])->update($new);
+            $changed++;
+        }
+        $this->info("  preserved consultations re-linked: {$changed} row(s) re-pointed at the rebuilt patient/user ids");
     }
 
     private function importReference(): void
@@ -339,7 +425,13 @@ class LegacyImport extends Command
         $this->info('  consultations imported: ' . number_format(DB::table('consultations')->count()));
     }
 
-    private function importSettings(): void
+    /**
+     * Rebuild the single settings row from legacy. `consultations_source_of_truth` has no legacy
+     * counterpart, so it is CARRIED THROUGH from the value read at the top of handle(); otherwise
+     * the first import would silently reset the gate to false and the second would destroy the
+     * ledger it was installed to protect.
+     */
+    private function importSettings(bool $preserveConsultations): void
     {
         $s = $this->legacy->table('settings')->where('id', 0)->first();
         DB::table('settings')->insert([
@@ -351,6 +443,7 @@ class LegacyImport extends Command
             'short_los' => (int) ($s->short_los ?? 5),
             'long_los' => (int) ($s->long_los ?? 11),
             'mfa_enforcement' => (int) ($s->mfa_enforcement ?? 0),
+            'consultations_source_of_truth' => $preserveConsultations,
             'created_at' => now(), 'updated_at' => now(),
         ]);
         $this->info('  settings imported');
