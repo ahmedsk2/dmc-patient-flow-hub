@@ -57,9 +57,27 @@ class ReportsController extends Controller
         ]);
     }
 
+    /**
+     * §3.6 stopgap: bound a synchronous booklet render so a slow report cannot hold a web worker open
+     * indefinitely.
+     *
+     * Deliberately a NO-OP on the CLI. PHP's CLI SAPI defaults max_execution_time to 0 (unlimited), and
+     * the limit is per-PROCESS, not per-call — so setting it here caps everything that runs afterwards in
+     * the same process. In PHPUnit that means one Reports test silently puts the whole remaining suite on
+     * a 120-second budget and the run dies mid-way with "Premature end of PHP process"; in a queue worker
+     * it would cap a legitimately long render (GenerateMonthlyPdf).
+     */
+    private function boundSyncRender(): void
+    {
+        if (PHP_SAPI === 'cli') {
+            return;
+        }
+        @ini_set('max_execution_time', '120');
+    }
+
     public function pdf(ReportYearRequest $request): SymfonyResponse
     {
-        @ini_set('max_execution_time', '120'); // §3.6 stopgap: bound the synchronous annual booklet
+        $this->boundSyncRender();
         $year = (int) ($request->validated('year') ?: Carbon::today()->year);
         $pdf = Pdf::loadView('reports.annual-pdf', $this->gather($year))->setPaper('a4', 'landscape');
 
@@ -74,7 +92,7 @@ class ReportsController extends Controller
      */
     public function consultantPdf(ConsultantScorecardRequest $request, User $user, StatisticsController $stats): SymfonyResponse
     {
-        @ini_set('max_execution_time', '120');
+        $this->boundSyncRender();
         $data = $request->validated();
         $to = isset($data['to']) ? Carbon::parse($data['to']) : Carbon::today();
         $from = isset($data['from']) ? Carbon::parse($data['from']) : $to->copy()->startOfYear();
@@ -132,7 +150,7 @@ class ReportsController extends Controller
      */
     public function governancePdf(GovernanceReportRequest $request): SymfonyResponse
     {
-        @ini_set('max_execution_time', '120');
+        $this->boundSyncRender();
         $data = $request->validated();
         if ($data['period_type'] === 'quarter') {
             $startMonth = ($data['quarter'] - 1) * 3 + 1;
@@ -404,7 +422,7 @@ class ReportsController extends Controller
                 'message' => 'Your PDF is being generated — you will be notified when it is ready.']);
         }
 
-        @ini_set('max_execution_time', '120'); // §3.6 stopgap: bound the synchronous monthly booklet
+        $this->boundSyncRender();
         $pdf = Pdf::loadView('reports.monthly-pdf', $this->gatherBooklet($year))->setPaper('a4', 'landscape');
 
         return $pdf->download("dmc-monthly-report-{$year}.pdf");
