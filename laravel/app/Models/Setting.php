@@ -8,7 +8,11 @@ class Setting extends Model
 {
     protected $guarded = ['id'];
 
-    protected $casts = ['log_record_opens' => 'boolean', 'mail_password' => 'encrypted'];
+    protected $casts = [
+        'log_record_opens' => 'boolean',
+        'consultations_source_of_truth' => 'boolean',
+        'mail_password' => 'encrypted',
+    ];
 
     // The SMTP secret. Eloquent's toArray()/toJson DECRYPTS `encrypted` casts, so without $hidden the
     // plaintext would serialize into any Inertia prop that ships the raw model (e.g. Control's `settings`
