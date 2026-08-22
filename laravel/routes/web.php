@@ -148,6 +148,9 @@ Route::middleware(['auth', 'session.timeout', 'email.verify', 'mfa.enroll', 'pwd
     Route::post('/consultations/search', [ConsultationsController::class, 'index'])->name('consultations.search');
     Route::get('/consultations/search', fn () => redirect()->route('consultations.index'));
     Route::post('/consultations/{consultation}/signoff', [ConsultationsController::class, 'signoff'])->name('consultations.signoff');
+    // Wave 2b: the daily "seen today" tick. JSON in/out (the worklist calls it with fetch()), one
+    // row per consult per day enforced by a DB unique — a repeat tick answers 422, never overwrites.
+    Route::post('/consultations/{consultation}/followup', [ConsultationsController::class, 'followup'])->name('consultations.followup');
     Route::post('/consultations/{consultation}/reverse-signoff', [ConsultationsController::class, 'reverseSignoff'])->name('consultations.reverseSignoff');
     // Wave W2A: explicit four-state moves (new→active, new→ongoing, active⇄ongoing). Sign-off is
     // deliberately NOT reachable here — it carries a required response payload and its own gate.

@@ -9,9 +9,12 @@ use App\Models\Specialty;
 use App\Models\User;
 use App\Support\Audit;
 use App\Support\AuditDiff;
+use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -235,6 +238,82 @@ class ConsultationsController extends Controller
         ]);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultation signed off.']);
+    }
+
+    /**
+     * POST /consultations/{consultation}/followup — record TODAY's "seen" tick.
+     *
+     * JSON in / JSON out: the worklist ticks rows off with fetch() and renders a refusal inline, so
+     * this must answer a plain 422 rather than an Inertia redirect. Non-api/* routes do not get
+     * Laravel's automatic exception-to-JSON rendering, which is what jsonValidate()/jsonFail() are for.
+     *
+     * Order of checks matters:
+     *   1. Observers are read-only BEFORE any capability flag (the global guarantee).
+     *   2. The actor must be able to SEE the consult (own specialty / coordinator / admin).
+     *   3. A signed-off consult is closed — nothing may be appended to it.
+     *   4. One tick per consult per day. A second tick the same day is REJECTED with a friendly 422,
+     *      never a silent overwrite: the row is append-only and "seen X of Y" must stay exact.
+     *   5. The FIRST tick on a `new` consult promotes it to `active` — the single automatic status
+     *      transition in the whole design, because "not seen" has just become untrue.
+     */
+    public function followup(Request $request, Consultation $consultation): JsonResponse
+    {
+        $user = Auth::user();
+        if ($user->isObserver()) {
+            throw new AccessDeniedHttpException('Observers have read-only access.');
+        }
+        if (! $user->canSeeConsultation($consultation)) {
+            throw new AccessDeniedHttpException('This consultation belongs to another service.');
+        }
+
+        $data = $this->jsonValidate($request, ['note' => ['nullable', 'string', 'max:500']]);
+        $note = trim((string) ($data['note'] ?? '')) ?: null;
+
+        if ($consultation->status === Consultation::STATUS_SIGNED_OFF) {
+            $this->jsonFail(['note' => 'This consultation is signed off — no further follow-up can be recorded.']);
+        }
+
+        $today = now()->toDateString();
+        if ($consultation->followups()->whereDate('followup_date', $today)->exists()) {
+            $this->jsonFail(['note' => 'A follow-up is already recorded for this consultation today.']);
+        }
+
+        $promoted = false;
+        try {
+            DB::transaction(function () use ($consultation, $note, $today, &$promoted) {
+                $consultation->followups()->create([
+                    'followup_date' => $today,
+                    'note' => $note,
+                    'author_id' => Auth::id(),          // session-sourced, never from the payload
+                ]);
+                if ($consultation->status === Consultation::STATUS_NEW) {
+                    $consultation->update(['status' => Consultation::STATUS_ACTIVE]);
+                    $promoted = true;
+                }
+                Audit::log('consultation.followup', 'consultation', (string) $consultation->id, [
+                    'followup_date' => $today,
+                    'has_note' => $note !== null,
+                ]);
+                if ($promoted) {
+                    Audit::log('consultation.status_change', 'consultation', (string) $consultation->id, [
+                        'from' => Consultation::STATUS_NEW,
+                        'to' => Consultation::STATUS_ACTIVE,
+                        'reason' => 'first_followup',
+                    ]);
+                }
+            });
+        } catch (UniqueConstraintViolationException) {
+            // lost a race with a concurrent tick (double-click / two devices) — same friendly answer
+            // as the pre-check above rather than a 500 on a live clinical page
+            $this->jsonFail(['note' => 'A follow-up is already recorded for this consultation today.']);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'status' => $consultation->fresh()->status,
+            'promoted' => $promoted,
+            'followup_date' => $today,
+        ]);
     }
 
     /**
