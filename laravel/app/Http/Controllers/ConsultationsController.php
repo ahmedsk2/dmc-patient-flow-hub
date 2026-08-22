@@ -32,6 +32,12 @@ class ConsultationsController extends Controller
         Consultation::STATUS_SIGNED_OFF => [],
     ];
 
+    /** The four tabs of the workspace, in display order — also the only accepted `?status=` values. */
+    private const STATUS_TABS = [
+        Consultation::STATUS_NEW, Consultation::STATUS_ACTIVE,
+        Consultation::STATUS_ONGOING, Consultation::STATUS_SIGNED_OFF,
+    ];
+
     public function index(Request $request): Response|RedirectResponse
     {
         // legacy access_PICU_patients [0,2,3,4] page gate — observers are read-only and the
@@ -47,18 +53,22 @@ class ConsultationsController extends Controller
         }
 
         $filters = $request->only('search', 'status', 'scope');
-        $status = $filters['status'] ?? 'active';
+        // W2A: `status` now names one of the FOUR real states. Anything else — an absent param, or a
+        // bookmarked legacy `?status=signed` — falls back to `new`, the tab that demands triage. The
+        // per-tab counts ship on every render, so an empty default tab still points at the work.
+        $status = in_array($filters['status'] ?? '', self::STATUS_TABS, true)
+            ? $filters['status']
+            : Consultation::STATUS_NEW;
         $mine = ($filters['scope'] ?? '') === 'mine';
         $reasons = ConsultationReason::pluck('name', 'id');
 
-        // W1: specialty scoping is enforced HERE, server-side. The UI never decides who sees what.
-        $viewer = Auth::user();
+        // W1 specialty scoping: every list AND every count runs through the same visibility scope,
+        // so a tab count can never advertise rows the viewer is not allowed to open.
+        $scoped = fn () => Consultation::query()->visibleTo(Auth::user());
 
-        $consultations = Consultation::query()
-            ->visibleTo($viewer)
+        $consultations = $scoped()
             ->with('consultant:id,full_name,name')
-            ->when($status === 'active', fn ($q) => $q->whereNull('signoff_date'))
-            ->when($status === 'signed', fn ($q) => $q->whereNotNull('signoff_date'))
+            ->where('status', $status)
             ->when($mine, fn ($q) => $q->where('consultant_id', Auth::id()))
             ->when($filters['search'] ?? null, fn ($q, $s) => $q->where(fn ($w) =>
                 $w->where('patient_name', 'like', "%{$s}%")->orWhere('mrn', 'like', "%{$s}%")))
@@ -78,10 +88,15 @@ class ConsultationsController extends Controller
                 'consultant_id' => $c->consultant_id,
                 'date' => optional($c->consultation_date)->toDateString(),
                 'signoff' => optional($c->signoff_date)->toDateString(),
+                'status' => $c->status,
+                'open_days' => self::openDays($c),
+                'disposition' => $c->response_disposition,
                 'reasons' => collect($c->indication ?? [])->map(fn ($id) => $reasons[$id] ?? null)->filter()->values(),
                 'indication_ids' => array_map('intval', $c->indication ?? []),
                 'other' => $c->other_indication,
             ]);
+
+        $counts = $scoped()->selectRaw('status, COUNT(*) as c')->groupBy('status')->pluck('c', 'status');
 
         return Inertia::render('Consultations/Index', [
             'consultations' => $consultations,
@@ -90,13 +105,14 @@ class ConsultationsController extends Controller
             // INTERNAL specialty when "to service" matches one
             'specialties' => Specialty::orderBy('name')->get(['id', 'name', 'is_external']),
             'stats' => [
-                // every counter is scoped the same way as the list — a headline the viewer cannot
-                // drill into would be a lie about their own book
-                'active' => Consultation::visibleTo($viewer)->whereNull('signoff_date')->count(),
-                'total' => Consultation::visibleTo($viewer)->count(),
-                // personal counter for consultant-role viewers (K1-13): own active out of total active
-                'mine_active' => Consultation::visibleTo($viewer)->whereNull('signoff_date')
-                    ->where('consultant_id', Auth::id())->count(),
+                Consultation::STATUS_NEW => (int) ($counts[Consultation::STATUS_NEW] ?? 0),
+                Consultation::STATUS_ACTIVE => (int) ($counts[Consultation::STATUS_ACTIVE] ?? 0),
+                Consultation::STATUS_ONGOING => (int) ($counts[Consultation::STATUS_ONGOING] ?? 0),
+                Consultation::STATUS_SIGNED_OFF => (int) ($counts[Consultation::STATUS_SIGNED_OFF] ?? 0),
+                'total' => (int) $counts->sum(),
+                // personal counter for consultant-role viewers (K1-13): own OPEN out of all open
+                'mine_open' => $scoped()->open()->where('consultant_id', Auth::id())->count(),
+                'open' => $scoped()->open()->count(),
             ],
             'reasons' => $reasons->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
             'consultants' => User::consultantOptions(),
@@ -303,5 +319,27 @@ class ConsultationsController extends Controller
             ->first(fn (Specialty $s) => mb_strtolower(trim((string) $s->name)) === $wanted);
 
         return $match?->id;
+    }
+
+    /**
+     * How long an OPEN consult has been waiting, in whole days.
+     *
+     * `requested_at` is the authoritative request time but is NULL for all 1,283 historical rows —
+     * §4.4 refuses to fabricate a time that never existed — so ageing falls back to the date-only
+     * `consultation_date` those rows do have. Both are compared at day granularity, which is the
+     * only precision the fallback can honestly claim. A signed-off consult is not open and has no
+     * ageing; a row with neither timestamp reports NULL ("—") rather than a misleading 0.
+     */
+    private static function openDays(Consultation $c): ?int
+    {
+        if ($c->status === Consultation::STATUS_SIGNED_OFF) {
+            return null;
+        }
+        $start = $c->requested_at ?? $c->consultation_date;
+        if ($start === null) {
+            return null;
+        }
+
+        return max(0, (int) $start->copy()->startOfDay()->diffInDays(now()->startOfDay()));
     }
 }

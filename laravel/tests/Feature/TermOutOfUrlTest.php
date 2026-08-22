@@ -144,8 +144,10 @@ class TermOutOfUrlTest extends TestCase
         Consultation::create(['mrn' => '70000007', 'patient_name' => 'Cons Other', 'consultation_date' => now()->toDateString(),
             'indication' => [], 'current_location' => 'Ward', 'owning_specialty_id' => $cardio->id]);
 
+        // W2A: `status` names one of the four real states; a freshly created consult is `new`.
+        // What this test pins — the TERM travels in the POST body, never the URL — is unchanged.
         $this->actingAs($consultant)
-            ->post('/consultations/search?status=active', ['search' => 'Findme'])
+            ->post('/consultations/search?status=new', ['search' => 'Findme'])
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('Consultations/Index')

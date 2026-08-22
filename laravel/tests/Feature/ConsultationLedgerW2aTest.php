@@ -8,6 +8,7 @@ use App\Models\Specialty;
 use App\Models\User;
 use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
 /**
@@ -409,5 +410,80 @@ class ConsultationLedgerW2aTest extends TestCase
 
         $this->assertSame(Consultation::STATUS_SIGNED_OFF, $c->fresh()->status);
         $this->assertNotNull($c->fresh()->signoff_date);
+    }
+
+    // ---- 14. four status tabs, live counts, ageing -----------------------------------------------
+
+    public function test_the_workspace_filters_by_status_and_ships_a_live_count_per_tab(): void
+    {
+        $this->consultation(['status' => Consultation::STATUS_NEW]);
+        $this->consultation(['status' => Consultation::STATUS_ACTIVE]);
+        $this->consultation(['status' => Consultation::STATUS_ACTIVE]);
+        $this->consultation(['status' => Consultation::STATUS_ONGOING]);
+        $this->consultation(['status' => Consultation::STATUS_SIGNED_OFF, 'signoff_date' => now()->toDateString()]);
+
+        $this->actingAs($this->admin())->get('/consultations?status=active')
+            ->assertInertia(fn (AssertableInertia $p) => $p
+                ->component('Consultations/Index')
+                ->where('filters.status', 'active')
+                ->where('consultations.total', 2)
+                ->where('stats.new', 1)
+                ->where('stats.active', 2)
+                ->where('stats.ongoing', 1)
+                ->where('stats.signed_off', 1)
+                ->where('stats.total', 5));
+
+        $this->actingAs($this->admin())->get('/consultations?status=ongoing')
+            ->assertInertia(fn (AssertableInertia $p) => $p->where('consultations.total', 1));
+
+        $this->actingAs($this->admin())->get('/consultations?status=signed_off')
+            ->assertInertia(fn (AssertableInertia $p) => $p
+                ->where('consultations.total', 1)
+                ->where('consultations.data.0.open_days', null));
+    }
+
+    public function test_an_unknown_status_falls_back_to_the_new_tab(): void
+    {
+        $this->consultation(['status' => Consultation::STATUS_NEW]);
+        $this->consultation(['status' => Consultation::STATUS_ONGOING]);
+
+        $this->actingAs($this->admin())->get('/consultations?status=signed')
+            ->assertInertia(fn (AssertableInertia $p) => $p
+                ->where('filters.status', 'new')
+                ->where('consultations.total', 1));
+    }
+
+    public function test_open_days_uses_requested_at_when_it_is_present(): void
+    {
+        $this->consultation([
+            'status' => Consultation::STATUS_ONGOING,
+            'requested_at' => now()->subDays(6),
+            'consultation_date' => now()->subDays(30)->toDateString(),   // must be ignored
+        ]);
+
+        $this->actingAs($this->admin())->get('/consultations?status=ongoing')
+            ->assertInertia(fn (AssertableInertia $p) => $p->where('consultations.data.0.open_days', 6));
+    }
+
+    public function test_open_days_falls_back_to_consultation_date_for_historical_rows(): void
+    {
+        $this->consultation([
+            'status' => Consultation::STATUS_ONGOING,
+            'requested_at' => null,                                       // every legacy row
+            'consultation_date' => now()->subDays(3)->toDateString(),
+        ]);
+
+        $this->actingAs($this->admin())->get('/consultations?status=ongoing')
+            ->assertInertia(fn (AssertableInertia $p) => $p->where('consultations.data.0.open_days', 3));
+    }
+
+    public function test_a_row_with_neither_timestamp_reports_no_ageing_rather_than_zero(): void
+    {
+        $this->consultation([
+            'status' => Consultation::STATUS_ONGOING, 'requested_at' => null, 'consultation_date' => null,
+        ]);
+
+        $this->actingAs($this->admin())->get('/consultations?status=ongoing')
+            ->assertInertia(fn (AssertableInertia $p) => $p->where('consultations.data.0.open_days', null));
     }
 }

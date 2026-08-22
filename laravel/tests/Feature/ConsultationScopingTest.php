@@ -63,11 +63,13 @@ class ConsultationScopingTest extends TestCase
                 ->where('consultations.data.0.mrn', '75000001')
                 // EVERY headline counter is scoped, not just the list. An unscoped `active` would be
                 // a cross-specialty aggregate disclosure sitting on top of a list of one row.
+                // W2A: `stats` now reports the four real states by name — the seeded row carries no
+                // explicit status, so it defaults to `new`, not the old blanket "not signed off".
                 ->where('stats.total', 1)
-                ->where('stats.active', 1)
-                // `mine_active` is equal scoped or not by construction (a consult assigned to you is
+                ->where('stats.new', 1)
+                // `mine_open` is equal scoped or not by construction (a consult assigned to you is
                 // always inside visibleTo) — pinned here so the number itself cannot drift.
-                ->where('stats.mine_active', 0));
+                ->where('stats.mine_open', 0));
     }
 
     public function test_a_coordinator_and_an_admin_see_every_book(): void
