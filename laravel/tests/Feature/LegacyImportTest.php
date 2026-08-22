@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
 /**
@@ -21,7 +22,14 @@ use Tests\TestCase;
  * NOTE: legacy:import TRUNCATEs the new tables (TRUNCATE = implicit COMMIT), which breaks out of
  * RefreshDatabase's wrapping transaction — tearDown() resets the affected tables by hand so the
  * next test starts from the empty post-migration state RefreshDatabase expects.
+ *
+ * GROUPED 'slow-import' because every test here rebuilds EVERY table end-to-end: ~18 full imports
+ * costing roughly 230s, i.e. over half the whole suite's runtime. A plain `artisan test` (and CI)
+ * still runs them — the group only lets a tight edit/verify loop opt out with
+ * `--exclude-group slow-import`. Never exclude them in a run that gates a release: this class is
+ * what proves a data reload cannot destroy or misattribute the consultation ledger.
  */
+#[Group('slow-import')]
 class LegacyImportTest extends TestCase
 {
     use RefreshDatabase;
