@@ -161,6 +161,9 @@ const clinicalNavSections = computed(() => {
             // instead of living only behind the board's print icon.
             { label: 'Active List', href: '/active-list', icon: 'list', can: true },
             { label: 'Consultations', href: '/consultations', icon: 'chat', can: !observer },
+            // W4 — the physician-scoped consultation dashboard. Same visibility rule as the
+            // workspace itself (clinical roles, never Observer); the route enforces it server-side.
+            { label: 'Consultation Dashboard', href: '/consultations/dashboard', icon: 'grid', can: !observer },
             // W3: the printable per-service shift-handover sheet. Same reasoning as Active List —
             // it is read at every handover, so it gets its own row rather than hiding behind an
             // icon on the workspace. Server-side gate is identical (observers are refused).

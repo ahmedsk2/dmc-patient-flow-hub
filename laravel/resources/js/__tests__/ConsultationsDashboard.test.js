@@ -1,12 +1,24 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { shallowMount } from '@vue/test-utils';
 
+// The page navigates with router.visit and reads no shared page props beyond auth; usePage is
+// stubbed so the component mounts outside an Inertia app.
+let authUser;
 vi.mock('@inertiajs/vue3', () => ({
-    router: { get: vi.fn() },
+    Link: { template: '<a><slot /></a>' },
+    router: { visit: vi.fn(), reload: vi.fn(), on: vi.fn() },
+    usePage: () => ({ props: { auth: { user: authUser } } }),
 }));
 vi.mock('@/Layouts/AppLayout.vue', () => ({ default: { template: '<div><slot /></div>' } }));
+// the chart-theme composable reads CSS custom properties — stub to inert refs.
+vi.mock('@/composables/useChartTheme', () => ({
+    useChartTheme: () => ({
+        gridColor: { value: '#000' }, axisColor: { value: '#000' }, strokeColor: { value: '#000' }, inkColor: { value: '#000' },
+        series: { value: { primary: '#009ca6', accent: '#d9a23c', deep: '#00565e', info: '#2f7fe0', muted: '#5b6a6e', primarySoft: '#38b4ba' } },
+    }),
+}));
 
-import Dashboard from '@/Pages/Consultations/Dashboard.vue';
+import ConsultationsDashboard from '@/Pages/Consultations/Dashboard.vue';
 import { router } from '@inertiajs/vue3';
 
 const baseProps = (over = {}) => ({
@@ -14,84 +26,113 @@ const baseProps = (over = {}) => ({
     filters: { specialty_id: null },
     specialties: [],
     scopeLabel: 'Cardiology',
-    openCounts: { new: 1, active: 2, ongoing: 3, total: 6 },
-    ageing: { b0_2: 1, b3_7: 2, b8_plus: 3, unknown: 4 },
-    generatedAt: '22 Aug 2026, 09:15 Asia/Riyadh',
+    openCounts: { new: 1, active: 4, ongoing: 2, total: 7 },
+    ageing: { b0_2: 3, b3_7: 2, b8_plus: 1, unknown: 1 },
+    today: { due: 4, seen: 3 },
+    turnaround: { first_followup_hours: 2.5, first_followup_n: 12, signoff_hours: 30.0, signoff_n: 9, legacy_excluded: 1283, from_cutover: true },
+    trend: { labels: ['Mar 26', 'Apr 26', 'May 26', 'Jun 26', 'Jul 26', 'Aug 26'], data: [3, 5, 2, 8, 4, 6] },
+    topIndications: [{ label: 'Chest pain', value: 9 }, { label: 'Arrhythmia', value: 4 }],
+    perConsultant: [{ id: 7, name: 'Dr Busy', c: 5 }, { id: 8, name: 'Dr Quiet', c: 2 }],
+    generatedAt: '09:41',
     ...over,
 });
 
-const mount = (over = {}) => shallowMount(Dashboard, {
-    props: baseProps(over),
-    global: { renderStubDefaultSlot: true },
-});
+const mountAs = (user, over = {}) => {
+    authUser = user;
+    return shallowMount(ConsultationsDashboard, {
+        props: baseProps(over),
+        global: { renderStubDefaultSlot: true, stubs: { apexchart: true, teleport: true } },
+    });
+};
 
-beforeEach(() => router.get.mockClear());
-
-// W4 — the physician dashboard renders server-scoped figures and re-derives NOTHING: every count
-// on it was already filtered by Consultation::scopeVisibleTo and the open/soft-delete invariants.
-describe('Consultations/Dashboard — server-scoped figures', () => {
-    const cellsOf = (w, section) => w.findAll(`section[aria-labelledby="${section}"] dd`).map((d) => d.text());
-
-    it('renders the four open counts exactly as handed', () => {
-        expect(cellsOf(mount(), 'open-heading')).toEqual(['1', '2', '3', '6']);
+describe('Consultations dashboard — scope header + picker', () => {
+    it('shows the scope label and hides the specialty picker for a plain consultant', () => {
+        const w = mountAs({ role: 3, is_admin: false });
+        expect(w.text()).toContain('Cardiology');
+        expect(w.find('select[data-testid="specialty-picker"]').exists()).toBe(false);
     });
 
-    // The controller derives `total` from the grouped SQL rows, so it legitimately exceeds
-    // new+active+ongoing when a row carries an unrecognised status. If this page ever recomputed the
-    // sum client-side it would disagree with the ageing buckets, which counted that row.
-    it('shows the server total verbatim and never recomputes it from the three named tiles', () => {
-        const w = mount({ openCounts: { new: 1, active: 0, ongoing: 0, total: 2 } });
-        expect(cellsOf(w, 'open-heading')).toEqual(['1', '0', '0', '2']);
-    });
+    it('renders the specialty picker for a picker (admin / coordinator) and navigates on change', async () => {
+        router.visit.mockClear();
+        const w = mountAs({ role: 0, is_admin: true }, {
+            canPick: true,
+            scopeLabel: 'All specialties',
+            specialties: [{ id: 2, name: 'Cardiology' }, { id: 3, name: 'Nephrology' }],
+        });
+        const picker = w.find('select[data-testid="specialty-picker"]');
+        expect(picker.exists()).toBe(true);
+        // "All specialties" + the two options
+        expect(picker.findAll('option')).toHaveLength(3);
 
-    it('renders all four ageing buckets, including the date-less rows', () => {
-        expect(cellsOf(mount(), 'ageing-heading')).toEqual(['1', '2', '3', '4']);
-        expect(mount().text()).toContain('No request date');
-    });
-
-    // The honesty requirement: date-less rows are reported separately, and the page SAYS so rather
-    // than letting a reader assume every open consult was aged.
-    it('states in plain language that date-less rows were not given a date', () => {
-        expect(mount().text()).toContain('rather than being given a date they never had');
-    });
-
-    it('stamps the scope label and the generated-at time, which carries a day and a zone', () => {
-        const text = mount().text();
-        expect(text).toContain('Cardiology');
-        expect(text).toContain('22 Aug 2026, 09:15 Asia/Riyadh');
+        await picker.setValue('3');
+        expect(router.visit).toHaveBeenCalledWith('/consultations/dashboard', { data: { specialty_id: '3' } });
     });
 });
 
-describe('Consultations/Dashboard — the specialty picker', () => {
-    it('is hidden for a viewer the server did not grant the pick', () => {
-        expect(mount().find('select').exists()).toBe(false);
+describe('Consultations dashboard — honesty of the turnaround block', () => {
+    it('renders the visible "from cutover" note naming the excluded historical count', () => {
+        const note = mountAs({ role: 3, is_admin: false }).find('[data-testid="cutover-note"]');
+        expect(note.exists()).toBe(true);
+        expect(note.text()).toContain('from cutover');
+        expect(note.text()).toContain('1283');
+        // the note must be VISIBLE, not screen-reader-only — the number is the caveat
+        expect(note.classes()).not.toContain('sr-only');
     });
 
-    it('is shown for a picker and reflects the server-side filter', () => {
-        const w = mount({
-            canPick: true, filters: { specialty_id: 7 },
-            specialties: [{ id: 7, name: 'Nephrology' }, { id: 9, name: 'Cardiology' }],
+    it('renders the note even when nothing was excluded, so the window is always stated', () => {
+        const w = mountAs({ role: 3, is_admin: false }, {
+            turnaround: { first_followup_hours: 1.0, first_followup_n: 2, signoff_hours: 4.0, signoff_n: 2, legacy_excluded: 0, from_cutover: true },
         });
-        const select = w.find('select');
-        expect(select.exists()).toBe(true);
-        expect(select.element.value).toBe('7');
-        expect(select.findAll('option').map((o) => o.text()))
-            .toEqual(['All specialties', 'Nephrology', 'Cardiology']);
+        expect(w.find('[data-testid="cutover-note"]').text()).toContain('from cutover');
     });
 
-    it('navigates with specialty_id on a pick, and with no filter at all on "All specialties"', async () => {
-        const w = mount({
-            canPick: true, filters: { specialty_id: null },
-            specialties: [{ id: 7, name: 'Nephrology' }],
+    it('shows a "not enough data yet" placeholder instead of a zero when a median is null', () => {
+        const w = mountAs({ role: 3, is_admin: false }, {
+            turnaround: { first_followup_hours: null, first_followup_n: 0, signoff_hours: null, signoff_n: 0, legacy_excluded: 1283, from_cutover: true },
         });
-        const select = w.find('select');
+        const values = w.findAll('[data-testid="turnaround-value"]').map((n) => n.text());
+        expect(values).toEqual(['Not enough data yet', 'Not enough data yet']);
+        expect(values.join(' ')).not.toContain('0.0');
+    });
 
-        await select.setValue('7');
-        expect(router.get).toHaveBeenLastCalledWith('/consultations/dashboard',
-            { specialty_id: '7' }, expect.objectContaining({ replace: true }));
+    it('formats a real median in hours', () => {
+        const values = mountAs({ role: 3, is_admin: false })
+            .findAll('[data-testid="turnaround-value"]').map((n) => n.text());
+        expect(values[0]).toBe('2.5 h');
+        expect(values[1]).toBe('30 h');
+    });
+});
 
-        await select.setValue('');
-        expect(router.get).toHaveBeenLastCalledWith('/consultations/dashboard',
-            {}, expect.objectContaining({ replace: true }));
+describe('Consultations dashboard — worklist + load', () => {
+    it('states today\'s completeness as "seen X of Y"', () => {
+        expect(mountAs({ role: 3, is_admin: false }).find('[data-testid="today-completeness"]').text())
+            .toContain('3 of 4');
+    });
+
+    it('reads 0 of 0 without a NaN when nothing is on the daily worklist', () => {
+        const w = mountAs({ role: 3, is_admin: false }, { today: { due: 0, seen: 0 } });
+        const text = w.find('[data-testid="today-completeness"]').text();
+        expect(text).toContain('0 of 0');
+        expect(text).not.toContain('NaN');
+    });
+
+    it('lists per-consultant load rows and drills into the workspace filtered to that consultant', async () => {
+        router.visit.mockClear();
+        const w = mountAs({ role: 3, is_admin: false });
+        const rows = w.findAll('[data-testid="load-row"]');
+        expect(rows).toHaveLength(2);
+        expect(rows[0].text()).toContain('Dr Busy');
+
+        await rows[0].trigger('click');
+        expect(router.visit).toHaveBeenCalledWith('/consultations', { data: { consultant_id: 7 } });
+    });
+
+    it('renders one row per top indication', () => {
+        expect(mountAs({ role: 3, is_admin: false }).findAll('[data-testid="indication-row"]')).toHaveLength(2);
+    });
+
+    it('renders a calm empty note instead of a chart when the trend has no data', () => {
+        const w = mountAs({ role: 3, is_admin: false }, { trend: { labels: [], data: [] } });
+        expect(w.text()).toContain('No data for this period.');
     });
 });
