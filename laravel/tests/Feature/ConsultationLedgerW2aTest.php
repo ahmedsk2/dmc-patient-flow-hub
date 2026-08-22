@@ -486,4 +486,46 @@ class ConsultationLedgerW2aTest extends TestCase
         $this->actingAs($this->admin())->get('/consultations?status=ongoing')
             ->assertInertia(fn (AssertableInertia $p) => $p->where('consultations.data.0.open_days', null));
     }
+
+    /**
+     * The per-status counts must answer the SAME question the list is currently answering. A
+     * clinician searching an MRN who lands on an empty `new` tab needs the OTHER tabs' badges to
+     * say where the match actually is — not an unconditional total that contradicts the empty list.
+     */
+    public function test_the_per_status_counts_follow_the_search_term_so_other_tabs_hint_at_a_match(): void
+    {
+        $this->consultation(['status' => Consultation::STATUS_NEW, 'patient_name' => 'Zephyr Match', 'mrn' => '90000001']);
+        $this->consultation(['status' => Consultation::STATUS_ACTIVE, 'patient_name' => 'Zephyr Match', 'mrn' => '90000002']);
+        $this->consultation(['status' => Consultation::STATUS_NEW, 'patient_name' => 'Someone Else', 'mrn' => '90000003']);
+
+        $this->actingAs($this->admin())->post('/consultations/search?status=new', ['search' => 'Zephyr'])
+            ->assertInertia(fn (AssertableInertia $p) => $p
+                ->where('consultations.total', 1)
+                ->where('stats.new', 1)
+                ->where('stats.active', 1)
+                ->where('stats.total', 2));
+    }
+
+    /**
+     * Same rule for the "mine" scope: a badge must not promise rows the toggled view can't show.
+     * Both rows are visible to `mine` under plain specialty scoping (same team) — the ONLY thing
+     * that should hide the other consultant's row from the counts is the mine filter itself, so
+     * this catches a regression in the filter that a scoping-only fixture (visibleTo already
+     * excluding the row) would miss.
+     */
+    public function test_the_per_status_counts_follow_the_mine_scope(): void
+    {
+        $cardio = Specialty::create(['name' => 'Cardiology W2a Mine', 'is_subspecialty' => true, 'is_external' => false]);
+        $mine = $this->user(User::ROLE_CONSULTANT, ['specialty_id' => $cardio->id]);
+        $other = $this->user(User::ROLE_CONSULTANT, ['specialty_id' => $cardio->id]);
+        $this->consultation(['status' => Consultation::STATUS_NEW, 'consultant_id' => $mine->id, 'owning_specialty_id' => $cardio->id]);
+        $this->consultation(['status' => Consultation::STATUS_ACTIVE, 'consultant_id' => $other->id, 'owning_specialty_id' => $cardio->id]);
+
+        $this->actingAs($mine)->get('/consultations?status=new&scope=mine')
+            ->assertInertia(fn (AssertableInertia $p) => $p
+                ->where('consultations.total', 1)
+                ->where('stats.new', 1)
+                ->where('stats.active', 0)
+                ->where('stats.total', 1));
+    }
 }

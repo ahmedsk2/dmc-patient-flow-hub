@@ -66,12 +66,20 @@ class ConsultationsController extends Controller
         // so a tab count can never advertise rows the viewer is not allowed to open.
         $scoped = fn () => Consultation::query()->visibleTo(Auth::user());
 
-        $consultations = $scoped()
-            ->with('consultant:id,full_name,name')
-            ->where('status', $status)
+        // The per-status tab counts must answer the SAME question the list is currently answering —
+        // "how many rows in this state match what I'm looking at" — not a silent unconditional total.
+        // Sharing this builder between the list and $counts (below) means a clinician who searches an
+        // MRN sees the tab badges agree with the list: zero in the current tab, N in another, which
+        // doubles as the "this patient's consult is over there" signal the search itself can't give
+        // once results are confined to one status.
+        $filtered = fn () => $scoped()
             ->when($mine, fn ($q) => $q->where('consultant_id', Auth::id()))
             ->when($filters['search'] ?? null, fn ($q, $s) => $q->where(fn ($w) =>
-                $w->where('patient_name', 'like', "%{$s}%")->orWhere('mrn', 'like', "%{$s}%")))
+                $w->where('patient_name', 'like', "%{$s}%")->orWhere('mrn', 'like', "%{$s}%")));
+
+        $consultations = $filtered()
+            ->with('consultant:id,full_name,name')
+            ->where('status', $status)
             ->orderByDesc('id')
             ->paginate(15)
             ->withQueryString()
@@ -96,7 +104,7 @@ class ConsultationsController extends Controller
                 'other' => $c->other_indication,
             ]);
 
-        $counts = $scoped()->selectRaw('status, COUNT(*) as c')->groupBy('status')->pluck('c', 'status');
+        $counts = $filtered()->selectRaw('status, COUNT(*) as c')->groupBy('status')->pluck('c', 'status');
 
         return Inertia::render('Consultations/Index', [
             'consultations' => $consultations,
@@ -109,6 +117,10 @@ class ConsultationsController extends Controller
                 Consultation::STATUS_ACTIVE => (int) ($counts[Consultation::STATUS_ACTIVE] ?? 0),
                 Consultation::STATUS_ONGOING => (int) ($counts[Consultation::STATUS_ONGOING] ?? 0),
                 Consultation::STATUS_SIGNED_OFF => (int) ($counts[Consultation::STATUS_SIGNED_OFF] ?? 0),
+                // matches-the-current-tabs total: same $filtered() builder as the four counts above,
+                // so it always sums to them. Deliberately DIFFERENT from `open`/`mine_open` below,
+                // which are headline "of all open work" figures and stay unfiltered by search/mine
+                // on purpose — they answer "how am I doing overall", not "what does this view show".
                 'total' => (int) $counts->sum(),
                 // personal counter for consultant-role viewers (K1-13): own OPEN out of all open
                 'mine_open' => $scoped()->open()->where('consultant_id', Auth::id())->count(),

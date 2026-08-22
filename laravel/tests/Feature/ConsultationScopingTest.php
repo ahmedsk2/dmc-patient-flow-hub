@@ -69,7 +69,12 @@ class ConsultationScopingTest extends TestCase
                 ->where('stats.new', 1)
                 // `mine_open` is equal scoped or not by construction (a consult assigned to you is
                 // always inside visibleTo) — pinned here so the number itself cannot drift.
-                ->where('stats.mine_open', 0));
+                ->where('stats.mine_open', 0)
+                // `open` is the OTHER headline counter built straight off $scoped() (mutation-tested:
+                // swapping it for an unscoped Consultation::query()->count() left the whole suite
+                // green until this pin existed) — the seeded row is `new`, hence open, and the
+                // cardio viewer's own book is the one row, so this must read 1, not 3.
+                ->where('stats.open', 1));
     }
 
     public function test_a_coordinator_and_an_admin_see_every_book(): void
