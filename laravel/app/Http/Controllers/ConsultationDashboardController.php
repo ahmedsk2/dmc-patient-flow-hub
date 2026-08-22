@@ -66,6 +66,7 @@ class ConsultationDashboardController extends Controller
             'openCounts' => $this->openCounts($user, $specialtyId),
             'ageing' => $this->ageing($user, $specialtyId),
             'today' => $this->todayCompleteness($user, $specialtyId, now()->toDateString()),
+            'turnaround' => $this->turnaround($user, $specialtyId),
             // Day-granular figures deserve a day-granular, zone-explicit stamp: "as of 14:30" on a
             // page whose every number counts whole days is ambiguous about WHICH day it means.
             'generatedAt' => now()->format('j M Y, H:i') . ' ' . config('app.timezone'),
@@ -268,5 +269,87 @@ class ConsultationDashboardController extends Controller
             ->count();
 
         return ['due' => $due, 'seen' => $seen];
+    }
+
+    /**
+     * The two turnaround medians — CUTOVER ONWARD ONLY.
+     *
+     * Median time to first follow-up:
+     *   SELECT TIMESTAMPDIFF(MINUTE, c.requested_at, MIN(f.created_at))
+     *   FROM consultations c JOIN consultation_followups f ON f.consultation_id = c.id
+     *   WHERE c.deleted_at IS NULL AND <scope> AND c.requested_at IS NOT NULL
+     *   GROUP BY c.id, c.requested_at HAVING mins >= 0
+     *
+     * Median time to sign-off:
+     *   SELECT TIMESTAMPDIFF(MINUTE, requested_at, signed_off_at)
+     *   FROM consultations
+     *   WHERE deleted_at IS NULL AND <scope>
+     *     AND requested_at IS NOT NULL AND signed_off_at IS NOT NULL
+     *     AND signed_off_at >= requested_at
+     *
+     * `requested_at IS NOT NULL` is the load-bearing predicate. EVERY historical row has it NULL
+     * by deliberate design (§4.4: fabricating a time from a date-only legacy column would
+     * manufacture precision that never existed), so both samples cover cutover onward only. The
+     * payload therefore ships `legacy_excluded` — the number of in-scope rows that carry no
+     * request timestamp — and `from_cutover`, so the UI can SAY so instead of quietly presenting
+     * a mixed number. `signed_off_at >= requested_at` / `HAVING mins >= 0` drop clock-skew or
+     * hand-corrected rows rather than letting a negative duration drag the median.
+     *
+     * Built on baseQuery(), NOT openQuery(): a turnaround is measured over the rows that have
+     * actually turned around, and every sign-off duration lives on a closed row.
+     *
+     * The median (not the mean) because a single 3-week outlier consult would otherwise swamp a
+     * ward's real turnaround; medians are also what the design table asks for.
+     */
+    private function turnaround(User $user, ?int $specialtyId): array
+    {
+        $firstFollowup = $this->baseQuery($user, $specialtyId)
+            ->join('consultation_followups as f', 'f.consultation_id', '=', 'consultations.id')
+            ->whereNotNull('consultations.requested_at')
+            ->groupBy('consultations.id', 'consultations.requested_at')
+            ->havingRaw('mins >= 0')
+            ->selectRaw('TIMESTAMPDIFF(MINUTE, consultations.requested_at, MIN(f.created_at)) mins')
+            ->pluck('mins')->map(fn ($m) => (float) $m)->all();
+
+        $signoff = $this->baseQuery($user, $specialtyId)
+            ->whereNotNull('consultations.requested_at')
+            ->whereNotNull('consultations.signed_off_at')
+            ->whereColumn('consultations.signed_off_at', '>=', 'consultations.requested_at')
+            ->selectRaw('TIMESTAMPDIFF(MINUTE, consultations.requested_at, consultations.signed_off_at) mins')
+            ->pluck('mins')->map(fn ($m) => (float) $m)->all();
+
+        $legacyExcluded = (int) $this->baseQuery($user, $specialtyId)
+            ->whereNull('consultations.requested_at')
+            ->count();
+
+        return [
+            'first_followup_hours' => $this->medianHours($firstFollowup),
+            'first_followup_n' => count($firstFollowup),
+            'signoff_hours' => $this->medianHours($signoff),
+            'signoff_n' => count($signoff),
+            'legacy_excluded' => $legacyExcluded,
+            'from_cutover' => true,
+        ];
+    }
+
+    /**
+     * Median of a minute list, returned in hours to one decimal — or NULL when the sample is
+     * empty. NULL is a deliberate payload value: the UI renders an explicit "not enough data yet"
+     * rather than a 0.0 that would read as "instant turnaround".
+     *
+     * @param  array<int, float>  $minutes
+     */
+    private function medianHours(array $minutes): ?float
+    {
+        $v = array_values($minutes);
+        sort($v);
+        $n = count($v);
+        if ($n === 0) {
+            return null;
+        }
+        $mid = intdiv($n, 2);
+        $median = $n % 2 === 1 ? $v[$mid] : ($v[$mid - 1] + $v[$mid]) / 2;
+
+        return round($median / 60, 1);
     }
 }
