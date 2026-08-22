@@ -147,8 +147,14 @@ class ConsultationsController extends Controller
         $from = (string) $consultation->status;
         $to = $data['status'];
 
-        if (! in_array($to, self::STATUS_MOVES[$from] ?? [], true)) {
-            $this->jsonFail(['status' => $from === Consultation::STATUS_SIGNED_OFF
+        // Belt AND braces: `status` and `signoff_date` are meant to be written together (see the
+        // Consultation docblock), but the model itself names column drift as the standing hazard —
+        // and a row carrying a sign-off date is closed whatever its status column happens to say.
+        // Keying the freeze on either column means this guard cannot be defeated by that drift.
+        $frozen = $from === Consultation::STATUS_SIGNED_OFF || $consultation->signoff_date !== null;
+
+        if ($frozen || ! in_array($to, self::STATUS_MOVES[$from] ?? [], true)) {
+            $this->jsonFail(['status' => $frozen
                 ? 'A signed-off consultation cannot be moved. An admin must reverse the sign-off first.'
                 : "A consultation cannot move from {$from} to {$to}."]);
         }

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AuditLog;
 use App\Models\Consultation;
+use App\Models\Specialty;
 use App\Models\User;
 use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -144,6 +145,31 @@ class ConsultationLedgerW2aTest extends TestCase
         $this->assertSame(Consultation::STATUS_SIGNED_OFF, $c->fresh()->status);
     }
 
+    /**
+     * The fabricated-row case above pins the SHAPE a signed-off consult will have once signoff()
+     * writes `status` too (Task 12). This case proves the FREEZE itself, by reaching the state the
+     * way a clinician does — through the real sign-off endpoint — so the guard can never be green
+     * on a state no code path produces while a genuinely signed-off consult is silently reopened.
+     */
+    public function test_a_consult_signed_off_through_the_real_endpoint_is_frozen(): void
+    {
+        $admin = $this->admin();
+        $c = $this->consultation(['status' => Consultation::STATUS_ACTIVE]);
+
+        $this->actingAs($admin)->post("/consultations/{$c->id}/signoff")->assertRedirect();
+        $this->assertNotNull($c->fresh()->signoff_date, 'fixture guard: the sign-off must have landed');
+
+        $this->actingAs($admin)
+            ->post("/consultations/{$c->id}/status", ['status' => Consultation::STATUS_ONGOING])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.status.0', 'A signed-off consultation cannot be moved. An admin must reverse the sign-off first.');
+
+        $after = $c->fresh();
+        $this->assertNotSame(Consultation::STATUS_ONGOING, $after->status,
+            'a signed-off consultation must never be reopened through the status endpoint');
+        $this->assertNotNull($after->signoff_date);
+    }
+
     public function test_observers_can_never_change_a_status_even_with_capability_flags(): void
     {
         $c = $this->consultation();
@@ -165,5 +191,35 @@ class ConsultationLedgerW2aTest extends TestCase
             ->assertRedirect();
 
         $this->assertSame(Consultation::STATUS_ACTIVE, $c->fresh()->status);
+    }
+
+    /**
+     * The gate is canModifyConsultation — W1 SPECIALTY scoping, not a bare observer check and not
+     * the coordinator flag. These two cases are what distinguish them: a plain consultant of the
+     * owning team may move the consult, and a plain consultant of another team may not.
+     */
+    public function test_a_consultant_of_the_owning_specialty_may_change_the_status(): void
+    {
+        $cardio = Specialty::create(['name' => 'Cardiology', 'is_subspecialty' => true, 'is_external' => false]);
+        $c = $this->consultation(['owning_specialty_id' => $cardio->id]);
+
+        $this->actingAs($this->user(User::ROLE_CONSULTANT, ['specialty_id' => $cardio->id]))
+            ->post("/consultations/{$c->id}/status", ['status' => Consultation::STATUS_ACTIVE])
+            ->assertRedirect();
+
+        $this->assertSame(Consultation::STATUS_ACTIVE, $c->fresh()->status);
+    }
+
+    public function test_a_consultant_of_another_specialty_may_not_change_the_status(): void
+    {
+        $cardio = Specialty::create(['name' => 'Cardiology', 'is_subspecialty' => true, 'is_external' => false]);
+        $nephro = Specialty::create(['name' => 'Nephrology', 'is_subspecialty' => true, 'is_external' => false]);
+        $c = $this->consultation(['owning_specialty_id' => $cardio->id]);
+
+        $this->actingAs($this->user(User::ROLE_CONSULTANT, ['specialty_id' => $nephro->id]))
+            ->post("/consultations/{$c->id}/status", ['status' => Consultation::STATUS_ACTIVE])
+            ->assertForbidden();
+
+        $this->assertSame(Consultation::STATUS_NEW, $c->fresh()->status);
     }
 }
