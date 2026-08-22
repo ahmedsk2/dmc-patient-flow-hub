@@ -12,12 +12,26 @@ use App\Support\AuditDiff;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 class ConsultationsController extends Controller
 {
+    /**
+     * The ONLY moves POST /consultations/{consultation}/status will make. Sign-off is absent on
+     * purpose: it is a clinical assertion carrying a required response payload, so it goes through
+     * signoff() and its own canManageConsultation gate. `signed_off` maps to an empty list — a
+     * signed-off consult is frozen until an admin reverses the sign-off (same-day only).
+     */
+    private const STATUS_MOVES = [
+        Consultation::STATUS_NEW => [Consultation::STATUS_ACTIVE, Consultation::STATUS_ONGOING],
+        Consultation::STATUS_ACTIVE => [Consultation::STATUS_ONGOING],
+        Consultation::STATUS_ONGOING => [Consultation::STATUS_ACTIVE],
+        Consultation::STATUS_SIGNED_OFF => [],
+    ];
+
     public function index(Request $request): Response|RedirectResponse
     {
         // legacy access_PICU_patients [0,2,3,4] page gate — observers are read-only and the
@@ -109,6 +123,41 @@ class ConsultationsController extends Controller
         Audit::log('consultation.create', 'consultation', (string) $c->id, ['mrn' => $data['mrn']]);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultation created.']);
+    }
+
+    /**
+     * Move a consultation between the three OPEN states. Authorization is the same predicate that
+     * guards editing — own specialty / coordinator / admin, observers refused first — so anyone who
+     * may work the consult may say where it stands. Illegal moves answer 422 JSON (jsonFail): this
+     * route is outside api/*, so a plain ValidationException would redirect instead, and the tabs
+     * only ever offer legal moves, making a 422 a genuine client/API error rather than user input.
+     */
+    public function status(Request $request, Consultation $consultation): RedirectResponse
+    {
+        if (! Auth::user()->canModifyConsultation($consultation)) {
+            throw new AccessDeniedHttpException('You may not change this consultation.');
+        }
+
+        $data = $this->jsonValidate($request, [
+            'status' => ['required', 'string', Rule::in([
+                Consultation::STATUS_NEW, Consultation::STATUS_ACTIVE, Consultation::STATUS_ONGOING,
+            ])],
+        ]);
+
+        $from = (string) $consultation->status;
+        $to = $data['status'];
+
+        if (! in_array($to, self::STATUS_MOVES[$from] ?? [], true)) {
+            $this->jsonFail(['status' => $from === Consultation::STATUS_SIGNED_OFF
+                ? 'A signed-off consultation cannot be moved. An admin must reverse the sign-off first.'
+                : "A consultation cannot move from {$from} to {$to}."]);
+        }
+
+        $consultation->update(['status' => $to]);
+        Audit::log('consultation.status_change', 'consultation', (string) $consultation->id,
+            ['from' => $from, 'to' => $to]);
+
+        return back()->with('flash', ['type' => 'success', 'message' => 'Consultation status updated.']);
     }
 
     public function signoff(Request $request, Consultation $consultation): RedirectResponse

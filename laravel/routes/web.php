@@ -149,6 +149,9 @@ Route::middleware(['auth', 'session.timeout', 'email.verify', 'mfa.enroll', 'pwd
     Route::get('/consultations/search', fn () => redirect()->route('consultations.index'));
     Route::post('/consultations/{consultation}/signoff', [ConsultationsController::class, 'signoff'])->name('consultations.signoff');
     Route::post('/consultations/{consultation}/reverse-signoff', [ConsultationsController::class, 'reverseSignoff'])->name('consultations.reverseSignoff');
+    // Wave W2A: explicit four-state moves (new→active, new→ongoing, active⇄ongoing). Sign-off is
+    // deliberately NOT reachable here — it carries a required response payload and its own gate.
+    Route::post('/consultations/{consultation}/status', [ConsultationsController::class, 'status'])->name('consultations.status');
     Route::put('/consultations/{consultation}', [ConsultationsController::class, 'update'])->name('consultations.update');
     Route::delete('/consultations/{consultation}', [ConsultationsController::class, 'destroy'])->name('consultations.destroy');
 
