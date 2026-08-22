@@ -137,3 +137,19 @@ const print = () => window.print();
         </div>
     </AppLayout>
 </template>
+
+<style>
+@page { size: A4; margin: 12mm; }
+@media print {
+    aside, header.sticky { display: none !important; }
+    [class*="pl-64"] { padding-left: 0 !important; }
+    main { padding: 0 !important; }
+    body { background: #fff !important; }
+    .no-print { display: none !important; }
+    /* a service's block must not be split across a page break — the sheet is read per team */
+    .group-block { break-inside: avoid; }
+    /* a service with many open consults WILL span pages; repeat the column header on each one */
+    thead { display: table-header-group; }
+    tr { break-inside: avoid; }
+}
+</style>

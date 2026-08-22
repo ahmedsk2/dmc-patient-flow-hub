@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 // Stub the layout chrome — this spec is about the sheet's content, and Handover.vue uses no
 // Inertia primitives of its own (the page is read-only, so it needs no router/form).
@@ -99,5 +101,68 @@ describe('Consultations/Handover — the shift sheet', () => {
         const text = mountPage(props({ groups: [g] })).text();
         expect(text).toContain('0 of 1 active seen today');
         expect(text).not.toContain('1 of 1 active seen today');
+    });
+});
+
+const nephrology = () => group('Nephrology', 'Nephrology', [
+    consult({ id: 3, name: 'Renal Patient', mrn: '90000003', specialty: 'Nephrology', consultant: 'Dr Nephro', status: 'ongoing', last_followup: null }),
+]);
+
+describe('Consultations/Handover — printing', () => {
+    it('keeps the toolbar off the printout', () => {
+        expect(mountPage().find('.no-print').exists()).toBe(true);
+    });
+
+    it('wraps each service in a block the print stylesheet can keep whole', () => {
+        expect(mountPage().findAll('.group-block').length).toBe(1);
+    });
+
+    it('ships a print stylesheet that sets an A4 page box and hides the app chrome', () => {
+        const src = readFileSync(resolve(__dirname, '../Handover.vue'), 'utf8');
+        expect(src).toContain('@page { size: A4; margin: 12mm; }');
+        expect(src).toContain('@media print');
+        expect(src).toContain('break-inside: avoid');
+        expect(src).toContain('table-header-group');
+    });
+
+    it('renders the sheet at full page width so columns fit their text', () => {
+        expect(mountPage().find('.report').classes()).toContain('max-w-full');
+    });
+
+    it('hides the service picker for a single-service viewer', () => {
+        expect(mountPage().find('select').exists()).toBe(false);
+    });
+
+    it('offers "All services" plus one option per service when several are visible', () => {
+        const opts = mountPage(props({ groups: [cardiology(), nephrology()] })).findAll('option').map((o) => o.text());
+        expect(opts[0]).toContain('All services');
+        expect(opts.some((t) => t.includes('Cardiology'))).toBe(true);
+        expect(opts.some((t) => t.includes('Nephrology'))).toBe(true);
+    });
+
+    it('selecting one service drops the others from the printout and labels the header', async () => {
+        const w = mountPage(props({ groups: [cardiology(), nephrology()] }));
+        await w.find('select').setValue('Nephrology');
+        const report = w.find('.report').text();
+        expect(report).toContain('Renal Patient');
+        expect(report).not.toContain('Ward Patient');
+        expect(report).toContain('— Nephrology');
+    });
+
+    it('the header totals track the selection', async () => {
+        const w = mountPage(props({ groups: [cardiology(), nephrology()] }));
+        expect(w.text()).toContain('3 open consult(s)');
+        await w.find('select').setValue('Nephrology');
+        expect(w.text()).toContain('1 open consult(s)');
+    });
+});
+
+describe('Handover is reachable from the Clinical nav', () => {
+    // Asserted at source level: mounting AppLayout.vue would mean stubbing Inertia's Head/Link/
+    // router/usePage plus the tour, session-timeout and recent-patient modules for what is a
+    // one-line nav registration. The route string is the thing that must not silently disappear.
+    it('registers the handover route in AppLayout', () => {
+        const src = readFileSync(resolve(__dirname, '../../../Layouts/AppLayout.vue'), 'utf8');
+        expect(src).toContain("href: '/consultations/handover'");
     });
 });

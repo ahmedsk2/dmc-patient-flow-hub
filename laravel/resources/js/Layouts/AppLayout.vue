@@ -161,6 +161,10 @@ const clinicalNavSections = computed(() => {
             // instead of living only behind the board's print icon.
             { label: 'Active List', href: '/active-list', icon: 'list', can: true },
             { label: 'Consultations', href: '/consultations', icon: 'chat', can: !observer },
+            // W3: the printable per-service shift-handover sheet. Same reasoning as Active List —
+            // it is read at every handover, so it gets its own row rather than hiding behind an
+            // icon on the workspace. Server-side gate is identical (observers are refused).
+            { label: 'Consult Handover', href: '/consultations/handover', icon: 'clipboard', can: !observer },
         ] },
         { section: 'Operations', items: [
             { label: 'Handovers', href: '/handovers', icon: 'clipboard', can: true },
