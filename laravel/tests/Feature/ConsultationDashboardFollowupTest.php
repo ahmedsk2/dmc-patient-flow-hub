@@ -120,6 +120,30 @@ class ConsultationDashboardFollowupTest extends TestCase
                 ->where('today.seen', 1));
     }
 
+    public function test_a_consult_visible_only_via_entered_by_is_excluded_from_the_denominator(): void
+    {
+        // Dr A is Cardiology, no coordinator flag. She books a consult INTO Nephrology's book
+        // (owning_specialty_id = Nephro), so entered_by = A but she has no way to ever tick it
+        // (User::canRecordFollowup refuses her; ConsultationsController::todayWorklist never lists
+        // it). scopeVisibleTo would still return it (entered_by clause) — scopeRecordableBy must not,
+        // or her "seen X of Y" could never reach Y for a row nothing she does will ever clear.
+        $cardio = Specialty::create(['name' => 'Cardiology']);
+        $nephro = Specialty::create(['name' => 'Nephrology']);
+        $doc = $this->user(User::ROLE_CONSULTANT, ['specialty_id' => $cardio->id]);
+
+        $foreignEntered = $this->consult([
+            'owning_specialty_id' => $nephro->id,
+            'status' => Consultation::STATUS_ACTIVE,
+            'entered_by' => $doc->id,
+        ]);
+        $this->assertNotNull($foreignEntered->id);
+
+        $this->actingAs($doc)->get('/consultations/dashboard')
+            ->assertInertia(fn (AssertableInertia $p) => $p
+                ->where('today.due', 0)
+                ->where('today.seen', 0));
+    }
+
     public function test_an_empty_worklist_reports_zero_of_zero_not_a_division(): void
     {
         $cardio = Specialty::create(['name' => 'Cardiology']);

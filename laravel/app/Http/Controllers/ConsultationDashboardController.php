@@ -107,6 +107,36 @@ class ConsultationDashboardController extends Controller
     }
 
     /**
+     * The WRITE-scoped counterpart to baseQuery()/openQuery(), built on
+     * Consultation::scopeRecordableBy() rather than scopeVisibleTo(). Used ONLY by
+     * todayCompleteness(): that tile promises a reachable "seen X of Y", so its denominator must be
+     * exactly the rows the viewer is capable of ticking (scopeRecordableBy's docblock states this in
+     * as many words — it is the scope todayWorklist() is built from, for the same reason).
+     *
+     * openCounts()/ageing() are deliberately NOT changed to this scope: they are awareness tiles
+     * ("what does my team's book look like"), and a referrer who booked a consult into another
+     * team's book should still see it counted there — just not offered as something only they can
+     * clear. Narrower than baseQuery() by exactly the `entered_by` clause (see scopeRecordableBy).
+     *
+     * Carries the same signoff_date drift belt as openQuery() (see that method's docblock) — a
+     * drifted legacy row is excluded from both the read-side ageing tiles and this write-side one.
+     * The reverse is NOT true of ConsultationsController::todayWorklist(), which has no such belt:
+     * a row with status='active' and a stray signoff_date is on that worklist but absent from this
+     * denominator. That divergence is a pre-existing property of the two call sites (todayWorklist
+     * predates this dashboard) and is out of scope for this tile to correct.
+     */
+    private function recordableOpenQuery(User $user, ?int $specialtyId): Builder
+    {
+        return Consultation::query()
+            ->recordableBy($user)
+            ->whereNull('consultations.deleted_at')
+            ->when($specialtyId !== null,
+                fn (Builder $q) => $q->where('consultations.owning_specialty_id', $specialtyId))
+            ->open()
+            ->whereNull('consultations.signoff_date');
+    }
+
+    /**
      * @param  Collection<int, Specialty>  $specialties  already-fetched picker options, if any
      */
     private function scopeLabel(User $user, bool $canPick, ?int $specialtyId, Collection $specialties): string
@@ -203,10 +233,13 @@ class ConsultationDashboardController extends Controller
      *                  SELECT 1 FROM consultation_followups f
      *                  WHERE f.consultation_id = consultations.id AND f.followup_date = $today)
      *
-     * Built on openQuery() rather than baseQuery(), like every other tile on this page: it carries
-     * the same signoff_date belt described on openQuery()'s docblock, so a legacy row that reads
-     * status='active' but was actually closed by a pre-status-column signoff can never headline this
-     * page as "due today" while the ageing tiles above correctly treat it as closed.
+     * Built on recordableOpenQuery() — the WRITE scope (Consultation::scopeRecordableBy()), NOT
+     * baseQuery()/openQuery() (the READ scope, scopeVisibleTo()) that the other two tiles on this
+     * page use. A row this scope excludes is one the viewer has no way to tick: counting it in Y
+     * would print a "seen X of Y" that can never reach Y, teaching the viewer to ignore the tile
+     * (see scopeRecordableBy's docblock and recordableOpenQuery's docblock above). It still carries
+     * the same signoff_date belt as openQuery(), so a legacy row that reads status='active' but was
+     * actually closed by a pre-status-column signoff can never headline this page as "due today".
      *
      * EXISTS rather than a JOIN so a (hypothetically) duplicated tick could never double-count;
      * W2's unique(['consultation_id', 'followup_date']) already makes that impossible, and this keeps
@@ -220,11 +253,11 @@ class ConsultationDashboardController extends Controller
      */
     private function todayCompleteness(User $user, ?int $specialtyId, string $today): array
     {
-        $due = (int) $this->openQuery($user, $specialtyId)
+        $due = (int) $this->recordableOpenQuery($user, $specialtyId)
             ->where('consultations.status', Consultation::STATUS_ACTIVE)
             ->count();
 
-        $seen = (int) $this->openQuery($user, $specialtyId)
+        $seen = (int) $this->recordableOpenQuery($user, $specialtyId)
             ->where('consultations.status', Consultation::STATUS_ACTIVE)
             ->whereExists(function ($q) use ($today) {
                 $q->select(DB::raw(1))
