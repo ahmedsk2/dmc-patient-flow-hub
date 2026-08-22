@@ -57,7 +57,7 @@ class ConsultationsController extends Controller
             return redirect()->route('consultations.index', \Illuminate\Support\Arr::except($request->query(), ['search']));
         }
 
-        $filters = $request->only('search', 'status', 'scope');
+        $filters = $request->only('search', 'status', 'scope', 'consultant_id');
         // W2A: `status` now names one of the FOUR real states. Anything else — an absent param, or a
         // bookmarked legacy `?status=signed` — falls back to `new`, the tab that demands triage. The
         // per-tab counts ship on every render, so an empty default tab still points at the work.
@@ -65,6 +65,12 @@ class ConsultationsController extends Controller
             ? $filters['status']
             : Consultation::STATUS_NEW;
         $mine = ($filters['scope'] ?? '') === 'mine';
+        // W4 dashboard drill-through: "Dr Busy, 5 open consultations" must land on Dr Busy's rows,
+        // not the unfiltered tab. Validated rather than trusted raw — a non-numeric value is simply
+        // ignored, the same graceful fallback `status` gets above.
+        $consultantId = filled($filters['consultant_id'] ?? null) && ctype_digit((string) $filters['consultant_id'])
+            ? (int) $filters['consultant_id']
+            : null;
         $reasons = ConsultationReason::pluck('name', 'id');
 
         // W1 specialty scoping: every list AND every count runs through the same visibility scope,
@@ -79,6 +85,7 @@ class ConsultationsController extends Controller
         // once results are confined to one status.
         $filtered = fn () => $scoped()
             ->when($mine, fn ($q) => $q->where('consultant_id', Auth::id()))
+            ->when($consultantId, fn ($q, $id) => $q->where('consultant_id', $id))
             ->when($filters['search'] ?? null, fn ($q, $s) => $q->where(fn ($w) =>
                 $w->where('patient_name', 'like', "%{$s}%")->orWhere('mrn', 'like', "%{$s}%")));
 
@@ -133,7 +140,7 @@ class ConsultationsController extends Controller
 
         return Inertia::render('Consultations/Index', [
             'consultations' => $consultations,
-            'filters' => ['search' => $filters['search'] ?? '', 'status' => $status, 'scope' => $mine ? 'mine' : ''],
+            'filters' => ['search' => $filters['search'] ?? '', 'status' => $status, 'scope' => $mine ? 'mine' : '', 'consultant_id' => $consultantId],
             // full objects (not just names): the form filters the consultant dropdown by
             // INTERNAL specialty when "to service" matches one
             'specialties' => Specialty::orderBy('name')->get(['id', 'name', 'is_external']),

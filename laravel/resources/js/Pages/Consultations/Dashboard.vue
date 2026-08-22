@@ -35,10 +35,17 @@ const pickSpecialty = (event) => {
 // Drill-through: every figure lands on the workspace list that produced it.
 const openWorkspace = (data) => router.visit('/consultations', data ? { data } : {});
 
+// `total` is deliberately the SUM of the grouped-by-status rows on the server, not
+// new+active+ongoing added up client-side (see ConsultationDashboardController::openCounts): status
+// has no CHECK constraint, so a hand-run SQL fix on prod could leave a value outside the three known
+// states. Rendering a fourth "Total open" tile — rather than silently dropping the figure — is the
+// only surface that keeps such a row visible: it would count in the ageing chart below but appear in
+// none of the three named cards and none of the four workspace tabs.
 const statusCards = computed(() => [
-    { key: 'new', label: 'New / not seen', value: props.openCounts.new, tint: 'bg-tint-info/30', status: 'new' },
-    { key: 'active', label: 'Active (daily F/U)', value: props.openCounts.active, tint: 'bg-brand-50', status: 'active' },
-    { key: 'ongoing', label: 'Ongoing (no daily F/U)', value: props.openCounts.ongoing, tint: 'bg-ink-50', status: 'ongoing' },
+    { key: 'new', label: 'New / not seen', value: props.openCounts.new, tint: 'bg-tint-info/30', filter: { status: 'new' } },
+    { key: 'active', label: 'Active (daily F/U)', value: props.openCounts.active, tint: 'bg-brand-50', filter: { status: 'active' } },
+    { key: 'ongoing', label: 'Ongoing (no daily F/U)', value: props.openCounts.ongoing, tint: 'bg-ink-50', filter: { status: 'ongoing' } },
+    { key: 'total', label: 'Total open', value: props.openCounts.total, tint: 'bg-tint-warning/30', filter: null },
 ]);
 
 // Ageing is measured from requested_at, falling back to the historical date-only column; a consult
@@ -116,11 +123,12 @@ const loadMax = computed(() => Math.max(1, ...(props.perConsultant || []).map((r
 
         <!-- open counts by status -->
         <h2 class="sr-only">Open consultations by status</h2>
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <button v-for="c in statusCards" :key="c.key" type="button"
                     :data-testid="`status-card-${c.key}`"
+                    :aria-label="`${c.value} ${c.label} — open the workspace filtered to this`"
                     class="rounded-2xl p-5 text-start ring-1 ring-line transition hover:ring-brand-300"
-                    :class="c.tint" @click="openWorkspace({ status: c.status })">
+                    :class="c.tint" @click="openWorkspace(c.filter)">
                 <p class="font-display nums text-3xl font-extrabold text-ink-900">{{ c.value }}</p>
                 <p class="mt-1 text-xs font-semibold uppercase tracking-wide text-ink-500">{{ c.label }}</p>
             </button>
@@ -166,8 +174,15 @@ const loadMax = computed(() => Math.max(1, ...(props.perConsultant || []).map((r
                              caption="Open consultations grouped by how long they have been open, measured from the request time or, for historical rows, the consultation date."
                              :columns="['Age', 'Open consults']" :rows="ageingRows">
                     <apexchart v-if="hasAgeing" type="bar" height="260" :options="ageingOptions" :series="ageingSeries" aria-label="Bar chart: open consultations by age" />
-                    <p v-else class="grid h-[260px] place-items-center text-sm text-ink-400">No data for this period.</p>
+                    <p v-else class="grid h-[260px] place-items-center text-sm text-ink-400">No open consultations.</p>
                 </ChartFigure>
+                <!-- VISIBLE, not just the chart's sr-only caption: this is the honesty statement that a
+                     consult with neither a request time nor a consultation date is reported separately
+                     rather than being given a day-count it never earned. -->
+                <p class="mt-3 text-xs text-ink-500">
+                    Age is measured from the request time or, for historical rows, the consultation date.
+                    Rows with neither are reported as "Date unknown" rather than being given a date they never had.
+                </p>
             </div>
 
             <!-- six-month volume -->

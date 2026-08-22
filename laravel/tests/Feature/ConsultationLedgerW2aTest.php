@@ -599,4 +599,32 @@ class ConsultationLedgerW2aTest extends TestCase
                 ->where('stats.active', 0)
                 ->where('stats.total', 1));
     }
+
+    /**
+     * W4 review fix — the dashboard's per-consultant load rows drill through with
+     * `?consultant_id=N`; the workspace must actually honour it rather than silently discarding it
+     * onto the unfiltered tab (the failure mode: a physician clicks "Dr Busy, 5 open consultations"
+     * and lands on everyone's New tab with no indication the filter did nothing).
+     */
+    public function test_the_index_can_be_filtered_to_one_consultant_by_id(): void
+    {
+        $cardio = Specialty::create(['name' => 'Cardiology W2a Consultant Filter', 'is_subspecialty' => true, 'is_external' => false]);
+        $busy = $this->user(User::ROLE_CONSULTANT, ['specialty_id' => $cardio->id]);
+        $quiet = $this->user(User::ROLE_CONSULTANT, ['specialty_id' => $cardio->id]);
+        $this->consultation(['status' => Consultation::STATUS_NEW, 'consultant_id' => $busy->id, 'owning_specialty_id' => $cardio->id]);
+        $this->consultation(['status' => Consultation::STATUS_NEW, 'consultant_id' => $quiet->id, 'owning_specialty_id' => $cardio->id]);
+
+        $this->actingAs($this->admin())->get("/consultations?status=new&consultant_id={$busy->id}")
+            ->assertInertia(fn (AssertableInertia $p) => $p
+                ->where('consultations.total', 1)
+                ->where('consultations.data.0.consultant_id', $busy->id)
+                ->where('stats.new', 1)
+                ->where('filters.consultant_id', $busy->id));
+
+        // a non-numeric value is ignored rather than thrown, the same graceful fallback `status` gets
+        $this->actingAs($this->admin())->get('/consultations?status=new&consultant_id=not-a-number')
+            ->assertInertia(fn (AssertableInertia $p) => $p
+                ->where('consultations.total', 2)
+                ->where('filters.consultant_id', null));
+    }
 }

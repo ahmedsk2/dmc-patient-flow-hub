@@ -19,6 +19,7 @@ vi.mock('@/composables/useChartTheme', () => ({
 }));
 
 import ConsultationsDashboard from '@/Pages/Consultations/Dashboard.vue';
+import ChartFigure from '@/Components/ChartFigure.vue';
 import { router } from '@inertiajs/vue3';
 
 const baseProps = (over = {}) => ({
@@ -100,6 +101,64 @@ describe('Consultations dashboard — honesty of the turnaround block', () => {
             .findAll('[data-testid="turnaround-value"]').map((n) => n.text());
         expect(values[0]).toBe('2.5 h');
         expect(values[1]).toBe('30 h');
+    });
+});
+
+describe('Consultations dashboard — open counts by status', () => {
+    // `total` is the server-summed count over the GROUPED status rows (see
+    // ConsultationDashboardController::openCounts), not new+active+ongoing re-added client-side — a
+    // row whose status is outside the three known values would otherwise be counted by the ageing
+    // chart but invisible on every status card and every workspace tab. This tile is the one place
+    // that keeps it visible.
+    it('renders a fourth "Total open" tile from the server total, and it drills through with no status filter', async () => {
+        router.visit.mockClear();
+        const w = mountAs({ role: 3, is_admin: false });
+        const card = w.find('[data-testid="status-card-total"]');
+        expect(card.exists()).toBe(true);
+        expect(card.text()).toContain('7');
+        expect(card.text()).toContain('Total open');
+
+        await card.trigger('click');
+        expect(router.visit).toHaveBeenCalledWith('/consultations', {});
+    });
+
+    it('a named status card still drills through with its own status filter', async () => {
+        router.visit.mockClear();
+        const w = mountAs({ role: 3, is_admin: false });
+        await w.find('[data-testid="status-card-new"]').trigger('click');
+        expect(router.visit).toHaveBeenCalledWith('/consultations', { data: { status: 'new' } });
+    });
+});
+
+describe('Consultations dashboard — ageing chart data', () => {
+    const findAgeingFigure = (w) => w.findAllComponents(ChartFigure)
+        .find((f) => f.props('title') === 'Ageing of open consultations');
+
+    // Pins the exact bucket order the payload keys (b0_2/b3_7/b8_plus/unknown) map onto — the shape
+    // where a transposition or a controller key rename degrades silently: every value becomes
+    // `undefined`, `hasAgeing` goes false, and the panel prints an empty-state over real open work.
+    it('feeds the four ageing buckets to the chart rows in the pinned bucket order', () => {
+        const w = mountAs({ role: 3, is_admin: false });
+        const figure = findAgeingFigure(w);
+        expect(figure.exists()).toBe(true);
+        expect(figure.props('rows')).toEqual([
+            ['0–2 days', 3],
+            ['3–7 days', 2],
+            ['Over 7 days', 1],
+            ['Date unknown', 1],
+        ]);
+    });
+
+    it('renders a calm "no open consultations" note instead of a chart when nothing is open', () => {
+        const w = mountAs({ role: 3, is_admin: false }, {
+            ageing: { b0_2: 0, b3_7: 0, b8_plus: 0, unknown: 0 },
+        });
+        expect(w.text()).toContain('No open consultations.');
+    });
+
+    it('visibly states that date-less rows are reported separately, not silently bucketed', () => {
+        const w = mountAs({ role: 3, is_admin: false });
+        expect(w.text()).toContain('Rows with neither are reported as "Date unknown"');
     });
 });
 
