@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\MetricQueries;
 use App\Models\Consultation;
+use App\Models\ConsultationReason;
 use App\Models\Specialty;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +42,11 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
  */
 class ConsultationDashboardController extends Controller
 {
+    use MetricQueries;
+
+    /** Months of history on the volume trend + the indication tally window. */
+    private const TREND_MONTHS = 6;
+
     public function index(Request $request): Response
     {
         $user = $this->currentUser();
@@ -58,6 +66,9 @@ class ConsultationDashboardController extends Controller
         // One query, reused for both the picker options and the scope label.
         $specialties = $canPick ? Specialty::orderBy('name')->get(['id', 'name']) : collect();
 
+        $from = Carbon::today()->startOfMonth()->subMonthsNoOverflow(self::TREND_MONTHS - 1);
+        $to = Carbon::today()->endOfMonth()->endOfDay();
+
         return Inertia::render('Consultations/Dashboard', [
             'canPick' => $canPick,
             'filters' => ['specialty_id' => $specialtyId],
@@ -67,6 +78,9 @@ class ConsultationDashboardController extends Controller
             'ageing' => $this->ageing($user, $specialtyId),
             'today' => $this->todayCompleteness($user, $specialtyId, now()->toDateString()),
             'turnaround' => $this->turnaround($user, $specialtyId),
+            'trend' => $this->volumeTrend($user, $specialtyId, $from, $to),
+            'topIndications' => $this->topIndications($user, $specialtyId, $from, $to),
+            'perConsultant' => $this->perConsultantLoad($user, $specialtyId),
             // Day-granular figures deserve a day-granular, zone-explicit stamp: "as of 14:30" on a
             // page whose every number counts whole days is ambiguous about WHICH day it means.
             'generatedAt' => now()->format('j M Y, H:i') . ' ' . config('app.timezone'),
@@ -374,5 +388,121 @@ class ConsultationDashboardController extends Controller
         $median = $n % 2 === 1 ? $v[$mid] : ($v[$mid - 1] + $v[$mid]) / 2;
 
         return round($median / 60, 1);
+    }
+
+    /** The date a consult is COUNTED under: real request time, else the historical date-only column. */
+    private function volumeDateExpr(): string
+    {
+        return 'COALESCE(consultations.requested_at, consultations.consultation_date)';
+    }
+
+    /**
+     * Volume trend — monthly counts over the last six calendar months:
+     *   SELECT DATE_FORMAT(COALESCE(requested_at, consultation_date), '%Y-%m') k, COUNT(*) c
+     *   FROM consultations
+     *   WHERE deleted_at IS NULL AND <scope>
+     *     AND COALESCE(requested_at, consultation_date) BETWEEN <from> AND <to>
+     *   GROUP BY k
+     *
+     * VOLUME is not a precision claim — unlike the medians, historical rows legitimately count
+     * here, keyed off their date-only column. The bucket list comes from Concerns\MetricQueries
+     * (buckets/keyExpr), the same helpers Statistics and Reports use, so an empty month renders
+     * as a real 0 rather than disappearing from the axis.
+     *
+     * Built on baseQuery() (the READ scope), NOT openQuery(): a trend counts every consult that
+     * happened, open or closed, exactly like the ageing/open tiles' sibling read-side awareness.
+     */
+    private function volumeTrend(User $user, ?int $specialtyId, Carbon $from, Carbon $to): array
+    {
+        $expr = $this->volumeDateExpr();
+        $counts = $this->baseQuery($user, $specialtyId)
+            ->whereRaw("{$expr} BETWEEN ? AND ?", [$from->toDateTimeString(), $to->toDateTimeString()])
+            ->selectRaw($this->keyExpr($expr, 'month') . ' k, COUNT(*) c')
+            ->groupBy('k')->pluck('c', 'k')->all();
+
+        $buckets = $this->buckets($from, $to, 'month');
+
+        return [
+            'labels' => array_column($buckets, 'label'),
+            'data' => array_map(fn (array $b) => (int) ($counts[$b['key']] ?? 0), $buckets),
+        ];
+    }
+
+    /**
+     * Top indications over the same six-month window. `indication` is a JSON ARRAY of
+     * consultation_reason ids, so the tally is done in PHP over a chunked cursor — exactly the
+     * approach StatisticsController::index already uses ("decode JSON indication in PHP — small
+     * set"), rather than a JSON_CONTAINS query per reason.
+     *
+     * Legacy rows store the ids as JSON STRINGS (["1","3"]) while app-written rows store INTs
+     * (Round-5 J1-2). Casting to int before the name lookup makes both shapes tally to the same
+     * reason instead of silently dropping the legacy half.
+     */
+    private function topIndications(User $user, ?int $specialtyId, Carbon $from, Carbon $to): array
+    {
+        $reasonNames = ConsultationReason::pluck('name', 'id');
+        $expr = $this->volumeDateExpr();
+        $tally = [];
+
+        $this->baseQuery($user, $specialtyId)
+            ->whereRaw("{$expr} BETWEEN ? AND ?", [$from->toDateTimeString(), $to->toDateTimeString()])
+            ->select(['consultations.id', 'consultations.indication'])
+            ->orderBy('consultations.id')
+            ->chunk(500, function ($chunk) use (&$tally, $reasonNames) {
+                foreach ($chunk as $row) {
+                    foreach ((array) ($row->indication ?? []) as $id) {
+                        $name = $reasonNames[(int) $id] ?? null;
+                        if ($name) {
+                            $tally[$name] = ($tally[$name] ?? 0) + 1;
+                        }
+                    }
+                }
+            });
+
+        arsort($tally);
+        $tally = array_slice($tally, 0, 8, true);
+
+        $out = [];
+        foreach ($tally as $label => $value) {
+            $out[] = ['label' => $label, 'value' => (int) $value];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Per-consultant load within the scope — OPEN consults only:
+     *   SELECT consultant_id, COUNT(*) FROM consultations
+     *   WHERE deleted_at IS NULL AND <scope> AND status <> 'signed_off' AND consultant_id IS NOT NULL
+     *   GROUP BY consultant_id
+     *
+     * Names are resolved in a second query with withTrashed(): users are soft-deleted, and a
+     * historical consult must still resolve the consultant who owns it rather than showing a bare
+     * id (the same reasoning as User::consultantOptions' $activeOnly=false callers). Rows with no
+     * consultant are simply absent — "unassigned" is not a person's load.
+     */
+    private function perConsultantLoad(User $user, ?int $specialtyId): array
+    {
+        $counts = $this->baseQuery($user, $specialtyId)
+            ->where('consultations.status', '<>', Consultation::STATUS_SIGNED_OFF)
+            ->whereNotNull('consultations.consultant_id')
+            ->selectRaw('consultations.consultant_id cid, COUNT(*) c')
+            ->groupBy('cid')->pluck('c', 'cid')->all();
+
+        if ($counts === []) {
+            return [];
+        }
+
+        $names = User::withTrashed()->whereIn('id', array_keys($counts))
+            ->get(['id', 'full_name', 'name'])
+            ->mapWithKeys(fn (User $u) => [(int) $u->id => ($u->full_name ?: $u->name)]);
+
+        $out = [];
+        foreach ($counts as $id => $c) {
+            $out[] = ['id' => (int) $id, 'name' => (string) ($names[(int) $id] ?? 'Unknown'), 'c' => (int) $c];
+        }
+        usort($out, fn (array $a, array $b) => $b['c'] <=> $a['c'] ?: strcmp($a['name'], $b['name']));
+
+        return $out;
     }
 }
