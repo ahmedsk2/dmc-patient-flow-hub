@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Auth\UsernameReminderController;
+use App\Http\Controllers\ConsultationDashboardController;
 use App\Http\Controllers\ConsultationsController;
 use App\Http\Controllers\ControlController;
 use App\Http\Controllers\DashboardController;
@@ -147,6 +148,10 @@ Route::middleware(['auth', 'session.timeout', 'email.verify', 'mfa.enroll', 'pwd
     // to the term-less workspace instead of a 405.
     Route::post('/consultations/search', [ConsultationsController::class, 'index'])->name('consultations.search');
     Route::get('/consultations/search', fn () => redirect()->route('consultations.index'));
+    // W4 — physician-scoped consultation analytics. Statistics / Registry / Reports stay ADMIN-ONLY
+    // (PHI exposure control); this page is the clinical alternative and is scoped by
+    // Consultation::scopeVisibleTo() instead of by an admin middleware.
+    Route::get('/consultations/dashboard', [ConsultationDashboardController::class, 'index'])->name('consultations.dashboard');
     // W3 — printable shift-handover sheet: the viewer's service's active + ongoing consults with
     // each one's latest follow-up note. A literal segment, so it can never collide with the
     // {consultation} model-bound routes below (which are POST/PUT/DELETE only anyway).
