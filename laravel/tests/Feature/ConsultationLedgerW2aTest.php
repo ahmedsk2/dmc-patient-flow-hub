@@ -156,7 +156,10 @@ class ConsultationLedgerW2aTest extends TestCase
         $admin = $this->admin();
         $c = $this->consultation(['status' => Consultation::STATUS_ACTIVE]);
 
-        $this->actingAs($admin)->post("/consultations/{$c->id}/signoff")->assertRedirect();
+        // W2A (Task 12): sign-off now carries a REQUIRED structured response, so the fixture step
+        // posts one. What this case actually pins — the freeze — is unchanged.
+        $this->actingAs($admin)->post("/consultations/{$c->id}/signoff",
+            ['response_disposition' => 'advice_given'])->assertRedirect();
         $this->assertNotNull($c->fresh()->signoff_date, 'fixture guard: the sign-off must have landed');
 
         $this->actingAs($admin)
@@ -221,5 +224,87 @@ class ConsultationLedgerW2aTest extends TestCase
             ->assertForbidden();
 
         $this->assertSame(Consultation::STATUS_NEW, $c->fresh()->status);
+    }
+
+    // ---- 12. sign-off writes the response --------------------------------------------------------
+
+    public function test_signoff_records_status_actor_time_and_the_structured_response(): void
+    {
+        $owner = $this->user();
+        $c = $this->consultation(['status' => Consultation::STATUS_ACTIVE, 'consultant_id' => $owner->id]);
+
+        $this->actingAs($owner)->post("/consultations/{$c->id}/signoff", [
+            'response_disposition' => 'advice_given',
+            'response_followup_needed' => true,
+            'response_note' => 'Continue beta blocker, repeat echo in 6 weeks.',
+        ])->assertRedirect()->assertSessionHas('flash.type', 'success');
+
+        $c->refresh();
+        $this->assertSame(Consultation::STATUS_SIGNED_OFF, $c->status);
+        $this->assertSame(now()->toDateString(), $c->signoff_date?->toDateString());
+        $this->assertNotNull($c->signed_off_at);
+        $this->assertSame($owner->id, (int) $c->signed_off_by);
+        $this->assertSame('advice_given', $c->response_disposition);
+        $this->assertTrue((bool) $c->response_followup_needed);
+        $this->assertSame('Continue beta blocker, repeat echo in 6 weeks.', $c->response_note);
+        $this->assertTrue(AuditLog::where('action', 'consultation.signoff')
+            ->where('entity_id', (string) $c->id)->exists());
+    }
+
+    public function test_signoff_requires_a_disposition(): void
+    {
+        $owner = $this->user();
+        $c = $this->consultation(['status' => Consultation::STATUS_ACTIVE, 'consultant_id' => $owner->id]);
+
+        $this->actingAs($owner)->from('/consultations')
+            ->post("/consultations/{$c->id}/signoff", ['response_note' => 'no disposition given'])
+            ->assertRedirect('/consultations')
+            ->assertSessionHasErrors('response_disposition');
+
+        $c->refresh();
+        $this->assertNull($c->signoff_date, 'a consult must never be signed off without a recorded response');
+        $this->assertSame(Consultation::STATUS_ACTIVE, $c->status);
+    }
+
+    public function test_signoff_rejects_a_disposition_outside_the_vocabulary(): void
+    {
+        $owner = $this->user();
+        $c = $this->consultation(['status' => Consultation::STATUS_ACTIVE, 'consultant_id' => $owner->id]);
+
+        $this->actingAs($owner)->from('/consultations')
+            ->post("/consultations/{$c->id}/signoff", ['response_disposition' => 'handed_to_surgery'])
+            ->assertRedirect('/consultations')
+            ->assertSessionHasErrors('response_disposition');
+
+        $this->assertNull($c->fresh()->signoff_date);
+    }
+
+    public function test_a_coordinator_is_refused_sign_off(): void
+    {
+        $c = $this->consultation(['status' => Consultation::STATUS_ACTIVE, 'consultant_id' => $this->user()->id]);
+
+        $this->actingAs($this->coordinator())
+            ->post("/consultations/{$c->id}/signoff", ['response_disposition' => 'advice_given'])
+            ->assertForbidden();
+
+        $c->refresh();
+        $this->assertNull($c->signoff_date, 'coordinating is booking work, not asserting it is done');
+        $this->assertNull($c->response_disposition);
+        $this->assertSame(Consultation::STATUS_ACTIVE, $c->status);
+    }
+
+    public function test_an_already_signed_off_consult_is_refused_without_overwriting_the_response(): void
+    {
+        $owner = $this->user();
+        $c = $this->consultation([
+            'status' => Consultation::STATUS_SIGNED_OFF, 'consultant_id' => $owner->id,
+            'signoff_date' => now()->subDay()->toDateString(), 'response_disposition' => 'no_further_input',
+        ]);
+
+        $this->actingAs($owner)->post("/consultations/{$c->id}/signoff", [
+            'response_disposition' => 'taking_over',
+        ])->assertRedirect()->assertSessionHas('flash.type', 'error');
+
+        $this->assertSame('no_further_input', $c->fresh()->response_disposition);
     }
 }

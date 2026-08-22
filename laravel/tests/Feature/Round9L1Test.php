@@ -426,10 +426,13 @@ class Round9L1Test extends TestCase
         $owner = $this->user();
         $c = $this->consultation($owner);
 
-        $this->actingAs($owner)->post("/consultations/{$c->id}/signoff")
+        // W2A: sign-off now carries a REQUIRED structured response (disposition), so this pin posts
+        // the payload. The gate and the audited outcome it exists to protect are unchanged.
+        $this->actingAs($owner)->post("/consultations/{$c->id}/signoff", ['response_disposition' => 'advice_given'])
             ->assertRedirect()->assertSessionHas('flash.type', 'success');
 
         $this->assertSame(now()->toDateString(), $c->fresh()->signoff_date?->toDateString());
+        $this->assertSame('advice_given', $c->fresh()->response_disposition);
         $this->assertTrue(AuditLog::where('action', 'consultation.signoff')->where('entity_id', (string) $c->id)->exists());
     }
 

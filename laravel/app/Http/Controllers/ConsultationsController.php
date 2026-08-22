@@ -166,18 +166,31 @@ class ConsultationsController extends Controller
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultation status updated.']);
     }
 
-    public function signoff(Request $request, Consultation $consultation): RedirectResponse
+    /**
+     * Sign off — now the ledger's closing entry rather than a date stamp. The gate is UNCHANGED
+     * (User::canManageConsultation: observers refused first, then admin / can_manage / the receiving
+     * consultant) and simply moved into ConsultationSignoffRequest::authorize() so the 403 fires
+     * before validation. Coordinators are not in that predicate and stay refused by design.
+     */
+    public function signoff(\App\Http\Requests\ConsultationSignoffRequest $request, Consultation $consultation): RedirectResponse
     {
-        // observers are read-only EVEN with a Manage flag (J1-9 global guarantee); the manage rule
-        // (admin / can_manage / receiving consultant) lives on User::canManageConsultation now
-        if (! Auth::user()->canManageConsultation($consultation)) {
-            throw new AccessDeniedHttpException('Only the receiving consultant or a manager may sign off.');
-        }
         if ($consultation->signoff_date) {
             return back()->with('flash', ['type' => 'error', 'message' => 'Already signed off.']);
         }
-        $consultation->update(['signoff_date' => now()->toDateString()]);
-        Audit::log('consultation.signoff', 'consultation', (string) $consultation->id);
+        $data = $request->validated();
+        $consultation->update([
+            'status' => Consultation::STATUS_SIGNED_OFF,
+            'signoff_date' => now()->toDateString(),   // retained: every legacy report reads this
+            'signed_off_at' => now(),                   // real time — cutover onward
+            'signed_off_by' => Auth::id(),              // session-sourced, never from the payload
+            'response_disposition' => $data['response_disposition'],
+            'response_followup_needed' => (bool) ($data['response_followup_needed'] ?? false),
+            'response_note' => $data['response_note'] ?? null,
+        ]);
+        Audit::log('consultation.signoff', 'consultation', (string) $consultation->id, [
+            'disposition' => $data['response_disposition'],
+            'followup_needed' => (bool) ($data['response_followup_needed'] ?? false),
+        ]);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultation signed off.']);
     }
