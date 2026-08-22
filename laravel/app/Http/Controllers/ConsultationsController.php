@@ -168,9 +168,12 @@ class ConsultationsController extends Controller
         // are re-derived below rather than mass-assigned from the payload
         unset($data['patient_id'], $data['admission_id'], $data['unmatched_mrn_ack']);
 
-        $patient = $pickedPatientId
-            ? Patient::find($pickedPatientId)
-            : Patient::where('mrn', $data['mrn'])->first();
+        // A pick wins, but never at the cost of dropping a link: the request guarantees the pick is a
+        // LIVE patient whose MRN is the typed one, so falling back to MRN resolution if it vanished
+        // between validation and here resolves to the same patient — and can only ever add a link,
+        // never swap one.
+        $patient = ($pickedPatientId ? Patient::find($pickedPatientId) : null)
+            ?? Patient::where('mrn', $data['mrn'])->first();
 
         // an admission only attaches when it really belongs to the resolved patient — a mismatched
         // id in the payload is dropped, never trusted
@@ -412,6 +415,13 @@ class ConsultationsController extends Controller
     {
         // edit is open to any clinical role (J1-10 legacy parity); gate lives in ConsultationRequest::authorize()
         $data = $request->validated();
+        // Wave 2b: the patient-lookup fields are CREATE-only and are stripped here for the same
+        // reason store() strips them — the model is $guarded = ['id'], so leaving them in $data would
+        // mass-assign them straight into the row. On edit that would silently re-point a filed
+        // clinical record at a different patient (or attach someone else's admission) with no
+        // ownership check and nothing in the $fields audit diff below. Re-identifying a consultation
+        // is not an edit; edit stays untouched.
+        unset($data['patient_id'], $data['admission_id'], $data['unmatched_mrn_ack']);
         // field-level diff (Item 4): snapshot the editable fields before the update, diff after
         $fields = ['patient_name', 'mrn', 'age', 'bed', 'current_location',
             'consultation_from', 'to_service', 'consultant_id', 'indication', 'other_indication',

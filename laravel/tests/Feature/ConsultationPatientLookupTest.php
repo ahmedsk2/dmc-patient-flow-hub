@@ -144,6 +144,91 @@ class ConsultationPatientLookupTest extends TestCase
         $this->assertSame($actor->id, (int) Consultation::firstOrFail()->entered_by);
     }
 
+    public function test_a_picked_patient_whose_mrn_is_not_the_typed_mrn_is_refused(): void
+    {
+        Patient::create(['mrn' => '70001111', 'name' => 'Right Pt', 'age' => 52]);
+        $wrong = Patient::create(['mrn' => '70005555', 'name' => 'Wrong Pt', 'age' => 52]);
+
+        // the MRN the clinician reads on the ledger and the patient the row JOINS to must be the
+        // same person — a picked patient may not silently override the typed MRN
+        $this->actingAs($this->booker())->from('/consultations')
+            ->post('/consultations', $this->payload(['patient_id' => $wrong->id]))
+            ->assertRedirect('/consultations')
+            ->assertSessionHasErrors('mrn');
+
+        $this->assertSame(0, Consultation::count());
+    }
+
+    public function test_a_soft_deleted_patient_or_admission_can_never_be_picked(): void
+    {
+        $trashed = Patient::create(['mrn' => '70006666', 'name' => 'Trashed Pt', 'age' => 44]);
+        $trashed->delete();
+
+        // exists:patients,id is soft-delete-blind; a trashed pick used to pass validation and then
+        // resolve to NULL in the controller — the exact silent orphan this task exists to prevent
+        $this->actingAs($this->booker())->from('/consultations')
+            ->post('/consultations', $this->payload(['mrn' => '70006666', 'patient_id' => $trashed->id]))
+            ->assertRedirect('/consultations')
+            ->assertSessionHasErrors('patient_id');
+
+        $live = Patient::create(['mrn' => '70007777', 'name' => 'Live Pt', 'age' => 44]);
+        $trashedAdmission = Admission::create([
+            'patient_id' => $live->id, 'admit_date' => now()->subDay()->toDateString(),
+            'current_location' => 'Ward', 'is_longterm' => 0, 'is_new_assignment' => 0,
+        ]);
+        $trashedAdmission->delete();
+
+        $this->actingAs($this->booker())->from('/consultations')
+            ->post('/consultations', $this->payload([
+                'mrn' => '70007777', 'patient_id' => $live->id, 'admission_id' => $trashedAdmission->id,
+            ]))
+            ->assertRedirect('/consultations')
+            ->assertSessionHasErrors('admission_id');
+
+        $this->assertSame(0, Consultation::count());
+    }
+
+    public function test_an_unknown_patient_id_is_refused(): void
+    {
+        $this->actingAs($this->booker())->from('/consultations')
+            ->post('/consultations', $this->payload(['patient_id' => 987654]))
+            ->assertRedirect('/consultations')
+            ->assertSessionHasErrors('patient_id');
+
+        $this->assertSame(0, Consultation::count());
+    }
+
+    public function test_an_edit_can_never_relink_the_patient_or_the_admission(): void
+    {
+        $cardio = Specialty::firstOrCreate(['name' => 'Cardiology'], ['is_subspecialty' => true, 'is_external' => false]);
+        $right = Patient::create(['mrn' => '70008888', 'name' => 'Right Pt', 'age' => 52]);
+        $wrong = Patient::create(['mrn' => '70009999', 'name' => 'Wrong Pt', 'age' => 52]);
+        $wrongAdmission = Admission::create([
+            'patient_id' => $wrong->id, 'admit_date' => now()->subDay()->toDateString(),
+            'current_location' => 'Ward', 'is_longterm' => 0, 'is_new_assignment' => 0,
+        ]);
+        $admin = $this->user(User::ROLE_ADMIN);
+        $c = Consultation::create([
+            'mrn' => '70008888', 'patient_name' => 'Right Pt', 'age' => 52, 'bed' => 'W-2',
+            'current_location' => 'Ward', 'consultation_date' => now()->toDateString(),
+            'consultation_from' => 'ER', 'to_service' => 'Cardiology', 'consultant_id' => $admin->id,
+            'indication' => [1], 'owning_specialty_id' => $cardio->id, 'patient_id' => $right->id,
+        ]);
+
+        // the lookup fields are CREATE-only. Re-pointing a clinical record at another patient is not
+        // an edit, and mass assignment would do it with nothing in the audit diff.
+        $this->actingAs($admin)->put("/consultations/{$c->id}", [
+            'mrn' => '70008888', 'patient_name' => 'Right Pt', 'age' => 52, 'bed' => 'W-2',
+            'current_location' => 'Ward', 'consultation_date' => now()->toDateString(),
+            'consultation_from' => 'ER', 'to_service' => 'Cardiology', 'consultant_id' => $admin->id,
+            'indication' => [1], 'patient_id' => $wrong->id, 'admission_id' => $wrongAdmission->id,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $c->refresh();
+        $this->assertSame($right->id, (int) $c->patient_id, 'an edit must never relink the patient');
+        $this->assertNull($c->admission_id, 'an edit must never attach an admission');
+    }
+
     public function test_editing_a_legacy_consultation_with_an_unmatched_mrn_still_saves(): void
     {
         $cardio = Specialty::firstOrCreate(['name' => 'Cardiology'], ['is_subspecialty' => true, 'is_external' => false]);

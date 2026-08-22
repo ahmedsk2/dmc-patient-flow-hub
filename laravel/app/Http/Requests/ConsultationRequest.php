@@ -51,8 +51,16 @@ class ConsultationRequest extends FormRequest
             // POST /api/patients/quick-search (term in the BODY — PHI never enters a URL) and posts
             // the chosen ids alongside the typed MRN. `unmatched_mrn_ack` is the user's explicit
             // "file it unlinked anyway" for an MRN that matches no patient record.
-            'patient_id' => ['nullable', 'integer', 'exists:patients,id'],
-            'admission_id' => ['nullable', 'integer', 'exists:admissions,id'],
+            // These three are CREATE-ONLY controls — ConsultationsController::update() strips them,
+            // because relinking a filed consultation to a different patient is a re-identification,
+            // not an edit.
+            // `exists` is a RAW db check and is blind to SoftDeletes: without whereNull(deleted_at) a
+            // trashed pick would validate here and then resolve to NULL in the controller, filing the
+            // very silent orphan this guard exists to prevent.
+            'patient_id' => ['nullable', 'integer',
+                \Illuminate\Validation\Rule::exists('patients', 'id')->whereNull('deleted_at')],
+            'admission_id' => ['nullable', 'integer',
+                \Illuminate\Validation\Rule::exists('admissions', 'id')->whereNull('deleted_at')],
             'unmatched_mrn_ack' => ['nullable', 'boolean'],
         ];
 
@@ -64,6 +72,11 @@ class ConsultationRequest extends FormRequest
      * `patient_id = NULL` without a word, producing a consultation nobody could ever join back to a
      * patient. The user must now either pick the patient from the lookup (`patient_id`) or tick the
      * acknowledgement. The point is the WARNING, not a block — acknowledging always succeeds.
+     *
+     * A PICKED patient must also BE the typed MRN's patient. The MRN is what a clinician reads on
+     * the ledger; `patient_id` is what the row joins to. Letting a pick silently override the typed
+     * MRN would make the two disagree about who the consultation is for — a quieter version of the
+     * same defect.
      *
      * EDIT is deliberately exempt: 1,283 imported rows carry MRNs that match nothing and must stay
      * save-able for an unrelated edit (the same reasoning as consultationDateRules()).
@@ -77,11 +90,24 @@ class ConsultationRequest extends FormRequest
             if ($v->errors()->has('mrn')) {
                 return;                                  // already failing on shape; don't pile on
             }
-            if ($this->filled('patient_id') || $this->boolean('unmatched_mrn_ack')) {
-                return;                                  // picked from the lookup, or acknowledged
-            }
             $mrn = trim((string) $this->input('mrn'));
-            if ($mrn !== '' && \App\Models\Patient::where('mrn', $mrn)->exists()) {
+
+            if ($this->filled('patient_id')) {
+                if ($v->errors()->has('patient_id')) {
+                    return;                              // unknown / trashed pick — already refused
+                }
+                // the exists rule above guarantees a live row, so find() cannot be NULL here
+                $picked = \App\Models\Patient::find((int) $this->input('patient_id'));
+                if ($picked !== null && trim((string) $picked->mrn) !== $mrn) {
+                    $v->errors()->add('mrn', "MRN {$mrn} is not the MRN of the patient you picked ({$picked->mrn}). Correct the MRN, or pick the patient this MRN belongs to.");
+                }
+
+                return;                                  // picked from the lookup
+            }
+            if ($this->boolean('unmatched_mrn_ack')) {
+                return;                                  // acknowledged: file it unlinked
+            }
+            if (\App\Models\Patient::where('mrn', $mrn)->exists()) {
                 return;                                  // the typed MRN does resolve
             }
             $v->errors()->add('mrn', "No patient record matches MRN {$mrn}. Pick the patient from the lookup, or tick 'Record anyway' to file this consultation without linking a patient record.");
