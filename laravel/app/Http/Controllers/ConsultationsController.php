@@ -249,7 +249,8 @@ class ConsultationsController extends Controller
      *
      * Order of checks matters:
      *   1. Observers are read-only BEFORE any capability flag (the global guarantee).
-     *   2. The actor must be able to SEE the consult (own specialty / coordinator / admin).
+     *   2. The actor must be on the RECEIVING side of the consult — see mayRecordFollowup(), which
+     *      is deliberately narrower than the read predicate.
      *   3. A signed-off consult is closed — nothing may be appended to it.
      *   4. One tick per consult per day. A second tick the same day is REJECTED with a friendly 422,
      *      never a silent overwrite: the row is append-only and "seen X of Y" must stay exact.
@@ -262,14 +263,18 @@ class ConsultationsController extends Controller
         if ($user->isObserver()) {
             throw new AccessDeniedHttpException('Observers have read-only access.');
         }
-        if (! $user->canSeeConsultation($consultation)) {
+        if (! self::mayRecordFollowup($user, $consultation)) {
             throw new AccessDeniedHttpException('This consultation belongs to another service.');
         }
 
         $data = $this->jsonValidate($request, ['note' => ['nullable', 'string', 'max:500']]);
         $note = trim((string) ($data['note'] ?? '')) ?: null;
 
-        if ($consultation->status === Consultation::STATUS_SIGNED_OFF) {
+        // Same either-column freeze as status(): `status` and `signoff_date` are meant to move
+        // together, but legacy:import writes `signoff_date` and never writes `status`, so every
+        // re-imported signed-off row carries the schema default `new`. Keying on `status` alone
+        // would let a CLOSED consult be ticked AND auto-promoted into the daily worklist.
+        if ($consultation->status === Consultation::STATUS_SIGNED_OFF || $consultation->signoff_date !== null) {
             $this->jsonFail(['note' => 'This consultation is signed off — no further follow-up can be recorded.']);
         }
 
@@ -314,6 +319,33 @@ class ConsultationsController extends Controller
             'promoted' => $promoted,
             'followup_date' => $today,
         ]);
+    }
+
+    /**
+     * May this user record TODAY's tick against this consult?
+     *
+     * Deliberately NARROWER than User::canSeeConsultation(), which is a VISIBILITY predicate and on
+     * purpose also returns true for `entered_by` ("you never lose sight of a consult you personally
+     * booked"). A follow-up is not a read: it is the receiving team's assertion that they rounded on
+     * this patient today. Letting the REFERRER tick it — a Nephrology registrar closing out the day
+     * on a Cardiology consult she merely booked — would misattribute the clinical fact (`author_id`
+     * would name her) and inflate Cardiology's "seen 8 of 12" with a round nobody on that team made.
+     *
+     * So: the owning team, the assigned consultant, a coordinator, or an admin. Observers are
+     * refused by the caller before this is ever reached.
+     */
+    private static function mayRecordFollowup(User $user, Consultation $consultation): bool
+    {
+        if ($user->isAdmin() || $user->canCoordinateConsultations()) {
+            return true;
+        }
+        if ($user->specialty_id !== null
+            && (int) $consultation->owning_specialty_id === (int) $user->specialty_id) {
+            return true;
+        }
+
+        return $consultation->consultant_id !== null
+            && (int) $consultation->consultant_id === (int) $user->id;
     }
 
     /**

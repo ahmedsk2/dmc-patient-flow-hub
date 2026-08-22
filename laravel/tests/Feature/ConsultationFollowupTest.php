@@ -15,8 +15,11 @@ use Tests\TestCase;
  *
  * Rules pinned here:
  *  - Observers are refused BEFORE any capability flag (the global read-only guarantee).
- *  - Only someone who can SEE the consult (own specialty / coordinator / admin) may tick it.
- *  - A signed-off consult is closed: no follow-up may be appended to it.
+ *  - Only the RECEIVING side may tick it: owning specialty / assigned consultant / coordinator /
+ *    admin. Merely being able to see the consult is not enough — the clinician who BOOKED it keeps
+ *    sight of it (User::canSeeConsultation) but never rounds on it, so they may not tick it.
+ *  - A signed-off consult is closed: no follow-up may be appended to it — and "closed" is keyed on
+ *    EITHER column, because legacy:import writes signoff_date without ever writing status.
  *  - One tick per consult per day — a second tick is a friendly 422, never a silent overwrite.
  *  - The FIRST tick on a `new` consult promotes it to `active`. That is the ONLY automatic
  *    status transition in the design.
@@ -111,9 +114,71 @@ class ConsultationFollowupTest extends TestCase
         ]);
 
         $this->actingAs($doc)->postJson("/consultations/{$c->id}/followup", ['note' => 'late note'])
-            ->assertStatus(422);
+            ->assertStatus(422)
+            ->assertJsonPath('errors.note.0',
+                'This consultation is signed off — no further follow-up can be recorded.');
 
         $this->assertSame(0, ConsultationFollowup::where('consultation_id', $c->id)->count());
+    }
+
+    /**
+     * The drifted-column case, and it is not hypothetical: `LegacyImport::importConsultations()`
+     * writes `signoff_date` and NEVER writes `status`, so every re-imported signed-off consult lands
+     * at the schema default `new`. The W1 backfill that would repair them is a one-time migration and
+     * does not re-run after an import. Keying the freeze on `status` alone would therefore let a
+     * CLOSED consult be ticked — and auto-promoted `new` -> `active`, dropping a signed-off row into
+     * the team's daily must-be-seen worklist and poisoning the "seen X of Y" denominator.
+     */
+    public function test_a_followup_is_refused_when_only_the_signoff_date_says_the_consult_is_closed(): void
+    {
+        $cardio = $this->specialty('Cardiology');
+        $doc = $this->user(User::ROLE_CONSULTANT, ['specialty_id' => $cardio->id]);
+        // exactly what legacy:import produces: a sign-off date with the default `new` status
+        $c = $this->consult($cardio, [
+            'consultant_id' => $doc->id, 'status' => Consultation::STATUS_NEW,
+            'signoff_date' => now()->toDateString(),
+        ]);
+
+        $this->actingAs($doc)->postJson("/consultations/{$c->id}/followup", ['note' => 'late note'])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.note.0',
+                'This consultation is signed off — no further follow-up can be recorded.');
+
+        $this->assertSame(0, ConsultationFollowup::where('consultation_id', $c->id)->count());
+        // and above all: no silent promotion of a closed row into the daily worklist
+        $this->assertSame(Consultation::STATUS_NEW, $c->fresh()->status);
+    }
+
+    /**
+     * A tick is the RECEIVING team's assertion that they rounded on the patient today. The referring
+     * clinician keeps the consult in sight (canSeeConsultation honours `entered_by`) but never makes
+     * that round, so ticking it would both misattribute the clinical fact — `author_id` would name
+     * the referrer — and inflate the owning team's completeness count with a round nobody made.
+     */
+    public function test_the_clinician_who_booked_the_consult_cannot_tick_another_teams_round(): void
+    {
+        $cardio = $this->specialty('Cardiology');
+        $nephro = $this->specialty('Nephrology');
+        $referrer = $this->user(User::ROLE_REGISTRAR, ['specialty_id' => $nephro->id]);
+        $c = $this->consult($cardio, ['entered_by' => $referrer->id]);
+
+        $this->actingAs($referrer)->postJson("/consultations/{$c->id}/followup", ['note' => 'seen by me'])
+            ->assertForbidden();
+
+        $this->assertSame(0, ConsultationFollowup::where('consultation_id', $c->id)->count());
+        $this->assertSame(Consultation::STATUS_NEW, $c->fresh()->status);
+    }
+
+    /** The other side of that narrowing: the ASSIGNED consultant rounds on it, whatever their book. */
+    public function test_the_assigned_consultant_may_tick_even_from_another_specialty(): void
+    {
+        $cardio = $this->specialty('Cardiology');
+        $nephro = $this->specialty('Nephrology');
+        $doc = $this->user(User::ROLE_CONSULTANT, ['specialty_id' => $nephro->id]);
+        $c = $this->consult($cardio, ['consultant_id' => $doc->id, 'status' => Consultation::STATUS_ACTIVE]);
+
+        $this->actingAs($doc)->postJson("/consultations/{$c->id}/followup", ['note' => 'seen'])->assertOk();
+        $this->assertSame(1, ConsultationFollowup::where('consultation_id', $c->id)->count());
     }
 
     public function test_an_observer_can_never_record_a_followup(): void
