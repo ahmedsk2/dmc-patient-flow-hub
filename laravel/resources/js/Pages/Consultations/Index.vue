@@ -72,7 +72,9 @@ const STATE_TITLE = {
 };
 const statusTitle = (s) => STATE_TITLE[s] || 'Unrecognised status — ask an administrator';
 const moveTitle = (next) => `Move to ${STATE_TITLE[next] || statusLabel(next)}`;
-const tabAria = (t) => `${t.duty ? `${t.name}, ${t.duty}` : t.name} — ${props.stats[t.id] ?? 0} consultations`;
+// WCAG 2.5.3 (Label in Name): the accessible name must START with the VISIBLE label, or a
+// speech-input user saying what they can see ("Active dot daily F slash U") matches nothing.
+const tabAria = (t) => `${t.tab}${t.duty ? ` — ${t.duty}` : ''} — ${props.stats[t.id] ?? 0} consultations`;
 // the moves POST /consultations/{id}/status accepts — the UI offers only legal ones, so the
 // server's 422 stays a genuine API-misuse guard rather than routine user feedback
 const STATUS_MOVES = { new: ['active', 'ongoing'], active: ['ongoing'], ongoing: ['active'], signed_off: [] };
@@ -92,9 +94,12 @@ const moveTo = (row, next) => {
         preserveScroll: true,
         onError: (errors) => { moveError.value = firstError(errors) || 'That status change was refused. Nothing was saved.'; },
         onHttpException: (res) => {
+            // Deliberately NOT "nothing was saved" here: a 500 can be raised AFTER the update lands
+            // (e.g. inside Audit::log), so promising the move did not happen could be a lie about a
+            // patient's state. Only the 422 path above knows the write was rejected outright.
             moveError.value = res?.status === 403
                 ? 'You are not allowed to change this consultation.'
-                : (res?.data?.message || 'That status change was refused. Nothing was saved.');
+                : (res?.data?.message || 'That status change failed — reload to see the current state.');
 
             return false;   // handled inline — no crash dialog over a clinician's list
         },
@@ -115,6 +120,9 @@ let timer = null;
 // term-filtered page change re-carries the term in the body.
 const nonPii = () => ({ status: status.value, scope: scope.value || undefined });
 const apply = () => {
+    // preserveState keeps this component alive across a tab switch or search, so a refusal from a
+    // PREVIOUS row would otherwise sit above a completely different list.
+    moveError.value = '';
     const opts = { preserveState: true, replace: true, preserveScroll: true };
     if (search.value.trim()) {
         const q = new URLSearchParams(Object.entries(nonPii()).filter(([, v]) => v !== undefined)).toString();
@@ -247,7 +255,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                  the pair could read "Open 9 · Total 1", so the scope is now part of the label. -->
             <div class="flex gap-2">
                 <span data-stat-chip title="Every open consultation in your book — not narrowed by the search box or the My-consultations filter." class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Open (all) <span class="nums ms-1 text-on-accent">{{ stats.open ?? 0 }}</span></span>
-                <span data-stat-chip title="Consultations matching the current search and filters, across all four states." class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Total in view <span class="nums ms-1 text-ink-600">{{ stats.total }}</span></span>
+                <span data-stat-chip title="Consultations matching the current search and filters, across all four states — not just the tab you are looking at." class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Total (all states) <span class="nums ms-1 text-ink-600">{{ stats.total }}</span></span>
                 <!-- personal counter for consultant viewers (K1-13): own open out of all open -->
                 <span v-if="me.role === 3" data-stat-chip title="Your own open consultations out of every open one in your book — not narrowed by the search box or filters." class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Mine (all) <span class="nums ms-1 text-brand-700">{{ stats.mine_open ?? 0 }} of {{ stats.open ?? 0 }} open</span></span>
             </div>
@@ -321,7 +329,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                                 <span v-if="c.status === 'signed_off' && c.disposition" data-response class="rounded-full bg-ink-100 px-2 py-0.5 text-[11px] font-semibold text-ink-600">{{ dispositionLabel(c.disposition) }}</span>
                                 <span v-if="c.status === 'signed_off' && c.followup_needed" data-followup class="rounded-full bg-tint-warning px-2 py-0.5 text-[11px] font-semibold text-on-warning">Follow-up needed</span>
                                 <button v-for="next in (canModify(c) ? (STATUS_MOVES[c.status] || []) : [])" :key="next" data-status-move type="button" @click="moveTo(c, next)"
-                                    :disabled="moving === c.id" :title="moveTitle(next)" class="rounded-lg px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-50">→ {{ statusLabel(next) }}</button>
+                                    :disabled="!!moving" :title="moveTitle(next)" class="rounded-lg px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-50">→ {{ statusLabel(next) }}</button>
                                 <button v-if="c.status !== 'signed_off' && canSignoff(c)" @click="openSignoff(c)" title="Sign off" class="rounded-lg px-2 py-1 text-xs font-semibold text-on-success hover:bg-tint-success">Sign off</button>
                                 <button v-if="canModify(c)" @click="openEdit(c)" title="Edit" class="rounded-lg px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50">Edit</button>
                                 <button v-if="me.is_admin" @click="deleteConsult(c)" title="Delete" class="rounded-lg px-2 py-1 text-xs font-semibold text-on-danger hover:bg-tint-danger">Delete</button>

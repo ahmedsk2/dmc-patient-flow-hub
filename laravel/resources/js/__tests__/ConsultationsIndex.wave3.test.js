@@ -319,11 +319,22 @@ describe('Consultations/Index — the follow-up obligation is spelled out, never
         const w = mountWith();
         const names = w.findAll('[data-status-tab]').map((b) => b.attributes('aria-label'));
         expect(names).toEqual([
-            'New, awaiting triage — 2 consultations',
-            'Active, daily follow-up owed — 3 consultations',
-            'Ongoing, no daily follow-up — 4 consultations',
+            'New — awaiting triage — 2 consultations',
+            'Active · daily F/U — daily follow-up owed — 3 consultations',
+            'Ongoing · no daily F/U — no daily follow-up — 4 consultations',
             'Signed off — 5 consultations',
         ]);
+    });
+
+    // WCAG 2.5.3 Label in Name (Level A): a speech-input user says what they can SEE, so the
+    // visible label must be a prefix of the accessible name. axe-core only flags this as
+    // best-practice, so the repo's "0 critical" gate would not catch a regression here.
+    it('starts each accessible name with the visible label (WCAG 2.5.3)', () => {
+        const w = mountWith();
+        for (const b of w.findAll('[data-status-tab]')) {
+            const visible = b.text().replace(/\s*\d+\s*$/, '').trim();   // drop the trailing count
+            expect(b.attributes('aria-label').startsWith(visible)).toBe(true);
+        }
     });
 
     it('the status filter is a group of aria-pressed toggles, not a half-built tablist', () => {
@@ -355,7 +366,7 @@ describe('Consultations/Index — the follow-up obligation is spelled out, never
         const w = mountWith();
         const chips = w.findAll('[data-stat-chip]').map((c) => c.text());
         expect(chips[0]).toContain('Open (all)');
-        expect(chips[1]).toContain('Total in view');
+        expect(chips[1]).toContain('Total (all states)');
         expect(w.findAll('[data-stat-chip]')[0].attributes('title')).toMatch(/search/i);
     });
 });
