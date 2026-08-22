@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Admission;
 use App\Models\Consultation;
 use App\Models\ConsultationReason;
+use App\Models\Notification;
 use App\Models\Patient;
 use App\Models\Specialty;
 use App\Models\User;
@@ -199,6 +200,7 @@ class ConsultationsController extends Controller
             'admission_id' => $admission?->id,
             'unmatched_mrn_ack' => $ack,
         ]);
+        $this->notifyAssignedConsultant($c, 'created');
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultation created.']);
     }
@@ -428,6 +430,7 @@ class ConsultationsController extends Controller
             // an ownership move is a clinical fact about who is carrying the patient — it belongs in
             // the diff, not just in the hidden column
             'owning_specialty_id'];
+        $previousConsultantId = (int) $consultation->consultant_id;   // Wave 2b: reassign detection
         $before = $consultation->only($fields);
         $payload = [...$data, 'indication' => $data['indication'] ?? []];
         // W1: `to_service` is the routing label the clinician reads; `owning_specialty_id` is the
@@ -442,6 +445,12 @@ class ConsultationsController extends Controller
         $consultation->update($payload);
         $diff = AuditDiff::diff($before, $consultation->fresh()->only($fields));
         Audit::log('consultation.modify', 'consultation', (string) $consultation->id, $diff);
+
+        // a coordinator moving the consult to a DIFFERENT consultant is a reassignment — tell the
+        // new owner once. An edit that leaves consultant_id alone raises nothing.
+        if ((int) $consultation->consultant_id !== $previousConsultantId) {
+            $this->notifyAssignedConsultant($consultation->fresh(), 'reassigned');
+        }
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultation updated.']);
     }
@@ -544,5 +553,49 @@ class ConsultationsController extends Controller
                 'seen_today' => (bool) $c->seen_today,
             ])->values()->all(),
         ];
+    }
+
+    /**
+     * Wave 2b (§6.4): placing a consultation used to notify nobody. The one case where the owning
+     * consultant genuinely does not already know is a COORDINATOR (or an admin, who holds the
+     * capability implicitly) booking the consult into that team's book — so raise exactly ONE in-app
+     * notification there, and none anywhere else. A consultant entering a consult for themselves
+     * raises none; a non-coordinator entering one raises none. That is the whole noise budget.
+     *
+     * Notification rows are never deleted — they are a retained clinical-audit trail, cleared only
+     * by read-all (see HandoverController::readAll).
+     *
+     * @param string $event 'created' | 'reassigned'
+     */
+    private function notifyAssignedConsultant(Consultation $c, string $event): void
+    {
+        $actor = Auth::user();
+        $consultantId = (int) ($c->consultant_id ?? 0);
+
+        if ($consultantId === 0 || $consultantId === (int) Auth::id()) {
+            return;                                     // no owner recorded, or self-entered
+        }
+        if (! $actor->canCoordinateConsultations()) {
+            return;                                     // only coordinator/admin bookings notify
+        }
+
+        Notification::create([
+            'user_id' => $consultantId,
+            'type' => 'consultation.assigned',
+            'created_at' => now(),
+            'payload' => [
+                'consultation_id' => $c->id,
+                'patient_name' => $c->patient_name,
+                'mrn' => $c->mrn,
+                'service' => $c->to_service,
+                'by_name' => $actor->full_name ?: $actor->name,
+                'event' => $event,
+            ],
+        ]);
+        Audit::log('consultation.assign', 'consultation', (string) $c->id, [
+            'consultant_id' => $consultantId,
+            'event' => $event,
+            'notified' => true,
+        ]);
     }
 }
