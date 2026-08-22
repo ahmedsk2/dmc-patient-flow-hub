@@ -77,6 +77,9 @@ class ConsultationsController extends Controller
             ->when($filters['search'] ?? null, fn ($q, $s) => $q->where(fn ($w) =>
                 $w->where('patient_name', 'like', "%{$s}%")->orWhere('mrn', 'like', "%{$s}%")));
 
+        // resolved ONCE for the whole page: every row's can_modify is this user's verdict
+        $viewer = Auth::user();
+
         $consultations = $filtered()
             ->with('consultant:id,full_name,name')
             ->where('status', $status)
@@ -98,7 +101,18 @@ class ConsultationsController extends Controller
                 'signoff' => optional($c->signoff_date)->toDateString(),
                 'status' => $c->status,
                 'open_days' => self::openDays($c),
+                // The workspace cannot mirror canModifyConsultation on its own — the shared auth
+                // payload carries only the four capability flags and no specialty — so the verdict
+                // ships per row. Without it the client fell back to admin/can_manage/own-consultant,
+                // which is far NARROWER than the server: a registrar of the owning team saw her own
+                // book's untriaged rows and could move none of them, and coordinators — whose whole
+                // purpose is modifying everyone's — got no controls at all. Sign-off is deliberately
+                // NOT derived from this (canManageConsultation stays its own, narrower gate).
+                'can_modify' => $viewer->canModifyConsultation($c),
                 'disposition' => $c->response_disposition,
+                // the OTHER half of the recorded response: collected at sign-off, and until now
+                // never shown to anyone
+                'followup_needed' => $c->response_followup_needed,
                 'reasons' => collect($c->indication ?? [])->map(fn ($id) => $reasons[$id] ?? null)->filter()->values(),
                 'indication_ids' => array_map('intval', $c->indication ?? []),
                 'other' => $c->other_indication,

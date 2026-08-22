@@ -20,11 +20,17 @@ const { ask } = useConfirm();
 const props = defineProps({ consultations: Object, filters: Object, stats: Object, reasons: Array, consultants: Array, specialties: Array });
 const page = usePage();
 const me = computed(() => page.props.auth.user);
-// mirrors User::canManageConsultation server-side (observers are excluded by canAdd/role checks and
-// by the server regardless). Coordinators are deliberately NOT here: they book work, they do not
-// assert it is finished — the server refuses them with a 403.
-const canSignoff = (row) => me.value.is_admin || me.value.can.manage || row.consultant_id === me.value.id;
-const canAdd = computed(() => me.value.role !== 5);
+// Observers (role 5) are read-only everywhere, and the read-only guarantee is never bought with a
+// capability flag — prod data really does contain observers carrying can_manage. The server refuses
+// them first in every predicate; this is the client saying the same thing rather than relying on
+// canAdd, which only ever gated the "New Consultation" button.
+const isObserver = computed(() => me.value.role === 5);
+// mirrors User::canManageConsultation server-side — the SIGN-OFF gate, deliberately NARROWER than
+// canModify below: coordinators book work, they do not assert it is finished, and the server
+// refuses them with a 403. This predicate must never widen.
+const canSignoff = (row) => !isObserver.value
+    && (me.value.is_admin || me.value.can.manage || row.consultant_id === me.value.id);
+const canAdd = computed(() => !isObserver.value);
 const isConsultant = computed(() => me.value.is_admin || me.value.role === 3);
 
 /**
@@ -70,7 +76,31 @@ const tabAria = (t) => `${t.duty ? `${t.name}, ${t.duty}` : t.name} — ${props.
 // the moves POST /consultations/{id}/status accepts — the UI offers only legal ones, so the
 // server's 422 stays a genuine API-misuse guard rather than routine user feedback
 const STATUS_MOVES = { new: ['active', 'ongoing'], active: ['ongoing'], ongoing: ['active'], signed_off: [] };
-const moveTo = (row, next) => router.post(`/consultations/${row.id}/status`, { status: next }, { preserveScroll: true });
+// One move at a time (every form on this page has a double-submit guard; this is the same idea for
+// a plain router.post), and a refusal is SHOWN. The status endpoint answers 403 for an unauthorized
+// caller and a raw JSON 422 for an illegal transition — neither is an Inertia response, so without
+// onHttpException Inertia would either throw up its crash dialog or say nothing at all while the row
+// silently stayed put.
+const moving = ref(null);
+const moveError = ref('');
+const firstError = (errors) => Object.values(errors || {}).flat().find((m) => typeof m === 'string' && m);
+const moveTo = (row, next) => {
+    if (moving.value) return;
+    moving.value = row.id;
+    moveError.value = '';
+    router.post(`/consultations/${row.id}/status`, { status: next }, {
+        preserveScroll: true,
+        onError: (errors) => { moveError.value = firstError(errors) || 'That status change was refused. Nothing was saved.'; },
+        onHttpException: (res) => {
+            moveError.value = res?.status === 403
+                ? 'You are not allowed to change this consultation.'
+                : (res?.data?.message || 'That status change was refused. Nothing was saved.');
+
+            return false;   // handled inline — no crash dialog over a clinician's list
+        },
+        onFinish: () => { moving.value = null; },
+    });
+};
 // ageing copy: "open 1 days" was wrong, and a legacy row can be four figures old ("open 1834 days")
 const openLabel = (n) => (Number(n) === 0 ? 'open today' : `open ${Number(n).toLocaleString()} day${Number(n) === 1 ? '' : 's'}`);
 
@@ -118,8 +148,13 @@ const doCloseAdd = () => { showAdd.value = false; };
 const closeAdd = () => guardedCloseAdd(doCloseAdd);
 const submitAdd = guardSubmit(cForm, () => cForm.post('/consultations', { preserveScroll: true, onSuccess: () => { doCloseAdd(); cForm.reset(); } }));
 
-// edit + delete
-const canEdit = (c) => me.value.is_admin || me.value.can.manage || c.consultant_id === me.value.id;
+// edit + status moves. `can_modify` is the SERVER's own User::canModifyConsultation verdict, shipped
+// per row (see ConsultationsController::index): own specialty / coordinator / admin. The client
+// cannot compute it — the shared auth payload carries four capability flags and no specialty — and
+// the old admin/can_manage/own-consultant guess was far narrower than the gate it claimed to mirror,
+// so a registrar of the owning team could see her book's untriaged rows and move none of them, and
+// coordinators got no controls at all. Observers stay read-only regardless.
+const canModify = (c) => !isObserver.value && c.can_modify === true;
 const editing = ref(null);
 const eForm = useForm({ mrn: '', patient_name: '', age: '', bed: '', current_location: 'Ward', consultation_date: today, consultation_from: '', to_service: '', consultant_id: '', indication: [], other_indication: '' });
 const eUid = useId();
@@ -240,6 +275,9 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
             </button>
         </div>
 
+        <!-- a refused status move (403 / illegal transition) says so here instead of vanishing -->
+        <div v-if="moveError" data-move-error role="alert" class="mb-3 rounded-xl bg-tint-danger px-4 py-2 text-sm font-semibold text-on-danger">{{ moveError }}</div>
+
         <div class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
           <div class="overflow-x-auto">
             <table class="min-w-[640px] w-full text-sm">
@@ -277,10 +315,15 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                                     :title="statusTitle(c.status)">
                                     {{ statusLabel(c.status) }}<template v-if="c.status === 'signed_off' && c.signoff"> {{ formatDate(c.signoff) }}</template>
                                 </span>
-                                <button v-for="next in (canEdit(c) ? (STATUS_MOVES[c.status] || []) : [])" :key="next" data-status-move type="button" @click="moveTo(c, next)"
-                                    :title="moveTitle(next)" class="rounded-lg px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50">→ {{ statusLabel(next) }}</button>
+                                <!-- the closing entry, READABLE: the disposition used to be a hover
+                                     title (invisible to keyboard and touch) and the follow-up flag
+                                     was collected at sign-off and then never shown to anyone -->
+                                <span v-if="c.status === 'signed_off' && c.disposition" data-response class="rounded-full bg-ink-100 px-2 py-0.5 text-[11px] font-semibold text-ink-600">{{ dispositionLabel(c.disposition) }}</span>
+                                <span v-if="c.status === 'signed_off' && c.followup_needed" data-followup class="rounded-full bg-tint-warning px-2 py-0.5 text-[11px] font-semibold text-on-warning">Follow-up needed</span>
+                                <button v-for="next in (canModify(c) ? (STATUS_MOVES[c.status] || []) : [])" :key="next" data-status-move type="button" @click="moveTo(c, next)"
+                                    :disabled="moving === c.id" :title="moveTitle(next)" class="rounded-lg px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-50">→ {{ statusLabel(next) }}</button>
                                 <button v-if="c.status !== 'signed_off' && canSignoff(c)" @click="openSignoff(c)" title="Sign off" class="rounded-lg px-2 py-1 text-xs font-semibold text-on-success hover:bg-tint-success">Sign off</button>
-                                <button v-if="canEdit(c)" @click="openEdit(c)" title="Edit" class="rounded-lg px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50">Edit</button>
+                                <button v-if="canModify(c)" @click="openEdit(c)" title="Edit" class="rounded-lg px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50">Edit</button>
                                 <button v-if="me.is_admin" @click="deleteConsult(c)" title="Delete" class="rounded-lg px-2 py-1 text-xs font-semibold text-on-danger hover:bg-tint-danger">Delete</button>
                             </div>
                         </td>

@@ -507,6 +507,77 @@ class ConsultationLedgerW2aTest extends TestCase
     }
 
     /**
+     * The row payload must carry the SAME modify verdict the status endpoint enforces
+     * (User::canModifyConsultation), or the workspace hides controls the server would accept: a
+     * registrar of the owning team with no can_manage flag and no assignment could see "New 12" in
+     * her own specialty's book and triage none of it. Each case asserts the flag AND then proves it
+     * by driving the real endpoint, so the payload can never drift away from the gate.
+     */
+    public function test_the_row_payload_carries_the_servers_own_modify_verdict(): void
+    {
+        $cardio = Specialty::create(['name' => 'Cardiology Payload', 'is_subspecialty' => true, 'is_external' => false]);
+        $this->consultation(['status' => Consultation::STATUS_NEW, 'owning_specialty_id' => $cardio->id]);
+
+        // a plain registrar of the owning team: no can_manage, not the receiving consultant
+        $registrar = $this->user(User::ROLE_REGISTRAR, ['specialty_id' => $cardio->id, 'can_manage' => false]);
+
+        $id = null;
+        $this->actingAs($registrar)->get('/consultations?status=new')
+            ->assertInertia(function (AssertableInertia $p) use (&$id) {
+                $p->where('consultations.data.0.can_modify', true);
+                $id = $p->toArray()['props']['consultations']['data'][0]['id'];
+            });
+
+        $this->actingAs($registrar)->post("/consultations/{$id}/status", ['status' => Consultation::STATUS_ACTIVE])
+            ->assertRedirect();
+    }
+
+    public function test_a_coordinator_row_payload_says_modifiable_and_the_server_agrees(): void
+    {
+        $c = $this->consultation(['status' => Consultation::STATUS_NEW]);
+        $coordinator = $this->coordinator();
+
+        $this->actingAs($coordinator)->get('/consultations?status=new')
+            ->assertInertia(fn (AssertableInertia $p) => $p->where('consultations.data.0.can_modify', true));
+
+        $this->actingAs($coordinator)->post("/consultations/{$c->id}/status", ['status' => Consultation::STATUS_ONGOING])
+            ->assertRedirect();
+    }
+
+    /**
+     * The recorded response is the point of signing off, so both halves of it must reach the client:
+     * `response_disposition` shipped already but was rendered as a hover title only, and
+     * `response_followup_needed` — "this patient still needs following up somewhere" — was collected
+     * and then never shown to anyone.
+     */
+    public function test_the_row_payload_carries_the_recorded_response_including_the_follow_up_flag(): void
+    {
+        $owner = $this->user();
+        $c = $this->consultation(['status' => Consultation::STATUS_ACTIVE, 'consultant_id' => $owner->id]);
+
+        $this->actingAs($owner)->post("/consultations/{$c->id}/signoff", [
+            'response_disposition' => 'follow_up_arranged',
+            'response_followup_needed' => true,
+            'response_note' => 'Clinic in 2 weeks.',
+        ])->assertRedirect();
+
+        $this->actingAs($owner)->get('/consultations?status=signed_off')
+            ->assertInertia(fn (AssertableInertia $p) => $p
+                ->where('consultations.data.0.disposition', 'follow_up_arranged')
+                ->where('consultations.data.0.followup_needed', true));
+    }
+
+    public function test_an_open_row_reports_no_recorded_follow_up_flag_rather_than_a_false_one(): void
+    {
+        $this->consultation(['status' => Consultation::STATUS_ONGOING]);
+
+        $this->actingAs($this->admin())->get('/consultations?status=ongoing')
+            ->assertInertia(fn (AssertableInertia $p) => $p
+                ->where('consultations.data.0.disposition', null)
+                ->where('consultations.data.0.followup_needed', null));
+    }
+
+    /**
      * Same rule for the "mine" scope: a badge must not promise rows the toggled view can't show.
      * Both rows are visible to `mine` under plain specialty scoping (same team) — the ONLY thing
      * that should hide the other consultant's row from the counts is the mine filter itself, so

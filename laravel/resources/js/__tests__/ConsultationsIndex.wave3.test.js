@@ -8,21 +8,33 @@ import { reactive } from 'vue';
 // ErrorSummary — is inspectable; BaseModal itself is stubbed to a slot-rendering shell (its own
 // behavior is covered by BaseModal.spec.js).
 
-const { post, put, deleteFn, ask } = vi.hoisted(() => ({
-    post: vi.fn(), put: vi.fn(), deleteFn: vi.fn(), ask: vi.fn(),
+// `get` is exported from the mock (it used to be an anonymous inline vi.fn) so a spec can assert the
+// request a control actually makes, not just the local ref it set.
+const { get, post, put, deleteFn, ask } = vi.hoisted(() => ({
+    get: vi.fn(), post: vi.fn(), put: vi.fn(), deleteFn: vi.fn(), ask: vi.fn(),
 }));
 let authUser;
 vi.mock('@inertiajs/vue3', () => ({
     Head: { template: '<div><slot /></div>' },
     Link: { template: '<a><slot /></a>' },
-    router: { get: vi.fn(), post, delete: deleteFn, on: vi.fn() },
+    router: { get, post, delete: deleteFn, on: vi.fn() },
     usePage: () => ({ props: { auth: { user: authUser } } }),
-    useForm: (obj) => reactive({
-        ...obj, errors: {}, processing: false,
-        post: vi.fn((...a) => post(...a)),
-        put: vi.fn((...a) => put(...a)),
-        reset: vi.fn(), clearErrors: vi.fn(),
-    }),
+    // Inertia's real form.post(url, options) transmits form.data(); the old mock forwarded only the
+    // arguments it was handed, so a spec could assert a URL and call that "posts the payload" while
+    // the payload itself was never observed. This mock sends the form's CURRENT field values as the
+    // second argument, exactly like the real thing, so the assertions can be about the request.
+    useForm: (obj) => {
+        const keys = Object.keys(obj);
+        const data = () => Object.fromEntries(keys.map((k) => [k, form[k]]));
+        const form = reactive({
+            ...obj, errors: {}, processing: false,
+            post: vi.fn((url, opts) => post(url, data(), opts)),
+            put: vi.fn((url, opts) => put(url, data(), opts)),
+            reset: vi.fn(), clearErrors: vi.fn(),
+        });
+
+        return form;
+    },
 }));
 vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => ({ ask }) }));
 vi.mock('@/Layouts/AppLayout.vue', () => ({ default: { template: '<div><slot /></div>' } }));
@@ -37,6 +49,12 @@ vi.mock('@/Components/BaseModal.vue', () => ({
 import ConsultationsIndex from '@/Pages/Consultations/Index.vue';
 
 const admin = { role: 0, is_admin: true, id: 1, can: { manage: true } };
+// a registrar with NO can_manage who is not the receiving consultant — the shape both a plain
+// member of the owning specialty and a consultation coordinator present to the client (neither the
+// specialty nor the coordinator flag is shared with the front end; the per-row can_modify is)
+const registrar = { role: 2, is_admin: false, id: 9, can: { manage: false } };
+// prod data really does contain observers carrying can_manage — read-only must survive that
+const observer = { role: 5, is_admin: false, id: 8, can: { manage: true } };
 const props = {
     consultations: { data: [], total: 0, last_page: 1, links: [] },
     filters: {}, stats: { new: 2, active: 3, ongoing: 4, signed_off: 5, total: 14, open: 9, mine_open: 1 },
@@ -50,7 +68,7 @@ const mountRows = (data, user = admin) => {
     return mount(ConsultationsIndex, { props: { ...props, consultations: { data, total: data.length, last_page: 1, links: [] } } });
 };
 
-beforeEach(() => { post.mockClear(); put.mockClear(); deleteFn.mockClear(); ask.mockReset(); });
+beforeEach(() => { get.mockClear(); post.mockClear(); put.mockClear(); deleteFn.mockClear(); ask.mockReset(); });
 
 describe('Consultations/Index — new-consultation modal: dirty guard + ErrorSummary', () => {
     it('clean form: Cancel closes immediately, no ask()', async () => {
@@ -195,10 +213,16 @@ describe('Consultations/Index — W2A: four status tabs with live counts', () =>
         expect(labels).toEqual(['New 2', 'Active · daily F/U 3', 'Ongoing · no daily F/U 4', 'Signed off 5']);
     });
 
-    it('clicking a tab re-queries with that status', () => {
+    // this used to assert only `w.vm.status` — deleting the apply() call left it green while the
+    // list silently kept showing the previous tab's rows
+    it('clicking a tab re-queries the SERVER with that status', async () => {
         const w = mountWith();
-        w.findAll('[data-status-tab]')[2].trigger('click');
+        await w.findAll('[data-status-tab]')[2].trigger('click');
         expect(w.vm.status).toBe('ongoing');
+        expect(get).toHaveBeenCalledTimes(1);
+        expect(get.mock.calls[0][0]).toBe('/consultations');
+        expect(get.mock.calls[0][1]).toEqual({ status: 'ongoing', scope: undefined });
+        expect(get.mock.calls[0][2]).toEqual(expect.objectContaining({ preserveState: true, replace: true, preserveScroll: true }));
     });
 
     it('shows the ageing of an open consult and nothing for a signed-off one', () => {
@@ -222,6 +246,9 @@ describe('Consultations/Index — W2A: four status tabs with live counts', () =>
 describe('Consultations/Index — W2A: sign-off response modal', () => {
     const row = { id: 7, name: 'Ali', mrn: '111', status: 'active', open_days: 2, signoff: null, reasons: [], indication_ids: [] };
 
+    // the ONE clinically meaningful payload in this feature: what the team advised, whether anyone
+    // still owes the patient a follow-up, and the note. Asserting the URL alone let all three be
+    // dropped without a single red test.
     it('submitting posts the disposition, follow-up flag and note to the sign-off route', async () => {
         const w = mountWith();
         w.vm.openSignoff(row);
@@ -232,6 +259,12 @@ describe('Consultations/Index — W2A: sign-off response modal', () => {
         w.vm.submitSignoff();
         expect(post).toHaveBeenCalledTimes(1);
         expect(post.mock.calls[0][0]).toBe('/consultations/7/signoff');
+        expect(post.mock.calls[0][1]).toEqual({
+            response_disposition: 'advice_given',
+            response_followup_needed: true,
+            response_note: 'Repeat echo in 6 weeks.',
+        });
+        expect(post.mock.calls[0][2]).toEqual(expect.objectContaining({ preserveScroll: true }));
     });
 
     it('double-submit guard: submitSignoff no-ops while processing', async () => {
@@ -341,5 +374,133 @@ describe('Consultations/Index — ageing and status-badge polish', () => {
         expect(badge.text()).toBe('Unknown');
         expect(badge.classes()).toContain('bg-ink-100');
         expect(badge.classes()).not.toContain('bg-tint-accent');
+    });
+});
+
+describe('Consultations/Index — row controls follow the SERVER\'s own modify verdict', () => {
+    // The client cannot reconstruct User::canModifyConsultation (own specialty / coordinator /
+    // admin): the shared auth payload carries four capability flags and no specialty. So the verdict
+    // ships per row as `can_modify`, and the row controls gate on it — never on the far narrower
+    // admin/can_manage/own-consultant guess, which hid triage from the very people who own the book.
+    const hasBtn = (w, label) => w.findAll('button').some((b) => b.text() === label);
+
+    it('offers the moves and Edit to a non-manager the server would accept', () => {
+        const w = mountRows([row({ status: 'new', can_modify: true, consultant_id: 999 })], registrar);
+        expect(w.findAll('[data-status-move]').length).toBe(2);
+        expect(hasBtn(w, 'Edit')).toBe(true);
+    });
+
+    it('withholds them when the server says the row is not modifiable', () => {
+        const w = mountRows([row({ status: 'new', can_modify: false, consultant_id: 999 })], registrar);
+        expect(w.findAll('[data-status-move]').length).toBe(0);
+        expect(hasBtn(w, 'Edit')).toBe(false);
+    });
+
+    it('offers only the legal transitions out of each state', () => {
+        const moves = (status) => mountRows([row({ status, can_modify: true })], registrar)
+            .findAll('[data-status-move]').map((b) => b.text());
+        expect(moves('new')).toEqual(['→ Active · daily F/U', '→ Ongoing · no daily F/U']);
+        expect(moves('active')).toEqual(['→ Ongoing · no daily F/U']);
+        expect(moves('ongoing')).toEqual(['→ Active · daily F/U']);
+        expect(moves('signed_off')).toEqual([]);
+    });
+
+    // I8 — the wave's own invariant, and every other consultation spec mounts as admin.
+    it('a coordinator-shaped viewer may triage the book but is NEVER offered sign-off', () => {
+        const w = mountRows([row({ status: 'active', can_modify: true, consultant_id: 999 })], registrar);
+        expect(w.findAll('[data-status-move]').length).toBe(1);
+        expect(hasBtn(w, 'Sign off')).toBe(false);
+    });
+
+    it('hides sign-off on an already signed-off row, even for an admin', () => {
+        const w = mountRows([row({ status: 'signed_off', signoff: '2026-08-20', open_days: null })]);
+        expect(hasBtn(w, 'Sign off')).toBe(false);
+    });
+
+    it('an observer carrying can_manage gets no write control at all', () => {
+        const w = mountRows([row({ status: 'active', can_modify: true, consultant_id: observer.id })], observer);
+        expect(hasBtn(w, 'Sign off')).toBe(false);
+        expect(hasBtn(w, 'Edit')).toBe(false);
+        expect(w.findAll('[data-status-move]').length).toBe(0);
+    });
+});
+
+describe('Consultations/Index — the recorded response is readable, not a tooltip', () => {
+    it('shows the disposition and the outstanding-follow-up flag on a signed-off row', () => {
+        const w = mountRows([row({
+            status: 'signed_off', signoff: '2026-08-20', open_days: null,
+            disposition: 'follow_up_arranged', followup_needed: true,
+        })]);
+        expect(w.get('[data-response]').text()).toBe('Follow-up arranged');
+        expect(w.get('[data-followup]').text()).toBe('Follow-up needed');
+    });
+
+    it('says nothing extra when the team recorded no outstanding follow-up', () => {
+        const w = mountRows([row({
+            status: 'signed_off', signoff: '2026-08-20', open_days: null,
+            disposition: 'advice_given', followup_needed: false,
+        })]);
+        expect(w.get('[data-response]').text()).toBe('Advice given');
+        expect(w.find('[data-followup]').exists()).toBe(false);
+    });
+
+    it('shows neither on a row that is still open', () => {
+        const w = mountRows([row({ status: 'active', disposition: null, followup_needed: null })]);
+        expect(w.find('[data-response]').exists()).toBe(false);
+        expect(w.find('[data-followup]').exists()).toBe(false);
+    });
+});
+
+describe('Consultations/Index — status moves: double-submit guard and real feedback', () => {
+    const openRow = { id: 1, status: 'new', can_modify: true };
+
+    it('no-ops a second click while a move is already in flight', () => {
+        const w = mountRows([row(openRow)], registrar);
+        w.vm.moveTo(openRow, 'active');
+        w.vm.moveTo(openRow, 'ongoing');
+        expect(post).toHaveBeenCalledTimes(1);
+        expect(post.mock.calls[0][0]).toBe('/consultations/1/status');
+        expect(post.mock.calls[0][1]).toEqual({ status: 'active' });
+    });
+
+    it('releases the guard when the request finishes', () => {
+        const w = mountRows([row(openRow)], registrar);
+        w.vm.moveTo(openRow, 'active');
+        post.mock.calls[0][2].onFinish();
+        w.vm.moveTo(openRow, 'ongoing');
+        expect(post).toHaveBeenCalledTimes(2);
+    });
+
+    it('surfaces a 403 refusal inline instead of letting Inertia throw up a crash dialog', async () => {
+        const w = mountRows([row(openRow)], registrar);
+        w.vm.moveTo(openRow, 'active');
+        const handled = post.mock.calls[0][2].onHttpException({ status: 403, data: {} });
+        await w.vm.$nextTick();
+        expect(handled).toBe(false);
+        expect(w.get('[data-move-error]').text()).toMatch(/not allowed|may not/i);
+    });
+
+    it('shows the 422 the status endpoint actually sent', async () => {
+        const w = mountRows([row(openRow)], registrar);
+        w.vm.moveTo(openRow, 'ongoing');
+        post.mock.calls[0][2].onHttpException({
+            status: 422,
+            data: { message: 'A signed-off consultation cannot be moved. An admin must reverse the sign-off first.' },
+        });
+        await w.vm.$nextTick();
+        expect(w.get('[data-move-error]').text()).toContain('cannot be moved');
+    });
+
+    it('surfaces a validation error delivered the ordinary Inertia way', async () => {
+        const w = mountRows([row(openRow)], registrar);
+        w.vm.moveTo(openRow, 'active');
+        post.mock.calls[0][2].onError({ status: 'A consultation cannot move from active to active.' });
+        await w.vm.$nextTick();
+        expect(w.get('[data-move-error]').text()).toContain('cannot move from active to active');
+    });
+
+    it('renders no error region until something is actually refused', () => {
+        const w = mountRows([row(openRow)], registrar);
+        expect(w.find('[data-move-error]').exists()).toBe(false);
     });
 });
