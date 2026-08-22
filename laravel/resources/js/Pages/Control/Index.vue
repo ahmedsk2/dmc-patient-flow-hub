@@ -61,6 +61,19 @@ const sForm = useForm({
 });
 const saveSettings = guardSubmit(sForm, () => sForm.put('/control/settings', { preserveScroll: true }));
 
+// Unchecking this is the destructive direction: the next `php artisan legacy:import` truncates and
+// rebuilds `consultations` from the legacy dump, wiping every consultation entered here since cutover
+// (see LegacyImport::handle()). Confirm before allowing the uncheck; the DOM checkbox is a plain
+// :checked binding (not v-model) so a cancelled confirm can revert it without touching sForm.
+function onSourceOfTruthChange(e) {
+    const next = e.target.checked;
+    if (!next && !window.confirm('Turning this OFF means the next legacy import will truncate and rebuild the consultation ledger, destroying every consultation entered here since cutover. Continue?')) {
+        e.target.checked = true;
+        return;
+    }
+    sForm.consultations_source_of_truth = next;
+}
+
 // Instant client-side user filtering over the FULL list (all users are shipped now, ~323 rows).
 // Every control narrows in-memory — no server round-trip, no pages to click past. `search` matches
 // name/username/email (case-insensitive); role/status/service/capability are exact.
@@ -225,7 +238,7 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
             <!-- Consultation ledger cutover gate -->
             <h4 class="mb-1 mt-6 font-bold text-ink-800">Consultation ledger</h4>
             <div class="grid gap-4 sm:grid-cols-2">
-                <label class="block sm:col-span-2"><span class="mb-1 flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" v-model="sForm.consultations_source_of_truth" class="rounded text-brand-600" /> Consultations: this system is the source of truth</span><span class="mt-1 block text-xs text-ink-400">When on, importing legacy data preserves the consultation ledger instead of rebuilding it. Turn this on at cutover.</span></label>
+                <label class="block sm:col-span-2"><span class="mb-1 flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" :checked="sForm.consultations_source_of_truth" @change="onSourceOfTruthChange" class="rounded text-brand-600" /> Consultations: this system is the source of truth</span><span class="mt-1 block text-xs text-ink-400">When on, importing legacy data preserves the consultation ledger instead of rebuilding it. Turn this on at cutover. Turning it off allows the next legacy import to truncate and rebuild consultations, destroying every consultation entered here since cutover.</span></label>
             </div>
 
             <div class="mt-5 flex items-center gap-3">
@@ -243,7 +256,7 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
                     <span class="font-semibold text-ink-700">{{ fieldLabels[h.field] || h.field }}</span>
                     <span class="nums text-ink-400 line-through">{{ h.old_value ?? '—' }}</span>
                     <span class="text-ink-300">→</span>
-                    <span class="nums font-bold text-brand-700">{{ h.new_value }}</span>
+                    <span class="nums font-bold text-brand-700">{{ h.new_value ?? '—' }}</span>
                     <span class="ml-auto text-xs text-ink-400">{{ h.changed_by || 'system' }} · {{ h.created_at?.slice(0, 16).replace('T', ' ') }}</span>
                 </div>
             </div>

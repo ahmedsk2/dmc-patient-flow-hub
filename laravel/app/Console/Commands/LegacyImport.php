@@ -41,7 +41,7 @@ class LegacyImport extends Command
         if ($this->option('wipe-consultations') && $preserveConsultations) {
             $this->error('Refusing to wipe consultations: settings.consultations_source_of_truth is ON, '
                 . 'so THIS application — not the legacy database — owns the consultation ledger. '
-                . 'Nothing was imported. Turn the flag off in Control → System if you really mean to '
+                . 'Nothing was imported. Turn the flag off in Control → Settings if you really mean to '
                 . 'rebuild consultations from the legacy dump (this destroys every consultation '
                 . 'entered here since cutover).');
 

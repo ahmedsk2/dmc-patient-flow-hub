@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
 /**
@@ -85,5 +86,42 @@ class ConsultationImportSafetyTest extends TestCase
 
         $this->actingAs($consultant)->put('/control/settings', $payload)->assertForbidden();
         $this->assertFalse((bool) DB::table('settings')->value('consultations_source_of_truth'));
+    }
+
+    /**
+     * Setting::current() ships the raw model as Control's `settings` Inertia prop. Without the
+     * boolean cast on Setting, this flag serialises as the integer 1, and Vue's `v-model` checkbox
+     * (looseEqual(1, true) === false) renders UNCHECKED even while the ledger-protection gate is
+     * actually ON — the UI would lie about the state of the switch that protects every consultation.
+     * Pin the prop as a strict boolean so that regression can never come back silently.
+     */
+    public function test_control_index_exposes_consultations_source_of_truth_as_a_strict_boolean(): void
+    {
+        Setting::current()->update(['consultations_source_of_truth' => true]);
+
+        $this->actingAs($this->admin())->get('/control')->assertInertia(fn (AssertableInertia $p) => $p
+            ->where('settings.consultations_source_of_truth', true));
+    }
+
+    /**
+     * ControlController::updateSettings() writes `setting_changes.new_value` — the append-only,
+     * queryable, human-facing history panel (Control/Index.vue). Turning this flag OFF is the most
+     * security-relevant change the form can record ("someone disabled ledger protection"): the
+     * recorded value must be legible ('0'), not an empty string ((string) false === '').
+     */
+    public function test_admin_turning_consultations_source_of_truth_off_records_a_legible_value(): void
+    {
+        Setting::current()->update(['consultations_source_of_truth' => true]);
+        $admin = $this->admin();
+        $payload = array_merge($this->settingsPayload(), ['consultations_source_of_truth' => false]);
+
+        $this->actingAs($admin)->put('/control/settings', $payload)->assertRedirect();
+
+        $this->assertFalse((bool) DB::table('settings')->value('consultations_source_of_truth'));
+        $this->assertDatabaseHas('setting_changes', [
+            'field' => 'consultations_source_of_truth',
+            'old_value' => '1',
+            'new_value' => '0',
+        ]);
     }
 }

@@ -127,10 +127,13 @@ class ControlController extends Controller
             if ($old !== null && (string) $old === (string) $new) {
                 continue;
             }
+            // Booleans (e.g. log_record_opens, consultations_source_of_truth) must be normalised to
+            // '1'/'0' here — plain (string) casting turns `false` into '' (an empty string, not '0'),
+            // which renders as an illegible blank in the Change history panel (Control/Index.vue).
             DB::table('setting_changes')->insert([
                 'field' => $field,
-                'old_value' => $old === null ? null : (string) $old,
-                'new_value' => (string) $new,
+                'old_value' => $old === null ? null : $this->historyValue($old),
+                'new_value' => $this->historyValue($new),
                 'changed_by' => Auth::id(),
                 'created_at' => now(),
             ]);
@@ -140,6 +143,21 @@ class ControlController extends Controller
         Audit::log('settings.update', 'settings', '1', $data);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Settings saved.']);
+    }
+
+    /**
+     * String-normalise a setting_changes value. Plain `(string)` casting turns a boolean `false`
+     * into '' (PHP: `(string) false === ''`), which the Change history panel then renders as an
+     * illegible blank right-hand side — the most security-relevant change this form can record
+     * (e.g. disabling the consultation-ledger cutover gate) would look like "1 → " instead of "1 → 0".
+     */
+    private function historyValue(mixed $value): string
+    {
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+
+        return (string) $value;
     }
 
     /**

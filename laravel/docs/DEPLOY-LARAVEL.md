@@ -69,7 +69,7 @@ Pick **one**:
   truncates and re-derives).
 
 > **Consultation cutover gate.** Once the doctors enter consultations *here* rather than in the legacy
-> app, set `settings.consultations_source_of_truth = 1` (Control -> System). With the gate ON,
+> app, set `settings.consultations_source_of_truth = 1` (Control -> Settings). With the gate ON,
 > `legacy:import` no longer truncates or re-imports `consultations`: it preserves them and re-points
 > each one at the rebuilt patient/user rows by natural key (`patients.mrn`, `users.legacy_id`).
 > App-owned `settings` columns (SMTP credentials, timezone, thresholds, the gate itself) are likewise
