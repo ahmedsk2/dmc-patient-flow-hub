@@ -109,4 +109,32 @@ class Consultation extends Model
             $w->orWhere('consultant_id', $u->id)->orWhere('entered_by', $u->id);
         });
     }
+
+    /**
+     * The WRITE-side scope: rows this user may actually tick a daily follow-up against — the query
+     * mirror of User::canRecordFollowup(), held to the same rule as scopeVisibleTo above (a scope
+     * must never return a row that the matching per-row predicate would refuse).
+     *
+     * Narrower than scopeVisibleTo by exactly one clause: `entered_by`. Seeing a consult you booked
+     * into another team's book is right; being asked to round on it is not. The daily worklist is
+     * built from THIS scope, so every row it offers is one the viewer can clear — otherwise a
+     * referrer's "Seen X of Y" could never reach Y and the panel becomes noise.
+     */
+    public function scopeRecordableBy(Builder $q, User $u): Builder
+    {
+        if ($u->isObserver()) {
+            return $q->whereRaw('1 = 0');
+        }
+
+        if ($u->isAdmin() || $u->canCoordinateConsultations()) {
+            return $q;
+        }
+
+        return $q->where(function (Builder $w) use ($u) {
+            if ($u->specialty_id !== null) {
+                $w->where('owning_specialty_id', $u->specialty_id);
+            }
+            $w->orWhere('consultant_id', $u->id);
+        });
+    }
 }

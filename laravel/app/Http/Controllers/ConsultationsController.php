@@ -253,8 +253,8 @@ class ConsultationsController extends Controller
      *
      * Order of checks matters:
      *   1. Observers are read-only BEFORE any capability flag (the global guarantee).
-     *   2. The actor must be on the RECEIVING side of the consult — see mayRecordFollowup(), which
-     *      is deliberately narrower than the read predicate.
+     *   2. The actor must be on the RECEIVING side of the consult — see User::canRecordFollowup(),
+     *      which is deliberately narrower than the read predicate.
      *   3. A signed-off consult is closed — nothing may be appended to it.
      *   4. One tick per consult per day. A second tick the same day is REJECTED with a friendly 422,
      *      never a silent overwrite: the row is append-only and "seen X of Y" must stay exact.
@@ -264,15 +264,20 @@ class ConsultationsController extends Controller
     public function followup(Request $request, Consultation $consultation): JsonResponse
     {
         $user = Auth::user();
+        // jsonForbid, not AccessDeniedHttpException: this route is outside api/*, so the kernel
+        // would render an HTML error page and the worklist's fetch() would lose the reason.
         if ($user->isObserver()) {
-            throw new AccessDeniedHttpException('Observers have read-only access.');
+            $this->jsonForbid('Observers have read-only access.');
         }
-        if (! self::mayRecordFollowup($user, $consultation)) {
-            throw new AccessDeniedHttpException('This consultation belongs to another service.');
+        if (! $user->canRecordFollowup($consultation)) {
+            $this->jsonForbid('This consultation belongs to another service.');
         }
 
         $data = $this->jsonValidate($request, ['note' => ['nullable', 'string', 'max:500']]);
-        $note = trim((string) ($data['note'] ?? '')) ?: null;
+        // NOT `?: null` — a note of literal "0" is falsy in PHP, and dropping it would be silent
+        // data loss in a log that is append-only and can never be corrected afterwards.
+        $note = trim((string) ($data['note'] ?? ''));
+        $note = $note === '' ? null : $note;
 
         // Same either-column freeze as status(): `status` and `signoff_date` are meant to move
         // together, but legacy:import writes `signoff_date` and never writes `status`, so every
@@ -283,7 +288,9 @@ class ConsultationsController extends Controller
         }
 
         $today = now()->toDateString();
-        if ($consultation->followups()->whereDate('followup_date', $today)->exists()) {
+        // plain `where`, not `whereDate`: the column is already a DATE, and wrapping it in DATE()
+        // would defeat the unique(consultation_id, followup_date) index this check rides on.
+        if ($consultation->followups()->where('followup_date', $today)->exists()) {
             $this->jsonFail(['note' => 'A follow-up is already recorded for this consultation today.']);
         }
 
@@ -319,37 +326,12 @@ class ConsultationsController extends Controller
 
         return response()->json([
             'ok' => true,
-            'status' => $consultation->fresh()->status,
+            // the in-memory attribute is already correct: update() refreshed it on promotion and
+            // nothing else touched it — no need to spend a SELECT per tick re-reading the row
+            'status' => $consultation->status,
             'promoted' => $promoted,
             'followup_date' => $today,
         ]);
-    }
-
-    /**
-     * May this user record TODAY's tick against this consult?
-     *
-     * Deliberately NARROWER than User::canSeeConsultation(), which is a VISIBILITY predicate and on
-     * purpose also returns true for `entered_by` ("you never lose sight of a consult you personally
-     * booked"). A follow-up is not a read: it is the receiving team's assertion that they rounded on
-     * this patient today. Letting the REFERRER tick it — a Nephrology registrar closing out the day
-     * on a Cardiology consult she merely booked — would misattribute the clinical fact (`author_id`
-     * would name her) and inflate Cardiology's "seen 8 of 12" with a round nobody on that team made.
-     *
-     * So: the owning team, the assigned consultant, a coordinator, or an admin. Observers are
-     * refused by the caller before this is ever reached.
-     */
-    private static function mayRecordFollowup(User $user, Consultation $consultation): bool
-    {
-        if ($user->isAdmin() || $user->canCoordinateConsultations()) {
-            return true;
-        }
-        if ($user->specialty_id !== null
-            && (int) $consultation->owning_specialty_id === (int) $user->specialty_id) {
-            return true;
-        }
-
-        return $consultation->consultant_id !== null
-            && (int) $consultation->consultant_id === (int) $user->id;
     }
 
     /**
@@ -491,16 +473,23 @@ class ConsultationsController extends Controller
      * `signed_off` are deliberately excluded — that is exactly why the Wave 1 backfill parked open
      * legacy consults in `ongoing` rather than fabricating a launch-day worklist of 1,283 rows.
      * The count is exact because consultation_followups carries unique(consultation_id, followup_date).
+     *
+     * Scoped by recordableBy, NOT visibleTo: this panel is a to-do list, so every row on it must be
+     * one the viewer can actually clear. The write gate (User::canRecordFollowup) is narrower than
+     * the read gate by the `entered_by` clause, and an unreconciled worklist would hand a referrer a
+     * row she is refused permission to tick — a must-be-seen item nobody she can act as can clear,
+     * whose only outcomes are a duplicated round or learned dismissal of the panel.
      */
     private function todayWorklist(User $user): array
     {
         $today = now()->toDateString();
 
         $rows = Consultation::query()
-            ->visibleTo($user)
+            ->recordableBy($user)
             ->where('status', Consultation::STATUS_ACTIVE)
             ->with('consultant:id,full_name,name')
-            ->withExists(['followups as seen_today' => fn ($q) => $q->whereDate('followup_date', $today)])
+            // plain `where` on an already-DATE column — see followup(): DATE() would defeat the index
+            ->withExists(['followups as seen_today' => fn ($q) => $q->where('followup_date', $today)])
             ->orderBy('patient_name')
             ->orderBy('id')
             ->get();

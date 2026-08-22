@@ -171,6 +171,36 @@ class User extends Authenticatable
         return $this->isAdmin() || $this->canCoordinateConsultations() || $this->canSeeConsultation($c);
     }
 
+    /**
+     * May this user record TODAY's follow-up tick against a consultation? (W2b)
+     *
+     * Deliberately NARROWER than canSeeConsultation(), which is a VISIBILITY predicate and on
+     * purpose also returns true for `entered_by` ("you never lose sight of a consult you personally
+     * booked"). A follow-up is not a read: it is the receiving team's assertion that they rounded on
+     * this patient today. Letting the REFERRER tick it — a Nephrology registrar closing out the day
+     * on a Cardiology consult she merely booked — would misattribute the clinical fact (`author_id`
+     * would name her) and inflate Cardiology's "seen 8 of 12" with a round nobody on that team made.
+     *
+     * So: the owning team, the assigned consultant, a coordinator, or an admin. Observers first, as
+     * everywhere. `Consultation::scopeRecordableBy` is the query mirror of this predicate and must
+     * be kept in lockstep with it — the daily worklist is built from that scope, and a worklist row
+     * this predicate would refuse is a must-be-seen item nobody can ever clear.
+     */
+    public function canRecordFollowup(Consultation $c): bool
+    {
+        if ($this->isObserver()) {
+            return false;
+        }
+        if ($this->isAdmin() || $this->canCoordinateConsultations()) {
+            return true;
+        }
+        if ($this->specialty_id !== null && (int) $c->owning_specialty_id === (int) $this->specialty_id) {
+            return true;
+        }
+
+        return $c->consultant_id !== null && (int) $c->consultant_id === (int) $this->id;
+    }
+
     public function mfaEnabled(): bool { return $this->mfa_secret !== null && $this->mfa_enrolled_at !== null; }
 
     /**

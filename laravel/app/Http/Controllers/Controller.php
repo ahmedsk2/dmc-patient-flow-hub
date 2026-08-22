@@ -42,4 +42,17 @@ abstract class Controller
             'errors' => $errors,
         ], 422));
     }
+
+    /**
+     * The 403 sibling of jsonFail(): refuse a JSON endpoint with a machine-readable reason.
+     *
+     * An `AccessDeniedHttpException` would be the idiomatic throw, but for the same reason
+     * jsonValidate() exists — `shouldRenderJsonWhen` is scoped to `api/*` — the kernel renders it as
+     * an HTML error page, so a `fetch()` caller's `response.json()` yields `{}` and the specific
+     * reason never reaches the user. Endpoints that must always answer in JSON use this instead.
+     */
+    protected function jsonForbid(string $message): never
+    {
+        throw new HttpResponseException(response()->json(['message' => $message], 403));
+    }
 }

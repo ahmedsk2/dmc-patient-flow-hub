@@ -8,6 +8,8 @@ use App\Models\Specialty;
 use App\Models\User;
 use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
 /**
@@ -167,6 +169,102 @@ class ConsultationFollowupTest extends TestCase
 
         $this->assertSame(0, ConsultationFollowup::where('consultation_id', $c->id)->count());
         $this->assertSame(Consultation::STATUS_NEW, $c->fresh()->status);
+    }
+
+    /**
+     * The write gate is narrower than the READ gate, so the daily worklist — which asks "what must
+     * my side round on today" — must be narrowed to match, or the referrer gets a row on a
+     * must-be-seen list that nobody she can act as is allowed to clear: `seen X of Y` could never
+     * reach Y, and a permanently unclearable row teaches clinicians to ignore the panel.
+     * `Consultation::scopeRecordableBy` is the query mirror of `User::canRecordFollowup`.
+     */
+    public function test_the_referrers_worklist_never_offers_a_row_she_is_not_allowed_to_tick(): void
+    {
+        $cardio = $this->specialty('Cardiology');
+        $nephro = $this->specialty('Nephrology');
+        $referrer = $this->user(User::ROLE_REGISTRAR, ['specialty_id' => $nephro->id]);
+        // she booked it and can still SEE it in the ledger — but it is Cardiology's round
+        $c = $this->consult($cardio, ['entered_by' => $referrer->id, 'status' => Consultation::STATUS_ACTIVE]);
+        // ...while her own team's active consult is exactly what the panel is for
+        $mine = $this->consult($nephro, ['patient_name' => 'My Own Pt', 'status' => Consultation::STATUS_ACTIVE]);
+
+        $this->actingAs($referrer)->get('/consultations')->assertOk()->assertInertia(
+            fn (AssertableInertia $p) => $p->where('worklist.total', 1)
+                ->where('worklist.seen', 0)
+                ->where('worklist.items.0.id', $mine->id)
+        );
+        // the row is refused by the endpoint, so it must not have been offered
+        $this->actingAs($referrer)->postJson("/consultations/{$c->id}/followup", [])->assertForbidden();
+    }
+
+    /**
+     * The refusal must reach the clinician, not just the log. The worklist ticks rows off with
+     * fetch() and renders `body.message` inline; non-`api/*` routes get no automatic
+     * exception-to-JSON rendering, so an HTTP-kernel AccessDeniedHttpException would answer an HTML
+     * error page, `r.json()` would yield `{}`, and the specific reason would be replaced by the
+     * generic "Could not record the follow-up."
+     */
+    public function test_an_authorization_refusal_answers_json_so_the_reason_reaches_the_clinician(): void
+    {
+        $cardio = $this->specialty('Cardiology');
+        $nephro = $this->specialty('Nephrology');
+        $outsider = $this->user(User::ROLE_CONSULTANT, ['specialty_id' => $nephro->id]);
+        $obs = $this->user(User::ROLE_OBSERVER, ['specialty_id' => $cardio->id, 'can_manage' => 1]);
+        $c = $this->consult($cardio, ['status' => Consultation::STATUS_ACTIVE]);
+
+        $this->actingAs($outsider)->postJson("/consultations/{$c->id}/followup", [])
+            ->assertForbidden()
+            ->assertHeader('content-type', 'application/json')
+            ->assertJsonPath('message', 'This consultation belongs to another service.');
+
+        $this->actingAs($obs)->postJson("/consultations/{$c->id}/followup", [])
+            ->assertForbidden()
+            ->assertHeader('content-type', 'application/json')
+            ->assertJsonPath('message', 'Observers have read-only access.');
+    }
+
+    /**
+     * A double-click / two-devices race loses the pre-check and hits the DB unique instead. That is
+     * the one path a single-threaded test cannot reach on its own, so the collision is forced from a
+     * model event — proving the catch answers the same friendly 422 rather than a 500 on a live
+     * clinical page, and that the transaction leaves nothing behind.
+     */
+    public function test_a_tick_that_loses_the_race_to_the_db_unique_answers_422_not_a_500(): void
+    {
+        $cardio = $this->specialty('Cardiology');
+        $doc = $this->user(User::ROLE_CONSULTANT, ['specialty_id' => $cardio->id]);
+        $c = $this->consult($cardio, ['consultant_id' => $doc->id, 'status' => Consultation::STATUS_NEW]);
+
+        // simulate the concurrent tick landing between our pre-check and our INSERT: a raw insert
+        // fires no model events, so this runs exactly once and the Eloquent insert then collides
+        ConsultationFollowup::creating(function () use ($c) {
+            DB::table('consultation_followups')->insert([
+                'consultation_id' => $c->id, 'followup_date' => now()->toDateString(),
+                'note' => 'the other device', 'author_id' => null, 'created_at' => now(),
+            ]);
+        });
+
+        $this->actingAs($doc)->postJson("/consultations/{$c->id}/followup", ['note' => 'mine'])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.note.0', 'A follow-up is already recorded for this consultation today.');
+
+        // the rolled-back transaction must not have promoted the consult either
+        $this->assertSame(Consultation::STATUS_NEW, $c->fresh()->status);
+    }
+
+    /**
+     * A note of literal "0" is falsy in PHP. Discarding it would be silent data loss in an
+     * append-only log that can never be corrected afterwards.
+     */
+    public function test_a_note_of_literal_zero_is_stored_rather_than_silently_discarded(): void
+    {
+        $cardio = $this->specialty('Cardiology');
+        $doc = $this->user(User::ROLE_CONSULTANT, ['specialty_id' => $cardio->id]);
+        $c = $this->consult($cardio, ['consultant_id' => $doc->id, 'status' => Consultation::STATUS_ACTIVE]);
+
+        $this->actingAs($doc)->postJson("/consultations/{$c->id}/followup", ['note' => '0'])->assertOk();
+
+        $this->assertSame('0', ConsultationFollowup::where('consultation_id', $c->id)->firstOrFail()->note);
     }
 
     /** The other side of that narrowing: the ASSIGNED consultant rounds on it, whatever their book. */
