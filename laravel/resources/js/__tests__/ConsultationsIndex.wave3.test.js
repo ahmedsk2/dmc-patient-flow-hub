@@ -43,6 +43,12 @@ const props = {
     reasons: [], consultants: [], specialties: [],
 };
 const mountWith = () => { authUser = admin; return mount(ConsultationsIndex, { props }); };
+// mounts the page around a given set of rows (and, optionally, a given viewer)
+const row = (extra = {}) => ({ id: 1, name: 'A', mrn: '1', reasons: [], status: 'active', open_days: 2, signoff: null, indication_ids: [], can_modify: true, ...extra });
+const mountRows = (data, user = admin) => {
+    authUser = user;
+    return mount(ConsultationsIndex, { props: { ...props, consultations: { data, total: data.length, last_page: 1, links: [] } } });
+};
 
 beforeEach(() => { post.mockClear(); put.mockClear(); deleteFn.mockClear(); ask.mockReset(); });
 
@@ -180,10 +186,13 @@ describe('Consultations/Index — deleteConsult copy (Wave 3, Item 6)', () => {
 });
 
 describe('Consultations/Index — W2A: four status tabs with live counts', () => {
-    it('renders exactly the four states, each carrying its count', () => {
+    // deliberately updated (never deleted): the four states are unchanged, but a bare "Active" /
+    // "Ongoing" pair is exactly the confusion this ledger cannot afford — every label now carries
+    // the follow-up obligation the state actually means.
+    it('renders exactly the four states, each carrying its count and its follow-up obligation', () => {
         const w = mountWith();
         const labels = w.findAll('[data-status-tab]').map((b) => b.text());
-        expect(labels).toEqual(['New 2', 'Active 3', 'Ongoing 4', 'Signed off 5']);
+        expect(labels).toEqual(['New 2', 'Active · daily F/U 3', 'Ongoing · no daily F/U 4', 'Signed off 5']);
     });
 
     it('clicking a tab re-queries with that status', () => {
@@ -255,5 +264,82 @@ describe('Consultations/Index — W2A: sign-off response modal', () => {
         const alert = w.get('[role="alert"]');
         const href = alert.get('a').attributes('href').slice(1);
         expect(w.get(`#${href}`).element.tagName).toBe('SELECT');
+    });
+
+    // I3: the note is a bookkeeping line, NOT the medical record. "What the team advised" invites a
+    // clinician to type the consultation note into a ledger that is not the HIS.
+    it('the note placeholder says the clinical note stays in the HIS', async () => {
+        const w = mountWith();
+        w.vm.openSignoff(row);
+        await w.vm.$nextTick();
+        expect(w.get('textarea').attributes('placeholder'))
+            .toBe('Working note — the clinical note stays in the HIS');
+    });
+});
+
+describe('Consultations/Index — the follow-up obligation is spelled out, never implied', () => {
+    // "active" and "ongoing" read as near-synonyms in plain English (and "ongoing" can read as MORE
+    // engaged), while here they mean opposite things: active = a daily follow-up is owed, ongoing =
+    // on the books with no daily commitment. A clinician who inverts them drops a patient who needs
+    // daily review off the team's must-see list — the exact failure this project has been burned by.
+    it('gives every tab an accessible name that spells the obligation and separates the count', () => {
+        const w = mountWith();
+        const names = w.findAll('[data-status-tab]').map((b) => b.attributes('aria-label'));
+        expect(names).toEqual([
+            'New, awaiting triage — 2 consultations',
+            'Active, daily follow-up owed — 3 consultations',
+            'Ongoing, no daily follow-up — 4 consultations',
+            'Signed off — 5 consultations',
+        ]);
+    });
+
+    it('the status filter is a group of aria-pressed toggles, not a half-built tablist', () => {
+        const w = mountWith();
+        expect(w.find('[role="tablist"]').exists()).toBe(false);
+        expect(w.find('[role="tab"]').exists()).toBe(false);
+        const btns = w.findAll('[data-status-tab]');
+        expect(btns.map((b) => b.attributes('type'))).toEqual(['button', 'button', 'button', 'button']);
+        expect(btns.map((b) => b.attributes('aria-pressed'))).toEqual(['true', 'false', 'false', 'false']);
+    });
+
+    it('spells the obligation on the row badge', () => {
+        const badges = (rows) => mountRows(rows).findAll('[data-status-badge]').map((b) => b.text());
+        expect(badges([row({ status: 'active' })])).toEqual(['Active · daily F/U']);
+        expect(badges([row({ status: 'ongoing' })])).toEqual(['Ongoing · no daily F/U']);
+    });
+
+    it('spells the obligation on the move buttons and in their titles', () => {
+        const w = mountRows([row({ status: 'new' })]);
+        const moves = w.findAll('[data-status-move]');
+        expect(moves.map((b) => b.text())).toEqual(['→ Active · daily F/U', '→ Ongoing · no daily F/U']);
+        expect(moves.map((b) => b.attributes('title'))).toEqual([
+            'Move to Active — a daily follow-up is owed on this patient',
+            'Move to Ongoing — on the books, no daily follow-up commitment',
+        ]);
+    });
+
+    it('labels the unfiltered headline counters so they cannot be read against the filtered total', () => {
+        const w = mountWith();
+        const chips = w.findAll('[data-stat-chip]').map((c) => c.text());
+        expect(chips[0]).toContain('Open (all)');
+        expect(chips[1]).toContain('Total in view');
+        expect(w.findAll('[data-stat-chip]')[0].attributes('title')).toMatch(/search/i);
+    });
+});
+
+describe('Consultations/Index — ageing and status-badge polish', () => {
+    it('pluralises the ageing, formats a long stay readably and says "today" for day zero', () => {
+        const w = mountRows([
+            row({ id: 1, open_days: 1 }), row({ id: 2, open_days: 0 }), row({ id: 3, open_days: 1834 }),
+        ]);
+        expect(w.findAll('[data-open-days]').map((c) => c.text()))
+            .toEqual(['open 1 day', 'open today', 'open 1,834 days']);
+    });
+
+    it('an unrecognised status looks like drift, not like Active', () => {
+        const badge = mountRows([row({ status: 'archived_2019' })]).get('[data-status-badge]');
+        expect(badge.text()).toBe('Unknown');
+        expect(badge.classes()).toContain('bg-ink-100');
+        expect(badge.classes()).not.toContain('bg-tint-accent');
     });
 });

@@ -27,12 +27,23 @@ const canSignoff = (row) => me.value.is_admin || me.value.can.manage || row.cons
 const canAdd = computed(() => me.value.role !== 5);
 const isConsultant = computed(() => me.value.is_admin || me.value.role === 3);
 
-// the four states, in workflow order, each rendered as a tab with its live count
+/**
+ * The four states, in workflow order. Every one of them carries the OBLIGATION it means, and that
+ * obligation is shown wherever a state is NAMED or CHANGED — filter button, row badge, move button.
+ * In plain English "active" and "ongoing" read as near-synonyms, and "ongoing" can even read as the
+ * MORE engaged of the two, while here they mean opposite things: `active` owes the patient a daily
+ * follow-up, `ongoing` is on the books with NO daily commitment. A clinician who inverts them files
+ * a patient who needs daily review under `ongoing`, where they silently drop off the team's daily
+ * must-see list — the exact failure mode this project has already been burned by.
+ *   `name` — the bare state name (accessible names, sentences)
+ *   `tab`  — the visible label, sized for a dense header strip
+ *   `duty` — the obligation, spelled out
+ */
 const STATUS_TABS = [
-    ['new', 'New'],
-    ['active', 'Active'],
-    ['ongoing', 'Ongoing'],
-    ['signed_off', 'Signed off'],
+    { id: 'new', name: 'New', tab: 'New', duty: 'awaiting triage' },
+    { id: 'active', name: 'Active', tab: 'Active · daily F/U', duty: 'daily follow-up owed' },
+    { id: 'ongoing', name: 'Ongoing', tab: 'Ongoing · no daily F/U', duty: 'no daily follow-up' },
+    { id: 'signed_off', name: 'Signed off', tab: 'Signed off', duty: null },
 ];
 const STATUS_BADGE = {
     new: 'bg-tint-info text-on-info',
@@ -40,11 +51,28 @@ const STATUS_BADGE = {
     ongoing: 'bg-tint-warning text-on-warning',
     signed_off: 'bg-tint-success text-on-success',
 };
-const statusLabel = (s) => (STATUS_TABS.find((t) => t[0] === s) || [null, 'Unknown'])[1];
+// A status the client does not recognise is DRIFT (a legacy value, a newer server). It used to be
+// painted exactly like `active`, so drift looked like a live daily-follow-up commitment; it is now
+// neutral ink, which is what "we do not know what this means" should look like.
+const STATUS_UNKNOWN = 'bg-ink-100 text-ink-500';
+const statusOf = (s) => STATUS_TABS.find((t) => t.id === s) || null;
+const statusLabel = (s) => statusOf(s)?.tab ?? 'Unknown';
+// full-sentence form, for a badge title and (prefixed with "Move to") a move button's title
+const STATE_TITLE = {
+    new: 'New — waiting for the team to triage it',
+    active: 'Active — a daily follow-up is owed on this patient',
+    ongoing: 'Ongoing — on the books, no daily follow-up commitment',
+    signed_off: 'Signed off — closed, with the response recorded',
+};
+const statusTitle = (s) => STATE_TITLE[s] || 'Unrecognised status — ask an administrator';
+const moveTitle = (next) => `Move to ${STATE_TITLE[next] || statusLabel(next)}`;
+const tabAria = (t) => `${t.duty ? `${t.name}, ${t.duty}` : t.name} — ${props.stats[t.id] ?? 0} consultations`;
 // the moves POST /consultations/{id}/status accepts — the UI offers only legal ones, so the
 // server's 422 stays a genuine API-misuse guard rather than routine user feedback
 const STATUS_MOVES = { new: ['active', 'ongoing'], active: ['ongoing'], ongoing: ['active'], signed_off: [] };
 const moveTo = (row, next) => router.post(`/consultations/${row.id}/status`, { status: next }, { preserveScroll: true });
+// ageing copy: "open 1 days" was wrong, and a legacy row can be four figures old ("open 1834 days")
+const openLabel = (n) => (Number(n) === 0 ? 'open today' : `open ${Number(n).toLocaleString()} day${Number(n) === 1 ? '' : 's'}`);
 
 const search = ref(props.filters.search || '');
 const status = ref(props.filters.status || 'new');
@@ -82,7 +110,7 @@ const cForm = useForm({
     consultation_from: '', to_service: '', consultant_id: '', indication: [], other_indication: '',
 });
 const cUid = useId();
-const cfid = (field) => `consult-add-${cUid}-${field}`;
+const cfid = (fieldName) => `consult-add-${cUid}-${fieldName}`;
 const cErrors = computed(() => Object.fromEntries(Object.entries(cForm.errors || {}).map(([k, v]) => [cfid(k), v])));
 const { guardedClose: guardedCloseAdd } = useUnsavedGuard(() => cForm.isDirty, ask);
 const openAdd = () => { showAdd.value = true; };
@@ -95,7 +123,7 @@ const canEdit = (c) => me.value.is_admin || me.value.can.manage || c.consultant_
 const editing = ref(null);
 const eForm = useForm({ mrn: '', patient_name: '', age: '', bed: '', current_location: 'Ward', consultation_date: today, consultation_from: '', to_service: '', consultant_id: '', indication: [], other_indication: '' });
 const eUid = useId();
-const efid = (field) => `consult-edit-${eUid}-${field}`;
+const efid = (fieldName) => `consult-edit-${eUid}-${fieldName}`;
 const eErrors = computed(() => Object.fromEntries(Object.entries(eForm.errors || {}).map(([k, v]) => [efid(k), v])));
 const { guardedClose: guardedCloseEdit } = useUnsavedGuard(() => eForm.isDirty, ask);
 const doCloseEdit = () => { editing.value = null; };
@@ -157,7 +185,7 @@ const dispositionLabel = (v) => (DISPOSITIONS.find((d) => d[0] === v) || [null, 
 const signingOff = ref(null);
 const sForm = useForm({ response_disposition: '', response_followup_needed: false, response_note: '' });
 const sUid = useId();
-const sfid = (field) => `consult-signoff-${sUid}-${field}`;
+const sfid = (fieldName) => `consult-signoff-${sUid}-${fieldName}`;
 const sErrors = computed(() => Object.fromEntries(Object.entries(sForm.errors || {}).map(([k, v]) => [sfid(k), v])));
 const { guardedClose: guardedCloseSignoff } = useUnsavedGuard(() => sForm.isDirty, ask);
 const openSignoff = (row) => {
@@ -178,20 +206,31 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
 <template>
     <AppLayout title="Consultations">
         <div class="mb-5 flex flex-wrap items-center gap-3">
+            <!-- These chips answer two DIFFERENT questions and used to be labelled as if they
+                 answered one: `total` follows the search box and the My-consultations toggle,
+                 while `open`/`mine_open` are deliberately whole-book figures. With a search active
+                 the pair could read "Open 9 · Total 1", so the scope is now part of the label. -->
             <div class="flex gap-2">
-                <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Open <span class="nums ms-1 text-on-accent">{{ stats.open ?? 0 }}</span></span>
-                <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Total <span class="nums ms-1 text-ink-600">{{ stats.total }}</span></span>
+                <span data-stat-chip title="Every open consultation in your book — not narrowed by the search box or the My-consultations filter." class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Open (all) <span class="nums ms-1 text-on-accent">{{ stats.open ?? 0 }}</span></span>
+                <span data-stat-chip title="Consultations matching the current search and filters, across all four states." class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Total in view <span class="nums ms-1 text-ink-600">{{ stats.total }}</span></span>
                 <!-- personal counter for consultant viewers (K1-13): own open out of all open -->
-                <span v-if="me.role === 3" class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Mine <span class="nums ms-1 text-brand-700">{{ stats.mine_open ?? 0 }} of {{ stats.open ?? 0 }} open</span></span>
+                <span v-if="me.role === 3" data-stat-chip title="Your own open consultations out of every open one in your book — not narrowed by the search box or filters." class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Mine (all) <span class="nums ms-1 text-brand-700">{{ stats.mine_open ?? 0 }} of {{ stats.open ?? 0 }} open</span></span>
             </div>
             <div class="relative ms-auto">
                 <svg class="pointer-events-none absolute start-3 top-2.5 h-5 w-5 text-ink-400" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" /></svg>
                 <input v-model="search" v-focus aria-label="Search consultations by name or MRN" placeholder="Search name or MRN…" autocomplete="off" class="w-64 rounded-xl border border-ink-200 bg-card py-2 ps-10 pe-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
             </div>
-            <div role="tablist" aria-label="Consultation status" class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line">
-                <button v-for="s in STATUS_TABS" :key="s[0]" data-status-tab role="tab" :aria-selected="status === s[0]" @click="setStatus(s[0])"
-                    class="rounded-lg px-3 py-1.5 text-sm font-semibold transition" :class="status === s[0] ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">
-                    {{ s[1] }} <span class="nums ms-1">{{ stats[s[0]] ?? 0 }}</span>
+            <!-- These are FILTER toggles, not ARIA tabs: each one re-queries the server and replaces
+                 the whole list, and there is no client-side panel for a tab to control. The previous
+                 markup announced "tab, 1 of 4" while arrow keys did nothing, which is worse than
+                 plain buttons; aria-pressed states the same thing truthfully and matches the house
+                 pattern for server-backed filters (Patients board density / layout). Each button's
+                 accessible name keeps the count OUT of the label and spells the obligation. -->
+            <div role="group" aria-label="Filter consultations by status" class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line">
+                <button v-for="s in STATUS_TABS" :key="s.id" data-status-tab type="button" :aria-pressed="status === s.id"
+                    :aria-label="tabAria(s)" :title="statusTitle(s.id)" @click="setStatus(s.id)"
+                    class="rounded-lg px-3 py-1.5 text-sm font-semibold transition" :class="status === s.id ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">
+                    {{ s.tab }} <span class="nums ms-1">{{ stats[s.id] ?? 0 }}</span>
                 </button>
             </div>
             <button v-if="isConsultant" @click="toggleMine" class="rounded-xl px-3 py-2 text-sm font-semibold shadow-sm ring-1 transition" :class="scope === 'mine' ? 'bg-accent-500 text-white ring-accent-500' : 'bg-card text-ink-500 ring-line hover:bg-ink-50'">My consultations</button>
@@ -231,15 +270,15 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                         <td class="nums px-3 py-3 text-ink-500">{{ formatDate(c.date) || '—' }}</td>
                         <!-- ageing: whole days since requested_at, or since consultation_date for the
                              historical rows that have no request time. Signed-off rows show nothing. -->
-                        <td data-open-days class="nums px-3 py-3 text-ink-500">{{ c.open_days === null || c.open_days === undefined ? '—' : `open ${c.open_days} days` }}</td>
+                        <td data-open-days class="nums px-3 py-3 text-ink-500">{{ c.open_days === null || c.open_days === undefined ? '—' : openLabel(c.open_days) }}</td>
                         <td class="px-5 py-3">
                             <div class="flex flex-wrap items-center gap-2">
-                                <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="STATUS_BADGE[c.status] || 'bg-tint-accent text-on-accent'"
-                                    :title="c.status === 'signed_off' && c.disposition ? dispositionLabel(c.disposition) : undefined">
+                                <span data-status-badge class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="STATUS_BADGE[c.status] || STATUS_UNKNOWN"
+                                    :title="statusTitle(c.status)">
                                     {{ statusLabel(c.status) }}<template v-if="c.status === 'signed_off' && c.signoff"> {{ formatDate(c.signoff) }}</template>
                                 </span>
-                                <button v-for="next in (canEdit(c) ? (STATUS_MOVES[c.status] || []) : [])" :key="next" @click="moveTo(c, next)"
-                                    :title="`Move to ${statusLabel(next)}`" class="rounded-lg px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50">→ {{ statusLabel(next) }}</button>
+                                <button v-for="next in (canEdit(c) ? (STATUS_MOVES[c.status] || []) : [])" :key="next" data-status-move type="button" @click="moveTo(c, next)"
+                                    :title="moveTitle(next)" class="rounded-lg px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50">→ {{ statusLabel(next) }}</button>
                                 <button v-if="c.status !== 'signed_off' && canSignoff(c)" @click="openSignoff(c)" title="Sign off" class="rounded-lg px-2 py-1 text-xs font-semibold text-on-success hover:bg-tint-success">Sign off</button>
                                 <button v-if="canEdit(c)" @click="openEdit(c)" title="Edit" class="rounded-lg px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50">Edit</button>
                                 <button v-if="me.is_admin" @click="deleteConsult(c)" title="Delete" class="rounded-lg px-2 py-1 text-xs font-semibold text-on-danger hover:bg-tint-danger">Delete</button>
@@ -357,7 +396,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                     </label>
                     <div>
                         <label :for="sfid('response_note')" class="mb-1 block text-sm font-semibold text-ink-700">Note</label>
-                        <textarea :id="sfid('response_note')" v-model="sForm.response_note" rows="3" maxlength="2000" :aria-describedby="sForm.errors.response_note ? sfid('response_note') + '-err' : undefined" :class="[field, sForm.errors.response_note && 'border-danger-500']" placeholder="What the team advised (optional)"></textarea>
+                        <textarea :id="sfid('response_note')" v-model="sForm.response_note" rows="3" maxlength="2000" :aria-describedby="sForm.errors.response_note ? sfid('response_note') + '-err' : undefined" :class="[field, sForm.errors.response_note && 'border-danger-500']" placeholder="Working note — the clinical note stays in the HIS"></textarea>
                         <p v-if="sForm.errors.response_note" :id="sfid('response_note') + '-err'" class="mt-1 text-xs text-on-danger">{{ sForm.errors.response_note }}</p>
                     </div>
                     <div class="flex justify-end gap-2">
