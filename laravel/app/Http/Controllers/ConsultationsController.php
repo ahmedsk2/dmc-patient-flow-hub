@@ -187,6 +187,11 @@ class ConsultationsController extends Controller
         $consultations = Consultation::query()
             ->visibleTo(Auth::user())
             ->whereIn('status', [Consultation::STATUS_ACTIVE, Consultation::STATUS_ONGOING])
+            // Belt and braces, exactly as status() and followup() do: the model docblock names
+            // `status` / `signoff_date` drift as the standing hazard (legacy:import writes
+            // signoff_date without status). This sheet is the one surface where that drift would be
+            // DISPLAYED — a closed consult presented as live shift work — so close it here too.
+            ->whereNull('signoff_date')
             ->with(['consultant:id,full_name,name', 'enteredBy:id,full_name,name', 'owningSpecialty:id,name'])
             // oldest request first: the sheet is read top-down and the stalest consult must lead.
             // Historical rows have a NULL requested_at, so fall back to the date-only column.
@@ -219,11 +224,8 @@ class ConsultationsController extends Controller
         $rows = $consultations->map(function (Consultation $c) use ($latest, $reasons, $today) {
             $f = $latest->get($c->id);
             // requested_at is the authoritative request time going forward; historical rows have
-            // only the date-only consultation_date. Parse defensively so this works whether or not
-            // the model casts requested_at.
-            $since = $c->requested_at
-                ? \Illuminate\Support\Carbon::parse($c->requested_at)
-                : ($c->consultation_date ? \Illuminate\Support\Carbon::parse($c->consultation_date) : null);
+            // only the date-only consultation_date. Both are Carbon (see Consultation::casts()).
+            $since = $c->requested_at ?? $c->consultation_date;
             $fDate = $f ? substr((string) $f->followup_date, 0, 10) : null;
 
             return [
@@ -243,7 +245,9 @@ class ConsultationsController extends Controller
                 'reasons' => collect($c->indication ?? [])->map(fn ($id) => $reasons[$id] ?? null)->filter()->values(),
                 'other' => $c->other_indication,
                 'requested_on' => $since?->toDateString(),
-                'open_days' => $since ? (int) $since->copy()->startOfDay()->diffInDays(now()->startOfDay()) : null,
+                // The ONE ageing rule, shared with index() — never re-derived here, or the printed
+                // sheet and the workspace row would disagree about the same consult by construction.
+                'open_days' => self::openDays($c),
                 'last_followup' => $f ? [
                     'date' => $fDate,
                     'note' => $f->note,

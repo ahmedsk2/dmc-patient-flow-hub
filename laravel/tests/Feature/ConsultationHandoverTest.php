@@ -85,6 +85,61 @@ class ConsultationHandoverTest extends TestCase
             });
     }
 
+    public function test_a_consult_assigned_to_the_viewer_appears_even_when_another_service_owns_it(): void
+    {
+        // Pins that scoping really is DELEGATED to scopeVisibleTo and not re-derived from
+        // owning_specialty_id alone. An implementation that only matched the viewer's specialty
+        // would still pass every other test here while DROPPING this row — and a dropped row on a
+        // handover sheet is a patient nobody hands over.
+        $cardio = Specialty::create(['name' => 'Cardiology']);
+        $nephro = Specialty::create(['name' => 'Nephrology']);
+        $viewer = $this->user(User::ROLE_CONSULTANT, ['specialty_id' => $cardio->id]);
+
+        $own = $this->consultation($cardio, Consultation::STATUS_ACTIVE, ['patient_name' => 'Own Book']);
+        $assigned = $this->consultation($nephro, Consultation::STATUS_ONGOING, [
+            'patient_name' => 'Assigned To Me', 'consultant_id' => $viewer->id,
+        ]);
+        $booked = $this->consultation($nephro, Consultation::STATUS_ACTIVE, [
+            'patient_name' => 'Booked By Me', 'entered_by' => $viewer->id,
+        ]);
+        $this->consultation($nephro, Consultation::STATUS_ACTIVE, ['patient_name' => 'Nobody Of Mine']);
+
+        $this->actingAs($viewer)->get('/consultations/handover')
+            ->assertOk()
+            ->assertInertia(function (AssertableInertia $page) use ($own, $assigned, $booked) {
+                $rows = $this->rowsOf($page);
+                $this->assertEqualsCanonicalizing(
+                    [$own->id, $assigned->id, $booked->id],
+                    array_column($rows, 'id'),
+                    'the consultant_id and entered_by arms of scopeVisibleTo must hold here too'
+                );
+                $this->assertNotContains('Nobody Of Mine', array_column($rows, 'name'));
+            });
+    }
+
+    public function test_a_row_carrying_a_signoff_date_is_kept_off_the_sheet_even_if_its_status_drifted(): void
+    {
+        // Column drift is the standing hazard named on the model: `status = 'signed_off'` and
+        // `signoff_date IS NOT NULL` are kept in lockstep by app code, but legacy:import writes
+        // signoff_date alone. The handover sheet is the one surface where that drift would be
+        // DISPLAYED — a closed consult presented as live shift work — so it is belt-and-braces.
+        $cardio = Specialty::create(['name' => 'Cardiology']);
+        $viewer = $this->user(User::ROLE_CONSULTANT, ['specialty_id' => $cardio->id]);
+
+        $live = $this->consultation($cardio, Consultation::STATUS_ACTIVE, ['patient_name' => 'Still Open']);
+        $this->consultation($cardio, Consultation::STATUS_ONGOING, [
+            'patient_name' => 'Closed But Drifted', 'signoff_date' => now()->subDay()->toDateString(),
+        ]);
+
+        $this->actingAs($viewer)->get('/consultations/handover')
+            ->assertOk()
+            ->assertInertia(function (AssertableInertia $page) use ($live) {
+                $rows = $this->rowsOf($page);
+                $this->assertSame([$live->id], array_column($rows, 'id'));
+                $this->assertNotContains('Closed But Drifted', array_column($rows, 'name'));
+            });
+    }
+
     public function test_admin_sees_every_service_grouped_including_unassigned(): void
     {
         $cardio = Specialty::create(['name' => 'Cardiology']);
