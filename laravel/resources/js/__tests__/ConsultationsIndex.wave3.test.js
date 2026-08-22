@@ -39,7 +39,8 @@ import ConsultationsIndex from '@/Pages/Consultations/Index.vue';
 const admin = { role: 0, is_admin: true, id: 1, can: { manage: true } };
 const props = {
     consultations: { data: [], total: 0, last_page: 1, links: [] },
-    filters: {}, stats: { active: 0, total: 0, mine_active: 0 }, reasons: [], consultants: [], specialties: [],
+    filters: {}, stats: { new: 2, active: 3, ongoing: 4, signed_off: 5, total: 14, open: 9, mine_open: 1 },
+    reasons: [], consultants: [], specialties: [],
 };
 const mountWith = () => { authUser = admin; return mount(ConsultationsIndex, { props }); };
 
@@ -175,5 +176,84 @@ describe('Consultations/Index — deleteConsult copy (Wave 3, Item 6)', () => {
         expect(body).toMatch(/restore/i);
         expect(body).not.toMatch(/cannot be undone/i);
         expect(tone).toBe('danger');
+    });
+});
+
+describe('Consultations/Index — W2A: four status tabs with live counts', () => {
+    it('renders exactly the four states, each carrying its count', () => {
+        const w = mountWith();
+        const labels = w.findAll('[data-status-tab]').map((b) => b.text());
+        expect(labels).toEqual(['New 2', 'Active 3', 'Ongoing 4', 'Signed off 5']);
+    });
+
+    it('clicking a tab re-queries with that status', () => {
+        const w = mountWith();
+        w.findAll('[data-status-tab]')[2].trigger('click');
+        expect(w.vm.status).toBe('ongoing');
+    });
+
+    it('shows the ageing of an open consult and nothing for a signed-off one', () => {
+        const w = mount(ConsultationsIndex, {
+            props: {
+                ...props,
+                consultations: {
+                    data: [
+                        { id: 1, name: 'A', mrn: '1', reasons: [], status: 'ongoing', open_days: 6, signoff: null, indication_ids: [] },
+                        { id: 2, name: 'B', mrn: '2', reasons: [], status: 'signed_off', open_days: null, signoff: '2026-08-20', indication_ids: [] },
+                    ],
+                    total: 2, last_page: 1, links: [],
+                },
+            },
+        });
+        const cells = w.findAll('[data-open-days]').map((c) => c.text());
+        expect(cells).toEqual(['open 6 days', '—']);
+    });
+});
+
+describe('Consultations/Index — W2A: sign-off response modal', () => {
+    const row = { id: 7, name: 'Ali', mrn: '111', status: 'active', open_days: 2, signoff: null, reasons: [], indication_ids: [] };
+
+    it('submitting posts the disposition, follow-up flag and note to the sign-off route', async () => {
+        const w = mountWith();
+        w.vm.openSignoff(row);
+        await w.vm.$nextTick();
+        w.vm.sForm.response_disposition = 'advice_given';
+        w.vm.sForm.response_followup_needed = true;
+        w.vm.sForm.response_note = 'Repeat echo in 6 weeks.';
+        w.vm.submitSignoff();
+        expect(post).toHaveBeenCalledTimes(1);
+        expect(post.mock.calls[0][0]).toBe('/consultations/7/signoff');
+    });
+
+    it('double-submit guard: submitSignoff no-ops while processing', async () => {
+        const w = mountWith();
+        w.vm.openSignoff(row);
+        w.vm.sForm.processing = true;
+        await w.vm.$nextTick();
+        w.vm.submitSignoff();
+        expect(post).not.toHaveBeenCalled();
+    });
+
+    it('dirty form: Cancel asks (danger) before discarding the response', async () => {
+        ask.mockResolvedValue(true);
+        const w = mountWith();
+        w.vm.openSignoff(row);
+        w.vm.sForm.isDirty = true;
+        await w.vm.$nextTick();
+        w.vm.closeSignoff();
+        await w.vm.$nextTick(); await w.vm.$nextTick();
+        expect(ask).toHaveBeenCalledTimes(1);
+        expect(ask.mock.calls[0][2]).toBe('danger');
+        expect(w.vm.signingOff).toBe(null);
+    });
+
+    it('maps sForm.errors onto an id that resolves to a real control', async () => {
+        const w = mountWith();
+        w.vm.openSignoff(row);
+        w.vm.sForm.errors = { response_disposition: 'Record what the team advised before signing off.' };
+        await w.vm.$nextTick();
+        const alert = w.get('[role="alert"]');
+        const href = alert.get('a').attributes('href').slice(1);
+        expect(w.get(`#${href}`).element.tagName).toBe('SELECT');
     });
 });

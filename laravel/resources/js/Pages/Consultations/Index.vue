@@ -20,12 +20,34 @@ const { ask } = useConfirm();
 const props = defineProps({ consultations: Object, filters: Object, stats: Object, reasons: Array, consultants: Array, specialties: Array });
 const page = usePage();
 const me = computed(() => page.props.auth.user);
+// mirrors User::canManageConsultation server-side (observers are excluded by canAdd/role checks and
+// by the server regardless). Coordinators are deliberately NOT here: they book work, they do not
+// assert it is finished — the server refuses them with a 403.
 const canSignoff = (row) => me.value.is_admin || me.value.can.manage || row.consultant_id === me.value.id;
 const canAdd = computed(() => me.value.role !== 5);
 const isConsultant = computed(() => me.value.is_admin || me.value.role === 3);
 
+// the four states, in workflow order, each rendered as a tab with its live count
+const STATUS_TABS = [
+    ['new', 'New'],
+    ['active', 'Active'],
+    ['ongoing', 'Ongoing'],
+    ['signed_off', 'Signed off'],
+];
+const STATUS_BADGE = {
+    new: 'bg-tint-info text-on-info',
+    active: 'bg-tint-accent text-on-accent',
+    ongoing: 'bg-tint-warning text-on-warning',
+    signed_off: 'bg-tint-success text-on-success',
+};
+const statusLabel = (s) => (STATUS_TABS.find((t) => t[0] === s) || [null, 'Unknown'])[1];
+// the moves POST /consultations/{id}/status accepts — the UI offers only legal ones, so the
+// server's 422 stays a genuine API-misuse guard rather than routine user feedback
+const STATUS_MOVES = { new: ['active', 'ongoing'], active: ['ongoing'], ongoing: ['active'], signed_off: [] };
+const moveTo = (row, next) => router.post(`/consultations/${row.id}/status`, { status: next }, { preserveScroll: true });
+
 const search = ref(props.filters.search || '');
-const status = ref(props.filters.status || 'active');
+const status = ref(props.filters.status || 'new');
 const scope = ref(props.filters.scope || '');
 let timer = null;
 
@@ -120,11 +142,10 @@ const deleteConsult = async (c) => {
     if (await ask('Remove consultation', body, 'danger')) router.delete(`/consultations/${c.id}`, { preserveScroll: true });
 };
 
-// sign off — Wave 2, Item 4: still NO confirm dialog. deleteConsult keeps its danger confirm
-// because removing a consult from the ledger changes every count, even though it is recoverable.
-// W2A: sign-off is the ledger's closing entry — the moment the team asserts its work is done — so
-// it carries a REQUIRED structured response. The row button therefore opens a short form; a bare
-// click would now be refused by the server and the clinician would see nothing happen.
+// sign off — W2A: no longer one click, because sign-off now records WHAT the team advised. It opens
+// the same modal idiom as add/edit: BaseModal + useForm + the unsaved-changes guard + ErrorSummary +
+// guardSubmit. Still no destructive confirm (Wave 2, Item 4): a sign-off is admin-reversible on the
+// same day, and the modal itself is the deliberate step. deleteConsult keeps its danger confirm.
 // The vocabulary mirrors ConsultationSignoffRequest::DISPOSITIONS — keep the two in step.
 const DISPOSITIONS = [
     ['advice_given', 'Advice given'],
@@ -132,15 +153,21 @@ const DISPOSITIONS = [
     ['follow_up_arranged', 'Follow-up arranged'],
     ['no_further_input', 'No further input needed'],
 ];
+const dispositionLabel = (v) => (DISPOSITIONS.find((d) => d[0] === v) || [null, ''])[1];
 const signingOff = ref(null);
 const sForm = useForm({ response_disposition: '', response_followup_needed: false, response_note: '' });
 const sUid = useId();
 const sfid = (field) => `consult-signoff-${sUid}-${field}`;
 const sErrors = computed(() => Object.fromEntries(Object.entries(sForm.errors || {}).map(([k, v]) => [sfid(k), v])));
 const { guardedClose: guardedCloseSignoff } = useUnsavedGuard(() => sForm.isDirty, ask);
+const openSignoff = (row) => {
+    signingOff.value = row;
+    sForm.response_disposition = ''; sForm.response_followup_needed = false; sForm.response_note = '';
+    sForm.clearErrors?.();
+    sForm.defaults?.();   // re-anchor Inertia's isDirty baseline to the empty response
+};
 const doCloseSignoff = () => { signingOff.value = null; };
 const closeSignoff = () => guardedCloseSignoff(doCloseSignoff);
-const signoff = (row) => { sForm.reset(); sForm.clearErrors(); signingOff.value = row; };
 const submitSignoff = guardSubmit(sForm, () => sForm.post(`/consultations/${signingOff.value.id}/signoff`, {
     preserveScroll: true,
     onSuccess: () => { doCloseSignoff(); sForm.reset(); },
@@ -152,18 +179,20 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
     <AppLayout title="Consultations">
         <div class="mb-5 flex flex-wrap items-center gap-3">
             <div class="flex gap-2">
-                <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Active <span class="nums ms-1 text-on-accent">{{ stats.active }}</span></span>
+                <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Open <span class="nums ms-1 text-on-accent">{{ stats.open ?? 0 }}</span></span>
                 <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Total <span class="nums ms-1 text-ink-600">{{ stats.total }}</span></span>
-                <!-- personal counter for consultant viewers (K1-13): own active out of total active -->
-                <span v-if="me.role === 3" class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Mine <span class="nums ms-1 text-brand-700">{{ stats.mine_active }} of {{ stats.active }} active</span></span>
+                <!-- personal counter for consultant viewers (K1-13): own open out of all open -->
+                <span v-if="me.role === 3" class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Mine <span class="nums ms-1 text-brand-700">{{ stats.mine_open ?? 0 }} of {{ stats.open ?? 0 }} open</span></span>
             </div>
             <div class="relative ms-auto">
                 <svg class="pointer-events-none absolute start-3 top-2.5 h-5 w-5 text-ink-400" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" /></svg>
                 <input v-model="search" v-focus aria-label="Search consultations by name or MRN" placeholder="Search name or MRN…" autocomplete="off" class="w-64 rounded-xl border border-ink-200 bg-card py-2 ps-10 pe-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
             </div>
-            <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line">
-                <button v-for="s in [['active','Active'],['signed','Signed off'],['all','All']]" :key="s[0]" @click="setStatus(s[0])"
-                    class="rounded-lg px-3 py-1.5 text-sm font-semibold transition" :class="status === s[0] ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">{{ s[1] }}</button>
+            <div role="tablist" aria-label="Consultation status" class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line">
+                <button v-for="s in STATUS_TABS" :key="s[0]" data-status-tab role="tab" :aria-selected="status === s[0]" @click="setStatus(s[0])"
+                    class="rounded-lg px-3 py-1.5 text-sm font-semibold transition" :class="status === s[0] ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">
+                    {{ s[1] }} <span class="nums ms-1">{{ stats[s[0]] ?? 0 }}</span>
+                </button>
             </div>
             <button v-if="isConsultant" @click="toggleMine" class="rounded-xl px-3 py-2 text-sm font-semibold shadow-sm ring-1 transition" :class="scope === 'mine' ? 'bg-accent-500 text-white ring-accent-500' : 'bg-card text-ink-500 ring-line hover:bg-ink-50'">My consultations</button>
             <button v-if="canAdd" @click="openAdd" class="inline-flex items-center gap-2 rounded-xl bg-brand-solid px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-solid-hover">
@@ -179,7 +208,8 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                     <tr class="border-b border-line text-start text-xs font-semibold uppercase tracking-wide text-ink-400">
                         <th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Location</th>
                         <th scope="col" class="px-3 py-3">From → To</th><th scope="col" class="px-3 py-3">Indication</th>
-                        <th scope="col" class="px-3 py-3">Consultant</th><th scope="col" class="px-3 py-3">Date</th><th scope="col" class="px-5 py-3">Status</th>
+                        <th scope="col" class="px-3 py-3">Consultant</th><th scope="col" class="px-3 py-3">Date</th>
+                        <th scope="col" class="px-3 py-3">Open</th><th scope="col" class="px-5 py-3">Status</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-line">
@@ -199,17 +229,24 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                         </td>
                         <td class="px-3 py-3 text-ink-600">{{ c.consultant }}</td>
                         <td class="nums px-3 py-3 text-ink-500">{{ formatDate(c.date) || '—' }}</td>
+                        <!-- ageing: whole days since requested_at, or since consultation_date for the
+                             historical rows that have no request time. Signed-off rows show nothing. -->
+                        <td data-open-days class="nums px-3 py-3 text-ink-500">{{ c.open_days === null || c.open_days === undefined ? '—' : `open ${c.open_days} days` }}</td>
                         <td class="px-5 py-3">
-                            <div class="flex items-center gap-2">
-                                <span v-if="c.signoff" class="rounded-full bg-tint-success px-2.5 py-0.5 text-xs font-semibold text-on-success">Signed {{ formatDate(c.signoff) }}</span>
-                                <span v-else class="rounded-full bg-tint-accent px-2.5 py-0.5 text-xs font-semibold text-on-accent">Active</span>
-                                <button v-if="!c.signoff && canSignoff(c)" @click="signoff(c)" title="Sign off" class="rounded-lg px-2 py-1 text-xs font-semibold text-on-success hover:bg-tint-success">Sign off</button>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="STATUS_BADGE[c.status] || 'bg-tint-accent text-on-accent'"
+                                    :title="c.status === 'signed_off' && c.disposition ? dispositionLabel(c.disposition) : undefined">
+                                    {{ statusLabel(c.status) }}<template v-if="c.status === 'signed_off' && c.signoff"> {{ formatDate(c.signoff) }}</template>
+                                </span>
+                                <button v-for="next in (canEdit(c) ? (STATUS_MOVES[c.status] || []) : [])" :key="next" @click="moveTo(c, next)"
+                                    :title="`Move to ${statusLabel(next)}`" class="rounded-lg px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50">→ {{ statusLabel(next) }}</button>
+                                <button v-if="c.status !== 'signed_off' && canSignoff(c)" @click="openSignoff(c)" title="Sign off" class="rounded-lg px-2 py-1 text-xs font-semibold text-on-success hover:bg-tint-success">Sign off</button>
                                 <button v-if="canEdit(c)" @click="openEdit(c)" title="Edit" class="rounded-lg px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50">Edit</button>
                                 <button v-if="me.is_admin" @click="deleteConsult(c)" title="Delete" class="rounded-lg px-2 py-1 text-xs font-semibold text-on-danger hover:bg-tint-danger">Delete</button>
                             </div>
                         </td>
                     </tr>
-                    <tr v-if="!consultations.data.length"><td colspan="7" class="px-5 py-10 text-center text-ink-400">No consultations match your filters.</td></tr>
+                    <tr v-if="!consultations.data.length"><td colspan="8" class="px-5 py-10 text-center text-ink-400">No consultations match your filters.</td></tr>
                 </tbody>
             </table>
           </div>

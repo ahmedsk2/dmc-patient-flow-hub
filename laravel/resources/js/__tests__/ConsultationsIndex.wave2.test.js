@@ -18,27 +18,28 @@ import ConsultationsIndex from '@/Pages/Consultations/Index.vue';
 const admin = { role: 0, is_admin: true, id: 1, can: { manage: true } };
 const props = {
     consultations: { data: [], total: 0, last_page: 1, links: [] },
-    filters: {}, stats: { active: 0, total: 0, mine_active: 0 }, reasons: [], consultants: [], specialties: [],
+    filters: {}, stats: { new: 0, active: 0, ongoing: 0, signed_off: 0, total: 0, open: 0, mine_open: 0 },
+    reasons: [], consultants: [], specialties: [],
 };
 const mountWith = (user) => { authUser = user; return shallowMount(ConsultationsIndex, { props, global: { stubs: { teleport: true } } }); };
 
 beforeEach(() => { post.mockClear(); deleteFn.mockClear(); ask.mockClear(); });
 
 describe('Consultations/Index — Wave 2 Item 4', () => {
-    // W2A: sign-off now carries a REQUIRED structured response, so the row button opens a short
-    // form rather than posting a bare click (which the server refuses). The pinned behavior this
-    // case exists for is unchanged: NO confirm dialog stands between the clinician and sign-off.
-    it('signoff opens the response form and never calls ask()', () => {
+    // W2A: sign-off carries a REQUIRED structured response, so it opens a modal instead of posting
+    // on click. What this case still pins is the Item-4 decision it was written for: sign-off never
+    // routes through the destructive-confirm dialog (deleteConsult, below, still does).
+    it('openSignoff opens the response modal and never calls ask()', () => {
         const vm = mountWith(admin).vm;
-        vm.signoff({ id: 7, name: 'X', mrn: '1' });
-        expect(vm.signingOff).toMatchObject({ id: 7 });
+        vm.openSignoff({ id: 7, name: 'X', mrn: '1', status: 'active' });
+        expect(vm.signingOff.id).toBe(7);
         expect(post).not.toHaveBeenCalled();
         expect(ask).not.toHaveBeenCalled();
     });
 
     it('submitting the sign-off form posts the structured response for that consultation', () => {
         const vm = mountWith(admin).vm;
-        vm.signoff({ id: 7, name: 'X', mrn: '1' });
+        vm.openSignoff({ id: 7, name: 'X', mrn: '1', status: 'active' });
         vm.sForm.response_disposition = 'advice_given';
         vm.submitSignoff();
         expect(vm.sForm.post).toHaveBeenCalledWith('/consultations/7/signoff',
