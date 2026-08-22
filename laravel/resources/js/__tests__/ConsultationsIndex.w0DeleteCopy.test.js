@@ -20,7 +20,9 @@ import ConsultationsIndex from '@/Pages/Consultations/Index.vue';
 const admin = { role: 0, is_admin: true, id: 1, can: { manage: true } };
 const props = {
     consultations: { data: [], total: 0, last_page: 1, links: [] },
-    filters: {}, stats: { active: 0, total: 0, mine_active: 0 }, reasons: [], consultants: [], specialties: [],
+    // W2A stats shape — the server ships the four per-status counts plus open/mine_open/total
+    filters: {}, stats: { new: 0, active: 0, ongoing: 0, signed_off: 0, total: 0, open: 0, mine_open: 0 },
+    reasons: [], consultants: [], specialties: [],
 };
 const mountWith = (user) => { authUser = user; return shallowMount(ConsultationsIndex, { props, global: { stubs: { teleport: true } } }); };
 

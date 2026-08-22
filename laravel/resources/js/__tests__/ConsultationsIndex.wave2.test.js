@@ -8,7 +8,16 @@ vi.mock('@inertiajs/vue3', () => ({
     Link: { template: '<a><slot /></a>' },
     router: { get: vi.fn(), post, delete: deleteFn, on: vi.fn() },
     usePage: () => ({ props: { auth: { user: authUser } } }),
-    useForm: (obj) => ({ ...obj, post: vi.fn(), put: vi.fn(), reset: vi.fn(), clearErrors: vi.fn(), errors: {}, processing: false }),
+    // like Inertia's real form.post(url, options), the mock transmits the form's CURRENT field
+    // values as the request body — otherwise a spec can assert a URL and call that "posts the
+    // structured response" while never observing the response itself.
+    useForm: (obj) => {
+        const keys = Object.keys(obj);
+        const form = { ...obj, put: vi.fn(), reset: vi.fn(), clearErrors: vi.fn(), errors: {}, processing: false };
+        form.post = vi.fn((url, opts) => post(url, Object.fromEntries(keys.map((k) => [k, form[k]])), opts));
+
+        return form;
+    },
 }));
 vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => ({ ask }) }));
 vi.mock('@/Layouts/AppLayout.vue', () => ({ default: { template: '<div><slot /></div>' } }));
@@ -41,9 +50,19 @@ describe('Consultations/Index — Wave 2 Item 4', () => {
         const vm = mountWith(admin).vm;
         vm.openSignoff({ id: 7, name: 'X', mrn: '1', status: 'active' });
         vm.sForm.response_disposition = 'advice_given';
+        vm.sForm.response_followup_needed = true;
+        vm.sForm.response_note = 'Repeat echo in 6 weeks.';
         vm.submitSignoff();
-        expect(vm.sForm.post).toHaveBeenCalledWith('/consultations/7/signoff',
-            expect.objectContaining({ preserveScroll: true }));
+        // the RESPONSE, not just the route: dropping any of the three fields must go red
+        expect(post).toHaveBeenCalledWith(
+            '/consultations/7/signoff',
+            {
+                response_disposition: 'advice_given',
+                response_followup_needed: true,
+                response_note: 'Repeat echo in 6 weeks.',
+            },
+            expect.objectContaining({ preserveScroll: true }),
+        );
     });
 
     it('deleteConsult STILL confirms (danger) before deleting', async () => {
