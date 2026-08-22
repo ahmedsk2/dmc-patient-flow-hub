@@ -35,7 +35,7 @@ onUnmounted(() => window.removeEventListener('scroll', onScroll));
         enter-active-class="transition duration-200" enter-from-class="translate-y-3 opacity-0"
         leave-active-class="transition duration-200" leave-to-class="translate-y-3 opacity-0">
         <button v-if="visible" type="button" @click="toTop" title="Back to top" aria-label="Back to top"
-            class="fixed bottom-24 end-6 z-20 grid h-11 w-11 coarse:h-12 coarse:w-12 place-items-center rounded-full bg-card text-ink-500 shadow-lg ring-1 ring-line transition hover:bg-ink-50 hover:text-ink-700">
+            class="no-print fixed bottom-24 end-6 z-20 grid h-11 w-11 coarse:h-12 coarse:w-12 place-items-center rounded-full bg-card text-ink-500 shadow-lg ring-1 ring-line transition hover:bg-ink-50 hover:text-ink-700">
             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.9" stroke="currentColor" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
             </svg>

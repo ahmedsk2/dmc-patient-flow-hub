@@ -153,9 +153,23 @@ describe('AppLayout — role/capability-aware nav (Item 4)', () => {
         const l = labels(mountLayout());
         expect(l).not.toContain('New Admissions');
         expect(l).not.toContain('Consultations');
+        // ...nor either consultation SUB-ROUTE. These hang off Consultations as children, so they
+        // inherit its `can`, but `toContain` is exact-element — 'Dashboard'/'Service Handover' would
+        // never trip the assertion above, so without these lines nothing fails if a future edit
+        // promotes them back to flat rows and drops the observer guard.
+        expect(l).not.toContain('Consultation Dashboard');
+        expect(l).not.toContain('Service Handover');
         // but still sees the read-only clinical board + recent activity
         expect(l).toContain('Patients');
         expect(l).toContain('Recent Activity');
+    });
+
+    it('a clinical (non-observer) user sees both consultation sub-routes, indented under the workspace', () => {
+        setPage(baseUser({ role: 3, is_admin: false }));
+        const l = labels(mountLayout());
+        expect(l).toContain('Consultations');
+        expect(l).toContain('Consultation Dashboard');
+        expect(l).toContain('Service Handover');
     });
 });
 

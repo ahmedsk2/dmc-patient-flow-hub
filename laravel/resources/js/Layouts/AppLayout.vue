@@ -160,14 +160,21 @@ const clinicalNavSections = computed(() => {
             // Printable whole-ward census (unscoped, all roles) — high-traffic, so it gets its own row
             // instead of living only behind the board's print icon.
             { label: 'Active List', href: '/active-list', icon: 'list', can: true },
-            { label: 'Consultations', href: '/consultations', icon: 'chat', can: !observer },
-            // W4 — the physician-scoped consultation dashboard. Same visibility rule as the
-            // workspace itself (clinical roles, never Observer); the route enforces it server-side.
-            { label: 'Consultation Dashboard', href: '/consultations/dashboard', icon: 'chart', can: !observer },
-            // W3: the printable per-service shift-handover sheet. Same reasoning as Active List —
-            // it is read at every handover, so it gets its own row rather than hiding behind an
-            // icon on the workspace. Server-side gate is identical (observers are refused).
-            { label: 'Consult Handover', href: '/consultations/handover', icon: 'clipboard', can: !observer },
+            // The dashboard (W4) and the printable shift-handover sheet (W3) are SUB-ROUTES of the
+            // workspace, so they hang off it as `children` rather than as flat siblings — the same
+            // shape Reports uses for the M&M Pack. Flat rows made isActive()'s startsWith() light up
+            // three "current page" rows at once on /consultations/dashboard. Children inherit the
+            // parent's `can`, so the Observer exclusion still holds; the routes enforce it server-side.
+            { label: 'Consultations', href: '/consultations', icon: 'chat', can: !observer, children: [
+                // NOT plain 'Dashboard' — the unit dashboard at '/' already owns that label, and two
+                // rows reading "Dashboard" is a wrong-click waiting to happen. Matches the page's <title>.
+                { label: 'Consultation Dashboard', href: '/consultations/dashboard', icon: 'chart' },
+                // 'doc', not 'clipboard': Operations → Handovers (a different feature) already owns
+                // clipboard, and with the sidebar collapsed the label is sr-only — two identical
+                // glyphs in adjacent sections is a wrong-click at shift change. Label matches the
+                // page's own <title> so the row and the page agree on what this is.
+                { label: 'Service Handover', href: '/consultations/handover', icon: 'doc' },
+            ] },
         ] },
         { section: 'Operations', items: [
             { label: 'Handovers', href: '/handovers', icon: 'clipboard', can: true },
@@ -445,8 +452,12 @@ onUnmounted(() => {
                 <div data-tour="nav-clinical" class="space-y-1">
                     <template v-for="section in clinicalNavSections" :key="section.section">
                         <p class="px-3 pb-2 pt-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-navy-400 first:pt-0" :class="{ 'lg:sr-only': sidebarCollapsed }">{{ section.section }}</p>
-                        <NavLink v-for="item in section.items" :key="item.href"
-                            :href="item.href" :icon-path="iconPath(item.icon)" :label="item.label" :active="isActive(item.href)" :collapsed="sidebarCollapsed" />
+                        <template v-for="item in section.items" :key="item.href">
+                            <NavLink :href="item.href" :icon-path="iconPath(item.icon)" :label="item.label" :active="isActive(item.href)" :collapsed="sidebarCollapsed" />
+                            <!-- sub-routes render indented under their parent, same as the admin sections -->
+                            <NavLink v-for="child in (item.children || [])" :key="child.href"
+                                :href="child.href" :icon-path="iconPath(child.icon)" :label="child.label" :active="isActive(child.href)" :indent="true" :collapsed="sidebarCollapsed" />
+                        </template>
                     </template>
                 </div>
 

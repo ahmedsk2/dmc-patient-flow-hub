@@ -37,8 +37,16 @@ const ageTone = (days) => days === null ? 'bg-brand-100 text-brand-700'
     : days > 7 ? 'bg-tint-danger text-on-danger'
     : days > 2 ? 'bg-tint-warning text-on-warning'
     : 'bg-tint-success text-on-success';
-const statusTone = (s) => s === 'active' ? 'bg-tint-success text-on-success' : 'bg-tint-warning text-on-warning';
-const statusLabel = (s) => s === 'active' ? 'Active · daily F/U' : 'Ongoing';
+// Fail LOUD, not open. The controller filters to active+ongoing with signoff_date NULL, so nothing
+// else can reach this sheet today — but its own comment names status/signoff_date drift as the
+// standing hazard, and the old `anything-not-active => Ongoing` would print a NEW or signed-off row
+// as "no daily follow-up owed": a false all-clear on a sheet carried round a ward.
+const statusTone = (s) => s === 'active' ? 'bg-tint-success text-on-success'
+    : s === 'ongoing' ? 'bg-tint-warning text-on-warning'
+    : 'bg-ink-100 text-ink-500';
+const statusLabel = (s) => s === 'active' ? 'Active · daily F/U'
+    : s === 'ongoing' ? 'Ongoing'
+    : `? ${s || 'unknown'} — check the record`;
 
 const print = () => window.print();
 </script>
@@ -92,7 +100,7 @@ const print = () => window.print();
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-if="!g.consultations.length"><td colspan="10" class="px-2 py-2 text-ink-300">Nothing on the books.</td></tr>
+                        <tr v-if="!g.consultations.length"><td colspan="10" class="px-2 py-2 text-ink-500">Nothing on the books.</td></tr>
                         <tr v-for="c in g.consultations" :key="c.id" class="border-b border-ink-50 align-top">
                             <td class="nums px-2 py-1.5 font-semibold text-ink-700">{{ c.bed || '—' }}</td>
                             <td class="nums px-2 py-1.5">{{ c.mrn || '—' }}</td>
@@ -111,7 +119,7 @@ const print = () => window.print();
                             <td class="px-2 py-1.5 text-ink-600">
                                 <div v-for="r in c.reasons" :key="r">{{ r }}</div>
                                 <div v-if="c.other" class="text-ink-500">{{ c.other }}</div>
-                                <span v-if="!c.reasons.length && !c.other" class="text-ink-300">—</span>
+                                <span v-if="!c.reasons.length && !c.other" class="text-ink-500">—</span>
                             </td>
                             <td class="px-2 py-1.5 text-ink-600">
                                 <template v-if="c.last_followup">
@@ -122,7 +130,7 @@ const print = () => window.print();
                                     </div>
                                     <div v-if="c.last_followup.note">{{ c.last_followup.note }}</div>
                                 </template>
-                                <span v-else class="text-ink-300">No follow-up recorded</span>
+                                <span v-else class="text-ink-500">No follow-up recorded</span>
                             </td>
                         </tr>
                     </tbody>
