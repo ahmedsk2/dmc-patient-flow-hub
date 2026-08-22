@@ -219,7 +219,11 @@ class ConsultationsController extends Controller
         }
         $was = [
             'disposition' => $consultation->response_disposition,
+            'followup_needed' => $consultation->response_followup_needed,
+            'note' => $consultation->response_note,
             'signed_off_by' => $consultation->signed_off_by,
+            'signed_off_at' => optional($consultation->signed_off_at)->toDateTimeString(),
+            'to' => Consultation::STATUS_ONGOING,
         ];
         $consultation->update([
             'status' => Consultation::STATUS_ONGOING,
@@ -230,8 +234,9 @@ class ConsultationsController extends Controller
             'response_followup_needed' => null,
             'response_note' => null,
         ]);
-        // the cleared response is preserved in the audit trail, which is where an undone clinical
-        // assertion belongs — on the record of what happened, not on the live row
+        // the cleared response (incl. the free-text note) is preserved in the audit trail, which is
+        // where an undone clinical assertion belongs — on the record of what happened, not on the
+        // live row
         Audit::log('consultation.reverse_signoff', 'consultation', (string) $consultation->id, $was);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Sign-off reversed.']);

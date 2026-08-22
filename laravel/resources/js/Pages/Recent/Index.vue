@@ -15,7 +15,7 @@ const isAdmin = computed(() => !!usePage().props.auth?.user?.is_admin);
 
 const tab = ref('discharges');
 const undoDischarge = async (d) => { if (await ask('Reverse discharge', `Reverse the discharge for ${d.name} (MRN ${d.mrn}) — the patient returns to the active board.`, 'danger')) router.post(`/admissions/${d.id}/reverse-discharge`, {}, { preserveScroll: true }); };
-const undoSignoff = async (s) => { if (await ask('Reverse sign-off', `Reverse the sign-off for ${s.name} (MRN ${s.mrn}) — the consultation returns to active.`, 'danger')) router.post(`/consultations/${s.id}/reverse-signoff`, {}, { preserveScroll: true }); };
+const undoSignoff = async (s) => { if (await ask('Reverse sign-off', `Reverse the sign-off for ${s.name} (MRN ${s.mrn}) — the consultation returns to ongoing (no daily follow-up commitment), and the recorded response (disposition, follow-up flag, note) is discarded.`, 'danger')) router.post(`/consultations/${s.id}/reverse-signoff`, {}, { preserveScroll: true }); };
 
 // discharges grouped per consultant like the legacy "Dr X Patient List" sections (J1-8);
 // rows arrive ordered by discharge date — groups keep first-appearance order
