@@ -1,0 +1,88 @@
+import { describe, it, expect, vi } from 'vitest';
+import { mount } from '@vue/test-utils';
+
+// Stub the layout chrome — this spec is about the sheet's content, and Handover.vue uses no
+// Inertia primitives of its own (the page is read-only, so it needs no router/form).
+vi.mock('@/Layouts/AppLayout.vue', () => ({ default: { name: 'AppLayout', template: '<div><slot /></div>' } }));
+
+import Handover from '@/Pages/Consultations/Handover.vue';
+
+const consult = (over = {}) => ({
+    id: 1, name: 'Ward Patient', mrn: '90000001', age: 61, bed: 'W-12', location: 'Ward',
+    from: 'ER', status: 'active', specialty: 'Cardiology',
+    consultant: 'Dr Cardio', entered_by: 'Dr Coordinator',
+    reasons: ['Chest pain'], other: null, requested_on: '2026-08-15', open_days: 6,
+    last_followup: { date: '2026-08-21', note: 'Rate controlled, continue beta blocker.', author: 'Dr Cardio', is_today: true },
+    ...over,
+});
+
+const group = (key, name, consultations) => ({
+    key, name, consultations,
+    counts: {
+        total: consultations.length,
+        active: consultations.filter((c) => c.status === 'active').length,
+        ongoing: consultations.filter((c) => c.status === 'ongoing').length,
+        seen_today: consultations.filter((c) => c.last_followup && c.last_followup.is_today).length,
+    },
+});
+
+const cardiology = () => group('Cardiology', 'Cardiology', [
+    consult(),
+    consult({ id: 2, name: 'Second Patient', mrn: '90000002', bed: 'W-20', status: 'ongoing', open_days: 12, last_followup: null }),
+]);
+
+const props = (over = {}) => ({
+    groups: [cardiology()], generatedAt: 'Fri, 21 Aug 2026 · 07:00', today: '2026-08-21', ...over,
+});
+
+const mountPage = (p = props()) => mount(Handover, { props: p });
+
+describe('Consultations/Handover — the shift sheet', () => {
+    it('names the service and lists every consult in it', () => {
+        const report = mountPage().find('.report').text();
+        expect(report).toContain('Cardiology');
+        expect(report).toContain('Ward Patient');
+        expect(report).toContain('90000001');
+        expect(report).toContain('W-12');
+        expect(report).toContain('Second Patient');
+    });
+
+    it('shows the owning consultant separately from whoever entered the consult', () => {
+        const report = mountPage().find('.report').text();
+        expect(report).toContain('Dr Cardio');
+        expect(report).toContain('Dr Coordinator');
+    });
+
+    it('renders the latest follow-up note, and says so when there is none', () => {
+        const report = mountPage().find('.report').text();
+        expect(report).toContain('Rate controlled, continue beta blocker.');
+        expect(report).toContain('No follow-up recorded');
+    });
+
+    it('marks a consult already followed up today', () => {
+        expect(mountPage().find('.report').text()).toContain('seen today');
+    });
+
+    it('labels active and ongoing distinctly', () => {
+        const report = mountPage().find('.report').text();
+        expect(report).toContain('Active · daily F/U');
+        expect(report).toContain('Ongoing');
+    });
+
+    it('shows how long each consult has been open', () => {
+        const report = mountPage().find('.report').text();
+        expect(report).toContain('open 6d');
+        expect(report).toContain('open 12d');
+    });
+
+    it('heads the sheet with the open total and today’s follow-up completeness', () => {
+        const text = mountPage().text();
+        expect(text).toContain('2 open consult(s)');
+        expect(text).toContain('1 of 1 active seen today');
+        expect(text).toContain('Fri, 21 Aug 2026 · 07:00');
+    });
+
+    it('says so when there is nothing to hand over', () => {
+        expect(mountPage(props({ groups: [] })).text()).toContain('No active or ongoing consultations');
+    });
+});
