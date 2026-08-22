@@ -307,4 +307,41 @@ class ConsultationLedgerW2aTest extends TestCase
 
         $this->assertSame('no_further_input', $c->fresh()->response_disposition);
     }
+
+    /**
+     * Sign-off now writes a whole block (status + actor + time + response), so undoing it must undo
+     * ALL of it. A row left saying "Dr X closed this at 14:02, advice given" while signoff_date is
+     * NULL is a misattributed clinical record — and it would also freeze the consult forever, since
+     * the status endpoint refuses to move anything still carrying `status = signed_off`.
+     */
+    public function test_reversing_a_signoff_clears_the_whole_response_block_and_reopens_the_consult(): void
+    {
+        $admin = $this->admin();
+        $c = $this->consultation(['status' => Consultation::STATUS_ACTIVE, 'consultant_id' => $admin->id]);
+
+        $this->actingAs($admin)->post("/consultations/{$c->id}/signoff", [
+            'response_disposition' => 'advice_given',
+            'response_followup_needed' => true,
+            'response_note' => 'Repeat echo in 6 weeks.',
+        ])->assertRedirect()->assertSessionHas('flash.type', 'success');
+
+        $this->actingAs($admin)->post("/consultations/{$c->id}/reverse-signoff")
+            ->assertRedirect()->assertSessionHas('flash.type', 'success');
+
+        $c->refresh();
+        $this->assertNull($c->signoff_date);
+        $this->assertSame(Consultation::STATUS_ONGOING, $c->status,
+            'a reversed sign-off must not leave the row claiming it is closed');
+        $this->assertNull($c->signed_off_at);
+        $this->assertNull($c->signed_off_by, 'the reversed record must not keep naming a signer');
+        $this->assertNull($c->response_disposition);
+        $this->assertNull($c->response_followup_needed);
+        $this->assertNull($c->response_note);
+
+        // and it is genuinely back on the books: the status endpoint no longer freezes it
+        $this->actingAs($admin)
+            ->post("/consultations/{$c->id}/status", ['status' => Consultation::STATUS_ACTIVE])
+            ->assertRedirect()->assertSessionHas('flash.type', 'success');
+        $this->assertSame(Consultation::STATUS_ACTIVE, $c->fresh()->status);
+    }
 }

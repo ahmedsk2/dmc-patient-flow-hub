@@ -195,7 +195,15 @@ class ConsultationsController extends Controller
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultation signed off.']);
     }
 
-    /** Undo a same-day sign-off (admin only) — clears the sign-off date. */
+    /**
+     * Undo a same-day sign-off (admin only) — clears the ENTIRE closing entry, not just the date.
+     * Sign-off writes a block (status + signed_off_at + signed_off_by + the response), so a reversal
+     * that cleared only `signoff_date` would leave the row still naming a signer, a time and a
+     * disposition for a consult that is no longer closed — a misattributed clinical record — and
+     * would strand it forever, because the status endpoint freezes anything carrying
+     * `status = signed_off`. The consult returns to `ongoing`: back on the books, with no daily
+     * commitment invented for it.
+     */
     public function reverseSignoff(Request $request, Consultation $consultation): RedirectResponse
     {
         if (! Auth::user()->isAdmin()) {
@@ -209,8 +217,22 @@ class ConsultationsController extends Controller
         if (! $consultation->signoff_date->isToday()) {
             return back()->with('flash', ['type' => 'error', 'message' => 'Only same-day sign-offs can be reversed.']);
         }
-        $consultation->update(['signoff_date' => null]);
-        Audit::log('consultation.reverse_signoff', 'consultation', (string) $consultation->id);
+        $was = [
+            'disposition' => $consultation->response_disposition,
+            'signed_off_by' => $consultation->signed_off_by,
+        ];
+        $consultation->update([
+            'status' => Consultation::STATUS_ONGOING,
+            'signoff_date' => null,        // kept in lockstep with `status` — see the Consultation docblock
+            'signed_off_at' => null,
+            'signed_off_by' => null,
+            'response_disposition' => null,
+            'response_followup_needed' => null,
+            'response_note' => null,
+        ]);
+        // the cleared response is preserved in the audit trail, which is where an undone clinical
+        // assertion belongs — on the record of what happened, not on the live row
+        Audit::log('consultation.reverse_signoff', 'consultation', (string) $consultation->id, $was);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Sign-off reversed.']);
     }

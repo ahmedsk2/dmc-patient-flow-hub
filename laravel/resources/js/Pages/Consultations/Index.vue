@@ -120,11 +120,31 @@ const deleteConsult = async (c) => {
     if (await ask('Remove consultation', body, 'danger')) router.delete(`/consultations/${c.id}`, { preserveScroll: true });
 };
 
-// sign off — Wave 2, Item 4: no confirm. A single sign-off is reversible (the reverse-signoff
-// button, already instant) and low-stakes; the server flash is the feedback. deleteConsult keeps
-// its danger confirm because removing a consult from the ledger changes every count, even though
-// it is recoverable. Sign-all stays confirmed on the Handovers page (bulk).
-const signoff = (row) => router.post(`/consultations/${row.id}/signoff`, {}, { preserveScroll: true });
+// sign off — Wave 2, Item 4: still NO confirm dialog. deleteConsult keeps its danger confirm
+// because removing a consult from the ledger changes every count, even though it is recoverable.
+// W2A: sign-off is the ledger's closing entry — the moment the team asserts its work is done — so
+// it carries a REQUIRED structured response. The row button therefore opens a short form; a bare
+// click would now be refused by the server and the clinician would see nothing happen.
+// The vocabulary mirrors ConsultationSignoffRequest::DISPOSITIONS — keep the two in step.
+const DISPOSITIONS = [
+    ['advice_given', 'Advice given'],
+    ['taking_over', 'Taking over the patient'],
+    ['follow_up_arranged', 'Follow-up arranged'],
+    ['no_further_input', 'No further input needed'],
+];
+const signingOff = ref(null);
+const sForm = useForm({ response_disposition: '', response_followup_needed: false, response_note: '' });
+const sUid = useId();
+const sfid = (field) => `consult-signoff-${sUid}-${field}`;
+const sErrors = computed(() => Object.fromEntries(Object.entries(sForm.errors || {}).map(([k, v]) => [sfid(k), v])));
+const { guardedClose: guardedCloseSignoff } = useUnsavedGuard(() => sForm.isDirty, ask);
+const doCloseSignoff = () => { signingOff.value = null; };
+const closeSignoff = () => guardedCloseSignoff(doCloseSignoff);
+const signoff = (row) => { sForm.reset(); sForm.clearErrors(); signingOff.value = row; };
+const submitSignoff = guardSubmit(sForm, () => sForm.post(`/consultations/${signingOff.value.id}/signoff`, {
+    preserveScroll: true,
+    onSuccess: () => { doCloseSignoff(); sForm.reset(); },
+}));
 const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20';
 </script>
 
@@ -274,6 +294,38 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                     <div class="flex justify-end gap-2">
                         <button type="button" @click="closeAdd" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
                         <button type="submit" :disabled="cForm.processing" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Create consultation</button>
+                    </div>
+                </form>
+        </BaseModal>
+
+        <!-- sign-off modal: closing a consult records WHAT the team advised, not just that it closed -->
+        <BaseModal :open="!!signingOff" title="Sign off consultation" size="lg" field-first :dirty="!!sForm.isDirty" @close="closeSignoff">
+                <ErrorSummary :errors="sErrors" />
+                <form @submit.prevent="submitSignoff" class="space-y-4">
+                    <p v-if="signingOff" class="text-sm text-ink-500">
+                        <span class="font-semibold text-ink-800">{{ signingOff.name }}</span>
+                        <span class="nums"> · MRN {{ signingOff.mrn }} · Bed {{ signingOff.bed || '—' }}</span>
+                    </p>
+                    <div>
+                        <label :for="sfid('response_disposition')" class="mb-1 block text-sm font-semibold text-ink-700">Response <span class="text-danger-500">*</span></label>
+                        <select :id="sfid('response_disposition')" v-model="sForm.response_disposition" :aria-describedby="sForm.errors.response_disposition ? sfid('response_disposition') + '-err' : undefined" :class="[field, sForm.errors.response_disposition && 'border-danger-500']">
+                            <option value="">Select a response…</option>
+                            <option v-for="d in DISPOSITIONS" :key="d[0]" :value="d[0]">{{ d[1] }}</option>
+                        </select>
+                        <p v-if="sForm.errors.response_disposition" :id="sfid('response_disposition') + '-err'" class="mt-1 text-xs text-on-danger">{{ sForm.errors.response_disposition }}</p>
+                    </div>
+                    <label class="flex items-center gap-2 text-sm font-semibold text-ink-700">
+                        <input :id="sfid('response_followup_needed')" v-model="sForm.response_followup_needed" type="checkbox" class="h-4 w-4 rounded border-ink-200" />
+                        Follow-up still needed
+                    </label>
+                    <div>
+                        <label :for="sfid('response_note')" class="mb-1 block text-sm font-semibold text-ink-700">Note</label>
+                        <textarea :id="sfid('response_note')" v-model="sForm.response_note" rows="3" maxlength="2000" :aria-describedby="sForm.errors.response_note ? sfid('response_note') + '-err' : undefined" :class="[field, sForm.errors.response_note && 'border-danger-500']" placeholder="What the team advised (optional)"></textarea>
+                        <p v-if="sForm.errors.response_note" :id="sfid('response_note') + '-err'" class="mt-1 text-xs text-on-danger">{{ sForm.errors.response_note }}</p>
+                    </div>
+                    <div class="flex justify-end gap-2">
+                        <button type="button" @click="closeSignoff" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
+                        <button type="submit" :disabled="sForm.processing" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Sign off</button>
                     </div>
                 </form>
         </BaseModal>
