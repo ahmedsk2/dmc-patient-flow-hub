@@ -85,4 +85,19 @@ describe('Consultations/Handover — the shift sheet', () => {
     it('says so when there is nothing to hand over', () => {
         expect(mountPage(props({ groups: [] })).text()).toContain('No active or ongoing consultations');
     });
+
+    it('does not count an ongoing consult toward "active seen today", even if it was followed up today', () => {
+        // 1 active (not yet seen today) + 1 ongoing (seen today) — the ongoing row's today
+        // follow-up must not inflate the active-seen-today numerator, or the sheet would print
+        // a false all-clear ("1 of 1 active seen today") while the one active patient with the
+        // daily-review obligation was never actually seen.
+        const consultations = [
+            consult({ id: 1, status: 'active', last_followup: null }),
+            consult({ id: 2, status: 'ongoing', last_followup: { date: '2026-08-21', note: '', author: 'Dr Cardio', is_today: true } }),
+        ];
+        const g = group('Cardiology', 'Cardiology', consultations);
+        const text = mountPage(props({ groups: [g] })).text();
+        expect(text).toContain('0 of 1 active seen today');
+        expect(text).not.toContain('1 of 1 active seen today');
+    });
 });

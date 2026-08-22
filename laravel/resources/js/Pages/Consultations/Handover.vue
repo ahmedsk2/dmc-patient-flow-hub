@@ -20,7 +20,16 @@ const selectedName = computed(() => visibleGroups.value[0]?.name ?? '');
 const sum = (field) => visibleGroups.value.reduce((t, g) => t + g.counts[field], 0);
 const totals = computed(() => sum('total'));
 const activeTotal = computed(() => sum('active'));
-const seenToday = computed(() => sum('seen_today'));
+
+// "Seen today" must count only ACTIVE consults with a today follow-up — active is the only
+// status that carries the daily-review obligation this figure is reporting on. The server's
+// counts.seen_today is unfiltered by status (any status with a today follow-up, ongoing
+// included), so it cannot be used directly here: an ongoing consult that happens to have a
+// today follow-up would inflate the numerator and print a false all-clear on the sheet
+// ("N of N active seen today" while some genuinely active patients were never seen). Compute
+// the numerator from the actual rows instead of trusting that aggregate.
+const activeSeenToday = (consultations) => consultations.filter((c) => c.status === 'active' && c.last_followup?.is_today).length;
+const seenToday = computed(() => visibleGroups.value.reduce((t, g) => t + activeSeenToday(g.consultations), 0));
 
 // Ageing tone — a consult open past a week must read as overdue on a printed page, not blend in.
 // All four tokens are existing AA-verified pairs (see lib/ui.js locTone / deltaChipClass).
@@ -70,7 +79,7 @@ const print = () => window.print();
             <section v-for="g in visibleGroups" :key="g.key" class="group-block mb-5">
                 <div class="mb-1.5 flex items-baseline justify-between border-b border-line pb-1">
                     <h2 class="text-sm font-bold uppercase tracking-wide text-navy-800">{{ g.name }}</h2>
-                    <span class="nums text-xs text-ink-400">{{ g.counts.total }} open · Active {{ g.counts.active }} · Ongoing {{ g.counts.ongoing }} · Seen today {{ g.counts.seen_today }}</span>
+                    <span class="nums text-xs text-ink-400">{{ g.counts.total }} open · Active {{ g.counts.active }} · Ongoing {{ g.counts.ongoing }} · Seen today {{ activeSeenToday(g.consultations) }}</span>
                 </div>
                 <table class="w-full border-collapse text-xs">
                     <thead>
