@@ -447,7 +447,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                     <tr class="border-b border-line text-start text-xs font-semibold uppercase tracking-wide text-ink-400">
                         <th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Location</th>
                         <th scope="col" class="px-3 py-3">From → To</th><th scope="col" class="px-3 py-3">Indication</th>
-                        <th scope="col" class="px-3 py-3">Consultant</th><th scope="col" class="px-3 py-3">Date</th>
+                        <th scope="col" class="px-3 py-3">Consultant / entered by</th><th scope="col" class="px-3 py-3">Date</th>
                         <th scope="col" class="px-3 py-3">Open</th><th scope="col" class="px-5 py-3">Status</th>
                     </tr>
                 </thead>
@@ -466,7 +466,11 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                                 <span v-if="!c.reasons.length && !c.other" class="text-ink-300">—</span>
                             </div>
                         </td>
-                        <td class="px-3 py-3 text-ink-600">{{ c.consultant }}</td>
+                        <td class="px-3 py-3" :data-test="`attribution-${c.id}`">
+                            <div class="text-ink-600">{{ c.consultant }}</div>
+                            <!-- entered_by is the session-stamped typist; ownership is separate -->
+                            <div class="text-xs text-ink-400">Entered by {{ c.entered_by || '—' }}</div>
+                        </td>
                         <td class="nums px-3 py-3 text-ink-500">{{ formatDate(c.date) || '—' }}</td>
                         <!-- ageing: whole days since requested_at, or since consultation_date for the
                              historical rows that have no request time. Signed-off rows show nothing. -->
@@ -513,6 +517,10 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
         <BaseModal :open="!!editing" title="Edit consultation" size="2xl" tall :dirty="!!eForm.isDirty" @close="closeEdit">
                 <ErrorSummary :errors="eErrors" />
                 <form @submit.prevent="submitEdit" class="space-y-4">
+                    <p v-if="editing" data-test="edit-attribution" class="rounded-xl bg-ink-50 px-3 py-2 text-xs text-ink-500">
+                        Entered by {{ editing.entered_by || '—' }} · owned by {{ editing.consultant || '—' }}.
+                        Editing never changes who entered a record.
+                    </p>
                     <div class="grid gap-3 sm:grid-cols-2">
                         <div><label :for="efid('mrn')" class="mb-1 block text-sm font-semibold text-ink-700">MRN</label><input :id="efid('mrn')" v-model="eForm.mrn" :aria-describedby="eForm.errors.mrn ? efid('mrn') + '-err' : undefined" :class="[field, eForm.errors.mrn && 'border-danger-500']" /></div>
                         <div><label :for="efid('patient_name')" class="mb-1 block text-sm font-semibold text-ink-700">Patient name</label><input :id="efid('patient_name')" v-model="eForm.patient_name" :class="field" /></div>

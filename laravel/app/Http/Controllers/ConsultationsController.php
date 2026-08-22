@@ -86,7 +86,7 @@ class ConsultationsController extends Controller
         $viewer = Auth::user();
 
         $consultations = $filtered()
-            ->with('consultant:id,full_name,name')
+            ->with(['consultant:id,full_name,name', 'enteredBy:id,full_name,name'])
             ->where('status', $status)
             ->orderByDesc('id')
             ->paginate(15)
@@ -102,6 +102,12 @@ class ConsultationsController extends Controller
                 'to' => $c->to_service,
                 'consultant' => $c->consultant?->full_name ?? $c->consultant?->name ?? '—',
                 'consultant_id' => $c->consultant_id,
+                // Wave 2b: who TYPED the record. entered_by is session-sourced and unspoofable —
+                // the one attribution field in this table that can be trusted — and is deliberately
+                // shown apart from the OWNER (owning_specialty_id + consultant_id), which is
+                // independent of it.
+                'entered_by' => $c->enteredBy?->full_name ?? $c->enteredBy?->name ?? '—',
+                'entered_by_id' => $c->entered_by,
                 'date' => optional($c->consultation_date)->toDateString(),
                 'signoff' => optional($c->signoff_date)->toDateString(),
                 'status' => $c->status,

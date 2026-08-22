@@ -11,6 +11,7 @@ import { useTour } from '@/composables/useTour';
 import { useSessionTimeout } from '@/composables/useSessionTimeout';
 import { xsrf } from '@/lib/ui.js';
 import { clearRecents } from '@/lib/recentPatients';
+import { notifText, feedTarget } from '@/Layouts/notifText.js';
 
 // Wave 5, Item 4: sessionStorage anchor for the ABSOLUTE session-timeout countdown (see the composable
 // block below) — declared up top so both `logout()` and the mount hook can reach it.
@@ -301,28 +302,11 @@ const clearNotifications = async () => {
     } finally { clearing.value = false; }
 };
 const goInbox = () => { bellOpen.value = false; router.visit('/handovers'); };
+// Wave 2b: bell copy + per-type destination now live in a testable module.
+const goFeed = (n) => { bellOpen.value = false; router.visit(feedTarget(n)); };
 // focus the first actionable element in the bell dropdown when it mounts (a11y). Used as a
 // function ref on the panel — Vue calls it with the element on mount, null on unmount.
 const focusFirstBell = (el) => { if (el) nextTick(() => el.querySelector('button,a')?.focus()); };
-const notifText = (n) => {
-    const p = n.payload || {};
-    // Phase 4 — Item 3: failed-login burst alert
-    if (n.type === 'security.failed_logins') {
-        return `Security: ${p.count || ''} failed login attempt(s) for "${p.username || 'unknown'}"${p.ip ? ` from ${p.ip}` : ''}`;
-    }
-    // Phase 4 — Item 6: daily data-quality digest
-    if (n.type === 'dq.daily_report') {
-        const total = (p.over_los || 0) + (p.no_dx || 0) + (p.bad_dates || 0) + (p.orphan_dx || 0) + (p.double_open || 0);
-        return `Data quality: ${total} item(s) need review (see the Data Quality page)`;
-    }
-    // HO-T7: persistent "incomplete handover" reminder — the reassign moved the patient before the
-    // handover note was refreshed today; stays lit until someone saves a note (see resolve step).
-    if (n.type === 'handover.incomplete') {
-        return `${p.patient_name || 'A patient'}${p.mrn ? ` (MRN ${p.mrn})` : ''} was reassigned from Dr. ${p.from_name || '—'} without a completed handover — complete it.`;
-    }
-    if (p.count) return `Dr. ${p.from_name || 'A consultant'} handed over ${p.count} patient(s) to you`;
-    return `Dr. ${p.from_name || 'A consultant'} handed over ${p.patient_name || 'a patient'}${p.mrn ? ` (MRN ${p.mrn})` : ''}`;
-};
 const relTime = (iso) => {
     if (!iso) return '';
     const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -561,7 +545,7 @@ onUnmounted(() => {
                             <!-- non-actionable feed (actionable ids are pinned above, so they're filtered out here) -->
                             <ul v-if="feedNotifications.length" class="divide-y divide-line">
                                 <li v-for="n in feedNotifications" :key="n.id">
-                                    <button @click="goInbox" class="w-full px-4 py-3 text-start transition hover:bg-brand-50/40" :class="{ 'bg-brand-50/30': !n.read_at }">
+                                    <button @click="goFeed(n)" class="w-full px-4 py-3 text-start transition hover:bg-brand-50/40" :class="{ 'bg-brand-50/30': !n.read_at }">
                                         <p class="text-sm leading-snug text-ink-700">{{ notifText(n) }}</p>
                                         <p class="nums mt-0.5 text-xs text-ink-400">{{ relTime(n.created_at) }}</p>
                                     </button>
