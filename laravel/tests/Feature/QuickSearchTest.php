@@ -204,10 +204,16 @@ class QuickSearchTest extends TestCase
     public function test_rows_carry_the_bed_for_the_consultation_lookup(): void
     {
         $admin = $this->user(User::ROLE_ADMIN);
-        $this->admission($this->patient('Bedded Patient', '40020001'), ['bed' => 'W-12']);
+        $p = $this->patient('Bedded Patient', '40020001');
+        $adm = $this->admission($p, ['bed' => 'W-12']);
 
         $res = $this->actingAs($admin)->postJson('/api/patients/quick-search', ['q' => 'Bedded'])->assertOk();
 
-        $this->assertSame('W-12', collect($res->json())->firstWhere('mrn', '40020001')['bed']);
+        $row = collect($res->json())->firstWhere('mrn', '40020001');
+        $this->assertSame('W-12', $row['bed']);
+        // Review fix: `id` is the ADMISSION id (the stay), `patient_id` is a distinct FK into `patients` —
+        // the create-consultation form must pin both, never conflate them.
+        $this->assertSame($adm->id, $row['id']);
+        $this->assertSame($p->id, $row['patient_id']);
     }
 }

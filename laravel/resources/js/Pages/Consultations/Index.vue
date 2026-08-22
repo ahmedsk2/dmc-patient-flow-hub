@@ -175,6 +175,7 @@ onMounted(() => {
 onUnmounted(() => {
     if (wlDateTimer) clearInterval(wlDateTimer);
     document.removeEventListener('visibilitychange', wlCheckDate);
+    clearTimeout(lookupTimer);
 });
 const markSeen = async (item) => {
     if (wlBusy.value[item.id] || item.seen_today || wlStale.value) return;
@@ -264,8 +265,8 @@ const pickPatient = (rowData) => {
     cForm.age = rowData.age ?? '';
     cForm.bed = rowData.bed || '';
     cForm.current_location = rowData.location || 'Ward';
-    cForm.patient_id = rowData.id ?? null;         // quick-search rows are ADMISSION rows…
-    cForm.admission_id = rowData.id ?? null;       // …so the same id is the stay; the server re-checks ownership
+    cForm.patient_id = rowData.patient_id ?? null; // rowData.id is the ADMISSION id (the stay); patient_id
+    cForm.admission_id = rowData.id ?? null;       // is a distinct FK into the patients table — never conflate them
     cForm.unmatched_mrn_ack = false;
     lookupResults.value = [];
     lookupQuery.value = '';

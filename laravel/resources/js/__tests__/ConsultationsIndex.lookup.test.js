@@ -41,8 +41,10 @@ const props = {
     reasons: [], consultants: [], specialties: [],
     worklist: { date: '2026-08-21', seen: 0, total: 0, items: [] },
 };
+// `id` is the ADMISSION id (the stay); `patient_id` is a distinct FK into `patients` — deliberately
+// different numbers here so a test that conflated them (as the shipped code once did) would fail.
 const row = {
-    id: 501, mrn: '40020001', name: 'Bedded Patient', age: 63, gender: 'Male',
+    id: 501, patient_id: 9012, mrn: '40020001', name: 'Bedded Patient', age: 63, gender: 'Male',
     location: 'Ward', bed: 'W-12', status: 'active', dest: 'board',
 };
 const mountWith = () => { authUser = admin; return mount(ConsultationsIndex, { props }); };
@@ -79,7 +81,14 @@ describe('Consultations/Index — patient lookup on create', () => {
     it('picking a patient fills the identity fields and pins patient_id + admission_id', async () => {
         const w = mountWith();
         w.vm.openAdd();
-        w.vm.pickPatient(row);
+        w.vm.lookupResults = [row];
+        await w.vm.$nextTick();
+
+        // drive the rendered UI (not the vm method directly) so the click handler + template wiring
+        // are actually proven, not just the function they happen to call
+        const buttons = w.findAll('ul button');
+        expect(buttons).toHaveLength(1);
+        await buttons[0].trigger('click');
         await w.vm.$nextTick();
 
         expect(w.vm.cForm.mrn).toBe('40020001');
@@ -87,7 +96,9 @@ describe('Consultations/Index — patient lookup on create', () => {
         expect(w.vm.cForm.age).toBe(63);
         expect(w.vm.cForm.bed).toBe('W-12');
         expect(w.vm.cForm.current_location).toBe('Ward');
-        expect(w.vm.cForm.patient_id).toBe(501);
+        // patient_id and admission_id come from distinct id spaces (patients vs admissions) and must
+        // not be conflated — this is the exact defect the review caught.
+        expect(w.vm.cForm.patient_id).toBe(9012);
         expect(w.vm.cForm.admission_id).toBe(501);
         expect(w.vm.lookupResults).toEqual([]);
     });
