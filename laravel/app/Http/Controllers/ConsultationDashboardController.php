@@ -219,10 +219,11 @@ class ConsultationDashboardController extends Controller
     private function ageing(User $user, ?int $specialtyId): array
     {
         $today = now()->toDateString();
-        $age = 'DATEDIFF(?, DATE(COALESCE(consultations.requested_at, consultations.consultation_date)))';
+        $expr = $this->volumeDateExpr();
+        $age = "DATEDIFF(?, DATE({$expr}))";
         $rows = $this->openQuery($user, $specialtyId)
             ->selectRaw("CASE
-                    WHEN COALESCE(consultations.requested_at, consultations.consultation_date) IS NULL THEN 'unknown'
+                    WHEN {$expr} IS NULL THEN 'unknown'
                     WHEN {$age} <= 2 THEN 'b0_2'
                     WHEN {$age} <= 7 THEN 'b3_7'
                     ELSE 'b8_plus'
@@ -397,11 +398,34 @@ class ConsultationDashboardController extends Controller
     }
 
     /**
+     * The volume-window filter, spelled as a range predicate over each indexed date column rather
+     * than `COALESCE(...) BETWEEN ...`: wrapping the filter column in COALESCE (or any function)
+     * makes it non-sargable and forces a full scan of `consultations` on every dashboard load — the
+     * one thing MetricQueries' class docblock says never to do. `requested_at BETWEEN ? AND ?` OR
+     * `(requested_at IS NULL AND consultation_date BETWEEN ? AND ?)` is equivalent to the COALESCE
+     * form for every row (a row only ever has one date, never both) and keeps each branch usable
+     * against its own index.
+     */
+    private function volumeDateFilter(Carbon $from, Carbon $to): \Closure
+    {
+        $bounds = [$from->toDateTimeString(), $to->toDateTimeString()];
+
+        return function (Builder $q) use ($bounds) {
+            $q->whereBetween('consultations.requested_at', $bounds)
+                ->orWhere(function (Builder $q2) use ($bounds) {
+                    $q2->whereNull('consultations.requested_at')
+                        ->whereBetween('consultations.consultation_date', $bounds);
+                });
+        };
+    }
+
+    /**
      * Volume trend — monthly counts over the last six calendar months:
      *   SELECT DATE_FORMAT(COALESCE(requested_at, consultation_date), '%Y-%m') k, COUNT(*) c
      *   FROM consultations
      *   WHERE deleted_at IS NULL AND <scope>
-     *     AND COALESCE(requested_at, consultation_date) BETWEEN <from> AND <to>
+     *     AND (requested_at BETWEEN <from> AND <to>
+     *          OR (requested_at IS NULL AND consultation_date BETWEEN <from> AND <to>))
      *   GROUP BY k
      *
      * VOLUME is not a precision claim — unlike the medians, historical rows legitimately count
@@ -416,7 +440,7 @@ class ConsultationDashboardController extends Controller
     {
         $expr = $this->volumeDateExpr();
         $counts = $this->baseQuery($user, $specialtyId)
-            ->whereRaw("{$expr} BETWEEN ? AND ?", [$from->toDateTimeString(), $to->toDateTimeString()])
+            ->where($this->volumeDateFilter($from, $to))
             ->selectRaw($this->keyExpr($expr, 'month') . ' k, COUNT(*) c')
             ->groupBy('k')->pluck('c', 'k')->all();
 
@@ -441,11 +465,10 @@ class ConsultationDashboardController extends Controller
     private function topIndications(User $user, ?int $specialtyId, Carbon $from, Carbon $to): array
     {
         $reasonNames = ConsultationReason::pluck('name', 'id');
-        $expr = $this->volumeDateExpr();
         $tally = [];
 
         $this->baseQuery($user, $specialtyId)
-            ->whereRaw("{$expr} BETWEEN ? AND ?", [$from->toDateTimeString(), $to->toDateTimeString()])
+            ->where($this->volumeDateFilter($from, $to))
             ->select(['consultations.id', 'consultations.indication'])
             ->orderBy('consultations.id')
             ->chunk(500, function ($chunk) use (&$tally, $reasonNames) {
@@ -480,11 +503,15 @@ class ConsultationDashboardController extends Controller
      * historical consult must still resolve the consultant who owns it rather than showing a bare
      * id (the same reasoning as User::consultantOptions' $activeOnly=false callers). Rows with no
      * consultant are simply absent — "unassigned" is not a person's load.
+     *
+     * Built on openQuery(), NOT a re-spelled status<>signed_off filter: it carries the same
+     * signoff_date drift belt as the other two open-work tiles on this page (see openQuery's
+     * docblock) — a legacy row that legacy:import closed without the status column staying in
+     * sync must not headline here as load while openCounts/ageing correctly ignore it.
      */
     private function perConsultantLoad(User $user, ?int $specialtyId): array
     {
-        $counts = $this->baseQuery($user, $specialtyId)
-            ->where('consultations.status', '<>', Consultation::STATUS_SIGNED_OFF)
+        $counts = $this->openQuery($user, $specialtyId)
             ->whereNotNull('consultations.consultant_id')
             ->selectRaw('consultations.consultant_id cid, COUNT(*) c')
             ->groupBy('cid')->pluck('c', 'cid')->all();

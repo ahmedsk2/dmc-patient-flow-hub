@@ -77,18 +77,21 @@ class ConsultationDashboardVolumeTest extends TestCase
     {
         $cardio = Specialty::create(['name' => 'Cardiology']);
         $doc = $this->user(User::ROLE_CONSULTANT, ['specialty_id' => $cardio->id]);
-        ConsultationReason::create(['name' => 'Chest pain']);          // id 1
-        ConsultationReason::create(['name' => 'Arrhythmia']);          // id 2
-        ConsultationReason::create(['name' => 'Heart failure']);       // id 3
+        // RefreshDatabase does not roll back MySQL's AUTO_INCREMENT, so these ids are NOT
+        // guaranteed to be 1/2/3 (see the class-earned lesson at test_top_indications... below,
+        // repeated here): capture the real ids rather than assuming them.
+        $chestPain = ConsultationReason::create(['name' => 'Chest pain']);
+        $arrhythmia = ConsultationReason::create(['name' => 'Arrhythmia']);
+        $heartFailure = ConsultationReason::create(['name' => 'Heart failure']);
 
         // app-written rows: ids as JSON ints
-        $this->consult(['owning_specialty_id' => $cardio->id, 'requested_at' => now(), 'indication' => [1, 2]]);
-        $this->consult(['owning_specialty_id' => $cardio->id, 'requested_at' => now(), 'indication' => [1]]);
+        $this->consult(['owning_specialty_id' => $cardio->id, 'requested_at' => now(), 'indication' => [$chestPain->id, $arrhythmia->id]]);
+        $this->consult(['owning_specialty_id' => $cardio->id, 'requested_at' => now(), 'indication' => [$chestPain->id]]);
         // a legacy row: ids as JSON STRINGS, dated by consultation_date
         DB::table('consultations')->insert([
             'mrn' => '77000001', 'patient_name' => 'Legacy Pt',
             'consultation_date' => now()->toDateString(),
-            'indication' => '["1","3"]',
+            'indication' => json_encode([(string) $chestPain->id, (string) $heartFailure->id]),
             'owning_specialty_id' => $cardio->id,
             'status' => Consultation::STATUS_ONGOING,
             'created_at' => now(), 'updated_at' => now(),
