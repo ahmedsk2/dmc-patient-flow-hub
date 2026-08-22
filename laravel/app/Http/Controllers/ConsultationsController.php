@@ -615,7 +615,15 @@ class ConsultationsController extends Controller
             return null;
         }
 
-        $match = Specialty::where('is_external', false)->get(['id', 'name'])
+        // Deliberately NOT filtered by is_external. That flag answers a different question — "does a
+        // TRANSFERRED patient leave the system?" — and has nothing to do with which service was
+        // CONSULTED. Borrowing it here meant a consult to Cardiology, Endocrine, Nephrology, GIT,
+        // Neurology, ICU or Surgical specialties (every one of them is_external in production)
+        // resolved to NULL and vanished into Unassigned, invisible to the team whose book it belongs
+        // in. Any service can be consulted, so any service can own a ledger. The separate rule that a
+        // consultant is REQUIRED only for an internal to_service still lives in ConsultationRequest,
+        // which is correct: an external service has no in-system consultant to name.
+        $match = Specialty::get(['id', 'name'])
             ->first(fn (Specialty $s) => mb_strtolower(trim((string) $s->name)) === $wanted);
 
         return $match?->id;

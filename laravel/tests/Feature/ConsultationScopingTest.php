@@ -8,6 +8,7 @@ use App\Models\Specialty;
 use App\Models\User;
 use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
@@ -118,6 +119,31 @@ class ConsultationScopingTest extends TestCase
         ], $overrides);
     }
 
+    /**
+     * `is_external` answers "does a TRANSFERRED patient leave the system?" — it says nothing about
+     * which service was CONSULTED. The ledger wrongly borrowed the transfer rule, so a consult to an
+     * external service (Cardiology, Endocrine, Nephrology… — every one of them is_external on prod)
+     * resolved to owning_specialty_id NULL and vanished into Unassigned, invisible to the very team
+     * whose book it belongs in. Any specialty can be consulted, so any specialty can own a ledger.
+     */
+    public function test_a_consult_to_an_external_service_still_gets_that_service_as_its_owner(): void
+    {
+        $endocrine = Specialty::create(['name' => 'Endocrine', 'is_subspecialty' => true, 'is_external' => true]);
+        $admin = $this->user(User::ROLE_ADMIN, ['specialty_id' => null]);
+
+        // an external service carries no in-system consultant (ConsultationRequest keeps consultant_id
+        // nullable for non-internal to_service) — the book is still Endocrine's
+        $this->actingAs($admin)->from('/consultations')
+            ->post('/consultations', $this->payload($endocrine, $admin, ['consultant_id' => null]))
+            ->assertRedirect('/consultations');
+
+        $this->assertSame(
+            $endocrine->id,
+            (int) DB::table('consultations')->latest('id')->value('owning_specialty_id'),
+            'a consult to an external service must be owned by that service, not dumped in Unassigned'
+        );
+    }
+
     public function test_a_non_coordinator_cannot_create_into_another_specialty(): void
     {
         [$cardio, $nephro] = $this->specialties();
@@ -198,29 +224,56 @@ class ConsultationScopingTest extends TestCase
     }
 
     /**
-     * The `is_external = false` half of the resolver, which the free-text case above cannot tell
-     * apart from an unmatched string. It matters against the real data: 7 of the 12 configured
-     * specialties are external, so if that filter regressed, consults to those services would
-     * become owned, vanish from everyone outside that team, and stop being creatable.
+     * DELIBERATELY FLIPPED (2026-08-22), was: "a NAMED external specialty is unowned and bookable by
+     * any team". The old rule made the resolver filter `is_external = false`, on the reasoning that an
+     * external service is not an IM team. That conflated two different questions:
+     *
+     *   is_external  -> "does a TRANSFERRED patient leave the system?"   (transfer semantics)
+     *   ledger owner -> "which service was CONSULTED and keeps the book?" (bookkeeping)
+     *
+     * Owner confirmed the ledger belongs to the CONSULTED service, entered by that service or by
+     * someone with rights to file one — never by the requesting team. Since ANY service can be
+     * consulted, any service can own a book. Under the old rule, 7 of the 12 configured specialties
+     * (Cardiology, Endocrine, GIT, Neurology, Nephrology, ICU, Surgical specialties — all external)
+     * could never own one, so every consult to them resolved to NULL and vanished into Unassigned:
+     * on prod that was 103 rows, 90 of them Endocrine, the 4th-busiest consulted service.
+     *
+     * The old test's real worry — that owned-by-an-external-service would "stop being creatable" — is
+     * answered by the coordinator capability: 2026_08_21_000500 grants it to every unaffiliated
+     * active non-observer, which on the live database is 121 of 150 active accounts, including every
+     * registrar and resident. They can file into any book. A consultant belonging to a DIFFERENT
+     * specialty is still refused, and that refusal is the product rule, not a regression.
      */
-    public function test_a_NAMED_external_specialty_is_unowned_and_bookable_by_any_team(): void
+    public function test_a_NAMED_external_specialty_owns_its_ledger_and_coordinators_can_file_into_it(): void
     {
         [$cardio] = $this->specialties();
         $external = Specialty::create(['name' => 'Coronary Care Outreach', 'is_subspecialty' => false, 'is_external' => true]);
-        $cardioUser = $this->user(User::ROLE_CONSULTANT, ['specialty_id' => $cardio->id]);
 
-        $this->assertNull(
+        $this->assertSame(
+            $external->id,
             \App\Http\Controllers\ConsultationsController::resolveOwningSpecialtyId('Coronary Care Outreach'),
-            'an EXTERNAL specialty is never an IM owner, even though its name matches a row'
+            'a consulted service owns its book whether or not a transfer there would leave the system'
         );
 
-        $this->actingAs($cardioUser)
-            ->post('/consultations', $this->payload($external, $cardioUser, ['consultant_id' => null]))
+        // the rollout route: an unaffiliated registrar/resident holds the coordinator capability
+        $coordinator = $this->user(User::ROLE_REGISTRAR, [
+            'specialty_id' => null, 'can_coordinate_consultations' => true,
+        ]);
+        $this->actingAs($coordinator)
+            ->post('/consultations', $this->payload($external, $coordinator, ['consultant_id' => null]))
             ->assertRedirect()->assertSessionHasNoErrors();
 
         $c = Consultation::first();
         $this->assertSame('Coronary Care Outreach', $c->to_service);
-        $this->assertNull($c->owning_specialty_id, 'a consult to an external service lands in Unassigned');
+        $this->assertSame($external->id, (int) $c->owning_specialty_id, 'the consulted service owns it');
+
+        // ...but a consultant from ANOTHER specialty still cannot file into someone else's book —
+        // the ledger is kept by the consulted service, not by the team asking for the opinion.
+        $cardioUser = $this->user(User::ROLE_CONSULTANT, ['specialty_id' => $cardio->id]);
+        $this->actingAs($cardioUser)->from('/consultations')
+            ->post('/consultations', $this->payload($external, $cardioUser, ['consultant_id' => null]))
+            ->assertRedirect('/consultations')
+            ->assertSessionHasErrors();
     }
 
     /**
