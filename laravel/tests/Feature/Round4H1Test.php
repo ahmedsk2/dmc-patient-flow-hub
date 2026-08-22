@@ -330,7 +330,8 @@ class Round4H1Test extends TestCase
     {
         Specialty::create(['name' => 'Dietary', 'is_subspecialty' => true, 'is_external' => true]);
 
-        $this->actingAs($this->admin())->post('/consultations', $this->consultPayload())
+        // W2b: MRN 12341234 matches no patients row — acknowledge the unmatched-MRN warning
+        $this->actingAs($this->admin())->post('/consultations', $this->consultPayload(['unmatched_mrn_ack' => true]))
             ->assertRedirect()->assertSessionHasNoErrors();
 
         $c = Consultation::first();

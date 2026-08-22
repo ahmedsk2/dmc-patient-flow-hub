@@ -103,8 +103,10 @@ class ResidualR3Test extends TestCase
     {
         // W1: booking into a specialty you do not belong to is the COORDINATOR capability. A unit
         // registrar who books consults for every team is precisely who gets the flag.
+        // W2b: MRN 30001234 matches no patients row, so the create form's unmatched-MRN warning now
+        // applies — the payload carries the explicit acknowledgement rather than filing an orphan.
         $this->actingAs($this->user(User::ROLE_REGISTRAR, ['can_coordinate_consultations' => true]))
-            ->post('/consultations', $this->consultationPayload())
+            ->post('/consultations', $this->consultationPayload(['unmatched_mrn_ack' => true]))
             ->assertRedirect()->assertSessionHasNoErrors();
 
         $c = Consultation::first();

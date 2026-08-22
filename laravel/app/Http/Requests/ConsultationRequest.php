@@ -47,9 +47,45 @@ class ConsultationRequest extends FormRequest
                 \Illuminate\Validation\Rule::requiredIf(fn () => in_array(0, array_map('intval', (array) $this->input('indication', [])), true)),
                 'nullable', 'string', 'max:255',
             ],
+            // Wave 2b — patient lookup. The create form resolves the patient through
+            // POST /api/patients/quick-search (term in the BODY — PHI never enters a URL) and posts
+            // the chosen ids alongside the typed MRN. `unmatched_mrn_ack` is the user's explicit
+            // "file it unlinked anyway" for an MRN that matches no patient record.
+            'patient_id' => ['nullable', 'integer', 'exists:patients,id'],
+            'admission_id' => ['nullable', 'integer', 'exists:admissions,id'],
+            'unmatched_mrn_ack' => ['nullable', 'boolean'],
         ];
 
         return $rules;
+    }
+
+    /**
+     * CREATE-only guard against the silent orphan: an MRN matching no patient record used to store
+     * `patient_id = NULL` without a word, producing a consultation nobody could ever join back to a
+     * patient. The user must now either pick the patient from the lookup (`patient_id`) or tick the
+     * acknowledgement. The point is the WARNING, not a block — acknowledging always succeeds.
+     *
+     * EDIT is deliberately exempt: 1,283 imported rows carry MRNs that match nothing and must stay
+     * save-able for an unrelated edit (the same reasoning as consultationDateRules()).
+     */
+    public function withValidator(\Illuminate\Validation\Validator $validator): void
+    {
+        $validator->after(function (\Illuminate\Validation\Validator $v) {
+            if ($this->route('consultation') !== null) {
+                return;                                  // update — legacy rows stay editable
+            }
+            if ($v->errors()->has('mrn')) {
+                return;                                  // already failing on shape; don't pile on
+            }
+            if ($this->filled('patient_id') || $this->boolean('unmatched_mrn_ack')) {
+                return;                                  // picked from the lookup, or acknowledged
+            }
+            $mrn = trim((string) $this->input('mrn'));
+            if ($mrn !== '' && \App\Models\Patient::where('mrn', $mrn)->exists()) {
+                return;                                  // the typed MRN does resolve
+            }
+            $v->errors()->add('mrn', "No patient record matches MRN {$mrn}. Pick the patient from the lookup, or tick 'Record anyway' to file this consultation without linking a patient record.");
+        });
     }
 
     /**

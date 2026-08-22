@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Admission;
 use App\Models\Consultation;
 use App\Models\ConsultationReason;
 use App\Models\Patient;
@@ -156,19 +157,45 @@ class ConsultationsController extends Controller
         // Observer gate lives in ConsultationRequest::authorize() (403 before validation)
         $data = $request->validated();
 
-        $patient = Patient::where('mrn', $data['mrn'])->first();
+        // Wave 2b — patient lookup. A patient PICKED from the lookup wins; otherwise fall back to
+        // resolving the typed MRN. An MRN that resolves to nothing only reaches this line when the
+        // user explicitly acknowledged it (ConsultationRequest::withValidator refuses it otherwise),
+        // so `patient_id = NULL` is now always a deliberate choice, never a silent accident.
+        $ack = (bool) ($data['unmatched_mrn_ack'] ?? false);
+        $pickedPatientId = $data['patient_id'] ?? null;
+        $pickedAdmissionId = $data['admission_id'] ?? null;
+        // strip the lookup-control fields: `unmatched_mrn_ack` is not a column, and patient/admission
+        // are re-derived below rather than mass-assigned from the payload
+        unset($data['patient_id'], $data['admission_id'], $data['unmatched_mrn_ack']);
+
+        $patient = $pickedPatientId
+            ? Patient::find($pickedPatientId)
+            : Patient::where('mrn', $data['mrn'])->first();
+
+        // an admission only attaches when it really belongs to the resolved patient — a mismatched
+        // id in the payload is dropped, never trusted
+        $admission = ($pickedAdmissionId && $patient)
+            ? Admission::where('id', $pickedAdmissionId)->where('patient_id', $patient->id)->first()
+            : null;
+
         // W1: the owning team is RESOLVED server-side from to_service (internal specialties only).
         // An external/free-text service resolves to NULL — the Unassigned bucket. Never guessed,
         // and never accepted from the payload.
         $c = Consultation::create([
             ...$data,
             'patient_id' => $patient?->id,
+            'admission_id' => $admission?->id,
             'owning_specialty_id' => self::resolveOwningSpecialtyId($data['to_service'] ?? null),
             'requested_at' => now(),                     // REAL request time — cutover onward only
             'indication' => $data['indication'] ?? [],
             'entered_by' => Auth::id(),                  // session-sourced, immutable
         ]);
-        Audit::log('consultation.create', 'consultation', (string) $c->id, ['mrn' => $data['mrn']]);
+        Audit::log('consultation.create', 'consultation', (string) $c->id, [
+            'mrn' => $data['mrn'],
+            'patient_id' => $patient?->id,
+            'admission_id' => $admission?->id,
+            'unmatched_mrn_ack' => $ack,
+        ]);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultation created.']);
     }

@@ -111,6 +111,10 @@ class ConsultationScopingTest extends TestCase
             'current_location' => 'Ward', 'consultation_date' => now()->toDateString(),
             'consultation_from' => 'ER', 'to_service' => $target->name,
             'consultant_id' => $receiving->id, 'indication' => [$reason->id],
+            // W2b: MRN 75000100 matches no patients row, and an unmatched MRN is now warned about
+            // rather than silently filed as an orphan. These cases are about SPECIALTY SCOPING, so
+            // they carry the explicit acknowledgement and keep testing exactly what they always did.
+            'unmatched_mrn_ack' => true,
         ], $overrides);
     }
 
