@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Consultation;
+use App\Models\ConsultationFollowup;
 use App\Models\ConsultationReason;
 use App\Models\Patient;
 use App\Models\Specialty;
@@ -143,6 +144,9 @@ class ConsultationsController extends Controller
                 'mine_open' => $scoped()->open()->where('consultant_id', Auth::id())->count(),
                 'open' => $scoped()->open()->count(),
             ],
+            // Wave 2b: "Today's follow-up" — the ACTIVE set the viewer can see, with per-row
+            // "already ticked today" and the exact seen/total pair behind "Seen X of Y today".
+            'worklist' => $this->todayWorklist(Auth::user()),
             'reasons' => $reasons->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
             'consultants' => User::consultantOptions(),
         ]);
@@ -478,5 +482,42 @@ class ConsultationsController extends Controller
         }
 
         return max(0, (int) $start->copy()->startOfDay()->diffInDays(now()->startOfDay()));
+    }
+
+    /**
+     * Today's follow-up worklist.
+     *
+     * `active` is the ONLY status that asserts a daily commitment, so `new`, `ongoing` and
+     * `signed_off` are deliberately excluded — that is exactly why the Wave 1 backfill parked open
+     * legacy consults in `ongoing` rather than fabricating a launch-day worklist of 1,283 rows.
+     * The count is exact because consultation_followups carries unique(consultation_id, followup_date).
+     */
+    private function todayWorklist(User $user): array
+    {
+        $today = now()->toDateString();
+
+        $rows = Consultation::query()
+            ->visibleTo($user)
+            ->where('status', Consultation::STATUS_ACTIVE)
+            ->with('consultant:id,full_name,name')
+            ->withExists(['followups as seen_today' => fn ($q) => $q->whereDate('followup_date', $today)])
+            ->orderBy('patient_name')
+            ->orderBy('id')
+            ->get();
+
+        return [
+            'date' => $today,
+            'seen' => $rows->where('seen_today', true)->count(),
+            'total' => $rows->count(),
+            'items' => $rows->map(fn (Consultation $c) => [
+                'id' => $c->id,
+                'name' => $c->patient_name ?? 'Unknown',
+                'mrn' => $c->mrn,
+                'bed' => $c->bed,
+                'location' => $c->current_location,
+                'consultant' => $c->consultant?->full_name ?? $c->consultant?->name ?? '—',
+                'seen_today' => (bool) $c->seen_today,
+            ])->values()->all(),
+        ];
     }
 }

@@ -6,7 +6,7 @@ import BaseModal from '@/Components/BaseModal.vue';
 import ErrorSummary from '@/Components/ErrorSummary.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
-import { localToday, vFocus, guardSubmit, formatDate } from '@/lib/ui.js';
+import { localToday, vFocus, guardSubmit, formatDate, xsrf } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
 
@@ -17,7 +17,7 @@ const { ask } = useConfirm();
 // .errors onto per-instance field ids (useId()-scoped) with aria-describedby wired to the
 // existing field-level messages. Submit handlers are wrapped in guardSubmit() (Item 5).
 
-const props = defineProps({ consultations: Object, filters: Object, stats: Object, reasons: Array, consultants: Array, specialties: Array });
+const props = defineProps({ consultations: Object, filters: Object, stats: Object, reasons: Array, consultants: Array, specialties: Array, worklist: { type: Object, default: () => ({ date: '', seen: 0, total: 0, items: [] }) } });
 const page = usePage();
 const me = computed(() => page.props.auth.user);
 // Observers (role 5) are read-only everywhere, and the read-only guarantee is never bought with a
@@ -139,6 +139,38 @@ const goPage = (url) => {
 watch(search, () => { clearTimeout(timer); timer = setTimeout(apply, 300); });
 const setStatus = (s) => { status.value = s; apply(); };
 const toggleMine = () => { scope.value = scope.value === 'mine' ? '' : 'mine'; apply(); };
+
+// ---- Wave 2b: Today's follow-up worklist ------------------------------------------------------
+// A local mirror of the server prop so a tick flips instantly without a full Inertia round-trip.
+// The tick is a JSON fetch (not an Inertia visit) because the server answers 422 on a repeat tick
+// — one row per consult per day is a DB unique — and that refusal is rendered inline, right here.
+const wl = ref({ ...props.worklist, items: [...(props.worklist?.items || [])] });
+watch(() => props.worklist, (v) => { wl.value = { ...v, items: [...(v?.items || [])] }; });
+const wlNotes = ref({});
+const wlBusy = ref(null);
+const wlError = ref('');
+const wlSeen = computed(() => wl.value.items.filter((i) => i.seen_today).length);
+const wlPct = computed(() => (wl.value.total ? Math.round((wlSeen.value / wl.value.total) * 100) : 0));
+const markSeen = async (item) => {
+    if (wlBusy.value || item.seen_today) return;
+    wlBusy.value = item.id;
+    wlError.value = '';
+    try {
+        const r = await fetch(`/consultations/${item.id}/followup`, {
+            method: 'POST',
+            headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf() },
+            body: JSON.stringify({ note: (wlNotes.value[item.id] || '').trim() || null }),
+        });
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) { wlError.value = body.message || 'Could not record the follow-up.'; return; }
+        item.seen_today = true;
+        wlNotes.value[item.id] = '';
+    } catch {
+        wlError.value = 'Could not record the follow-up.';
+    } finally {
+        wlBusy.value = null;
+    }
+};
 
 // new consultation
 const today = localToday();
@@ -282,6 +314,33 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                 New Consultation
             </button>
         </div>
+
+        <!-- Today's follow-up: the ACTIVE set only — the one status that asserts a daily round -->
+        <section v-if="wl.total" data-test="worklist" class="mb-5 overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
+            <header class="flex flex-wrap items-center gap-3 border-b border-line px-5 py-3">
+                <h2 class="text-sm font-bold text-ink-800">Today's follow-up</h2>
+                <span class="nums rounded-full bg-tint-accent px-2.5 py-0.5 text-xs font-semibold text-on-accent">Seen {{ wlSeen }} of {{ wl.total }} today</span>
+                <div class="ms-auto h-2 w-40 overflow-hidden rounded-full bg-ink-100">
+                    <div class="h-full rounded-full bg-brand-solid transition-all" :style="{ width: wlPct + '%' }" />
+                </div>
+            </header>
+            <p v-if="wlError" role="alert" class="border-b border-line bg-tint-danger px-5 py-2 text-xs font-semibold text-on-danger">{{ wlError }}</p>
+            <ul class="divide-y divide-line">
+                <li v-for="item in wl.items" :key="item.id" class="flex flex-wrap items-center gap-3 px-5 py-3">
+                    <div class="min-w-48">
+                        <div class="font-semibold text-ink-800">{{ item.name }}</div>
+                        <div class="nums text-xs text-ink-400">MRN {{ item.mrn }} · Bed {{ item.bed || '—' }} · {{ item.location || '—' }} · {{ item.consultant }}</div>
+                    </div>
+                    <input v-if="!item.seen_today" v-model="wlNotes[item.id]" :aria-label="`Follow-up note for ${item.name}`"
+                        placeholder="Optional one-line note…" maxlength="500"
+                        class="ms-auto w-64 rounded-xl border border-ink-200 px-3 py-1.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+                    <span v-if="item.seen_today" class="ms-auto rounded-full bg-tint-success px-2.5 py-0.5 text-xs font-semibold text-on-success">Seen today</span>
+                    <button v-else type="button" :disabled="wlBusy === item.id" @click="markSeen(item)"
+                        class="rounded-xl bg-brand-solid px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-solid-hover disabled:opacity-50">Mark seen</button>
+                </li>
+            </ul>
+            <span class="sr-only" aria-live="polite" aria-atomic="true">Seen {{ wlSeen }} of {{ wl.total }} today</span>
+        </section>
 
         <!-- a refused status move (403 / illegal transition) says so here instead of vanishing -->
         <div v-if="moveError" data-move-error role="alert" class="mb-3 rounded-xl bg-tint-danger px-4 py-2 text-sm font-semibold text-on-danger">{{ moveError }}</div>
