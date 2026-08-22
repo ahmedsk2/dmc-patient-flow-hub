@@ -199,4 +199,15 @@ class QuickSearchTest extends TestCase
             ->assertOk();
         $this->assertLessThanOrEqual(10, count($res->json()), 'ids lookup is capped at 10');
     }
+
+    /** Wave 2b: the consultation create form fills Bed from the lookup, so rows must carry it. */
+    public function test_rows_carry_the_bed_for_the_consultation_lookup(): void
+    {
+        $admin = $this->user(User::ROLE_ADMIN);
+        $this->admission($this->patient('Bedded Patient', '40020001'), ['bed' => 'W-12']);
+
+        $res = $this->actingAs($admin)->postJson('/api/patients/quick-search', ['q' => 'Bedded'])->assertOk();
+
+        $this->assertSame('W-12', collect($res->json())->firstWhere('mrn', '40020001')['bed']);
+    }
 }

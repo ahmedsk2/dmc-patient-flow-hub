@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, computed, useId, onMounted, onUnmounted } from 'vue';
+import { ref, watch, computed, useId, onMounted, onUnmounted, nextTick } from 'vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BaseModal from '@/Components/BaseModal.vue';
@@ -210,6 +210,9 @@ const showAdd = ref(false);
 const cForm = useForm({
     mrn: '', patient_name: '', age: '', bed: '', current_location: 'Ward', consultation_date: today,
     consultation_from: '', to_service: '', consultant_id: '', indication: [], other_indication: '',
+    // Wave 2b — patient lookup controls. patient_id/admission_id are pinned by picking a result;
+    // unmatched_mrn_ack is the explicit "file it unlinked" the server asks for on a no-match MRN.
+    patient_id: null, admission_id: null, unmatched_mrn_ack: false,
 });
 const cUid = useId();
 const cfid = (fieldName) => `consult-add-${cUid}-${fieldName}`;
@@ -219,6 +222,63 @@ const openAdd = () => { showAdd.value = true; };
 const doCloseAdd = () => { showAdd.value = false; };
 const closeAdd = () => guardedCloseAdd(doCloseAdd);
 const submitAdd = guardSubmit(cForm, () => cForm.post('/consultations', { preserveScroll: true, onSuccess: () => { doCloseAdd(); cForm.reset(); } }));
+
+// ---- Wave 2b: patient lookup on create --------------------------------------------------------
+// Same endpoint and same PHI scoping as the global quick-jump: POST /api/patients/quick-search with
+// the term in the BODY — a patient name or MRN must never enter a URL (it would land in history,
+// proxy and access logs). Picking a row pins patient_id + admission_id so the consult attaches to a
+// real stay; typing the MRN by hand unpins it, and the server then warns rather than filing an orphan.
+const lookupQuery = ref('');
+const lookupResults = ref([]);
+const lookupBusy = ref(false);
+const lookupError = ref('');
+let lookupTimer = null;
+let lookupSeq = 0;
+const runLookup = async () => {
+    const term = lookupQuery.value.trim();
+    if (term.length < 2) { lookupResults.value = []; return; }
+    const mySeq = ++lookupSeq;
+    lookupBusy.value = true;
+    lookupError.value = '';
+    try {
+        const r = await fetch('/api/patients/quick-search', {
+            method: 'POST',
+            headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf() },
+            body: JSON.stringify({ q: term }),
+        });
+        if (mySeq !== lookupSeq) return;
+        if (!r.ok) { lookupResults.value = []; lookupError.value = 'Patient search failed.'; return; }
+        lookupResults.value = await r.json();
+    } catch {
+        if (mySeq === lookupSeq) { lookupResults.value = []; lookupError.value = 'Patient search failed.'; }
+    } finally {
+        if (mySeq === lookupSeq) lookupBusy.value = false;
+    }
+};
+watch(lookupQuery, () => { clearTimeout(lookupTimer); lookupTimer = setTimeout(runLookup, 300); });
+let pinning = false;
+const pickPatient = (rowData) => {
+    pinning = true;                       // the mrn watcher below must not unpin what we just pinned
+    cForm.mrn = rowData.mrn || '';
+    cForm.patient_name = rowData.name || '';
+    cForm.age = rowData.age ?? '';
+    cForm.bed = rowData.bed || '';
+    cForm.current_location = rowData.location || 'Ward';
+    cForm.patient_id = rowData.id ?? null;         // quick-search rows are ADMISSION rows…
+    cForm.admission_id = rowData.id ?? null;       // …so the same id is the stay; the server re-checks ownership
+    cForm.unmatched_mrn_ack = false;
+    lookupResults.value = [];
+    lookupQuery.value = '';
+    nextTick(() => { pinning = false; });
+};
+watch(() => cForm.mrn, () => {
+    if (pinning) return;
+    cForm.patient_id = null;
+    cForm.admission_id = null;
+    cForm.unmatched_mrn_ack = false;
+});
+// the server is authoritative about "this MRN matches nothing"; the tick only appears once it says so
+const showUnmatchedAck = computed(() => !!cForm.errors.mrn && !cForm.patient_id && String(cForm.mrn).trim() !== '');
 
 // edit + status moves. `can_modify` is the SERVER's own User::canModifyConsultation verdict, shipped
 // per row (see ConsultationsController::index): own specialty / coordinator / admin. The client
@@ -482,8 +542,30 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
         <BaseModal :open="showAdd" title="New consultation" size="2xl" tall field-first :dirty="!!cForm.isDirty" @close="closeAdd">
                 <ErrorSummary :errors="cErrors" />
                 <form @submit.prevent="submitAdd" class="space-y-4">
+                    <!-- Patient lookup: POST body only (SPC-TM-011 — PHI never rides a URL) -->
+                    <div class="rounded-xl bg-ink-50 p-3">
+                        <label :for="cfid('lookup')" class="mb-1 block text-sm font-semibold text-ink-700">Find the patient</label>
+                        <input :id="cfid('lookup')" v-model="lookupQuery" autocomplete="off"
+                            placeholder="Type a name or MRN to look up an admitted patient…" :class="field" />
+                        <p v-if="lookupBusy" class="mt-1 text-xs text-ink-400">Searching…</p>
+                        <p v-else-if="lookupError" class="mt-1 text-xs text-on-danger">{{ lookupError }}</p>
+                        <ul v-if="lookupResults.length" class="mt-2 divide-y divide-line overflow-hidden rounded-xl bg-card ring-1 ring-line">
+                            <li v-for="r in lookupResults" :key="r.id">
+                                <button type="button" @click="pickPatient(r)" class="w-full px-3 py-2 text-start transition hover:bg-brand-50/40">
+                                    <span class="font-semibold text-ink-800">{{ r.name }}</span>
+                                    <span class="nums ms-2 text-xs text-ink-400">MRN {{ r.mrn }} · {{ r.age ?? '—' }}y · Bed {{ r.bed || '—' }} · {{ r.location || '—' }}</span>
+                                </button>
+                            </li>
+                        </ul>
+                        <p v-if="cForm.patient_id" class="mt-2 text-xs font-semibold text-on-success">Linked to this patient's current admission.</p>
+                    </div>
                     <div class="grid gap-3 sm:grid-cols-2">
-                        <div><label :for="cfid('mrn')" class="mb-1 block text-sm font-semibold text-ink-700">MRN <span class="text-danger-500">*</span></label><input :id="cfid('mrn')" v-model="cForm.mrn" :aria-describedby="cForm.errors.mrn ? cfid('mrn') + '-err' : undefined" :class="[field, cForm.errors.mrn && 'border-danger-500']" /><p v-if="cForm.errors.mrn" :id="cfid('mrn') + '-err'" class="mt-1 text-xs text-on-danger">{{ cForm.errors.mrn }}</p></div>
+                        <div><label :for="cfid('mrn')" class="mb-1 block text-sm font-semibold text-ink-700">MRN <span class="text-danger-500">*</span></label><input :id="cfid('mrn')" v-model="cForm.mrn" :aria-describedby="cForm.errors.mrn ? cfid('mrn') + '-err' : undefined" :class="[field, cForm.errors.mrn && 'border-danger-500']" /><p v-if="cForm.errors.mrn" :id="cfid('mrn') + '-err'" class="mt-1 text-xs text-on-danger">{{ cForm.errors.mrn }}</p>
+                            <label v-if="showUnmatchedAck" data-test="unmatched-ack" class="mt-2 flex items-start gap-2 rounded-xl bg-tint-warning p-2 text-xs font-semibold text-on-warning">
+                                <input type="checkbox" v-model="cForm.unmatched_mrn_ack" class="mt-0.5" />
+                                <span>Record anyway — file this consultation without linking a patient record.</span>
+                            </label>
+                        </div>
                         <div><label :for="cfid('patient_name')" class="mb-1 block text-sm font-semibold text-ink-700">Patient name <span class="text-danger-500">*</span></label><input :id="cfid('patient_name')" v-model="cForm.patient_name" :class="[field, cForm.errors.patient_name && 'border-danger-500']" /></div>
                         <div class="grid grid-cols-2 gap-3">
                             <div><label :for="cfid('age')" class="mb-1 block text-sm font-semibold text-ink-700">Age <span class="text-danger-500">*</span></label><input :id="cfid('age')" v-model="cForm.age" inputmode="numeric" :aria-describedby="cForm.errors.age ? cfid('age') + '-err' : undefined" :class="[field, cForm.errors.age && 'border-danger-500']" /><p v-if="cForm.errors.age" :id="cfid('age') + '-err'" class="mt-1 text-xs text-on-danger">{{ cForm.errors.age }}</p></div>

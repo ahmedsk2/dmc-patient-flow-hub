@@ -166,6 +166,7 @@ class PatientsController extends Controller
                 'age' => $a->patient?->age,
                 'gender' => $a->patient?->gender,
                 'location' => $a->current_location,
+                'bed' => $a->bed,                       // Wave 2b: the consultation create form fills Bed from the pick
                 'admit_date' => optional($a->admit_date)->toDateString(),
                 'deceased' => $a->outcome === 'Dead',
                 'status' => $discharged ? 'discharged' : ($a->consultant_id ? 'active' : 'unassigned'),
