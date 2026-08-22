@@ -5,7 +5,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 // W4 — the physician-scoped consultation dashboard. Every figure on this page was already scoped
 // server-side by Consultation::scopeVisibleTo, so this page renders exactly what it is handed and
 // never re-derives a permission. Admins and coordinators get the specialty picker (canPick).
-const props = defineProps({
+defineProps({
     canPick: Boolean,
     filters: Object,
     specialties: Array,
