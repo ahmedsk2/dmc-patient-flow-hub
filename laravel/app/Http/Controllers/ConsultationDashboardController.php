@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -64,6 +65,7 @@ class ConsultationDashboardController extends Controller
             'scopeLabel' => $this->scopeLabel($user, $canPick, $specialtyId, $specialties),
             'openCounts' => $this->openCounts($user, $specialtyId),
             'ageing' => $this->ageing($user, $specialtyId),
+            'today' => $this->todayCompleteness($user, $specialtyId, now()->toDateString()),
             // Day-granular figures deserve a day-granular, zone-explicit stamp: "as of 14:30" on a
             // page whose every number counts whole days is ambiguous about WHICH day it means.
             'generatedAt' => now()->format('j M Y, H:i') . ' ' . config('app.timezone'),
@@ -188,5 +190,50 @@ class ConsultationDashboardController extends Controller
             'b8_plus' => (int) ($rows['b8_plus'] ?? 0),
             'unknown' => (int) ($rows['unknown'] ?? 0),
         ];
+    }
+
+    /**
+     * Today's follow-up completeness — "seen X of Y".
+     *
+     *   Y (due)  = COUNT(*) over the scope WHERE status = 'active'
+     *              ('active' is the only status that asserts a DAILY follow-up obligation;
+     *               'ongoing' is deliberately on-the-books-without-a-daily-commitment, and
+     *               'new' has not been picked up yet — design §2 / §4.4.)
+     *   X (seen) = the same set, restricted with EXISTS (
+     *                  SELECT 1 FROM consultation_followups f
+     *                  WHERE f.consultation_id = consultations.id AND f.followup_date = $today)
+     *
+     * Built on openQuery() rather than baseQuery(), like every other tile on this page: it carries
+     * the same signoff_date belt described on openQuery()'s docblock, so a legacy row that reads
+     * status='active' but was actually closed by a pre-status-column signoff can never headline this
+     * page as "due today" while the ageing tiles above correctly treat it as closed.
+     *
+     * EXISTS rather than a JOIN so a (hypothetically) duplicated tick could never double-count;
+     * W2's unique(['consultation_id', 'followup_date']) already makes that impossible, and this keeps
+     * the count exact even if that constraint were ever relaxed. Both figures come back as plain
+     * integers — the ratio is formatted in the UI, so an empty worklist is "0 of 0", never a
+     * division by zero.
+     *
+     * `$today` is passed in (bound from PHP's now()->toDateString(), the same clock as ageing()
+     * above) rather than reaching for MySQL's CURDATE(), for the identical UTC-vs-local-day reason
+     * documented on ageing().
+     */
+    private function todayCompleteness(User $user, ?int $specialtyId, string $today): array
+    {
+        $due = (int) $this->openQuery($user, $specialtyId)
+            ->where('consultations.status', Consultation::STATUS_ACTIVE)
+            ->count();
+
+        $seen = (int) $this->openQuery($user, $specialtyId)
+            ->where('consultations.status', Consultation::STATUS_ACTIVE)
+            ->whereExists(function ($q) use ($today) {
+                $q->select(DB::raw(1))
+                    ->from('consultation_followups')
+                    ->whereColumn('consultation_followups.consultation_id', 'consultations.id')
+                    ->where('consultation_followups.followup_date', $today);
+            })
+            ->count();
+
+        return ['due' => $due, 'seen' => $seen];
     }
 }
