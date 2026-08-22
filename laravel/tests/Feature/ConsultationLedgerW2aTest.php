@@ -344,4 +344,70 @@ class ConsultationLedgerW2aTest extends TestCase
             ->assertRedirect()->assertSessionHas('flash.type', 'success');
         $this->assertSame(Consultation::STATUS_ACTIVE, $c->fresh()->status);
     }
+
+    // ---- 13. reverse sign-off ---------------------------------------------------------------------
+
+    public function test_reverse_signoff_returns_the_consult_to_ongoing_and_clears_the_response(): void
+    {
+        $owner = $this->user();
+        $c = $this->consultation([
+            'status' => Consultation::STATUS_SIGNED_OFF,
+            'consultant_id' => $owner->id,
+            'signoff_date' => now()->toDateString(),
+            'signed_off_at' => now(),
+            'signed_off_by' => $owner->id,
+            'response_disposition' => 'taking_over',
+            'response_followup_needed' => true,
+            'response_note' => 'signed off in error',
+        ]);
+
+        $this->actingAs($this->admin())
+            ->post("/consultations/{$c->id}/reverse-signoff")
+            ->assertRedirect()->assertSessionHas('flash.type', 'success');
+
+        $c->refresh();
+        $this->assertSame(Consultation::STATUS_ONGOING, $c->status, 'a reopened consult is on the books, not a daily commitment');
+        $this->assertNull($c->signoff_date);
+        $this->assertNull($c->signed_off_at);
+        $this->assertNull($c->signed_off_by);
+        $this->assertNull($c->response_disposition);
+        $this->assertNull($c->response_followup_needed);
+        $this->assertNull($c->response_note);
+        $this->assertTrue(AuditLog::where('action', 'consultation.reverse_signoff')
+            ->where('entity_id', (string) $c->id)->exists());
+    }
+
+    public function test_reverse_signoff_of_an_older_signoff_changes_nothing_at_all(): void
+    {
+        $c = $this->consultation([
+            'status' => Consultation::STATUS_SIGNED_OFF,
+            'signoff_date' => now()->subDays(3)->toDateString(),
+            'signed_off_at' => now()->subDays(3),
+            'response_disposition' => 'advice_given',
+        ]);
+
+        $this->actingAs($this->admin())
+            ->post("/consultations/{$c->id}/reverse-signoff")
+            ->assertRedirect()->assertSessionHas('flash.type', 'error');
+
+        $c->refresh();
+        $this->assertSame(Consultation::STATUS_SIGNED_OFF, $c->status);
+        $this->assertNotNull($c->signoff_date, 'older sign-offs are history, not mistakes');
+        $this->assertSame('advice_given', $c->response_disposition);
+    }
+
+    public function test_a_non_admin_cannot_reverse_a_sign_off(): void
+    {
+        $owner = $this->user();
+        $c = $this->consultation([
+            'status' => Consultation::STATUS_SIGNED_OFF, 'consultant_id' => $owner->id,
+            'signoff_date' => now()->toDateString(), 'response_disposition' => 'advice_given',
+        ]);
+
+        $this->actingAs($owner)->post("/consultations/{$c->id}/reverse-signoff")->assertForbidden();
+        $this->actingAs($this->coordinator())->post("/consultations/{$c->id}/reverse-signoff")->assertForbidden();
+
+        $this->assertSame(Consultation::STATUS_SIGNED_OFF, $c->fresh()->status);
+        $this->assertNotNull($c->fresh()->signoff_date);
+    }
 }
