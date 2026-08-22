@@ -147,6 +147,10 @@ Route::middleware(['auth', 'session.timeout', 'email.verify', 'mfa.enroll', 'pwd
     // to the term-less workspace instead of a 405.
     Route::post('/consultations/search', [ConsultationsController::class, 'index'])->name('consultations.search');
     Route::get('/consultations/search', fn () => redirect()->route('consultations.index'));
+    // W3 — printable shift-handover sheet: the viewer's service's active + ongoing consults with
+    // each one's latest follow-up note. A literal segment, so it can never collide with the
+    // {consultation} model-bound routes below (which are POST/PUT/DELETE only anyway).
+    Route::get('/consultations/handover', [ConsultationsController::class, 'handover'])->name('consultations.handover');
     Route::post('/consultations/{consultation}/signoff', [ConsultationsController::class, 'signoff'])->name('consultations.signoff');
     // Wave 2b: the daily "seen today" tick. JSON in/out (the worklist calls it with fetch()), one
     // row per consult per day enforced by a DB unique — a repeat tick answers 422, never overwrites.

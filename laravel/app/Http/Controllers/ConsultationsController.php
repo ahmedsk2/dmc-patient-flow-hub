@@ -159,6 +159,121 @@ class ConsultationsController extends Controller
         ]);
     }
 
+    /**
+     * W3 — the SERVICE HANDOVER SHEET: the viewer's service's ACTIVE + ONGOING consults, each with
+     * its LATEST follow-up note. Read at shift change and printed (Consultations/Handover.vue).
+     *
+     * Read-only by design: nothing here writes. Recording a follow-up or moving a status happens on
+     * the workspace (/consultations), so this sheet can be printed and carried without being stale
+     * in a way that matters.
+     *
+     * Scoping is DELEGATED to Consultation::scopeVisibleTo (W1) — there is exactly ONE consultation
+     * scoping rule in this codebase and this action must never grow a second one. `new` consults are
+     * excluded (nothing has been seen yet, so there is nothing to hand over) and `signed_off` ones
+     * are off the books.
+     *
+     * Not audited: this is a read of rows the same user already sees on /consultations, mirroring the
+     * printable Active List census (PatientsController::activeList), which is likewise unaudited.
+     */
+    public function handover(Request $request): Response
+    {
+        // Observer read-only guarantee, enforced BEFORE any capability flag — same gate as index().
+        if (Auth::user()->isObserver()) {
+            throw new AccessDeniedHttpException('Observers have read-only access.');
+        }
+
+        $reasons = ConsultationReason::pluck('name', 'id');
+
+        $consultations = Consultation::query()
+            ->visibleTo(Auth::user())
+            ->whereIn('status', [Consultation::STATUS_ACTIVE, Consultation::STATUS_ONGOING])
+            ->with(['consultant:id,full_name,name', 'enteredBy:id,full_name,name', 'owningSpecialty:id,name'])
+            // oldest request first: the sheet is read top-down and the stalest consult must lead.
+            // Historical rows have a NULL requested_at, so fall back to the date-only column.
+            ->orderByRaw('COALESCE(requested_at, consultation_date) asc')
+            ->orderBy('id')
+            ->get();
+
+        // ONE query for every latest follow-up — never one per row. The inner grouped select picks
+        // each consult's MAX(followup_date); the outer self-join fetches that exact row's note and
+        // author. consultation_followups.unique([consultation_id, followup_date]) guarantees the
+        // join matches exactly one row per consult, so no tie-break is needed.
+        $latest = $consultations->isEmpty() ? collect() : DB::table('consultation_followups as f')
+            ->joinSub(
+                DB::table('consultation_followups')
+                    ->selectRaw('consultation_id, MAX(followup_date) as followup_date')
+                    ->whereIn('consultation_id', $consultations->pluck('id'))
+                    ->groupBy('consultation_id'),
+                'm',
+                fn ($join) => $join->on('m.consultation_id', '=', 'f.consultation_id')
+                    ->on('m.followup_date', '=', 'f.followup_date')
+            )
+            ->leftJoin('users as u', 'u.id', '=', 'f.author_id')
+            ->select('f.consultation_id', 'f.followup_date', 'f.note',
+                'u.full_name as author_full_name', 'u.name as author_name')
+            ->get()
+            ->keyBy('consultation_id');
+
+        $today = now()->toDateString();
+
+        $rows = $consultations->map(function (Consultation $c) use ($latest, $reasons, $today) {
+            $f = $latest->get($c->id);
+            // requested_at is the authoritative request time going forward; historical rows have
+            // only the date-only consultation_date. Parse defensively so this works whether or not
+            // the model casts requested_at.
+            $since = $c->requested_at
+                ? \Illuminate\Support\Carbon::parse($c->requested_at)
+                : ($c->consultation_date ? \Illuminate\Support\Carbon::parse($c->consultation_date) : null);
+            $fDate = $f ? substr((string) $f->followup_date, 0, 10) : null;
+
+            return [
+                'id' => $c->id,
+                'name' => $c->patient_name ?? 'Unknown',
+                'mrn' => $c->mrn,
+                'age' => $c->age,
+                'bed' => $c->bed,
+                'location' => $c->current_location,
+                'from' => $c->consultation_from,
+                'status' => $c->status,
+                'specialty' => $c->owningSpecialty?->name ?? 'Unassigned',
+                'consultant' => $c->consultant?->full_name ?: ($c->consultant?->name ?? '—'),
+                // entered_by is immutable and session-sourced; the sheet shows it DISTINCTLY from the
+                // owning consultant so "who booked this in" is never confused with "whose consult it is".
+                'entered_by' => $c->enteredBy?->full_name ?: ($c->enteredBy?->name ?? '—'),
+                'reasons' => collect($c->indication ?? [])->map(fn ($id) => $reasons[$id] ?? null)->filter()->values(),
+                'other' => $c->other_indication,
+                'requested_on' => $since?->toDateString(),
+                'open_days' => $since ? (int) $since->copy()->startOfDay()->diffInDays(now()->startOfDay()) : null,
+                'last_followup' => $f ? [
+                    'date' => $fDate,
+                    'note' => $f->note,
+                    'author' => $f->author_full_name ?: ($f->author_name ?? '—'),
+                    'is_today' => $fDate === $today,
+                ] : null,
+            ];
+        });
+
+        // Grouped per owning service so admins/coordinators (who see every service) can print one
+        // team's sheet; an ordinary clinical viewer simply receives a single group.
+        $groups = $rows->groupBy('specialty')->sortKeys()->map(fn ($items, $name) => [
+            'key' => (string) $name,
+            'name' => (string) $name,
+            'consultations' => $items->values(),
+            'counts' => [
+                'total' => $items->count(),
+                'active' => $items->where('status', Consultation::STATUS_ACTIVE)->count(),
+                'ongoing' => $items->where('status', Consultation::STATUS_ONGOING)->count(),
+                'seen_today' => $items->filter(fn ($r) => $r['last_followup']['is_today'] ?? false)->count(),
+            ],
+        ])->values();
+
+        return Inertia::render('Consultations/Handover', [
+            'groups' => $groups,
+            'generatedAt' => now()->format('D, d M Y · H:i'),
+            'today' => $today,
+        ]);
+    }
+
     public function store(\App\Http\Requests\ConsultationRequest $request): RedirectResponse
     {
         // Observer gate lives in ConsultationRequest::authorize() (403 before validation)
