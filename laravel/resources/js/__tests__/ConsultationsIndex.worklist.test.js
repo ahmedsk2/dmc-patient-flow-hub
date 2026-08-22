@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { reactive } from 'vue';
+import { localToday } from '@/lib/ui.js';
 
 // Wave 2b — "Today's follow-up" panel on Consultations/Index.vue: the completeness indicator, the
 // one-tap check-off (a JSON fetch, not an Inertia visit) and the inline refusal message.
@@ -34,12 +35,15 @@ vi.mock('@/Components/BaseModal.vue', () => ({
 import ConsultationsIndex from '@/Pages/Consultations/Index.vue';
 
 const doc = { role: 3, is_admin: false, id: 9, can: { manage: false } };
+// worklist.date matches the same day the assertions read `wl.date !== localToday()` against — it
+// MUST track the real clock (not a fixed string) or every test here would trip the staleness guard
+// added to fix the midnight bug, exactly the drift that guard exists to catch.
 const baseProps = () => ({
     consultations: { data: [], total: 0, last_page: 1, links: [] },
-    filters: {}, stats: { active: 0, total: 0, mine_active: 0 },
+    filters: {}, stats: { new: 2, active: 3, ongoing: 4, signed_off: 5, total: 14, open: 9, mine_open: 1 },
     reasons: [], consultants: [], specialties: [],
     worklist: {
-        date: '2026-08-21', seen: 1, total: 2,
+        date: localToday(), seen: 1, total: 2,
         items: [
             { id: 11, name: 'Aaa Ticked', mrn: '1001', bed: 'W-1', location: 'Ward', consultant: 'Dr A', seen_today: true },
             { id: 12, name: 'Bbb Pending', mrn: '1002', bed: 'W-2', location: 'Ward', consultant: 'Dr A', seen_today: false },
@@ -108,5 +112,68 @@ describe("Consultations/Index — Today's follow-up worklist", () => {
         expect(global.fetch).toHaveBeenCalledTimes(1);
         release({ ok: true, json: async () => ({ ok: true }) });
         await first;
+    });
+
+    it('a click on a DIFFERENT row is not blocked while another row is in flight', async () => {
+        // Item 15 mirrors item 11/12's shape so the second row is a genuine, still-pending tick
+        // (item 0 in the fixture is already seen_today and would short-circuit regardless).
+        const releases = [];
+        global.fetch.mockImplementation(() => new Promise((r) => { releases.push(r); }));
+        const w = mountWith({
+            worklist: {
+                date: localToday(), seen: 0, total: 2,
+                items: [
+                    { id: 12, name: 'Bbb Pending', mrn: '1002', bed: 'W-2', location: 'Ward', consultant: 'Dr A', seen_today: false },
+                    { id: 15, name: 'Eee Pending', mrn: '1005', bed: 'W-5', location: 'Ward', consultant: 'Dr A', seen_today: false },
+                ],
+            },
+        });
+        const first = w.vm.markSeen(w.vm.wl.items[0]);
+        await w.vm.$nextTick();
+        expect(w.vm.wlBusy[15]).toBeFalsy();
+        const second = w.vm.markSeen(w.vm.wl.items[1]);
+        expect(global.fetch).toHaveBeenCalledTimes(2);
+        releases.forEach((r) => r({ ok: true, json: async () => ({ ok: true }) }));
+        await Promise.all([first, second]);
+    });
+
+    it('clicking the real "Mark seen" button in the DOM records the follow-up', async () => {
+        global.fetch.mockResolvedValue({ ok: true, json: async () => ({ ok: true, status: 'active', promoted: false }) });
+        const w = mountWith();
+        const buttons = w.findAll('[data-test="worklist"] button');
+        expect(buttons.length).toBe(1); // only the unticked row (Bbb) renders a button
+        await buttons[0].trigger('click');
+        await w.vm.$nextTick();
+
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+        expect(global.fetch.mock.calls[0][0]).toBe('/consultations/12/followup');
+        expect(w.vm.wl.items[1].seen_today).toBe(true);
+    });
+
+    it('special-cases a 419 (expired session) instead of the generic failure message', async () => {
+        global.fetch.mockResolvedValue({ ok: false, status: 419, json: async () => { throw new Error('not JSON'); } });
+        const w = mountWith();
+        await w.vm.markSeen(w.vm.wl.items[1]);
+        await w.vm.$nextTick();
+
+        expect(w.vm.wl.items[1].seen_today).toBe(false);
+        expect(w.text()).toContain('Your session has expired');
+    });
+
+    it('a worklist stamped with an earlier date is treated as stale: no tick, and the panel says so', async () => {
+        const w = mountWith({
+            worklist: {
+                date: '2000-01-01', seen: 1, total: 2,
+                items: [
+                    { id: 11, name: 'Aaa Ticked', mrn: '1001', bed: 'W-1', location: 'Ward', consultant: 'Dr A', seen_today: true },
+                    { id: 12, name: 'Bbb Pending', mrn: '1002', bed: 'W-2', location: 'Ward', consultant: 'Dr A', seen_today: false },
+                ],
+            },
+        });
+        expect(w.text()).toContain('This list is from an earlier day');
+
+        await w.vm.markSeen(w.vm.wl.items[1]);
+        expect(global.fetch).not.toHaveBeenCalled();
+        expect(w.vm.wl.items[1].seen_today).toBe(false);
     });
 });

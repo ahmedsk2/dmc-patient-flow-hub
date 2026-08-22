@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Consultation;
-use App\Models\ConsultationFollowup;
 use App\Models\ConsultationReason;
 use App\Models\Patient;
 use App\Models\Specialty;

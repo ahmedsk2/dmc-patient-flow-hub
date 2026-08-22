@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, computed, useId } from 'vue';
+import { ref, watch, computed, useId, onMounted, onUnmounted } from 'vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BaseModal from '@/Components/BaseModal.vue';
@@ -147,13 +147,38 @@ const toggleMine = () => { scope.value = scope.value === 'mine' ? '' : 'mine'; a
 const wl = ref({ ...props.worklist, items: [...(props.worklist?.items || [])] });
 watch(() => props.worklist, (v) => { wl.value = { ...v, items: [...(v?.items || [])] }; });
 const wlNotes = ref({});
-const wlBusy = ref(null);
+// per-row busy flags (not one global flag): a slow request for row A must never leave row B's
+// button silently inert — each row disables only itself.
+const wlBusy = ref({});
 const wlError = ref('');
-const wlSeen = computed(() => wl.value.items.filter((i) => i.seen_today).length);
+// `seen` is the server's own count (asserted by ConsultationWorklistTest) — the ONE source of
+// truth for "Seen X of Y", incremented locally on a successful tick rather than re-derived from
+// the items array, so the number the whole feature is named after can never disagree with itself.
+const wlSeen = computed(() => wl.value.seen ?? 0);
 const wlPct = computed(() => (wl.value.total ? Math.round((wlSeen.value / wl.value.total) * 100) : 0));
+// The worklist is stamped with the SERVER's date at render time. A tab left open across midnight
+// never re-renders on its own (the tick is a raw fetch, not an Inertia visit), so without this the
+// panel would silently keep showing yesterday's "Seen X of Y" and yesterday's ticked rows as if
+// they were today's. `wlStale` names that condition; the periodic check below clears it by asking
+// the server for the fresh set as soon as the local clock rolls to a new day.
+const wlStale = computed(() => !!wl.value.date && wl.value.date !== localToday());
+let wlDateTimer = null;
+const wlCheckDate = () => {
+    if (wl.value.date && wl.value.date !== localToday()) {
+        router.reload({ only: ['worklist'] });
+    }
+};
+onMounted(() => {
+    wlDateTimer = setInterval(wlCheckDate, 60000);
+    document.addEventListener('visibilitychange', wlCheckDate);
+});
+onUnmounted(() => {
+    if (wlDateTimer) clearInterval(wlDateTimer);
+    document.removeEventListener('visibilitychange', wlCheckDate);
+});
 const markSeen = async (item) => {
-    if (wlBusy.value || item.seen_today) return;
-    wlBusy.value = item.id;
+    if (wlBusy.value[item.id] || item.seen_today || wlStale.value) return;
+    wlBusy.value = { ...wlBusy.value, [item.id]: true };
     wlError.value = '';
     try {
         const r = await fetch(`/consultations/${item.id}/followup`, {
@@ -161,14 +186,21 @@ const markSeen = async (item) => {
             headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf() },
             body: JSON.stringify({ note: (wlNotes.value[item.id] || '').trim() || null }),
         });
+        if (r.status === 419) {
+            wlError.value = 'Your session has expired — sign in again to record this follow-up.';
+            return;
+        }
         const body = await r.json().catch(() => ({}));
         if (!r.ok) { wlError.value = body.message || 'Could not record the follow-up.'; return; }
         item.seen_today = true;
+        wl.value.seen = (wl.value.seen ?? 0) + 1;
         wlNotes.value[item.id] = '';
     } catch {
         wlError.value = 'Could not record the follow-up.';
     } finally {
-        wlBusy.value = null;
+        const next = { ...wlBusy.value };
+        delete next[item.id];
+        wlBusy.value = next;
     }
 };
 
@@ -324,6 +356,8 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                     <div class="h-full rounded-full bg-brand-solid transition-all" :style="{ width: wlPct + '%' }" />
                 </div>
             </header>
+            <!-- a tab left open across midnight: the list below is yesterday's until the reload lands -->
+            <p v-if="wlStale" role="status" class="border-b border-line bg-tint-warning px-5 py-2 text-xs font-semibold text-on-warning">This list is from an earlier day — refreshing…</p>
             <p v-if="wlError" role="alert" class="border-b border-line bg-tint-danger px-5 py-2 text-xs font-semibold text-on-danger">{{ wlError }}</p>
             <ul class="divide-y divide-line">
                 <li v-for="item in wl.items" :key="item.id" class="flex flex-wrap items-center gap-3 px-5 py-3">
@@ -335,7 +369,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                         placeholder="Optional one-line note…" maxlength="500"
                         class="ms-auto w-64 rounded-xl border border-ink-200 px-3 py-1.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
                     <span v-if="item.seen_today" class="ms-auto rounded-full bg-tint-success px-2.5 py-0.5 text-xs font-semibold text-on-success">Seen today</span>
-                    <button v-else type="button" :disabled="wlBusy === item.id" @click="markSeen(item)"
+                    <button v-else type="button" :disabled="!!wlBusy[item.id] || wlStale" @click="markSeen(item)"
                         class="rounded-xl bg-brand-solid px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-solid-hover disabled:opacity-50">Mark seen</button>
                 </li>
             </ul>
