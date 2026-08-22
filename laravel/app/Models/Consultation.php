@@ -91,6 +91,12 @@ class Consultation extends Model
      * is owning_specialty_id + consultant_id and is INDEPENDENT of entered_by, but you never lose
      * sight of a consult you personally booked. A user with no specialty_id and no coordinator flag
      * therefore sees only their own rows: unit-wide coordinators are given the flag deliberately.
+     *
+     * Every column is QUALIFIED. Callers may JOIN another table into this scope — the physician
+     * dashboard's first-follow-up median joins `consultation_followups` — and an unqualified
+     * `consultant_id` would resolve fine today only because that child table happens to share none
+     * of these three names. Adding one later would turn every non-admin's dashboard into an
+     * ambiguous-column 500. Qualifying removes the trap permanently and changes nothing else.
      */
     public function scopeVisibleTo(Builder $q, User $u): Builder
     {
@@ -104,9 +110,10 @@ class Consultation extends Model
 
         return $q->where(function (Builder $w) use ($u) {
             if ($u->specialty_id !== null) {
-                $w->where('owning_specialty_id', $u->specialty_id);
+                $w->where($w->qualifyColumn('owning_specialty_id'), $u->specialty_id);
             }
-            $w->orWhere('consultant_id', $u->id)->orWhere('entered_by', $u->id);
+            $w->orWhere($w->qualifyColumn('consultant_id'), $u->id)
+                ->orWhere($w->qualifyColumn('entered_by'), $u->id);
         });
     }
 
@@ -119,6 +126,8 @@ class Consultation extends Model
      * into another team's book is right; being asked to round on it is not. The daily worklist is
      * built from THIS scope, so every row it offers is one the viewer can clear — otherwise a
      * referrer's "Seen X of Y" could never reach Y and the panel becomes noise.
+     *
+     * Columns are qualified for the same reason as scopeVisibleTo above.
      */
     public function scopeRecordableBy(Builder $q, User $u): Builder
     {
@@ -132,9 +141,9 @@ class Consultation extends Model
 
         return $q->where(function (Builder $w) use ($u) {
             if ($u->specialty_id !== null) {
-                $w->where('owning_specialty_id', $u->specialty_id);
+                $w->where($w->qualifyColumn('owning_specialty_id'), $u->specialty_id);
             }
-            $w->orWhere('consultant_id', $u->id);
+            $w->orWhere($w->qualifyColumn('consultant_id'), $u->id);
         });
     }
 }

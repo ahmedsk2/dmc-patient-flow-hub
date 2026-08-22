@@ -75,10 +75,25 @@ class ConsultationDashboardTurnaroundTest extends TestCase
 
     /**
      * Hand-computed fixture (Cardiology):
-     *   A  requested 10h ago, signed off 4h ago            -> sign-off  6h
-     *   B  requested 20h ago, signed off 18h ago           -> sign-off  2h
-     *   C  HISTORICAL: requested_at NULL, signoff_date set -> EXCLUDED (would have been ~24h)
-     * median sign-off over [2, 6] = 4.0h. If C leaked in, [2, 6, 1440] would give 6.0h.
+     *   A  requested 10h ago, signed off 4h ago                -> sign-off  6h
+     *   B  requested 20h ago, signed off 18h ago               -> sign-off  2h
+     *   C  HISTORICAL, closed before cutover: no timestamps    -> EXCLUDED
+     *   C2 HISTORICAL, signed off AFTER cutover: real end,     -> EXCLUDED
+     *      no start (requested_at NULL, signed_off_at = now)
+     * median sign-off over [2, 6] = 4.0h; legacy_excluded = 2 (C and C2).
+     *
+     * C2 is the row this test is really named for, and the one that will exist ~1,283 times within
+     * weeks of cutover: ConsultationsController::signoff() writes `signed_off_at = now()` and never
+     * backfills `requested_at`, so every legacy consult closed from today onward has a real end
+     * instant and no start instant. It is the ONLY fixture shape that can distinguish "exclude the
+     * row" from "substitute consultation_date for the missing request time" — the exact §4.4
+     * violation an engineer would introduce by harmonising turnaround() with ageing()'s
+     * COALESCE(requested_at, consultation_date). Under that mutation C2 contributes the whole span
+     * from its 2024 consultation_date to now, the sample becomes [2h, 6h, ~2 years] and this reads
+     * 6.0h over n = 3 instead of 4.0h over n = 2 — a plausible-looking number that is entirely
+     * fabricated. C alone cannot catch it: with BOTH timestamps NULL, TIMESTAMPDIFF is NULL and the
+     * row falls out on its own no matter what the query says, which is why the pre-review fixture
+     * left the guard unpinned.
      */
     public function test_median_time_to_signoff_excludes_historical_null_requested_at_rows(): void
     {
@@ -92,16 +107,20 @@ class ConsultationDashboardTurnaroundTest extends TestCase
         $this->consult([...$base,
             'requested_at' => now()->subHours(20), 'signed_off_at' => now()->subHours(18),
             'signoff_date' => now()->toDateString()]);
-        // the legacy shape: date-only sign-off, no real timestamps at all
+        // C — the legacy shape closed before cutover: date-only sign-off, no real timestamps at all
         $this->consult([...$base,
             'requested_at' => null, 'signed_off_at' => null,
             'consultation_date' => '2024-01-01', 'signoff_date' => '2024-01-02']);
+        // C2 — the legacy shape closed AFTER cutover: a real signed_off_at, still no requested_at
+        $this->consult([...$base,
+            'requested_at' => null, 'signed_off_at' => now(),
+            'consultation_date' => '2024-01-01', 'signoff_date' => now()->toDateString()]);
 
         $this->actingAs($doc)->get('/consultations/dashboard')
             ->assertInertia(fn (AssertableInertia $p) => $p
                 ->where('turnaround.signoff_hours', $this->hours(4.0))
                 ->where('turnaround.signoff_n', 2)
-                ->where('turnaround.legacy_excluded', 1)
+                ->where('turnaround.legacy_excluded', 2)
                 ->where('turnaround.from_cutover', true));
     }
 

@@ -290,10 +290,31 @@ class ConsultationDashboardController extends Controller
      * `requested_at IS NOT NULL` is the load-bearing predicate. EVERY historical row has it NULL
      * by deliberate design (§4.4: fabricating a time from a date-only legacy column would
      * manufacture precision that never existed), so both samples cover cutover onward only. The
-     * payload therefore ships `legacy_excluded` — the number of in-scope rows that carry no
-     * request timestamp — and `from_cutover`, so the UI can SAY so instead of quietly presenting
-     * a mixed number. `signed_off_at >= requested_at` / `HAVING mins >= 0` drop clock-skew or
-     * hand-corrected rows rather than letting a negative duration drag the median.
+     * payload therefore ships `legacy_excluded` and `from_cutover`, so the UI can SAY so instead of
+     * quietly presenting a mixed number. `signed_off_at >= requested_at` / `HAVING mins >= 0` drop
+     * clock-skew or hand-corrected rows rather than letting a negative duration drag the median.
+     *
+     * DO NOT "harmonise" this with ageing()'s COALESCE(requested_at, consultation_date). That
+     * COALESCE is correct there — an age in whole DAYS from a date-only column loses nothing — and
+     * catastrophic here: it would turn every legacy consult signed off after cutover (a real end
+     * instant, no start instant — signoff() never backfills requested_at) into a multi-hundred-day
+     * "turnaround", which is precisely the fabricated precision §4.4 forbids. Both guards below are
+     * belt-and-braces with the predicates beside them (a NULL requested_at already fails the
+     * whereColumn comparison, and yields a NULL TIMESTAMPDIFF that fails `HAVING mins >= 0`); they
+     * are kept because they state the §4.4 rule explicitly at the call site rather than leaving it
+     * as an emergent property of NULL comparison semantics.
+     * ConsultationDashboardTurnaroundTest's C2 fixture pins the outcome against exactly that
+     * COALESCE mutation.
+     *
+     * `legacy_excluded` counts in-scope rows with NO request timestamp — the population that
+     * predates the cutover — NOT the per-median exclusions, which differ (a legacy row with no
+     * sign-off and no tick is in this count but was never a candidate for either sample). The UI
+     * must therefore word it as "N consultations predate the cutover", not "N excluded from this
+     * median": it over-discloses rather than hides, but the two numbers will not reconcile if it
+     * claims to be a per-median denominator. `from_cutover` is a constant TODAY, and is shipped
+     * anyway so the caveat lives in the payload contract rather than being hardcoded in the Vue
+     * copy — if a partial backfill ever gives some historical rows a real requested_at, this is the
+     * one place that has to change.
      *
      * Built on baseQuery(), NOT openQuery(): a turnaround is measured over the rows that have
      * actually turned around, and every sign-off duration lives on a closed row.
@@ -318,6 +339,8 @@ class ConsultationDashboardController extends Controller
             ->selectRaw('TIMESTAMPDIFF(MINUTE, consultations.requested_at, consultations.signed_off_at) mins')
             ->pluck('mins')->map(fn ($m) => (float) $m)->all();
 
+        // The pre-cutover POPULATION, not a per-median exclusion count — see the docblock for the
+        // wording that obliges the UI.
         $legacyExcluded = (int) $this->baseQuery($user, $specialtyId)
             ->whereNull('consultations.requested_at')
             ->count();
@@ -341,8 +364,8 @@ class ConsultationDashboardController extends Controller
      */
     private function medianHours(array $minutes): ?float
     {
-        $v = array_values($minutes);
-        sort($v);
+        $v = $minutes;
+        sort($v);   // sorts in place AND reindexes, so $v[$mid] is safe on any input keys
         $n = count($v);
         if ($n === 0) {
             return null;
