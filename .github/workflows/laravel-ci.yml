@@ -173,14 +173,16 @@ jobs:
             sleep 1
           done
 
-      - name: Test suite — pass 1 (exclude pdf group) + coverage floor
-        # `--min` is the line-coverage floor (TST-02); raise it as coverage grows, never lower it to
-        # make a build pass. COLUMNS/TERM give Collision's Termwind renderer a terminal to draw the
-        # coverage table in (the runner has no TTY).
-        env:
-          COLUMNS: '140'
-          TERM: xterm-256color
-        run: php artisan test --exclude-group pdf --coverage --min=1
+      - name: Test suite — pass 1 (exclude pdf group; collects coverage)
+        # Coverage is collected by PHPUnit itself into a Clover file (pcov driver from setup-php).
+        # `php artisan test --coverage --min` was tried twice and Collision printed no table on this
+        # runner, so the floor is enforced by our own script from the Clover metrics instead.
+        run: php artisan test --exclude-group pdf --coverage-clover coverage/clover.xml
+
+      - name: PHP coverage floor (TST-02) — statements over app/
+        # Floor set on 2026-09-03 below the first measured value; raise it as coverage grows, never
+        # lower it to make a build pass (a reason in the PR if it must move down).
+        run: php scripts/coverage-gate.php coverage/clover.xml 60
 
       - name: Test suite — pass 2 (pdf group, isolated process)
         # dompdf's native font-compression state accumulates across tests and segfaults PHP

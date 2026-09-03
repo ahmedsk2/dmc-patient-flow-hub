@@ -6,7 +6,7 @@
 ## The product
 
 - **The shipped product is the Laravel app under [`laravel/`](laravel/).** Stack: Laravel 13 +
-  Inertia 2 + Vue 3 (`<script setup>`) + Tailwind v4 + MySQL 8.4 + **Chart.js 4** (MIT).
+  Inertia 3 + Vue 3 (`<script setup>`) + Tailwind v4 + MySQL 8.4 + **Chart.js 4** (MIT).
 - **Live** at `https://dmc-new.towardpcc.com` (Cloudflare-proxied), deployed via **Coolify** on an
   OCI Riyadh host. This is a **live clinical system with real PHI** (~17k patients, ~37k admissions,
   ~331 users). **Saudi PDPL / SDAIA applies** (in-Kingdom data residency for the Laravel app).
@@ -105,9 +105,13 @@
    single-flight cache with jittered TTL (RES-08); JSON stderr log channel wired, production opt-in
    via `LOG_STACK=daily,stderr` (OBS-01 code part); in-app privacy text synced with the drafts;
    `scripts/deploy-on-green.sh` prepared (not enabled); drain-step settings documented (RES-12);
-   legacy CI no longer fires on docs-only changes; root README current. Still open from the report: CICD-08 (manual smoke/rollback), OBS-01/03/04/05,
-   DATA-02/04, OPS-02/06, CMP-03/06, the `__Host-` cookie prefix (G14), root `README.md`
-   ("22 tests").
+   legacy CI no longer fires on docs-only changes; root README current. **Still open and all
+   owner / infrastructure decisions, not code:** enable deploy-on-green and the drain step
+   (CICD-08 / RES-12), pick a log sink and set `LOG_STACK` (OBS-01/03/04/05), binlog or a second
+   backup region + instance principal (DATA-02/04), SLOs and a rollback rehearsal (OPS-02/06),
+   PERF-03 pagination, the PHI copies still on the host under `/home/ubuntu/migrate/dmc/`, repo
+   private before go-live, the legacy daily site, contracts / DPO / names / counsel decisions
+   (CMP-03/06 and item 2 above).
 
 ## Doc map
 

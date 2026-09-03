@@ -251,9 +251,12 @@ class ReportsController extends Controller
         // prod-ready G1: break-glass row for the governance pack — the pack itself carries MRNs, so
         // this is a PHI-read event; the audit DETAIL stays counts-only (period + line-list sizes),
         // never the MRNs/ages/consultants those line lists actually contain.
+        // Query-string values arrive as strings; store the period as integers so the JSON detail
+        // is typed consistently with the annual/monthly rows (and with what the viewer filters on).
         Audit::log('report.pdf.governance', 'report', null, [
-            'year' => $data['year'], 'period_type' => $data['period_type'],
-            'month' => $data['month'] ?? null, 'quarter' => $data['quarter'] ?? null,
+            'year' => (int) $data['year'], 'period_type' => $data['period_type'],
+            'month' => isset($data['month']) ? (int) $data['month'] : null,
+            'quarter' => isset($data['quarter']) ? (int) $data['quarter'] : null,
             'death_count' => $deathRows->count(), 'readmit_count' => $readmitRows->count(),
         ]);
 
