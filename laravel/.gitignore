@@ -26,8 +26,10 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 
-# prod-ready audit cache + reports (internal, contains infra detail)
-/.prod-ready
+# prod-ready audit cache + reports (internal, contains infra detail) — except the waiver file,
+# which is the change-controlled risk-acceptance record and must live in the repo
+/.prod-ready/*
+!/.prod-ready/waivers.yml
 __pycache__/
 
 # PHPUnit Clover output written by CI pass 1 (scripts/coverage-gate.php reads it)

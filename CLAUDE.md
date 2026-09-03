@@ -99,7 +99,7 @@ composer-audit gate in CI passes.
    ├─ scripts/                smoke.sh, contrast.mjs, check-source-allowlist.mjs, coverage-gate.php, deploy-on-green.sh (opt-in, off),
    │                          backup/{db-backup.py, binlog-ship.py, db-restore-drill.sh, test_*.py}
    ├─ docs/                   runbooks + behaviour docs (§13) · docs/compliance/ (PDPL paper trail)
-   └─ .prod-ready/            local audit workspace — never commit
+   └─ .prod-ready/            local audit workspace — git-ignored except waivers.yml (the committed risk-acceptance record)
 ```
 
 Directory names under `resources/js` are capitalised (`Pages`, `Components`, `Layouts`). Windows
@@ -445,12 +445,14 @@ CBAHI. State on 2026-09-03:
   review (smoke 15/15, audit chain intact); the same evening added the rollback rehearsal, restore
   drills, point-in-time recovery (PR #19, installed on the host), CODEOWNERS, ADRs, the behaviour-doc
   resync and the compliance rework (PRs #13–#18). **Third scoring run, full fresh audit of all 16
-  categories plus five re-audits after those merges: NEEDS FIXES 70/100, 0 Critical, 12 High,
-  17 Medium** (emphasis 76) —
+  categories plus five re-audits after those merges: NEEDS FIXES 71/100 with the two dated
+  waivers applied (70 without), 0 Critical, 10 High, 17 Medium** (emphasis 78) —
   [`evidence/prod-ready-2026-09-03-closeout.md`](laravel/docs/compliance/evidence/prod-ready-2026-09-03-closeout.md)
   (read its orchestrator notes: two category drops are auditor variance, and the MySQL session
-  time-zone finding is an accepted, documented risk). Every remaining High is an owner or
-  infrastructure decision: the ranked list lives in HANDOFF.md item 5.
+  time-zone finding is an accepted, documented risk). The single-maintainer review gap (SEC-11 /
+  CICD-11) is a **dated waiver** in `laravel/.prod-ready/waivers.yml` — the only committed file under
+  `.prod-ready/`; renew or retire it by 2026-12-03. Every remaining High is an owner or
+  infrastructure decision: the ranked list lives in HANDOFF.md item 5. Production is at `a855973`.
 - **Evidence pack:** [`EVIDENCE-PACK.md`](laravel/docs/compliance/EVIDENCE-PACK.md) maps the PDPL
   obligations and NCA domains to evidence, with the gap register G1–G16 (G1, G2 and G14 closed).
 
