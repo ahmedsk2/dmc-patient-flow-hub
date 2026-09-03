@@ -24,7 +24,7 @@ class EmailVerificationTest extends TestCase
     private function enrolledUser(array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'ev_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'ev_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'EV User', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
@@ -61,8 +61,7 @@ class EmailVerificationTest extends TestCase
         $user = $this->enrolledUser(['email' => 'confirmflow@example.test', 'email_verified_at' => null]);
 
         $this->actingAs($user)->get('/email/verify')
-            ->assertInertia(fn (AssertableInertia $p) => $p->where('maskedEmail', fn ($masked) =>
-                is_string($masked)
+            ->assertInertia(fn (AssertableInertia $p) => $p->where('maskedEmail', fn ($masked) => is_string($masked)
                 && str_starts_with($masked, 'c')
                 && str_ends_with($masked, '@example.test')
                 && str_contains($masked, '*')

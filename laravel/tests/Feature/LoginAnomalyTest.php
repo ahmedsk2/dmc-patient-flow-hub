@@ -21,7 +21,7 @@ class LoginAnomalyTest extends TestCase
     private function user(int $role = User::ROLE_ADMIN, array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'la_' . $role . '_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'la_'.$role.'_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'LA User', 'role' => $role, 'active' => 1, 'password' => 'secret12345',   // hashed cast
         ], $extra));
     }
@@ -49,7 +49,7 @@ class LoginAnomalyTest extends TestCase
 
     public function test_mfa_failure_writes_audit_row(): void
     {
-        $secret = \App\Support\Totp::secret();
+        $secret = Totp::secret();
         $u = $this->user(User::ROLE_ADMIN, ['mfa_secret' => $secret, 'mfa_enrolled_at' => now()]);
 
         $this->withSession([

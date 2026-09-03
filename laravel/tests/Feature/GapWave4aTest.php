@@ -4,11 +4,13 @@ namespace Tests\Feature;
 
 use App\Models\Admission;
 use App\Models\AuditLog;
+use App\Models\Handover;
 use App\Models\Patient;
 use App\Models\Specialty;
 use App\Models\User;
 use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
@@ -24,7 +26,7 @@ class GapWave4aTest extends TestCase
     private function user(array $overrides = []): User
     {
         return User::create(array_merge([
-            'username' => 'g4_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'g4_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'G4 User', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $overrides));
@@ -53,7 +55,7 @@ class GapWave4aTest extends TestCase
         $a->diagnoses()->create(['seq' => 1, 'icd10_code' => 'I21.0']);
         $a->diagnoses()->create(['seq' => 2, 'icd10_code' => 'E11.9']);
         // a consultant-changing transfer requires a handover updated TODAY (HandoverTest covers the gate)
-        \App\Models\Handover::create(['admission_id' => $a->id, 'body' => 'Plan attached.', 'updated_by' => $owner->id]);
+        Handover::create(['admission_id' => $a->id, 'body' => 'Plan attached.', 'updated_by' => $owner->id]);
 
         $this->actingAs($admin)->post("/admissions/{$a->id}/transfer", [
             'mode' => 'specialty', 'specialty_id' => $spec->id, 'consultant_id' => $cardio->id,
@@ -164,7 +166,7 @@ class GapWave4aTest extends TestCase
         $admin = $this->user(['role' => User::ROLE_ADMIN]);
         $a = $this->admission(['admit_date' => '2026-06-01', 'admitted_from' => 'ER', 'current_location' => 'Ward']);
         $mrn = $a->patient->mrn;
-        \Illuminate\Support\Facades\DB::table('icd10')->insert(['code' => 'A15.0', 'name' => 'TB of lung']);   // Phase 4 — Item 5: code must exist
+        DB::table('icd10')->insert(['code' => 'A15.0', 'name' => 'TB of lung']);   // Phase 4 — Item 5: code must exist
 
         $this->actingAs($admin)->post("/admissions/{$a->id}/modify", [
             'mrn' => $mrn, 'name' => 'G4 Patient', 'age' => 40, 'gender' => 'Male', 'bed' => 'W-9',
@@ -229,8 +231,8 @@ class GapWave4aTest extends TestCase
         // Phase 4 — Item 1: delete is now a SOFT delete — the row (and its diagnoses) survive in the
         // table but carry deleted_at, and the Eloquent global scope hides them.
         $this->assertDatabaseHas('admissions', ['id' => $id]);
-        $this->assertNotNull(\App\Models\Admission::withTrashed()->find($id)->deleted_at);
-        $this->assertNull(\App\Models\Admission::find($id), 'soft-deleted admission is hidden from Eloquent');
+        $this->assertNotNull(Admission::withTrashed()->find($id)->deleted_at);
+        $this->assertNull(Admission::find($id), 'soft-deleted admission is hidden from Eloquent');
         $this->assertDatabaseHas('admission_diagnoses', ['admission_id' => $id]);   // children kept (hidden with parent)
         $log = AuditLog::where('action', 'admission.delete')->where('entity_id', (string) $id)->first();
         $this->assertNotNull($log, 'delete must be audited');
@@ -247,7 +249,7 @@ class GapWave4aTest extends TestCase
         $this->actingAs($cons)
             ->withSession(['stepup.verified_at' => now()->getTimestamp()])
             ->delete("/admissions/{$a->id}")->assertForbidden();
-        $this->assertNull(\App\Models\Admission::find($a->id)?->deleted_at);
+        $this->assertNull(Admission::find($a->id)?->deleted_at);
     }
 
     // ---- 4. D1 — consultants see only their own patients ---------------------------------------

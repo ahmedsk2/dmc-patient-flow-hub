@@ -36,8 +36,8 @@ class ConsultationBackfillTest extends TestCase
         $n++;
 
         return Consultation::create(array_merge([
-            'mrn' => '7810000' . $n, 'patient_name' => 'Backfill Pt ' . $n,
-            'consultation_date' => '2024-04-0' . min($n, 9), 'indication' => [],
+            'mrn' => '7810000'.$n, 'patient_name' => 'Backfill Pt '.$n,
+            'consultation_date' => '2024-04-0'.min($n, 9), 'indication' => [],
         ], $overrides));
     }
 
@@ -67,11 +67,11 @@ class ConsultationBackfillTest extends TestCase
         $cardio = Specialty::create(['name' => 'Cardiology', 'is_subspecialty' => true, 'is_external' => false]);
         Specialty::create(['name' => 'Dietary', 'is_subspecialty' => true, 'is_external' => true]);
 
-        $lower    = $this->consult(['to_service' => 'cardiology']);
-        $padded   = $this->consult(['to_service' => '  Cardiology  ']);
+        $lower = $this->consult(['to_service' => 'cardiology']);
+        $padded = $this->consult(['to_service' => '  Cardiology  ']);
         $external = $this->consult(['to_service' => 'Dietary']);
         $freeText = $this->consult(['to_service' => 'Some Outside Clinic']);
-        $blank    = $this->consult(['to_service' => null]);
+        $blank = $this->consult(['to_service' => null]);
 
         $this->runBackfill();
 
@@ -89,7 +89,7 @@ class ConsultationBackfillTest extends TestCase
 
     public function test_real_timestamps_are_never_fabricated_from_a_date(): void
     {
-        $open   = $this->consult(['to_service' => 'Cardiology']);
+        $open = $this->consult(['to_service' => 'Cardiology']);
         $closed = $this->consult(['to_service' => 'Cardiology', 'signoff_date' => '2024-04-11']);
 
         $this->runBackfill();
@@ -124,7 +124,7 @@ class ConsultationBackfillTest extends TestCase
         $appClosed = $this->consult(['to_service' => 'Cardiology', 'signoff_date' => null]);
         DB::table('consultations')->where('id', $appClosed->id)
             ->update(['status' => 'signed_off', 'requested_at' => '2026-08-21 09:00:00',
-                      'signed_off_at' => '2026-08-22 10:00:00']);
+                'signed_off_at' => '2026-08-22 10:00:00']);
 
         // and an untouched legacy row alongside them, to prove the guard is not over-restrictive
         $legacy = $this->consult(['to_service' => 'Cardiology', 'signoff_date' => null]);

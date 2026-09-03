@@ -31,7 +31,7 @@ class MfaTest extends TestCase
         $secret = Totp::secret();
         $plain = $recovery ?: ['AAAA-BBBB'];
         $user = User::create([
-            'username' => 'mfa_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'mfa_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Mfa User', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
             'mfa_secret' => $secret,
             'mfa_recovery_codes' => array_map(fn ($c) => Hash::make($c), $plain),

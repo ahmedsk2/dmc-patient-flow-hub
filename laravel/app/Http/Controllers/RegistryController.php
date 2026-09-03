@@ -11,13 +11,17 @@ use App\Models\Patient;
 use App\Models\Setting;
 use App\Models\User;
 use App\Support\Audit;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
+use Inertia\Response;
 use OpenSpout\Common\Entity\Row;
 use OpenSpout\Writer\XLSX\Writer as XlsxWriter;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
-use Inertia\Inertia;
-use Inertia\Response;
 
 /**
  * Registry — three search modes (Admissions, Consultations, Free-text Diagnosis) with the legacy
@@ -25,7 +29,7 @@ use Inertia\Response;
  */
 class RegistryController extends Controller
 {
-    public function index(Request $request): Response|\Illuminate\Http\RedirectResponse
+    public function index(Request $request): Response|RedirectResponse
     {
         // SPC-TM-011 (Wave 1): the free-text terms (`search` = patient name/MRN, `keyword` =
         // diagnosis free text — exactly the two fields redactedFilters() already treats as PHI)
@@ -33,7 +37,7 @@ class RegistryController extends Controller
         // redirected to the term-less URL, keeping every non-PII filter shareable.
         if ($request->isMethod('get')
             && (trim((string) $request->query('search', '')) !== '' || trim((string) $request->query('keyword', '')) !== '')) {
-            return redirect()->route('registry.index', \Illuminate\Support\Arr::except($request->query(), ['search', 'keyword']));
+            return redirect()->route('registry.index', Arr::except($request->query(), ['search', 'keyword']));
         }
 
         // Phase 3 — §3.7: reject garbage date/age filters before they reach the query builder
@@ -87,7 +91,7 @@ class RegistryController extends Controller
                 'countries' => Country::orderBy('name')->pluck('name'),
                 'consultants' => User::consultantOptions(activeOnly: false),   // registry filters span inactive consultants
                 'reasons' => ConsultationReason::orderBy('name')->get(['id', 'name']),
-                'readmitWindow' => max(0, (int) (\App\Models\Setting::current()->readmission_window_days ?? 3)),
+                'readmitWindow' => max(0, (int) (Setting::current()->readmission_window_days ?? 3)),
                 // N1-2: resolve the ACTIVE dx-filter codes to names so the page can rebuild the
                 // removable diagnosis chips after pagination/reload (selectedDx is client-only ref)
                 'dxNames' => $this->dxFilterNames($request),
@@ -107,7 +111,7 @@ class RegistryController extends Controller
      * surface the matched row count before a potentially slow export and advise a queued path above
      * ~20k rows. Admin-only (route group).
      */
-    public function matchCount(Request $request): \Illuminate\Http\JsonResponse
+    public function matchCount(Request $request): JsonResponse
     {
         $count = match ($this->mode($request)) {
             'consultations' => $this->consultationQuery($request)->count(),
@@ -134,7 +138,7 @@ class RegistryController extends Controller
 
         foreach (['search', 'keyword'] as $phi) {
             if (! empty($f[$phi])) {
-                $f[$phi] = mb_strlen((string) $f[$phi]) . ' chars';
+                $f[$phi] = mb_strlen((string) $f[$phi]).' chars';
             }
         }
 
@@ -260,7 +264,7 @@ class RegistryController extends Controller
             // prior REAL discharge (typed OR NULL-typed historical close — legacy parity, J1-4)
             ->when($request->boolean('readmit72'), fn ($q) => $q->whereExists(
                 Admission::readmissionExists(
-                    max(0, (int) (\App\Models\Setting::current()->readmission_window_days ?? 3))
+                    max(0, (int) (Setting::current()->readmission_window_days ?? 3))
                 )
             ))
             ->when($dx, function ($q) use ($dx, $request) {
@@ -303,16 +307,16 @@ class RegistryController extends Controller
         $userNames = $userIds->isEmpty() ? collect() : User::whereIn('id', $userIds)
             ->get(['id', 'full_name', 'name'])->mapWithKeys(fn ($u) => [$u->id => $u->full_name ?: $u->name]);
 
-        $window = max(0, (int) (\App\Models\Setting::current()->readmission_window_days ?? 3));
+        $window = max(0, (int) (Setting::current()->readmission_window_days ?? 3));
         $readmitIds = $ids->isEmpty() ? collect() : Admission::whereIn('id', $ids)
             ->whereExists(Admission::readmissionExists($window))
             ->pluck('id')->flip();
 
-        $tbIds = $ids->isEmpty() ? collect() : \Illuminate\Support\Facades\DB::table('admission_diagnoses as ad')
+        $tbIds = $ids->isEmpty() ? collect() : DB::table('admission_diagnoses as ad')
             ->join('tb_diagnoses as tb', 'tb.icd10_code', '=', 'ad.icd10_code')
             ->whereIn('ad.admission_id', $ids)->distinct()->pluck('ad.admission_id')->flip();
 
-        $settings = \App\Models\Setting::current();   // LOS bands, same rule as the board (J2-7)
+        $settings = Setting::current();   // LOS bands, same rule as the board (J2-7)
 
         return $page->through(fn (Admission $a) => [
             'id' => $a->id, 'name' => $a->patient?->name ?? 'Unknown', 'mrn' => $a->patient?->mrn,
@@ -363,10 +367,14 @@ class RegistryController extends Controller
                 $both = fn ($w, $id) => $w->whereJsonContains('indication', (int) $id)
                     ->orWhereJsonContains('indication', (string) $id);
                 if ($request->input('ind_match') === 'and') {
-                    foreach ($indication as $id) { $q->where(fn ($w) => $both($w, $id)); }
+                    foreach ($indication as $id) {
+                        $q->where(fn ($w) => $both($w, $id));
+                    }
                 } else {
                     $q->where(function ($w) use ($indication, $both) {
-                        foreach ($indication as $id) { $w->orWhere(fn ($x) => $both($x, $id)); }
+                        foreach ($indication as $id) {
+                            $w->orWhere(fn ($x) => $both($x, $id));
+                        }
                     });
                 }
             });
@@ -413,7 +421,7 @@ class RegistryController extends Controller
 
     private function diagnosisResults(Request $request)
     {
-        $settings = \App\Models\Setting::current();   // LOS bands, same rule as the board (J2-7)
+        $settings = Setting::current();   // LOS bands, same rule as the board (J2-7)
 
         return $this->diagnosisQuery($request)
             ->paginate(20)->withQueryString()->through(fn (Admission $a) => [
@@ -431,7 +439,7 @@ class RegistryController extends Controller
     /** Legacy export filename — downstream spreadsheets key on Export-DD-MM-YYYY (C6). */
     private function exportFilename(string $ext): string
     {
-        return 'Export-' . now()->format('d-m-Y') . '.' . $ext;
+        return 'Export-'.now()->format('d-m-Y').'.'.$ext;
     }
 
     /** Row count of the CURRENT export mode's query — one cheap COUNT for the PHI-read audit detail. */
@@ -476,15 +484,15 @@ class RegistryController extends Controller
      */
     private static function csvSafe(mixed $v): mixed
     {
-        return preg_match('/^[=+\-@]/', (string) ($v ?? '')) ? "'" . $v : $v;
+        return preg_match('/^[=+\-@]/', (string) ($v ?? '')) ? "'".$v : $v;
     }
 
     public function exportXlsx(Request $request): BinaryFileResponse
     {
         $this->logExport($request, 'registry.export_xlsx');
 
-        $tmp = tempnam(sys_get_temp_dir(), 'reg') . '.xlsx';
-        $writer = new XlsxWriter();
+        $tmp = tempnam(sys_get_temp_dir(), 'reg').'.xlsx';
+        $writer = new XlsxWriter;
         $writer->openToFile($tmp);
         $this->writeExport($request, fn (array $row) => $writer->addRow(Row::fromValues(
             array_map(fn ($v) => $v ?? '', $row))));

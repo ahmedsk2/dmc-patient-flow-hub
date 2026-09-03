@@ -27,7 +27,7 @@ class Icd10ValidationTest extends TestCase
     private function admin(array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'i10_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'i10_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'I10 Admin', 'role' => User::ROLE_ADMIN, 'active' => 1, 'password' => 'secret12345',
             'can_add' => 1, 'can_modify' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
@@ -114,7 +114,7 @@ class Icd10ValidationTest extends TestCase
     public function test_import_flags_unknown_codes_as_warning_not_rejection(): void
     {
         $this->knownCode('A00');
-        $csv = "12345,Imp Pt,40,M,Saudi Arabia,2024-01-01,2024-01-05,Alive,Ward,A00|BADX99";
+        $csv = '12345,Imp Pt,40,M,Saudi Arabia,2024-01-01,2024-01-05,Alive,Ward,A00|BADX99';
 
         $parse = new \ReflectionMethod(ImportController::class, 'parse');
         $parse->setAccessible(true);

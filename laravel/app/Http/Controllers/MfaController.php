@@ -11,6 +11,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -62,7 +63,7 @@ class MfaController extends Controller
         // before enrolling (in the pre-MFA grace window) is invalidated — otherwise it would
         // auto-authenticate them on a future request WITHOUT the MFA challenge, defeating the second
         // factor. New logins never issue a recaller (AuthController), so this only clears stale ones.
-        $user->setRememberToken(\Illuminate\Support\Str::random(60));
+        $user->setRememberToken(Str::random(60));
         $user->save();
         // Same reasoning for trusted devices: a waiver granted against the PREVIOUS second factor
         // must not carry over to the new one (2026-07-19 trusted-device spec, "Revocation").
@@ -78,6 +79,7 @@ class MfaController extends Controller
 
     /** Pending-challenge TTL and guess budget — a parked login screen must not stay live. */
     private const PENDING_TTL_SECONDS = 300;   // 5 minutes after the password step
+
     private const MAX_ATTEMPTS = 8;            // per pending session
 
     /**
@@ -108,6 +110,7 @@ class MfaController extends Controller
         if (! $this->pendingFresh($request)) {
             return $this->rejectPending($request, 'Your sign-in expired — please log in again.');
         }
+
         // The configured trusted-device window drives the opt-in checkbox: the page renders it only
         // when this is > 0, and interpolates the number into the label. 0 = feature off.
         return Inertia::render('Auth/MfaChallenge', [
@@ -228,9 +231,11 @@ class MfaController extends Controller
             if (Hash::check($normalized, $hash)) {
                 unset($codes[$i]);
                 $user->update(['mfa_recovery_codes' => array_values($codes)]);
+
                 return true;
             }
         }
+
         return false;
     }
 

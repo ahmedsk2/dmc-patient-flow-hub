@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Admission;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 /**
  * New-admission payload. The patient-demographics rule block is shared with
@@ -63,7 +65,7 @@ class StoreAdmissionRequest extends FormRequest
             'diagnoses' => ['required', 'array', 'min:1'],
             'diagnoses.*' => ['required', 'string', 'max:100', Rule::exists('icd10', 'code')],   // Phase 4 — Item 5: full ICD-10 enforcement on new admissions
             'admit_date' => ['required', 'date', 'before_or_equal:today'],
-            'admitted_from' => ['nullable', 'string', 'max:64', 'in:' . implode(',', self::ADMIT_FROM)],
+            'admitted_from' => ['nullable', 'string', 'max:64', 'in:'.implode(',', self::ADMIT_FROM)],
             'current_location' => ['required', 'in:ER,Ward,ICU'],
             'consultant_id' => ['nullable', 'exists:users,id'],
         ]);
@@ -82,13 +84,13 @@ class StoreAdmissionRequest extends FormRequest
      * Duplicate active-MRN guard (legacy parity: newpatients/dmc-patients-add.php) — a patient
      * cannot be admitted twice while an episode is still open (discharge_date IS NULL).
      */
-    public function withValidator(\Illuminate\Validation\Validator $validator): void
+    public function withValidator(Validator $validator): void
     {
-        $validator->after(function (\Illuminate\Validation\Validator $v) {
+        $validator->after(function (Validator $v) {
             if ($v->errors()->has('mrn')) {
                 return;   // MRN already rejected — don't stack a misleading duplicate message
             }
-            $active = \App\Models\Admission::whereNull('discharge_date')
+            $active = Admission::whereNull('discharge_date')
                 ->whereHas('patient', fn ($q) => $q->where('mrn', $this->input('mrn')))
                 ->exists();
             if ($active) {

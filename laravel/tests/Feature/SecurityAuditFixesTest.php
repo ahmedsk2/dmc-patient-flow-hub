@@ -7,7 +7,9 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Support\Audit;
 use App\Support\Totp;
+use Illuminate\Cache\RateLimiter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -26,7 +28,7 @@ class SecurityAuditFixesTest extends TestCase
     private function mfaUser(array $attrs = []): User
     {
         return User::create(array_merge([
-            'username' => 'u_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'u_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'Test User',
             'role' => User::ROLE_ADMIN,
             'active' => 1,
@@ -41,7 +43,7 @@ class SecurityAuditFixesTest extends TestCase
     private function newPatient(string $mrn): int
     {
         return DB::table('patients')->insertGetId([
-            'mrn' => $mrn, 'name' => 'Pt ' . $mrn, 'created_at' => now(), 'updated_at' => now(),
+            'mrn' => $mrn, 'name' => 'Pt '.$mrn, 'created_at' => now(), 'updated_at' => now(),
         ]);
     }
 
@@ -160,10 +162,10 @@ class SecurityAuditFixesTest extends TestCase
 
     public function test_stepup_limiter_is_registered_and_keyed_by_user_or_ip(): void
     {
-        $limiter = app(\Illuminate\Cache\RateLimiter::class)->limiter('stepup');
+        $limiter = app(RateLimiter::class)->limiter('stepup');
         $this->assertNotNull($limiter);
 
-        $limit = $limiter(\Illuminate\Http\Request::create('/stepup', 'POST', server: ['REMOTE_ADDR' => '203.0.113.5']));
+        $limit = $limiter(Request::create('/stepup', 'POST', server: ['REMOTE_ADDR' => '203.0.113.5']));
         $this->assertStringContainsString('203.0.113.5', (string) $limit->key);   // no user → IP fallback
     }
 

@@ -22,7 +22,7 @@ class GapWave1Test extends TestCase
     private function user(array $overrides = []): User
     {
         return User::create(array_merge([
-            'username' => 'gw_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'gw_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'GW User', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $overrides));

@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Admission;
-use App\Models\Consultation;
 use App\Models\HandoverSignature;
 use App\Models\Patient;
 use App\Models\User;
@@ -24,7 +23,7 @@ class DashboardAdminBandTest extends TestCase
     private function user(int $role): User
     {
         return User::create([
-            'username' => 'band_' . $role . '_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'band_'.$role.'_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Band User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);

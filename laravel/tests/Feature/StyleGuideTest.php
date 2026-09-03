@@ -1,4 +1,5 @@
 <?php
+
 // laravel/tests/Feature/StyleGuideTest.php
 
 namespace Tests\Feature;
@@ -21,7 +22,7 @@ class StyleGuideTest extends TestCase
     private function user(int $role): User
     {
         return User::create([
-            'username' => 'sg_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'sg_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'SG',
             'full_name' => 'SG User',
             'password' => 'secret12345',

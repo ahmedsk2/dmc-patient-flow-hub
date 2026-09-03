@@ -34,7 +34,7 @@ class ReportValueTest extends TestCase
 
     private function admin(): User
     {
-        return User::create(['username' => 'rv_admin_' . substr(md5(uniqid('', true)), 0, 6),
+        return User::create(['username' => 'rv_admin_'.substr(md5(uniqid('', true)), 0, 6),
             'name' => 'RV Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }

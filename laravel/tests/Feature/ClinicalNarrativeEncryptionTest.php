@@ -11,7 +11,6 @@ use App\Models\Patient;
 use App\Models\Specialty;
 use App\Models\User;
 use App\Support\Totp;
-use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -46,7 +45,7 @@ class ClinicalNarrativeEncryptionTest extends TestCase
     private function user(array $overrides = []): User
     {
         return User::create(array_merge([
-            'username' => 'enc_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'enc_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'Enc User', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
             'email_verified_at' => now(), 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $overrides));

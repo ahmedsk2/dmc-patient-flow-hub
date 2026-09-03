@@ -20,7 +20,7 @@ class ReportYearRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'year' => ['nullable', 'integer', 'min:2000', 'max:' . (now()->year + 1)],
+            'year' => ['nullable', 'integer', 'min:2000', 'max:'.(now()->year + 1)],
             'month' => ['nullable', 'integer', 'min:1', 'max:12'],
         ];
     }

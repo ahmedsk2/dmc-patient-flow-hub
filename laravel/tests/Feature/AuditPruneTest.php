@@ -25,7 +25,7 @@ class AuditPruneTest extends TestCase
     private function actor(): User
     {
         return User::create([
-            'username' => 'aprn_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'aprn_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Prune Actor', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
         ]);
     }

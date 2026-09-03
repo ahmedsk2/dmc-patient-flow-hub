@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -19,6 +20,7 @@ class LegacyImport extends Command
     protected $signature = 'legacy:import
         {--fresh : wipe new tables first (default true)}
         {--wipe-consultations : rebuild consultations from legacy even though this app may own them — REFUSED while settings.consultations_source_of_truth is on}';
+
     protected $description = 'Import & transform the original DMC database into the new clean schema';
 
     private $legacy;
@@ -40,16 +42,16 @@ class LegacyImport extends Command
 
         if ($this->option('wipe-consultations') && $preserveConsultations) {
             $this->error('Refusing to wipe consultations: settings.consultations_source_of_truth is ON, '
-                . 'so THIS application — not the legacy database — owns the consultation ledger. '
-                . 'Nothing was imported. Turn the flag off in Control → Settings if you really mean to '
-                . 'rebuild consultations from the legacy dump (this destroys every consultation '
-                . 'entered here since cutover).');
+                .'so THIS application — not the legacy database — owns the consultation ledger. '
+                .'Nothing was imported. Turn the flag off in Control → Settings if you really mean to '
+                .'rebuild consultations from the legacy dump (this destroys every consultation '
+                .'entered here since cutover).');
 
             return self::FAILURE;
         }
 
         $this->legacy = DB::connection('legacy');
-        $this->info('Importing from legacy connection: ' . $this->legacy->getDatabaseName());
+        $this->info('Importing from legacy connection: '.$this->legacy->getDatabaseName());
 
         // Preserve explicit id=0 reference rows (legacy consultation_reason 'other'=0) instead of
         // letting an AUTO_INCREMENT column turn 0 into the next value.
@@ -66,9 +68,9 @@ class LegacyImport extends Command
         // next to a re-imported legacy consultation — silently re-attaching one patient's "seen today"
         // tick to a different patient's consult and corrupting the ledger's completeness count.
         $tables = ['handover_signatures', 'handover_revisions', 'handovers', 'notifications',
-                   'admission_diagnoses', 'admissions', 'consultation_followups', 'consultations',
-                   'patients', 'icd10', 'specialties', 'consultation_reasons', 'tb_diagnoses',
-                   'countries', 'settings'];
+            'admission_diagnoses', 'admissions', 'consultation_followups', 'consultations',
+            'patients', 'icd10', 'specialties', 'consultation_reasons', 'tb_diagnoses',
+            'countries', 'settings'];
         $consultationLinks = [];
         $followupLinks = [];
         if ($preserveConsultations) {
@@ -107,8 +109,8 @@ class LegacyImport extends Command
         if ($preserveConsultations) {
             $kept = (int) DB::table('consultations')->count();
             $this->warn("  consultations preserved: {$kept} row(s) kept and NOT re-imported — "
-                . 'settings.consultations_source_of_truth is ON, so this application owns the '
-                . 'consultation ledger and the legacy table is ignored.');
+                .'settings.consultations_source_of_truth is ON, so this application owns the '
+                .'consultation ledger and the legacy table is ignored.');
             $this->relinkPreservedConsultations($consultationLinks, $followupLinks, $userMap, $patientMap);
         } else {
             $this->importConsultations($userMap, $patientMap);
@@ -205,8 +207,13 @@ class LegacyImport extends Command
         // behind by a half-finished earlier run). That is unresolvable — it is NOT "app-created user,
         // keep the id", which is the case where the row exists but carries no legacy_id.
         $remapUser = function ($currentId, $rowId, $legacyId) use ($userMap) {
-            if ($currentId === null || $rowId === null) { return null; }
-            if ($legacyId === null) { return (int) $currentId; }   // app-created user — its id survived
+            if ($currentId === null || $rowId === null) {
+                return null;
+            }
+            if ($legacyId === null) {
+                return (int) $currentId;
+            }   // app-created user — its id survived
+
             return $userMap[(int) $legacyId] ?? null;              // legacy user — new id, or gone
         };
         $id = fn ($v) => $v === null ? null : (int) $v;
@@ -217,12 +224,18 @@ class LegacyImport extends Command
         $specialtyByName = DB::table('specialties')->orderBy('id')->get(['id', 'name'])
             ->reduce(function (array $map, $s) {
                 $key = mb_strtolower(trim((string) $s->name));
-                if ($key !== '' && ! isset($map[$key])) { $map[$key] = (int) $s->id; }
+                if ($key !== '' && ! isset($map[$key])) {
+                    $map[$key] = (int) $s->id;
+                }
+
                 return $map;
             }, []);
         $remapSpecialty = function ($currentId, $name) use ($specialtyByName) {
-            if ($currentId === null) { return null; }
+            if ($currentId === null) {
+                return null;
+            }
             $key = mb_strtolower(trim((string) $name));
+
             // A NULL/blank name means the referenced specialty no longer exists at all (a dangling
             // id). Either way: no name match => NULL (Unassigned), never a stale id.
             return $key === '' ? null : ($specialtyByName[$key] ?? null);
@@ -235,7 +248,10 @@ class LegacyImport extends Command
         $admissionByLegacy = DB::table('admissions')->whereNotNull('legacy_id')
             ->pluck('id', 'legacy_id')->all();
         $remapAdmission = function ($currentId, $legacyId) use ($admissionByLegacy) {
-            if ($currentId === null || $legacyId === null) { return null; }
+            if ($currentId === null || $legacyId === null) {
+                return null;
+            }
+
             return $admissionByLegacy[(int) $legacyId] ?? null;
         };
 
@@ -293,30 +309,32 @@ class LegacyImport extends Command
         if ($lostAuthors !== []) {
             $shown = array_slice($lostAuthors, 0, 50);
             $more = count($lostAuthors) - count($shown);
-            $this->warn('  ⚠ preserved follow-up ticks that lost their author_id: ' . count($lostAuthors)
-                . ' row(s) — consultation_followups id(s) ' . implode(', ', $shown)
-                . ($more > 0 ? " … and {$more} more" : '') . '. '
-                . 'The account that recorded the tick has no legacy_id match in the new data, so the '
-                . 'attribution was set to NULL rather than left pointing at whoever inherited that id. '
-                . 'The ticks themselves are intact — only "who ticked it" is lost.');
+            $this->warn('  ⚠ preserved follow-up ticks that lost their author_id: '.count($lostAuthors)
+                .' row(s) — consultation_followups id(s) '.implode(', ', $shown)
+                .($more > 0 ? " … and {$more} more" : '').'. '
+                .'The account that recorded the tick has no legacy_id match in the new data, so the '
+                .'attribution was set to NULL rather than left pointing at whoever inherited that id. '
+                .'The ticks themselves are intact — only "who ticked it" is lost.');
         }
 
         foreach ($lost as $field => $ids) {
-            if ($ids === []) { continue; }
+            if ($ids === []) {
+                continue;
+            }
             $shown = array_slice($ids, 0, 50);
             $more = count($ids) - count($shown);
-            $this->warn('  ⚠ preserved consultations that lost their ' . $field . ': ' . count($ids)
-                . ' row(s) — consultation id(s) ' . implode(', ', $shown)
-                . ($more > 0 ? " … and {$more} more" : '') . '. '
-                . 'The record each pointed at no longer exists after the rebuild and has no natural-key '
-                . 'match in the new data (patients match on mrn, users and admissions on legacy_id, '
-                . 'specialties on name — anything created inside THIS app is absent from the legacy '
-                . 'dump), so the link '
-                . 'was set to NULL instead of left pointing at a different record. The consultations '
-                . 'themselves are intact (mrn/patient_name/to_service survive); re-link them once the '
-                . 'missing record exists again. Until then, ledger queries that join on this column '
-                . 'skip these rows — a nulled owning_specialty_id lands the consult in the Unassigned '
-                . 'bucket, visible to coordinators and admins rather than to one team.');
+            $this->warn('  ⚠ preserved consultations that lost their '.$field.': '.count($ids)
+                .' row(s) — consultation id(s) '.implode(', ', $shown)
+                .($more > 0 ? " … and {$more} more" : '').'. '
+                .'The record each pointed at no longer exists after the rebuild and has no natural-key '
+                .'match in the new data (patients match on mrn, users and admissions on legacy_id, '
+                .'specialties on name — anything created inside THIS app is absent from the legacy '
+                .'dump), so the link '
+                .'was set to NULL instead of left pointing at a different record. The consultations '
+                .'themselves are intact (mrn/patient_name/to_service survive); re-link them once the '
+                .'missing record exists again. Until then, ledger queries that join on this column '
+                .'skip these rows — a nulled owning_specialty_id lands the consult in the Unassigned '
+                .'bucket, visible to coordinators and admins rather than to one team.');
         }
     }
 
@@ -363,7 +381,9 @@ class LegacyImport extends Command
         $external = [];
         foreach ($this->legacy->table('other_specialities')->get() as $r) {
             $name = trim($r->specilaity ?? '');
-            if ($name === '' || isset($taken[mb_strtolower($name)])) { continue; }
+            if ($name === '' || isset($taken[mb_strtolower($name)])) {
+                continue;
+            }
             $taken[mb_strtolower($name)] = true;
             $external[] = ['name' => $name, 'is_subspecialty' => true, 'is_external' => true,
                 'created_at' => now(), 'updated_at' => now()];
@@ -393,16 +413,16 @@ class LegacyImport extends Command
     {
         $rows = [];
         $seen = [];        // legacy member_name is NOT unique (and the collation is case-insensitive);
-                           // suffix the legacy id on collision so usernames stay unique + login still works.
+        // suffix the legacy id on collision so usernames stay unique + login still works.
         $seenEmail = [];   // users.email is UNIQUE (defense-in-depth). The lowest member_id keeps a
-                           // shared address; later duplicates are nulled so the insert can't violate
-                           // the index (~4 real dup-email pairs exist in prod). A nulled account still
-                           // logs in by username — an admin can assign it a unique email later.
+        // shared address; later duplicates are nulled so the insert can't violate
+        // the index (~4 real dup-email pairs exist in prod). A nulled account still
+        // logs in by username — an admin can assign it a unique email later.
         foreach ($this->legacy->table('members')->orderBy('member_id')->get() as $m) {
-            $base = trim((string) ($m->member_name ?: ('user' . $m->member_id)));
+            $base = trim((string) ($m->member_name ?: ('user'.$m->member_id)));
             $username = mb_substr($base, 0, 240);
             if (isset($seen[mb_strtolower($username)])) {
-                $username = mb_substr($base, 0, 230) . '_' . $m->member_id;
+                $username = mb_substr($base, 0, 230).'_'.$m->member_id;
             }
             $seen[mb_strtolower($username)] = true;
 
@@ -446,7 +466,8 @@ class LegacyImport extends Command
         }
         $this->insertBatched('users', $rows);
         $map = DB::table('users')->whereNotNull('legacy_id')->pluck('id', 'legacy_id')->all();
-        $this->info('  users imported: ' . count($map));
+        $this->info('  users imported: '.count($map));
+
         return $map;
     }
 
@@ -466,8 +487,8 @@ class LegacyImport extends Command
      * A user created inside this app (no legacy_id) is never touched by the `users` delete above, so
      * its flag is untouched already and needs no restoring here.
      *
-     * @param array $legacyIds legacy_id values that had the flag ON, captured BEFORE the users delete
-     * @param array $userMap   legacy_id => new id, as returned by importUsers()
+     * @param  array  $legacyIds  legacy_id values that had the flag ON, captured BEFORE the users delete
+     * @param  array  $userMap  legacy_id => new id, as returned by importUsers()
      */
     private function restoreCoordinatorGrants(array $legacyIds, array $userMap): void
     {
@@ -492,16 +513,18 @@ class LegacyImport extends Command
     {
         // one canonical patient per trimmed, non-blank MRN; demographics from the latest episode.
         $rows = $this->legacy->table('picupatients as p')
-            ->join(DB::raw('(SELECT TRIM(MRN) tm, MAX(ID) mid FROM ' . $this->legacy->getDatabaseName() . '.picupatients WHERE MRN IS NOT NULL AND TRIM(MRN) <> "" GROUP BY tm) agg'),
+            ->join(DB::raw('(SELECT TRIM(MRN) tm, MAX(ID) mid FROM '.$this->legacy->getDatabaseName().'.picupatients WHERE MRN IS NOT NULL AND TRIM(MRN) <> "" GROUP BY tm) agg'),
                 'p.ID', '=', 'agg.mid')
             ->selectRaw('agg.tm mrn, p.PNAME, p.gender, p.age, p.nationality')
             ->get();
         $batch = [];
         $seen = [];   // PHP trim() strips tab/newline that SQL TRIM() keeps, so two SQL-distinct
-                      // MRN groups can normalise to the same key here — collapse them.
+        // MRN groups can normalise to the same key here — collapse them.
         foreach ($rows as $r) {
             $mrn = mb_substr(trim((string) $r->mrn), 0, 64);
-            if ($mrn === '' || isset($seen[$mrn])) { continue; }
+            if ($mrn === '' || isset($seen[$mrn])) {
+                continue;
+            }
             $seen[$mrn] = true;
             $batch[] = [
                 'mrn' => $mrn,
@@ -513,7 +536,8 @@ class LegacyImport extends Command
         }
         $this->insertBatched('patients', $batch);
         $map = DB::table('patients')->pluck('id', 'mrn')->all();
-        $this->info('  patients imported: ' . count($map));
+        $this->info('  patients imported: '.count($map));
+
         return $map;
     }
 
@@ -529,7 +553,7 @@ class LegacyImport extends Command
                     // Admission with no usable MRN — preserve the clinical record under a per-episode
                     // placeholder patient (don't drop real patients just because the MRN is blank).
                     $pid = DB::table('patients')->insertGetId([
-                        'mrn' => 'NOMRN-' . $p->ID, 'name' => $p->PNAME, 'gender' => $p->gender,
+                        'mrn' => 'NOMRN-'.$p->ID, 'name' => $p->PNAME, 'gender' => $p->gender,
                         'age' => $this->age($p->age),
                         'nationality' => $this->nationality($p->nationality ?? null),
                         'created_at' => now(), 'updated_at' => now(),
@@ -548,11 +572,17 @@ class LegacyImport extends Command
                 $admit = $this->date($p->ADMDATE);
                 $med = $this->date($p->med_DISDATE);
                 $dis = $this->date($p->DISDATE);
-                if ($med !== null && $admit !== null && $med < $admit) { $med = null; }
+                if ($med !== null && $admit !== null && $med < $admit) {
+                    $med = null;
+                }
                 if ($dis !== null) {
                     $floor = $admit;
-                    if ($med !== null && ($floor === null || $med > $floor)) { $floor = $med; }
-                    if ($floor !== null && $dis < $floor) { $dis = $floor; }
+                    if ($med !== null && ($floor === null || $med > $floor)) {
+                        $floor = $med;
+                    }
+                    if ($floor !== null && $dis < $floor) {
+                        $dis = $floor;
+                    }
                 }
 
                 $batch[] = [
@@ -576,14 +606,14 @@ class LegacyImport extends Command
                     // the board's 24h "New" badge keys on assigned_at — backfill new-flagged rows
                     // at MIDNIGHT of assigned_on so cutover-day badges survive the migration
                     'assigned_at' => ((string) ($p->newassign ?? '') === '1' && $assignedOn)
-                        ? $assignedOn . ' 00:00:00' : null,
+                        ? $assignedOn.' 00:00:00' : null,
                     'legacy_id' => $p->ID,
                     'created_at' => now(), 'updated_at' => now(),
                 ];
             }
             $this->insertBatched('admissions', $batch);
         });
-        $this->info('  admissions imported: ' . number_format(DB::table('admissions')->count()));
+        $this->info('  admissions imported: '.number_format(DB::table('admissions')->count()));
 
         // diagnoses: map legacy picupatients.ID -> new admission id, expand the JSON array
         $admMap = DB::table('admissions')->whereNotNull('legacy_id')->pluck('id', 'legacy_id')->all();
@@ -591,21 +621,33 @@ class LegacyImport extends Command
         $this->legacy->table('picupatients')->select('ID', 'admissiondiagnosis')->orderBy('ID')->chunk(2000, function ($chunk) use (&$batch, $admMap) {
             foreach ($chunk as $p) {
                 $aid = $admMap[$p->ID] ?? null;
-                if (! $aid) { continue; }
+                if (! $aid) {
+                    continue;
+                }
                 $dx = json_decode($p->admissiondiagnosis ?? '', true);
-                if (! is_array($dx)) { continue; }
-                $seq = 1; $seen = [];   // de-dup codes within an admission (source arrays can repeat a code)
+                if (! is_array($dx)) {
+                    continue;
+                }
+                $seq = 1;
+                $seen = [];   // de-dup codes within an admission (source arrays can repeat a code)
                 foreach ($dx as $code) {
                     $code = trim((string) $code);
-                    if ($code === '' || isset($seen[$code])) { continue; }
+                    if ($code === '' || isset($seen[$code])) {
+                        continue;
+                    }
                     $seen[$code] = true;
                     $batch[] = ['admission_id' => $aid, 'seq' => $seq++, 'icd10_code' => $code, 'created_at' => now(), 'updated_at' => now()];
                 }
-                if (count($batch) >= 2000) { $this->insertBatched('admission_diagnoses', $batch); $batch = []; }
+                if (count($batch) >= 2000) {
+                    $this->insertBatched('admission_diagnoses', $batch);
+                    $batch = [];
+                }
             }
         });
-        if ($batch) { $this->insertBatched('admission_diagnoses', $batch); }
-        $this->info('  diagnoses imported: ' . number_format(DB::table('admission_diagnoses')->count()));
+        if ($batch) {
+            $this->insertBatched('admission_diagnoses', $batch);
+        }
+        $this->info('  diagnoses imported: '.number_format(DB::table('admission_diagnoses')->count()));
     }
 
     private function importConsultations(array $userMap, array $patientMap): void
@@ -656,7 +698,7 @@ class LegacyImport extends Command
             }
             $this->insertBatched('consultations', $batch);
         });
-        $this->info('  consultations imported: ' . number_format(DB::table('consultations')->count()));
+        $this->info('  consultations imported: '.number_format(DB::table('consultations')->count()));
     }
 
     /**
@@ -680,7 +722,7 @@ class LegacyImport extends Command
             'mfa_enforcement' => (int) ($s->mfa_enforcement ?? 0),
             'created_at' => now(), 'updated_at' => now(),
         ]));
-        $this->info('  settings imported (' . count($carried) . ' app-owned column(s) carried through)');
+        $this->info('  settings imported ('.count($carried).' app-owned column(s) carried through)');
     }
 
     /** Legacy nationality strings are kept as-is (dirty values stay editable) — blank becomes NULL. */
@@ -693,8 +735,14 @@ class LegacyImport extends Command
 
     private function date($v): ?string
     {
-        if (empty($v) || $v === '0000-00-00') { return null; }
-        try { return \Carbon\Carbon::parse($v)->toDateString(); } catch (\Throwable $e) { return null; }
+        if (empty($v) || $v === '0000-00-00') {
+            return null;
+        }
+        try {
+            return Carbon::parse($v)->toDateString();
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     /**
@@ -704,7 +752,9 @@ class LegacyImport extends Command
      */
     private function age($v): ?int
     {
-        if (! is_numeric($v)) { return null; }
+        if (! is_numeric($v)) {
+            return null;
+        }
         $age = (int) $v;
 
         return ($age >= 0 && $age <= 150) ? $age : null;
@@ -713,7 +763,9 @@ class LegacyImport extends Command
     private function insertBatched(string $table, array $rows): void
     {
         foreach (array_chunk($rows, 1000) as $chunk) {
-            if ($chunk) { DB::table($table)->insert($chunk); }
+            if ($chunk) {
+                DB::table($table)->insert($chunk);
+            }
         }
     }
 
@@ -721,7 +773,9 @@ class LegacyImport extends Command
     private function ensureMemory(string $target): void
     {
         $current = trim((string) ini_get('memory_limit'));
-        if ($current === '-1') { return; }                 // already unlimited
+        if ($current === '-1') {
+            return;
+        }                 // already unlimited
         if ($this->toBytes($current) < $this->toBytes($target)) {
             @ini_set('memory_limit', $target);
         }
@@ -731,6 +785,7 @@ class LegacyImport extends Command
     {
         $v = trim($v);
         $n = (int) $v;
+
         return match (strtolower(substr($v, -1))) {
             'g' => $n * 1024 * 1024 * 1024,
             'm' => $n * 1024 * 1024,

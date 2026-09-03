@@ -4,11 +4,13 @@ namespace Tests\Feature;
 
 use App\Models\Admission;
 use App\Models\AdmissionDiagnosis;
+use App\Models\Country;
 use App\Models\Patient;
 use App\Models\User;
 use App\Support\Totp;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -22,7 +24,7 @@ class DataIntegrityTest extends TestCase
     private function admin(): User
     {
         return User::create([
-            'username' => 'di_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'di_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'DI Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
@@ -31,9 +33,9 @@ class DataIntegrityTest extends TestCase
     private function payload(array $overrides = []): array
     {
         // B1 (legacy Fill-All): age/gender/nationality/bed + ≥1 diagnosis are REQUIRED on admit
-        \App\Models\Country::firstOrCreate(['name' => 'Saudi Arabia'], ['code' => 'SA']);
+        Country::firstOrCreate(['name' => 'Saudi Arabia'], ['code' => 'SA']);
         // Phase 4 — Item 5: the diagnosis code must exist in the icd10 reference table
-        \Illuminate\Support\Facades\DB::table('icd10')->updateOrInsert(['code' => 'J18.9'], ['name' => 'Pneumonia']);
+        DB::table('icd10')->updateOrInsert(['code' => 'J18.9'], ['name' => 'Pneumonia']);
 
         return array_merge([
             'mrn' => '12345', 'name' => 'Test Patient', 'age' => 50, 'gender' => 'Male',

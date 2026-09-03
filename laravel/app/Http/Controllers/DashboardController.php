@@ -3,8 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Admission;
+use App\Models\Consultation;
+use App\Models\HandoverSignature;
 use App\Models\Setting;
 use App\Models\User;
+use App\Support\DashboardCache;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +22,7 @@ use Inertia\Response;
  */
 class DashboardController extends Controller
 {
-    private string $nonIcu = \App\Models\Admission::NON_ICU_SQL;
+    private string $nonIcu = Admission::NON_ICU_SQL;
 
     public function index(): Response
     {
@@ -92,105 +95,114 @@ class DashboardController extends Controller
         // Live KPIs (census, today's counts, boarding, occupancy, recent, myUnit, alerts) stay OUTSIDE.
         // $admBy/$disBy are returned out of the cache because the Item-2 delta block consumes them.
         $nonIcu = $this->nonIcu;
-        $heavy = Cache::remember(\App\Support\DashboardCache::KEY, 300, function () use ($today, $monthStart, $yearStart, $nonIcu) {
-        // 31-point admissions-vs-discharges trend: today-30 .. today INCLUSIVE, like the legacy
-        // 31-day loop (dashboard/1.php) — non-ICU (J2-2)
-        $start30 = Carbon::today()->subDays(30)->toDateString();
-        $admBy = DB::table('admissions')->selectRaw('admit_date d, COUNT(*) c')->whereBetween('admit_date', [$start30, $today])->whereRaw($nonIcu)->whereNull('deleted_at')->groupBy('admit_date')->pluck('c', 'd')->all();   // ->all(): cache a plain array, not a Collection (survives the file/db cache serialize round-trip; a cached object came back as __PHP_Incomplete_Class on prod)
-        $disBy = DB::table('admissions')->selectRaw('discharge_date d, COUNT(*) c')->whereBetween('discharge_date', [$start30, $today])->whereRaw($nonIcu)->whereNull('deleted_at')->groupBy('discharge_date')->pluck('c', 'd')->all();   // ->all(): plain array for cache round-trip safety (see admBy)
-        $trend = ['labels' => [], 'admissions' => [], 'discharges' => []];
-        for ($i = 30; $i >= 0; $i--) {
-            $d = Carbon::today()->subDays($i)->toDateString();
-            $trend['labels'][] = $d;
-            $trend['admissions'][] = (int) ($admBy[$d] ?? 0);
-            $trend['discharges'][] = (int) ($disBy[$d] ?? 0);
-        }
+        $heavy = Cache::remember(DashboardCache::KEY, 300, function () use ($today, $monthStart, $yearStart, $nonIcu) {
+            // 31-point admissions-vs-discharges trend: today-30 .. today INCLUSIVE, like the legacy
+            // 31-day loop (dashboard/1.php) — non-ICU (J2-2)
+            $start30 = Carbon::today()->subDays(30)->toDateString();
+            $admBy = DB::table('admissions')->selectRaw('admit_date d, COUNT(*) c')->whereBetween('admit_date', [$start30, $today])->whereRaw($nonIcu)->whereNull('deleted_at')->groupBy('admit_date')->pluck('c', 'd')->all();   // ->all(): cache a plain array, not a Collection (survives the file/db cache serialize round-trip; a cached object came back as __PHP_Incomplete_Class on prod)
+            $disBy = DB::table('admissions')->selectRaw('discharge_date d, COUNT(*) c')->whereBetween('discharge_date', [$start30, $today])->whereRaw($nonIcu)->whereNull('deleted_at')->groupBy('discharge_date')->pluck('c', 'd')->all();   // ->all(): plain array for cache round-trip safety (see admBy)
+            $trend = ['labels' => [], 'admissions' => [], 'discharges' => []];
+            for ($i = 30; $i >= 0; $i--) {
+                $d = Carbon::today()->subDays($i)->toDateString();
+                $trend['labels'][] = $d;
+                $trend['admissions'][] = (int) ($admBy[$d] ?? 0);
+                $trend['discharges'][] = (int) ($disBy[$d] ?? 0);
+            }
 
-        // consultations vs sign-offs — 6 calendar months including current (M-5 .. M), 2 queries
-        // total (was a 12-query month loop). Same DATE_FORMAT('%Y-%m') GROUP BY + PHP-zip pattern
-        // as the 31-day admissions trend above; the output shape (and numbers) are unchanged.
-        $sixMonthsAgo = Carbon::today()->startOfMonth()->subMonths(5)->toDateString();
-        $consByMonth = DB::table('consultations')
-            ->selectRaw("DATE_FORMAT(consultation_date, '%Y-%m') ym, COUNT(*) c")
-            ->where('consultation_date', '>=', $sixMonthsAgo)->whereNull('deleted_at')
-            ->groupBy('ym')->pluck('c', 'ym');
-        $signedByMonth = DB::table('consultations')
-            ->selectRaw("DATE_FORMAT(signoff_date, '%Y-%m') ym, COUNT(*) c")
-            ->where('signoff_date', '>=', $sixMonthsAgo)->whereNull('deleted_at')
-            ->groupBy('ym')->pluck('c', 'ym');
+            // consultations vs sign-offs — 6 calendar months including current (M-5 .. M), 2 queries
+            // total (was a 12-query month loop). Same DATE_FORMAT('%Y-%m') GROUP BY + PHP-zip pattern
+            // as the 31-day admissions trend above; the output shape (and numbers) are unchanged.
+            $sixMonthsAgo = Carbon::today()->startOfMonth()->subMonths(5)->toDateString();
+            $consByMonth = DB::table('consultations')
+                ->selectRaw("DATE_FORMAT(consultation_date, '%Y-%m') ym, COUNT(*) c")
+                ->where('consultation_date', '>=', $sixMonthsAgo)->whereNull('deleted_at')
+                ->groupBy('ym')->pluck('c', 'ym');
+            $signedByMonth = DB::table('consultations')
+                ->selectRaw("DATE_FORMAT(signoff_date, '%Y-%m') ym, COUNT(*) c")
+                ->where('signoff_date', '>=', $sixMonthsAgo)->whereNull('deleted_at')
+                ->groupBy('ym')->pluck('c', 'ym');
 
-        $cons = ['labels' => [], 'new' => [], 'signed' => []];
-        for ($i = 5; $i >= 0; $i--) {
-            $m = Carbon::today()->subMonths($i);
-            $ym = $m->format('Y-m');
-            $cons['labels'][] = $m->format('M');
-            $cons['new'][] = (int) ($consByMonth[$ym] ?? 0);
-            $cons['signed'][] = (int) ($signedByMonth[$ym] ?? 0);
-        }
+            $cons = ['labels' => [], 'new' => [], 'signed' => []];
+            for ($i = 5; $i >= 0; $i--) {
+                $m = Carbon::today()->subMonths($i);
+                $ym = $m->format('Y-m');
+                $cons['labels'][] = $m->format('M');
+                $cons['new'][] = (int) ($consByMonth[$ym] ?? 0);
+                $cons['signed'][] = (int) ($signedByMonth[$ym] ?? 0);
+            }
 
-        // LOS distribution (discharged this year, non-ICU)
-        $losRows = DB::table('admissions')->selectRaw('DATEDIFF(discharge_date, admit_date) los')
-            ->whereNotNull('discharge_date')->whereNotNull('admit_date')->whereBetween('discharge_date', [$yearStart, $today])
-            ->whereRaw($nonIcu)->whereNull('deleted_at')->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')->pluck('los');
-        $losBuckets = ['0–2' => 0, '3–5' => 0, '6–10' => 0, '11–20' => 0, '21+' => 0];
-        foreach ($losRows as $l) {
-            $l = (int) $l;
-            if ($l <= 2) $losBuckets['0–2']++; elseif ($l <= 5) $losBuckets['3–5']++;
-            elseif ($l <= 10) $losBuckets['6–10']++; elseif ($l <= 20) $losBuckets['11–20']++; else $losBuckets['21+']++;
-        }
+            // LOS distribution (discharged this year, non-ICU)
+            $losRows = DB::table('admissions')->selectRaw('DATEDIFF(discharge_date, admit_date) los')
+                ->whereNotNull('discharge_date')->whereNotNull('admit_date')->whereBetween('discharge_date', [$yearStart, $today])
+                ->whereRaw($nonIcu)->whereNull('deleted_at')->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')->pluck('los');
+            $losBuckets = ['0–2' => 0, '3–5' => 0, '6–10' => 0, '11–20' => 0, '21+' => 0];
+            foreach ($losRows as $l) {
+                $l = (int) $l;
+                if ($l <= 2) {
+                    $losBuckets['0–2']++;
+                } elseif ($l <= 5) {
+                    $losBuckets['3–5']++;
+                } elseif ($l <= 10) {
+                    $losBuckets['6–10']++;
+                } elseif ($l <= 20) {
+                    $losBuckets['11–20']++;
+                } else {
+                    $losBuckets['21+']++;
+                }
+            }
 
-        // census by service (active non-ICU, ASSIGNED only — the legacy donut INNER JOINed
-        // members, so unassigned rows never counted; they live on the New Admissions queue)
-        $mix = (array) DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
-            ->selectRaw("
+            // census by service (active non-ICU, ASSIGNED only — the legacy donut INNER JOINed
+            // members, so unassigned rows never counted; they live on the New Admissions queue)
+            $mix = (array) DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
+                ->selectRaw('
                 SUM(CASE WHEN u.specialty_id = 1 AND a.is_longterm = 0 THEN 1 ELSE 0 END) hosp,
                 SUM(CASE WHEN (u.specialty_id <> 1 OR u.specialty_id IS NULL) AND a.is_longterm = 0 THEN 1 ELSE 0 END) subs,
-                SUM(CASE WHEN a.is_longterm = 1 THEN 1 ELSE 0 END) longterm")
-            ->whereNull('a.discharge_date')->whereNull('a.deleted_at')->whereRaw('(a.current_location <> "ICU" OR a.current_location IS NULL)')->first();
+                SUM(CASE WHEN a.is_longterm = 1 THEN 1 ELSE 0 END) longterm')
+                ->whereNull('a.discharge_date')->whereNull('a.deleted_at')->whereRaw('(a.current_location <> "ICU" OR a.current_location IS NULL)')->first();
 
-        // census-donut headline 'Current patients: N (incl. M TB)' — the DONUT'S OWN population
-        // (assigned non-ICU active), i.e. the sum of the mix slices, with its TB subset counted
-        // over the same rows (legacy dashboard/1.php:151-154 summed the donut buckets; the TB
-        // query INNER JOINed members too). The Active Census KPI tile (kpis.census) stays all-active.
-        $donutTotal = (int) (($mix['hosp'] ?? 0) + ($mix['subs'] ?? 0) + ($mix['longterm'] ?? 0));
-        $donutTb = (int) DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
-            ->whereNull('a.discharge_date')->whereNull('a.deleted_at')->whereRaw('(a.current_location <> "ICU" OR a.current_location IS NULL)')
-            ->whereExists(fn ($s) => $s->selectRaw('1')->from('admission_diagnoses as ad')
-                ->join('tb_diagnoses as tb', 'tb.icd10_code', '=', 'ad.icd10_code')
-                ->whereColumn('ad.admission_id', 'a.id'))->count();
+            // census-donut headline 'Current patients: N (incl. M TB)' — the DONUT'S OWN population
+            // (assigned non-ICU active), i.e. the sum of the mix slices, with its TB subset counted
+            // over the same rows (legacy dashboard/1.php:151-154 summed the donut buckets; the TB
+            // query INNER JOINed members too). The Active Census KPI tile (kpis.census) stays all-active.
+            $donutTotal = (int) (($mix['hosp'] ?? 0) + ($mix['subs'] ?? 0) + ($mix['longterm'] ?? 0));
+            $donutTb = (int) DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
+                ->whereNull('a.discharge_date')->whereNull('a.deleted_at')->whereRaw('(a.current_location <> "ICU" OR a.current_location IS NULL)')
+                ->whereExists(fn ($s) => $s->selectRaw('1')->from('admission_diagnoses as ad')
+                    ->join('tb_diagnoses as tb', 'tb.icd10_code', '=', 'ad.icd10_code')
+                    ->whereColumn('ad.admission_id', 'a.id'))->count();
 
-        // alias must NOT collide with a real column (users.name): MySQL resolves GROUP BY to the
-        // column (only_full_group_by error), MariaDB can't match repeated raw expressions either.
-        // A unique alias resolves identically on both engines. Re-keyed below to keep the UI shape.
-        // id + specialty_id added (Items 3 + 6): the load chart drill-through resolves a bar to a
-        // consultant_id, and the load-fairness band picks min/max by specialty. u.id is the PK so
-        // the GROUP BY stays well-formed on only_full_group_by (MySQL/MariaDB) when listed explicitly.
-        $perConsultant = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
-            ->selectRaw('u.id consultant_id, u.specialty_id, COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
-            ->whereNull('a.discharge_date')->whereNull('a.deleted_at')->whereRaw('(a.current_location <> "ICU" OR a.current_location IS NULL)')
-            ->groupByRaw('u.id, u.specialty_id, consultant')->orderByDesc('c')->limit(8)->get()
-            ->map(fn ($r) => ['id' => (int) $r->consultant_id, 'specialty_id' => (int) $r->specialty_id,
-                'name' => $r->consultant, 'c' => (int) $r->c])->all();   // plain array of arrays — cache round-trip safe
+            // alias must NOT collide with a real column (users.name): MySQL resolves GROUP BY to the
+            // column (only_full_group_by error), MariaDB can't match repeated raw expressions either.
+            // A unique alias resolves identically on both engines. Re-keyed below to keep the UI shape.
+            // id + specialty_id added (Items 3 + 6): the load chart drill-through resolves a bar to a
+            // consultant_id, and the load-fairness band picks min/max by specialty. u.id is the PK so
+            // the GROUP BY stays well-formed on only_full_group_by (MySQL/MariaDB) when listed explicitly.
+            $perConsultant = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
+                ->selectRaw('u.id consultant_id, u.specialty_id, COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
+                ->whereNull('a.discharge_date')->whereNull('a.deleted_at')->whereRaw('(a.current_location <> "ICU" OR a.current_location IS NULL)')
+                ->groupByRaw('u.id, u.specialty_id, consultant')->orderByDesc('c')->limit(8)->get()
+                ->map(fn ($r) => ['id' => (int) $r->consultant_id, 'specialty_id' => (int) $r->specialty_id,
+                    'name' => $r->consultant, 'c' => (int) $r->c])->all();   // plain array of arrays — cache round-trip safe
 
-        // per-consultant breakdown of the active census (legacy "Patient count per consultant").
-        // USERS-driven (left join), but a row now REQUIRES at least one active admission (see the
-        // whereExists below): the legacy members-list behaviour — every on-service consultant
-        // listed, zeros included — was noise, so zero-patient consultants are hidden here, on the
-        // board and on the Active List alike. The SUM cases still guard a.id IS NOT NULL.
-        $tbExists = "EXISTS (SELECT 1 FROM admission_diagnoses ad JOIN tb_diagnoses tb ON tb.icd10_code = ad.icd10_code WHERE ad.admission_id = a.id)";
-        // "New" keys on the is_new_assignment FLAG (the managed legacy signal — set on assign /
-        // handover / shuffle, cleared on discharge / reassign), NOT a rolling assigned_at >= now-24h
-        // window: that window silently reads 0 on imported/snapshot data once the newest assignment is
-        // >24h old, blanking the "New" column even though 27 patients are flagged. Matches the legacy
-        // "Patient count per consultant" table (active + newassign=1).
-        $consultantBoard = DB::table('users as u')
-            ->leftJoin('admissions as a', fn ($j) => $j->on('u.id', '=', 'a.consultant_id')->whereNull('a.discharge_date')->whereNull('a.deleted_at'))
-            ->where('u.active', 1)
-            ->whereNull('u.deleted_at')   // Phase 4 — Item 1: a soft-deleted consultant drops off the board
-            // only consultants who actually hold patients (rationale above)
-            ->whereExists(fn ($s) => $s->selectRaw('1')->from('admissions as ax')
-                ->whereColumn('ax.consultant_id', 'u.id')->whereNull('ax.discharge_date')->whereNull('ax.deleted_at'))
-            ->selectRaw("u.id, COALESCE(u.full_name, u.name) consultant, u.on_service, u.specialty_id,
+            // per-consultant breakdown of the active census (legacy "Patient count per consultant").
+            // USERS-driven (left join), but a row now REQUIRES at least one active admission (see the
+            // whereExists below): the legacy members-list behaviour — every on-service consultant
+            // listed, zeros included — was noise, so zero-patient consultants are hidden here, on the
+            // board and on the Active List alike. The SUM cases still guard a.id IS NOT NULL.
+            $tbExists = 'EXISTS (SELECT 1 FROM admission_diagnoses ad JOIN tb_diagnoses tb ON tb.icd10_code = ad.icd10_code WHERE ad.admission_id = a.id)';
+            // "New" keys on the is_new_assignment FLAG (the managed legacy signal — set on assign /
+            // handover / shuffle, cleared on discharge / reassign), NOT a rolling assigned_at >= now-24h
+            // window: that window silently reads 0 on imported/snapshot data once the newest assignment is
+            // >24h old, blanking the "New" column even though 27 patients are flagged. Matches the legacy
+            // "Patient count per consultant" table (active + newassign=1).
+            $consultantBoard = DB::table('users as u')
+                ->leftJoin('admissions as a', fn ($j) => $j->on('u.id', '=', 'a.consultant_id')->whereNull('a.discharge_date')->whereNull('a.deleted_at'))
+                ->where('u.active', 1)
+                ->whereNull('u.deleted_at')   // Phase 4 — Item 1: a soft-deleted consultant drops off the board
+                // only consultants who actually hold patients (rationale above)
+                ->whereExists(fn ($s) => $s->selectRaw('1')->from('admissions as ax')
+                    ->whereColumn('ax.consultant_id', 'u.id')->whereNull('ax.discharge_date')->whereNull('ax.deleted_at'))
+                ->selectRaw("u.id, COALESCE(u.full_name, u.name) consultant, u.on_service, u.specialty_id,
                 SUM(CASE WHEN a.id IS NOT NULL AND a.is_new_assignment = 1 THEN 1 ELSE 0 END) new,
                 SUM(CASE WHEN a.id IS NOT NULL AND a.is_new_assignment = 0 THEN 1 ELSE 0 END) old,
                 SUM(CASE WHEN a.current_location = 'ICU' THEN 1 ELSE 0 END) icu,
@@ -198,62 +210,62 @@ class DashboardController extends Controller
                 SUM(CASE WHEN a.id IS NOT NULL AND {$tbExists} THEN 1 ELSE 0 END) tb,
                 SUM(CASE WHEN a.id IS NOT NULL AND (a.current_location <> 'ICU' OR a.current_location IS NULL) AND a.medical_discharge_date IS NULL AND a.is_longterm = 0 AND NOT {$tbExists} THEN 1 ELSE 0 END) active,
                 COUNT(a.id) total")
-            ->groupByRaw('u.id, consultant, u.on_service, u.specialty_id')
-            ->orderByDesc('total')->get()
-            ->map(fn ($r) => [
-                'id' => (int) $r->id,
-                'name' => $r->consultant, 'on_service' => (bool) $r->on_service, 'specialty_id' => (int) $r->specialty_id,
-                'new' => (int) $r->new, 'old' => (int) $r->old, 'icu' => (int) $r->icu, 'ward' => (int) $r->ward,
-                'tb' => (int) $r->tb, 'active' => (int) $r->active, 'total' => (int) $r->total,
-            ])->all();   // plain array — cache round-trip safe
+                ->groupByRaw('u.id, consultant, u.on_service, u.specialty_id')
+                ->orderByDesc('total')->get()
+                ->map(fn ($r) => [
+                    'id' => (int) $r->id,
+                    'name' => $r->consultant, 'on_service' => (bool) $r->on_service, 'specialty_id' => (int) $r->specialty_id,
+                    'new' => (int) $r->new, 'old' => (int) $r->old, 'icu' => (int) $r->icu, 'ward' => (int) $r->ward,
+                    'tb' => (int) $r->tb, 'active' => (int) $r->active, 'total' => (int) $r->total,
+                ])->all();   // plain array — cache round-trip safe
 
-        // per-consultant activity since yesterday (legacy dashboard/1.php "last day" block).
-        // DATE columns — compare against the yesterday date STRING, so "since yesterday" means
-        // yesterday + today. Alias 'consultant' is the established non-colliding GROUP BY alias.
-        // Legacy parity: non-ICU rows only, joined to ACTIVE CONSULTANTS (position=3, active=1).
-        $since = Carbon::today()->subDay()->toDateString();
-        $activeConsultant = fn ($q) => $q->where('u.role', \App\Models\User::ROLE_CONSULTANT)->where('u.active', 1);
-        $adm24 = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
-            ->where('a.admit_date', '>=', $since)->whereRaw($nonIcu)->whereNull('a.deleted_at')->tap($activeConsultant)
-            ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
-            ->groupBy('consultant')->pluck('c', 'consultant');
-        $dis24 = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
-            ->where('a.discharge_date', '>=', $since)->whereRaw($nonIcu)->whereNull('a.deleted_at')->tap($activeConsultant)
-            ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
-            ->groupBy('consultant')->pluck('c', 'consultant');
-        // every ON-SERVICE active consultant appears, zeros included — the legacy table was
-        // built from the members list, so a quiet consultant still shows a row (J2-3)
-        $onServiceNames = DB::table('users')->where('role', \App\Models\User::ROLE_CONSULTANT)
-            ->where('active', 1)->where('on_service', 1)
-            ->selectRaw('COALESCE(full_name, name) consultant')->pluck('consultant');
-        $activity24h = $adm24->keys()->merge($dis24->keys())->merge($onServiceNames)->unique()->sort()->values()
-            ->map(fn ($name) => [
-                'name' => $name,
-                'admissions' => (int) ($adm24[$name] ?? 0),
-                'discharges' => (int) ($dis24[$name] ?? 0),
-            ])->all();   // plain array — cache round-trip safe
+            // per-consultant activity since yesterday (legacy dashboard/1.php "last day" block).
+            // DATE columns — compare against the yesterday date STRING, so "since yesterday" means
+            // yesterday + today. Alias 'consultant' is the established non-colliding GROUP BY alias.
+            // Legacy parity: non-ICU rows only, joined to ACTIVE CONSULTANTS (position=3, active=1).
+            $since = Carbon::today()->subDay()->toDateString();
+            $activeConsultant = fn ($q) => $q->where('u.role', User::ROLE_CONSULTANT)->where('u.active', 1);
+            $adm24 = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
+                ->where('a.admit_date', '>=', $since)->whereRaw($nonIcu)->whereNull('a.deleted_at')->tap($activeConsultant)
+                ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
+                ->groupBy('consultant')->pluck('c', 'consultant');
+            $dis24 = DB::table('admissions as a')->join('users as u', 'u.id', '=', 'a.consultant_id')
+                ->where('a.discharge_date', '>=', $since)->whereRaw($nonIcu)->whereNull('a.deleted_at')->tap($activeConsultant)
+                ->selectRaw('COALESCE(u.full_name, u.name) consultant, COUNT(*) c')
+                ->groupBy('consultant')->pluck('c', 'consultant');
+            // every ON-SERVICE active consultant appears, zeros included — the legacy table was
+            // built from the members list, so a quiet consultant still shows a row (J2-3)
+            $onServiceNames = DB::table('users')->where('role', User::ROLE_CONSULTANT)
+                ->where('active', 1)->where('on_service', 1)
+                ->selectRaw('COALESCE(full_name, name) consultant')->pluck('consultant');
+            $activity24h = $adm24->keys()->merge($dis24->keys())->merge($onServiceNames)->unique()->sort()->values()
+                ->map(fn ($name) => [
+                    'name' => $name,
+                    'admissions' => (int) ($adm24[$name] ?? 0),
+                    'discharges' => (int) ($dis24[$name] ?? 0),
+                ])->all();   // plain array — cache round-trip safe
 
-        // year-to-date counter strip (non-ICU admissions/discharges, per docs/METRICS.md)
-        $ytd = [
-            'admissions' => (int) DB::table('admissions')->whereBetween('admit_date', [$yearStart, $today])->whereRaw($nonIcu)->whereNull('deleted_at')->count(),
-            'discharges' => (int) DB::table('admissions')->whereBetween('discharge_date', [$yearStart, $today])->whereRaw($nonIcu)->whereNull('deleted_at')->count(),
-            'consultations' => (int) DB::table('consultations')->whereBetween('consultation_date', [$yearStart, $today])->whereNull('deleted_at')->count(),
-            'signoffs' => (int) DB::table('consultations')->whereBetween('signoff_date', [$yearStart, $today])->whereNull('deleted_at')->count(),
-        ];
+            // year-to-date counter strip (non-ICU admissions/discharges, per docs/METRICS.md)
+            $ytd = [
+                'admissions' => (int) DB::table('admissions')->whereBetween('admit_date', [$yearStart, $today])->whereRaw($nonIcu)->whereNull('deleted_at')->count(),
+                'discharges' => (int) DB::table('admissions')->whereBetween('discharge_date', [$yearStart, $today])->whereRaw($nonIcu)->whereNull('deleted_at')->count(),
+                'consultations' => (int) DB::table('consultations')->whereBetween('consultation_date', [$yearStart, $today])->whereNull('deleted_at')->count(),
+                'signoffs' => (int) DB::table('consultations')->whereBetween('signoff_date', [$yearStart, $today])->whereNull('deleted_at')->count(),
+            ];
 
-        // top 5 diagnoses for THIS calendar week-number across ALL years — the legacy card
-        // (dashboard/3.php: WEEK(ADMDATE) = WEEK(today)) is a seasonal "what does this week of
-        // the year admit" view, not a rolling last-7-days window. DELIBERATE definition change
-        // back to legacy (was: last 7 days).
-        // "This week" is the app's calendar day, bound from PHP — MySQL's CURDATE() is the DB host's
-        // (UTC) day and is still yesterday between 00:00 and 03:00 local (I18N-02).
-        $topDxWeekNum = (int) DB::selectOne('SELECT WEEK(?) wk', [$today])->wk;
-        $topDxWeek = DB::table('admission_diagnoses as ad')->join('admissions as a', 'a.id', '=', 'ad.admission_id')
-            ->leftJoin('icd10 as i', 'i.code', '=', 'ad.icd10_code')
-            ->whereRaw('WEEK(a.admit_date) = WEEK(?)', [$today])->whereNull('a.deleted_at')   // Phase 4 — Item 1
-            ->selectRaw('ad.icd10_code code, MAX(i.name) name, COUNT(*) c')
-            ->groupBy('ad.icd10_code')->orderByDesc('c')->limit(5)->get()
-            ->map(fn ($r) => ['name' => $r->name ?: $r->code, 'count' => (int) $r->c])->all();   // plain array — cache round-trip safe
+            // top 5 diagnoses for THIS calendar week-number across ALL years — the legacy card
+            // (dashboard/3.php: WEEK(ADMDATE) = WEEK(today)) is a seasonal "what does this week of
+            // the year admit" view, not a rolling last-7-days window. DELIBERATE definition change
+            // back to legacy (was: last 7 days).
+            // "This week" is the app's calendar day, bound from PHP — MySQL's CURDATE() is the DB host's
+            // (UTC) day and is still yesterday between 00:00 and 03:00 local (I18N-02).
+            $topDxWeekNum = (int) DB::selectOne('SELECT WEEK(?) wk', [$today])->wk;
+            $topDxWeek = DB::table('admission_diagnoses as ad')->join('admissions as a', 'a.id', '=', 'ad.admission_id')
+                ->leftJoin('icd10 as i', 'i.code', '=', 'ad.icd10_code')
+                ->whereRaw('WEEK(a.admit_date) = WEEK(?)', [$today])->whereNull('a.deleted_at')   // Phase 4 — Item 1
+                ->selectRaw('ad.icd10_code code, MAX(i.name) name, COUNT(*) c')
+                ->groupBy('ad.icd10_code')->orderByDesc('c')->limit(5)->get()
+                ->map(fn ($r) => ['name' => $r->name ?: $r->code, 'count' => (int) $r->c])->all();   // plain array — cache round-trip safe
 
             return compact('trend', 'cons', 'losBuckets', 'mix', 'donutTotal', 'donutTb',
                 'perConsultant', 'consultantBoard', 'activity24h', 'ytd', 'topDxWeek', 'topDxWeekNum',
@@ -261,12 +273,20 @@ class DashboardController extends Controller
         });   // end Cache::remember('dashboard.heavy')
 
         // unpack the heavy tier
-        $trend = $heavy['trend']; $cons = $heavy['cons']; $losBuckets = $heavy['losBuckets'];
-        $mix = $heavy['mix']; $donutTotal = $heavy['donutTotal']; $donutTb = $heavy['donutTb'];
-        $perConsultant = $heavy['perConsultant']; $consultantBoard = $heavy['consultantBoard'];
-        $activity24h = $heavy['activity24h']; $ytd = $heavy['ytd'];
-        $topDxWeek = $heavy['topDxWeek']; $topDxWeekNum = $heavy['topDxWeekNum'];
-        $admBy = $heavy['admBy']; $disBy = $heavy['disBy'];
+        $trend = $heavy['trend'];
+        $cons = $heavy['cons'];
+        $losBuckets = $heavy['losBuckets'];
+        $mix = $heavy['mix'];
+        $donutTotal = $heavy['donutTotal'];
+        $donutTb = $heavy['donutTb'];
+        $perConsultant = $heavy['perConsultant'];
+        $consultantBoard = $heavy['consultantBoard'];
+        $activity24h = $heavy['activity24h'];
+        $ytd = $heavy['ytd'];
+        $topDxWeek = $heavy['topDxWeek'];
+        $topDxWeekNum = $heavy['topDxWeekNum'];
+        $admBy = $heavy['admBy'];
+        $disBy = $heavy['disBy'];
 
         // ── Recent admissions (live tier) ──────────────────────────────────────────────────────
         // a simple ORDER BY DESC LIMIT 8 — kept OUTSIDE the cache so the newest admission always shows.
@@ -412,10 +432,10 @@ class DashboardController extends Controller
             $securityAnomalies = $failedClusters + $mfaNonCompliant;
 
             $recentlyDeleted = (int) Admission::onlyTrashed()->count()
-                + (int) \App\Models\Consultation::onlyTrashed()->count()
+                + (int) Consultation::onlyTrashed()->count()
                 + (int) User::onlyTrashed()->count();
 
-            $pendingHandovers = (int) \App\Models\HandoverSignature::pending()->count();
+            $pendingHandovers = (int) HandoverSignature::pending()->count();
             // TD-T3: unit-wide "needs handover" count (all consultants) — live tier, uncached,
             // matching pendingHandovers above (a different, narrower signature-based signal).
             $handoverDueUnit = (int) Admission::handoverPending()->count();

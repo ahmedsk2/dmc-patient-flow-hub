@@ -33,7 +33,6 @@ declare(strict_types=1);
  * Every entry MUST carry package, id, reason and reviewed_at — a malformed entry is exit 2, so an
  * allow-list cannot be widened by a half-written line.
  */
-
 const EXIT_PASS = 0;
 const EXIT_BLOCK = 1;
 const EXIT_USAGE = 2;
@@ -127,6 +126,7 @@ foreach ($report['advisories'] as $package => $advisories) {
 
         if ($entry !== null) {
             $ignored[] = "{$label} — ignored: {$entry['reason']} (reviewed {$entry['reviewed_at']}".(empty($entry['review_by']) ? '' : ", review by {$entry['review_by']}").')';
+
             continue;
         }
 
@@ -161,7 +161,7 @@ foreach ($blocking as $line) {
 }
 
 $summary = sprintf(
-    "composer audit gate: %d blocking, %d expired ignore(s), %d warning(s) (medium/low), %d ignored, %d abandoned",
+    'composer audit gate: %d blocking, %d expired ignore(s), %d warning(s) (medium/low), %d ignored, %d abandoned',
     count($blocking), count($expired), count($warnings), count($ignored), count($abandoned)
 );
 echo $summary."\n";

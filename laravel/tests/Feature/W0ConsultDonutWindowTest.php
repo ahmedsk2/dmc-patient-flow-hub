@@ -23,7 +23,7 @@ class W0ConsultDonutWindowTest extends TestCase
     private function admin(): User
     {
         return User::create([
-            'username' => 'w0d_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'w0d_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'W0 Admin', 'password' => 'secret12345',
             'role' => User::ROLE_ADMIN, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
@@ -33,7 +33,7 @@ class W0ConsultDonutWindowTest extends TestCase
     private function consult(string $mrn, ?string $signoff): Consultation
     {
         return Consultation::create([
-            'mrn' => $mrn, 'patient_name' => 'Donut Pt ' . $mrn,
+            'mrn' => $mrn, 'patient_name' => 'Donut Pt '.$mrn,
             'consultation_date' => now()->subDays(6)->toDateString(),
             'signoff_date' => $signoff, 'indication' => [],
         ]);

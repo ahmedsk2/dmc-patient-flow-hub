@@ -6,6 +6,7 @@ use App\Models\Admission;
 use App\Models\Consultation;
 use App\Models\User;
 use App\Support\Audit;
+use App\Support\DashboardCache;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -80,7 +81,7 @@ class TrashedController extends Controller
                 'mrn' => $admission->patient?->mrn,
             ]);
         });
-        \App\Support\DashboardCache::bust();
+        DashboardCache::bust();
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Admission restored.']);
     }

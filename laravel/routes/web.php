@@ -10,6 +10,7 @@ use App\Http\Controllers\Auth\UsernameReminderController;
 use App\Http\Controllers\ConsultationDashboardController;
 use App\Http\Controllers\ConsultationsController;
 use App\Http\Controllers\ControlController;
+use App\Http\Controllers\CspReportController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DataQualityController;
 use App\Http\Controllers\HandoverController;
@@ -77,7 +78,7 @@ Route::middleware('guest')->group(function () {
 // CSP violation-report sink (SecurityHeaders adds `report-uri /csp-report` to the policy).
 // Unauthenticated by design — browsers post reports without credentials; CSRF-exempted in
 // bootstrap/app.php; throttled hard since it is an open write endpoint (log-only, no storage).
-Route::post('/csp-report', [\App\Http\Controllers\CspReportController::class, 'store'])
+Route::post('/csp-report', [CspReportController::class, 'store'])
     ->middleware('throttle:30,1')->name('csp.report');
 
 // Public PDPL privacy notice (EN + AR). Deliberately outside BOTH the guest and auth groups: a

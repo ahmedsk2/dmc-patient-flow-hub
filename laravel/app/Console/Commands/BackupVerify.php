@@ -48,7 +48,7 @@ class BackupVerify extends Command
     {
         $maxAgeHours = max(1, (int) $this->option('max-age-hours'));
         $bucket = (string) config('services.db_backup.bucket');
-        $heartbeatKey = trim((string) config('services.db_backup.prefix'), '/') . '/LATEST.json';
+        $heartbeatKey = trim((string) config('services.db_backup.prefix'), '/').'/LATEST.json';
 
         $context = [
             'bucket' => $bucket,
@@ -65,7 +65,7 @@ class BackupVerify extends Command
         try {
             $raw = $client->get($heartbeatKey);
         } catch (Throwable $e) {
-            return $this->raiseIncident('error', 'could not read the backup heartbeat: ' . $this->safeMessage($e), $context);
+            return $this->raiseIncident('error', 'could not read the backup heartbeat: '.$this->safeMessage($e), $context);
         }
 
         if ($raw === null) {
@@ -100,7 +100,7 @@ class BackupVerify extends Command
         try {
             $head = $client->headObject((string) $heartbeat['object']);
         } catch (Throwable $e) {
-            return $this->raiseIncident('error', 'could not HEAD the backup object: ' . $this->safeMessage($e), $context);
+            return $this->raiseIncident('error', 'could not HEAD the backup object: '.$this->safeMessage($e), $context);
         }
         if ($head === 404) {
             return $this->raiseIncident('missing', 'the heartbeat points at an object that is not in the bucket', $context);
@@ -113,7 +113,7 @@ class BackupVerify extends Command
 
         Log::info('backup.verify_ok', $context);
         $this->info("Backup OK — {$context['object']} is {$ageHours}h old (limit {$maxAgeHours}h)."
-            . ($resolved ? " Resolved {$resolved} open backup.stale notification(s)." : ''));
+            .($resolved ? " Resolved {$resolved} open backup.stale notification(s)." : ''));
 
         return self::SUCCESS;
     }
@@ -123,7 +123,7 @@ class BackupVerify extends Command
      * warning for a plain stale/missing backup), then one notification per active admin unless
      * that admin already has an unresolved backup.stale open.
      *
-     * @param array<string,mixed> $context bucket/key/ages only — never credentials
+     * @param  array<string,mixed>  $context  bucket/key/ages only — never credentials
      */
     private function raiseIncident(string $reason, string $detail, array $context): int
     {
@@ -171,6 +171,6 @@ class BackupVerify extends Command
      */
     private function safeMessage(Throwable $e): string
     {
-        return mb_substr(class_basename($e) . ': ' . $e->getMessage(), 0, 300);
+        return mb_substr(class_basename($e).': '.$e->getMessage(), 0, 300);
     }
 }

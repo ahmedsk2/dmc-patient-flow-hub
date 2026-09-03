@@ -6,7 +6,9 @@ use App\Models\Admission;
 use App\Models\AuditLog;
 use App\Models\Consultation;
 use App\Models\ConsultationReason;
+use App\Models\Icd10;
 use App\Models\Patient;
+use App\Models\Specialty;
 use App\Models\User;
 use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -29,7 +31,7 @@ class ResidualR3Test extends TestCase
     private function user(int $role, array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'r3_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'r3_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'R3 User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
@@ -57,7 +59,7 @@ class ResidualR3Test extends TestCase
         $consultant = $this->user(User::ROLE_CONSULTANT, ['full_name' => 'Dr Receiver']);
         $reason = ConsultationReason::create(['name' => 'R3 Reason']);
         // H1: a consultant is required only for an INTERNAL to_service — make Cardiology one
-        \App\Models\Specialty::firstOrCreate(['name' => 'Cardiology'], ['is_subspecialty' => true, 'is_external' => false]);
+        Specialty::firstOrCreate(['name' => 'Cardiology'], ['is_subspecialty' => true, 'is_external' => false]);
 
         return array_merge([
             'mrn' => '30001234', 'patient_name' => 'Consult Pt', 'age' => 41, 'bed' => 'B-07',
@@ -118,7 +120,7 @@ class ResidualR3Test extends TestCase
 
     public function test_consultations_page_ships_specialty_objects_and_on_service_options(): void
     {
-        \App\Models\Specialty::create(['name' => 'Cardiology', 'is_subspecialty' => true, 'is_external' => false]);
+        Specialty::create(['name' => 'Cardiology', 'is_subspecialty' => true, 'is_external' => false]);
         $this->user(User::ROLE_CONSULTANT, ['full_name' => 'Dr On', 'on_service' => 1]);
 
         $this->actingAs($this->admin())->get('/consultations')
@@ -173,7 +175,7 @@ class ResidualR3Test extends TestCase
     public function test_active_list_renders_group_data_for_all_roles(): void
     {
         $c = $this->user(User::ROLE_CONSULTANT, ['full_name' => 'Dr Census']);
-        \App\Models\Icd10::create(['code' => 'J18.9', 'name' => 'Pneumonia, unspecified organism']);
+        Icd10::create(['code' => 'J18.9', 'name' => 'Pneumonia, unspecified organism']);
         $a = $this->admission(['consultant_id' => $c->id, 'bed' => 'W-12']);
         $a->diagnoses()->create(['seq' => 1, 'icd10_code' => 'J18.9']);
 

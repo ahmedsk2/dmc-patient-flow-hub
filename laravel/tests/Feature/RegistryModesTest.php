@@ -27,7 +27,7 @@ class RegistryModesTest extends TestCase
     {
         parent::setUp();
         $this->admin = User::create([
-            'username' => 'rm_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'rm_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'RM Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
@@ -42,6 +42,7 @@ class RegistryModesTest extends TestCase
         foreach ($codes as $c) {
             AdmissionDiagnosis::create(['admission_id' => $a->id, 'seq' => $seq++, 'icd10_code' => $c]);
         }
+
         return $a;
     }
 

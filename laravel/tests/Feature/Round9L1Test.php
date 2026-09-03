@@ -8,9 +8,11 @@ use App\Models\Consultation;
 use App\Models\Handover;
 use App\Models\HandoverRevision;
 use App\Models\HandoverSignature;
+use App\Models\Icd10;
 use App\Models\Patient;
 use App\Models\Setting;
 use App\Models\Specialty;
+use App\Models\TbDiagnosis;
 use App\Models\User;
 use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -48,7 +50,7 @@ class Round9L1Test extends TestCase
     private function user(int $role = User::ROLE_CONSULTANT, array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'l1_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'l1_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'L1 User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
@@ -499,8 +501,8 @@ class Round9L1Test extends TestCase
 
     public function test_consultant_chips_are_unit_wide_on_longterm_and_tb_views(): void
     {
-        \App\Models\Icd10::create(['code' => 'A15.0', 'name' => 'Tuberculosis of lung']);
-        \App\Models\TbDiagnosis::create(['icd10_code' => 'A15.0']);
+        Icd10::create(['code' => 'A15.0', 'name' => 'Tuberculosis of lung']);
+        TbDiagnosis::create(['icd10_code' => 'A15.0']);
         $me = $this->user(User::ROLE_CONSULTANT, ['full_name' => 'Dr Me']);
         $other = $this->user(User::ROLE_CONSULTANT, ['full_name' => 'Dr Other']);
         $this->admission(['consultant_id' => $me->id, 'is_longterm' => 1]);

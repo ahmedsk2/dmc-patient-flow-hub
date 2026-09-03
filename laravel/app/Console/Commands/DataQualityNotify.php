@@ -17,6 +17,7 @@ use Illuminate\Console\Command;
 class DataQualityNotify extends Command
 {
     protected $signature = 'dq:notify';
+
     protected $description = 'Notify admins of outstanding data-quality issues (daily digest)';
 
     public function handle(DataQualityController $dq): int

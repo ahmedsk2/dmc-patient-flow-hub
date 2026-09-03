@@ -85,12 +85,14 @@ return new class extends Migration
                         if ($encrypt) {
                             if ($plain !== null) {          // already encrypted — never re-encrypt
                                 $skipped++;
+
                                 continue;
                             }
                             $new = Crypt::encryptString($stored);
                         } else {
                             if ($plain === null) {          // already plaintext (or undecryptable) — leave it
                                 $skipped++;
+
                                 continue;
                             }
                             $new = $plain;

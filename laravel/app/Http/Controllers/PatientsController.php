@@ -3,10 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Models\Admission;
+use App\Models\Country;
+use App\Models\Handover;
+use App\Models\HandoverSignature;
 use App\Models\Setting;
 use App\Models\Specialty;
 use App\Models\User;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -18,13 +24,13 @@ use Inertia\Response;
  */
 class PatientsController extends Controller
 {
-    public function index(Request $request): Response|\Illuminate\Http\RedirectResponse
+    public function index(Request $request): Response|RedirectResponse
     {
         // SPC-TM-011 (Wave 1): the free-text term is patient name/MRN — it now travels in a POST
         // body only. A legacy GET-with-term (old bookmark/history entry) is still accepted but
         // redirects to the term-less board, keeping every non-PII filter.
         if ($request->isMethod('get') && trim((string) $request->query('search', '')) !== '') {
-            return redirect()->route('patients.index', \Illuminate\Support\Arr::except($request->query(), ['search']));
+            return redirect()->route('patients.index', Arr::except($request->query(), ['search']));
         }
 
         $settings = Setting::current();
@@ -66,7 +72,7 @@ class PatientsController extends Controller
                 ->when($request->user()->seesOwnPatientsOnly(), fn ($q) => $q->where('consultant_id', $request->user()->id))
                 ->count(),
             'consultants' => User::consultantOptions(),
-            'countries' => \App\Models\Country::orderBy('name')->pluck('name'),   // Modify modal nationality select
+            'countries' => Country::orderBy('name')->pluck('name'),   // Modify modal nationality select
             'specialties' => Specialty::where('is_external', false)->orderBy('name')->get(['id', 'name']),
             'externalServices' => Specialty::where('is_external', true)->orderBy('name')->pluck('name'),
             'stats' => [
@@ -126,7 +132,7 @@ class PatientsController extends Controller
      * Rows carry `dest` (board|registry) instead of a URL so the client never builds an
      * MRN-bearing query string.
      */
-    public function quickSearch(Request $request): \Illuminate\Http\JsonResponse
+    public function quickSearch(Request $request): JsonResponse
     {
         $u = $request->user();
         $isAdmin = $u->isAdmin();
@@ -255,8 +261,7 @@ class PatientsController extends Controller
             ->when(($filters['view'] ?? null) === 'boarding', fn ($q) => $q->whereNotNull('medical_discharge_date'))
             // drill-through filters (Phase 1, Item 3): applied ON TOP of the D1 scope above
             ->when($filters['consultant_id'] ?? null, fn ($q, $id) => $q->where('consultant_id', (int) $id))
-            ->when($filters['specialty_id'] ?? null, fn ($q, $id) =>
-                $q->whereHas('consultant', fn ($u) => $u->where('specialty_id', (int) $id)))
+            ->when($filters['specialty_id'] ?? null, fn ($q, $id) => $q->whereHas('consultant', fn ($u) => $u->where('specialty_id', (int) $id)))
             ->when($filters['search'] ?? null, fn ($q, $s) => $q->whereHas('patient',
                 fn ($p) => $p->where('name', 'like', "%{$s}%")->orWhere('mrn', 'like', "%{$s}%")))
             // needs-handover filter (TD-T3): active admissions carrying an unresolved transfer-driven reminder
@@ -277,11 +282,11 @@ class PatientsController extends Controller
         // with the dashboard's "Patient count per consultant" table and the legacy app.
 
         // handover meta + my pending signatures — two grouped lookups, no per-card queries
-        $handovers = \App\Models\Handover::whereIn('admission_id', $admissions->pluck('id'))
+        $handovers = Handover::whereIn('admission_id', $admissions->pluck('id'))
             ->with('updatedBy:id,name,full_name')->get()->keyBy('admission_id');
         // sign-pending is matched by PATIENT (a specialty transfer leaves the signature on the
         // closed episode while the board shows the patient's new one)
-        $signPendingPatientIds = \App\Models\HandoverSignature::where('to_consultant_id', auth()->id())
+        $signPendingPatientIds = HandoverSignature::where('to_consultant_id', auth()->id())
             ->whereNull('signed_at')->whereNull('voided_at')
             ->join('admissions', 'admissions.id', '=', 'handover_signatures.admission_id')
             ->pluck('admissions.patient_id')->flip();
@@ -349,17 +354,34 @@ class PatientsController extends Controller
 
             $c = &$groups[$cid]['counts'];
             $c['total']++;
-            if ($a->is_new_assignment) { $c['new']++; } else { $c['old']++; }
-            if ($isIcu) { $c['icu']++; } else { $c['ward']++; }
-            if ($isTb) $c['tb']++;
-            if (! $discharged && ! $isIcu && ! $medDischarged && ! $a->is_longterm && ! $isTb) $c['active']++;
+            if ($a->is_new_assignment) {
+                $c['new']++;
+            } else {
+                $c['old']++;
+            }
+            if ($isIcu) {
+                $c['icu']++;
+            } else {
+                $c['ward']++;
+            }
+            if ($isTb) {
+                $c['tb']++;
+            }
+            if (! $discharged && ! $isIcu && ! $medDischarged && ! $a->is_longterm && ! $isTb) {
+                $c['active']++;
+            }
             unset($c);
         }
 
         // order: on-service hospitalist (specialty 1) → on-service subspecialty → off-service
         $rank = function ($g) {
-            if ($g['on_service'] && $g['specialty_id'] === 1) return 0;
-            if ($g['on_service']) return 1;
+            if ($g['on_service'] && $g['specialty_id'] === 1) {
+                return 0;
+            }
+            if ($g['on_service']) {
+                return 1;
+            }
+
             return 2;
         };
         $groups = array_values($groups);

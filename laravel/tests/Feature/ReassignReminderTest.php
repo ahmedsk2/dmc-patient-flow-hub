@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Admission;
+use App\Models\AuditLog;
 use App\Models\Handover;
 use App\Models\Notification;
 use App\Models\Patient;
@@ -23,17 +24,17 @@ class ReassignReminderTest extends TestCase
     private function reassignFixture(bool $withTodayHandover = false): array
     {
         $admin = User::create([
-            'username' => 'rr_admin_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'rr_admin_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'RR Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
         $from = User::create([
-            'username' => 'rr_from_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'rr_from_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'RR From', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
         $to = User::create([
-            'username' => 'rr_to_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'rr_to_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'RR To', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
             'on_service' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
@@ -116,7 +117,7 @@ class ReassignReminderTest extends TestCase
     {
         [$admin, $x, $y, $admission] = $this->reassignFixture();
         $z = User::create([
-            'username' => 'rr_z_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'rr_z_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'RR Z', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
             'on_service' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
@@ -162,7 +163,7 @@ class ReassignReminderTest extends TestCase
             'consultant_id' => $to->id, 'acknowledged' => true,
         ])->assertRedirect();
 
-        $row = \App\Models\AuditLog::where('action', 'handover.reassign_incomplete')->latest('id')->first();
+        $row = AuditLog::where('action', 'handover.reassign_incomplete')->latest('id')->first();
         $this->assertNotNull($row);
         $this->assertTrue((bool) ($row->details['acknowledged'] ?? false));
     }
@@ -267,12 +268,12 @@ class ReassignReminderTest extends TestCase
         ])->assertRedirect();
 
         // every reminder carries the column, not just the JSON payload
-        $this->assertSame(2, \App\Models\Notification::where('type', 'handover.incomplete')
+        $this->assertSame(2, Notification::where('type', 'handover.incomplete')
             ->where('admission_id', $admission->id)->whereNull('resolved_at')->count());
 
         // saving the note resolves them THROUGH the column
         $this->actingAs($to)->postJson("/admissions/{$admission->id}/handover", ['body' => 'done'])->assertOk();
-        $this->assertSame(0, \App\Models\Notification::where('type', 'handover.incomplete')
+        $this->assertSame(0, Notification::where('type', 'handover.incomplete')
             ->where('admission_id', $admission->id)->whereNull('resolved_at')->count());
     }
 }

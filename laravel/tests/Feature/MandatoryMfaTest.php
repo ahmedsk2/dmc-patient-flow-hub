@@ -20,7 +20,7 @@ class MandatoryMfaTest extends TestCase
     private function user(int $role, array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'mm_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'mm_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'MM User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
         ], $extra));
     }

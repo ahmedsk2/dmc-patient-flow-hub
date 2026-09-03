@@ -2,13 +2,13 @@
 
 namespace Tests\Feature;
 
-use App\Support\Totp;
-
 use App\Models\Admission;
 use App\Models\Patient;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
 /**
@@ -30,7 +30,7 @@ use Tests\TestCase;
  *   census = 4; legacy totalPatients = 4 + A4 active Jul..Dec (1 × 6) = 10
  *   legacy longStay = 6 (A4 active and admitted >30 days before each month-end Jul..Dec) → 60.00%
  */
-#[\PHPUnit\Framework\Attributes\Group('pdf')]
+#[Group('pdf')]
 class GapWave2Test extends TestCase
 {
     use RefreshDatabase;
@@ -38,7 +38,7 @@ class GapWave2Test extends TestCase
     private function admin(): User
     {
         return User::create([
-            'username' => 'g2_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'g2_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'G2 Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
     }

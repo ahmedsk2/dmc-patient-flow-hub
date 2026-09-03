@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Admission;
 use App\Models\AuditLog;
 use App\Models\Consultation;
+use App\Models\Handover;
 use App\Models\Icd10;
 use App\Models\Patient;
 use App\Models\User;
@@ -30,7 +31,7 @@ class ResidualR2Test extends TestCase
     private function user(int $role, array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'r2_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'r2_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'R2 User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
@@ -301,7 +302,7 @@ class ResidualR2Test extends TestCase
         $a = $this->admission(['consultant_id' => $from->id, 'assigned_at' => $stamp,
             'assigned_on' => $stamp->toDateString(), 'is_new_assignment' => 1]);
         // bulk reassign is handover-gated: every moving patient needs a handover updated TODAY
-        \App\Models\Handover::create(['admission_id' => $a->id, 'body' => 'Plan attached.', 'updated_by' => $from->id]);
+        Handover::create(['admission_id' => $a->id, 'body' => 'Plan attached.', 'updated_by' => $from->id]);
 
         $this->actingAs($this->admin())->post('/admissions/reassign', [
             'from_consultant_id' => $from->id, 'to_consultant_id' => $to->id, 'mark_new' => false,
@@ -319,7 +320,7 @@ class ResidualR2Test extends TestCase
         $to = $this->user(User::ROLE_CONSULTANT);
         $a = $this->admission(['consultant_id' => $from->id]);
         // bulk reassign is handover-gated: every moving patient needs a handover updated TODAY
-        \App\Models\Handover::create(['admission_id' => $a->id, 'body' => 'Plan attached.', 'updated_by' => $from->id]);
+        Handover::create(['admission_id' => $a->id, 'body' => 'Plan attached.', 'updated_by' => $from->id]);
 
         $this->actingAs($this->admin())->post('/admissions/reassign', [
             'from_consultant_id' => $from->id, 'to_consultant_id' => $to->id,

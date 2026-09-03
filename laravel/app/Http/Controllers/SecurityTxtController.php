@@ -18,13 +18,13 @@ class SecurityTxtController extends Controller
     public function show(): Response
     {
         $lines = [
-            'Contact: ' . (string) config('security.contact'),
-            'Expires: ' . now()->addYear()->toIso8601ZuluString(),
+            'Contact: '.(string) config('security.contact'),
+            'Expires: '.now()->addYear()->toIso8601ZuluString(),
             'Preferred-Languages: en, ar',
-            'Canonical: ' . url('/.well-known/security.txt'),
+            'Canonical: '.url('/.well-known/security.txt'),
         ];
 
-        return response(implode("\n", $lines) . "\n", 200, [
+        return response(implode("\n", $lines)."\n", 200, [
             'Content-Type' => 'text/plain; charset=utf-8',
             'Cache-Control' => 'public, max-age=3600',
         ]);

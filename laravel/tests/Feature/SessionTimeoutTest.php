@@ -24,7 +24,7 @@ class SessionTimeoutTest extends TestCase
     private function user(array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'st_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'st_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'ST User', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
         ], $extra));
     }
@@ -87,9 +87,9 @@ class SessionTimeoutTest extends TestCase
     public function test_mfa_login_stamps_session_started_at(): void
     {
         // enroll a user with MFA so the login routes through the challenge
-        $secret = \App\Support\Totp::secret();
+        $secret = Totp::secret();
         $u = User::create([
-            'username' => 'st_mfa_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'st_mfa_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'ST MFA', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
             'mfa_secret' => $secret, 'mfa_enrolled_at' => now(),
         ]);
@@ -111,7 +111,7 @@ class SessionTimeoutTest extends TestCase
     /** Current valid 6-digit TOTP for a secret, via the private Totp::code (verifier accepts it). */
     private function totpFor(string $secret): string
     {
-        $reflect = new \ReflectionMethod(\App\Support\Totp::class, 'code');
+        $reflect = new \ReflectionMethod(Totp::class, 'code');
         $reflect->setAccessible(true);
 
         return $reflect->invoke(null, $secret, intdiv(time(), 30));

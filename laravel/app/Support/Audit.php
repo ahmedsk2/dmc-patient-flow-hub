@@ -21,10 +21,10 @@ final class Audit
      * Write one audit row. Actor identity and IP always come from the session/request;
      * the caller supplies what happened and to what.
      *
-     * @param string      $action     e.g. 'admission.discharge', 'user.delete'
-     * @param string      $entityType e.g. 'admission', 'consultation', 'user'
-     * @param string|null $entityId   string-cast PK, or null for bulk/system actions
-     * @param array       $details    arbitrary JSON context (before/after values, etc.)
+     * @param  string  $action  e.g. 'admission.discharge', 'user.delete'
+     * @param  string  $entityType  e.g. 'admission', 'consultation', 'user'
+     * @param  string|null  $entityId  string-cast PK, or null for bulk/system actions
+     * @param  array  $details  arbitrary JSON context (before/after values, etc.)
      */
     public static function log(
         string $action,

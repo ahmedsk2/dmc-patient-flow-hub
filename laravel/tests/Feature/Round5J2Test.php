@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\MfaController;
 use App\Models\Admission;
 use App\Models\AuditLog;
 use App\Models\Consultation;
+use App\Models\Icd10;
 use App\Models\Patient;
 use App\Models\Setting;
 use App\Models\Specialty;
@@ -42,7 +44,7 @@ class Round5J2Test extends TestCase
     private function user(int $role = User::ROLE_CONSULTANT, array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'j2_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'j2_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'J2 User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
@@ -208,7 +210,7 @@ class Round5J2Test extends TestCase
 
     public function test_dashboard_consult_donut_and_active_tb_count(): void
     {
-        \App\Models\Icd10::create(['code' => 'A15.0', 'name' => 'Tuberculosis of lung']);
+        Icd10::create(['code' => 'A15.0', 'name' => 'Tuberculosis of lung']);
         TbDiagnosis::create(['icd10_code' => 'A15.0']);
 
         Consultation::create(['mrn' => '93000010', 'patient_name' => 'Open Cx',
@@ -388,6 +390,6 @@ class Round5J2Test extends TestCase
     {
         // owner decision: MFA can only be reset by an admin (Control panel) — no self-disable
         $this->actingAs($this->user())->delete('/mfa')->assertNotFound();
-        $this->assertFalse(method_exists(\App\Http\Controllers\MfaController::class, 'disable'));
+        $this->assertFalse(method_exists(MfaController::class, 'disable'));
     }
 }

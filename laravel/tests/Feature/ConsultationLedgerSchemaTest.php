@@ -8,6 +8,7 @@ use App\Models\Patient;
 use App\Models\Specialty;
 use App\Models\User;
 use App\Support\Totp;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -102,7 +103,7 @@ class ConsultationLedgerSchemaTest extends TestCase
     public function test_signed_off_by_user_deletion_nulls_the_fk_without_destroying_the_consultation(): void
     {
         $signer = User::create([
-            'username' => 'ledger_fk_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'ledger_fk_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'Ledger FK Signer', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT,
             'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
@@ -182,7 +183,7 @@ class ConsultationLedgerSchemaTest extends TestCase
         ]);
 
         // the unique index IS the correctness guarantee behind "seen 8 of 12 today"
-        $this->expectException(\Illuminate\Database\QueryException::class);
+        $this->expectException(QueryException::class);
         DB::table('consultation_followups')->insert([
             'consultation_id' => $c->id, 'followup_date' => '2026-08-21', 'note' => 'seen again',
         ]);
@@ -256,11 +257,11 @@ class ConsultationLedgerSchemaTest extends TestCase
     {
         $this->assertTrue(Schema::hasColumn('users', 'can_coordinate_consultations'));
 
-        $u = \App\Models\User::create([
-            'username' => 'w1_default_' . substr(md5(uniqid('', true)), 0, 8),
+        $u = User::create([
+            'username' => 'w1_default_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'W1 Default', 'password' => 'secret12345',
-            'role' => \App\Models\User::ROLE_CONSULTANT, 'active' => 1,
-            'mfa_secret' => \App\Support\Totp::secret(), 'mfa_enrolled_at' => now(),
+            'role' => User::ROLE_CONSULTANT, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
 
         // default OFF: granting coordination is an explicit administrative act
@@ -271,7 +272,7 @@ class ConsultationLedgerSchemaTest extends TestCase
     {
         // a row written the way the legacy importer writes users (no capability columns at all)
         $id = DB::table('users')->insertGetId([
-            'username' => 'w1_legacy_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'w1_legacy_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'W1 Legacy', 'password' => 'x', 'role' => 4, 'active' => 1,
             'created_at' => now(), 'updated_at' => now(),
         ]);

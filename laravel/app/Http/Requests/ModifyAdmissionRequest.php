@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * Modify-patient payload — the same demographics block as StoreAdmissionRequest, but the
@@ -50,7 +52,7 @@ class ModifyAdmissionRequest extends FormRequest
         $submitted = array_map(fn ($c) => trim((string) $c), (array) $this->input('diagnoses', []));
         $newCodes = array_diff($submitted, $storedCodes);
         $rules['diagnoses.*'] = count($newCodes) > 0
-            ? ['string', 'max:100', \Illuminate\Validation\Rule::exists('icd10', 'code')]
+            ? ['string', 'max:100', Rule::exists('icd10', 'code')]
             : ['string', 'max:100'];
 
         // validate-only-on-change (legacy decision): untouched dirty values stay save-able
@@ -74,7 +76,7 @@ class ModifyAdmissionRequest extends FormRequest
         // a CHANGED admitted_from must come from the legacy ADMFROM enum, untouched dirty stays
         $rules['admit_date'] = ['required', 'date', 'before_or_equal:today'];
         $rules['admitted_from'] = ($admission && $this->changed('admitted_from', $admission->admitted_from))
-            ? ['nullable', 'string', 'max:64', 'in:' . implode(',', StoreAdmissionRequest::ADMIT_FROM)]
+            ? ['nullable', 'string', 'max:64', 'in:'.implode(',', StoreAdmissionRequest::ADMIT_FROM)]
             : ['nullable', 'string', 'max:64'];
         $rules['current_location'] = ['required', 'in:ER,Ward,ICU'];
         // optional QUIET consultant change (legacy Modify semantics, J2-13). The consultant-role
@@ -83,8 +85,8 @@ class ModifyAdmissionRequest extends FormRequest
         // legitimately held by a registrar/resident (assign-to-me, K1-9) must stay editable for an
         // unrelated bed/date correction — an unchanged consultant_id always passes (N1-1).
         $rules['consultant_id'] = ($admission && $this->changed('consultant_id', $admission->consultant_id))
-            ? ['nullable', \Illuminate\Validation\Rule::exists('users', 'id')
-                ->where('role', \App\Models\User::ROLE_CONSULTANT)]
+            ? ['nullable', Rule::exists('users', 'id')
+                ->where('role', User::ROLE_CONSULTANT)]
             : ['nullable', 'exists:users,id'];
 
         return $rules;

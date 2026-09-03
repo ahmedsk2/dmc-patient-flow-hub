@@ -101,6 +101,7 @@ class AuthController extends Controller
             $request->session()->put('mfa.pending.id', $user->id);
             $request->session()->put('mfa.pending.at', now()->getTimestamp());
             $request->session()->put('mfa.pending.attempts', 0);
+
             return redirect()->route('mfa.challenge');
         }
 

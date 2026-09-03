@@ -21,7 +21,7 @@ class PasswordResetTest extends TestCase
     private function user(): User
     {
         return User::create([
-            'username' => 'pr_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'pr_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'PR User', 'email' => 'pr.user@example.test',
             'password' => 'OldPass12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
         ]);
@@ -37,6 +37,7 @@ class PasswordResetTest extends TestCase
         $token = null;
         Notification::assertSentTo($user, ResetPassword::class, function ($n) use (&$token) {
             $token = $n->token;
+
             return true;
         });
         $this->assertNotNull($token);

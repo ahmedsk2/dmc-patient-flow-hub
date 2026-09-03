@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Admission;
+use App\Models\ConsultationReason;
+use App\Models\Setting;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -46,17 +49,17 @@ class RecentController extends Controller
             ->orderBy('ad.admission_id')->orderBy('ad.seq')
             ->get(['ad.admission_id', DB::raw('COALESCE(i.name, ad.icd10_code) as dx')])
             ->groupBy('admission_id');
-        $settings = \App\Models\Setting::current();
+        $settings = Setting::current();
         $discharges->each(function ($d) use ($dxByAdmission, $today, $settings) {
             $d->diagnoses = ($dxByAdmission[$d->id] ?? collect())->pluck('dx')->implode('; ');
             $d->reversible = $d->discharge_date === $today;   // undo is same-day only (legacy)
             // same settings-driven LOS bands as the board cards (J2-7)
-            $d->los_band = \App\Models\Admission::losBand($d->los === null ? null : (int) $d->los, $settings);
+            $d->los_band = Admission::losBand($d->los === null ? null : (int) $d->los, $settings);
         });
 
         // sign-offs carry the legacy 48consultation.php columns: age, indications (reason names),
         // consultation date, consulted-by (consultation_from) and entered-by (J1-8)
-        $reasons = \App\Models\ConsultationReason::pluck('name', 'id');
+        $reasons = ConsultationReason::pluck('name', 'id');
         $signoffs = DB::table('consultations as c')
             ->leftJoin('users as u', 'u.id', '=', 'c.consultant_id')
             ->leftJoin('users as eb', 'eb.id', '=', 'c.entered_by')

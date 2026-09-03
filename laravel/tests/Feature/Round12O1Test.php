@@ -4,11 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\Admission;
 use App\Models\Consultation;
-use App\Models\ConsultationReason;
 use App\Models\Handover;
 use App\Models\HandoverSignature;
 use App\Models\Patient;
-use App\Models\Specialty;
 use App\Models\User;
 use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -50,7 +48,8 @@ class Round12O1Test extends TestCase
     /* ---- 1. icuPull voids the pending handover signature on the closed ICU episode ---- */
     public function test_icu_pull_voids_pending_handover_signature(): void
     {
-        $from = $this->consultant('From ICU'); $to = $this->consultant('To Ward');
+        $from = $this->consultant('From ICU');
+        $to = $this->consultant('To Ward');
         $a = $this->admission(['consultant_id' => $from->id, 'current_location' => 'ICU']);
         Handover::create(['admission_id' => $a->id, 'body' => 'h', 'updated_by' => $from->id]);
         $sig = HandoverSignature::create(['admission_id' => $a->id, 'from_consultant_id' => $from->id,
@@ -128,7 +127,7 @@ class Round12O1Test extends TestCase
 
         // a second ACTIVE import row (no discharge date) for the same MRN must be flagged invalid
         $this->actingAs($this->admin())
-            ->post('/import/preview', ['rows' => "5559001,Already In,40,M,Saudi,2024-02-01,,Alive,Ward"])
+            ->post('/import/preview', ['rows' => '5559001,Already In,40,M,Saudi,2024-02-01,,Alive,Ward'])
             ->assertOk()
             ->assertInertia(fn ($p) => $p->component('Import/Index', false)->where('preview.invalid', 1));
     }

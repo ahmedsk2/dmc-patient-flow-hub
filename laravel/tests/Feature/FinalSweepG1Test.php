@@ -31,7 +31,7 @@ class FinalSweepG1Test extends TestCase
     private function user(int $role = User::ROLE_CONSULTANT, array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'g1_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'g1_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'G1 User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
@@ -205,7 +205,7 @@ class FinalSweepG1Test extends TestCase
     public function test_import_longterm_accepts_yes_and_shorter_rows_stay_valid(): void
     {
         $rows = "3010002,LT Pt,50,F,Egypt,2024-02-01,,,Ward,,,,,ER,B-2,,yes\n"
-              . '3010003,Short Pt,40,F,Egypt,2024-02-01,2024-02-05,Alive,Ward';
+              .'3010003,Short Pt,40,F,Egypt,2024-02-01,2024-02-05,Alive,Ward';
 
         $this->actingAs($this->admin())->post('/import', ['rows' => $rows])->assertRedirect();
 

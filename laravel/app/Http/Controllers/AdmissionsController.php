@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreAdmissionRequest;
 use App\Models\Admission;
 use App\Models\AdmissionDiagnosis;
 use App\Models\AuditLog;
@@ -16,9 +17,9 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 class AdmissionsController extends Controller
 {
@@ -40,20 +41,20 @@ class AdmissionsController extends Controller
         $dxNames = $codes->isEmpty() ? collect() : Icd10::whereIn('code', $codes)->pluck('name', 'code');
 
         $queue = $rows->map(fn (Admission $a) => [
-                'id' => $a->id,
-                'name' => $a->patient?->name ?? 'Unknown',
-                'mrn' => $a->patient?->mrn,
-                'age' => $a->patient?->age,
-                'gender' => $a->patient?->gender,
-                'bed' => $a->bed,
-                'location' => $a->current_location,
-                'admitted_from' => $a->admitted_from,
-                'admit_date' => optional($a->admit_date)->toDateString(),
-                'dx_count' => $a->diagnoses_count,
-                'diagnoses' => $a->diagnoses->sortBy('seq')->values()
-                    ->map(fn ($d) => ['code' => $d->icd10_code, 'name' => $dxNames[$d->icd10_code] ?? $d->icd10_code])->all(),
-                'los' => $a->lengthOfStay(),
-            ]);
+            'id' => $a->id,
+            'name' => $a->patient?->name ?? 'Unknown',
+            'mrn' => $a->patient?->mrn,
+            'age' => $a->patient?->age,
+            'gender' => $a->patient?->gender,
+            'bed' => $a->bed,
+            'location' => $a->current_location,
+            'admitted_from' => $a->admitted_from,
+            'admit_date' => optional($a->admit_date)->toDateString(),
+            'dx_count' => $a->diagnoses_count,
+            'diagnoses' => $a->diagnoses->sortBy('seq')->values()
+                ->map(fn ($d) => ['code' => $d->icd10_code, 'name' => $dxNames[$d->icd10_code] ?? $d->icd10_code])->all(),
+            'los' => $a->lengthOfStay(),
+        ]);
 
         // active ICU patients that can be pulled onto the ward ("Admission from ICU")
         $icuPatients = Admission::query()
@@ -92,11 +93,11 @@ class AdmissionsController extends Controller
             'consultants' => User::consultantOptions(),
             'countries' => Country::orderBy('name')->pluck('name'),
             'locations' => ['ER', 'Ward', 'ICU'],
-            'admitFrom' => \App\Http\Requests\StoreAdmissionRequest::ADMIT_FROM,   // full legacy ADMFROM vocabulary
+            'admitFrom' => StoreAdmissionRequest::ADMIT_FROM,   // full legacy ADMFROM vocabulary
         ]);
     }
 
-    public function store(\App\Http\Requests\StoreAdmissionRequest $request): RedirectResponse
+    public function store(StoreAdmissionRequest $request): RedirectResponse
     {
         // role gate lives in StoreAdmissionRequest::authorize() (403 before validation)
         $data = $request->validated();

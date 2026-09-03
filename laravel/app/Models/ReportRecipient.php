@@ -14,5 +14,8 @@ class ReportRecipient extends Model
 
     protected $casts = ['active' => 'boolean', 'created_at' => 'datetime'];
 
-    public function addedBy(): BelongsTo { return $this->belongsTo(User::class, 'added_by_id'); }
+    public function addedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'added_by_id');
+    }
 }

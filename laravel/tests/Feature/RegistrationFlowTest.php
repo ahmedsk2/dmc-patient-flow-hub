@@ -6,7 +6,10 @@ use App\Mail\RegistrationCodeMail;
 use App\Models\PendingRegistration;
 use App\Models\User;
 use App\Support\Totp;
+use Illuminate\Cache\RateLimiter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -334,11 +337,11 @@ class RegistrationFlowTest extends TestCase
         // The per-row cap/cooldown and the 'register' throttle both key off the session, so a
         // cookie-less client (fresh session each request) evades them. The 'register-email' limiter
         // must bound the mail relay by IP alone — session-independent — so it can't be reset that way.
-        $limiter = app(\Illuminate\Cache\RateLimiter::class)->limiter('register-email');
+        $limiter = app(RateLimiter::class)->limiter('register-email');
         $this->assertNotNull($limiter, 'the register-email limiter must be registered');
 
-        $keyFor = fn (string $ip) => collect(\Illuminate\Support\Arr::wrap($limiter(
-            \Illuminate\Http\Request::create('/register/email/send', 'POST', server: ['REMOTE_ADDR' => $ip])
+        $keyFor = fn (string $ip) => collect(Arr::wrap($limiter(
+            Request::create('/register/email/send', 'POST', server: ['REMOTE_ADDR' => $ip])
         )))->map(fn ($l) => (string) $l->key);
 
         $a = $keyFor('198.51.100.7');

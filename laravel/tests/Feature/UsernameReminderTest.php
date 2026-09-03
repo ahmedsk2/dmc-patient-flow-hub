@@ -21,7 +21,7 @@ class UsernameReminderTest extends TestCase
     private function activeUser(array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'ur_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'ur_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Reminder User',
             'email' => 'ur.user@example.test',
             'password' => 'secret12345',
@@ -56,7 +56,7 @@ class UsernameReminderTest extends TestCase
         $this->post('/forgot-username', ['email' => $this->activeUser()->email])
             ->assertRedirect()
             ->assertSessionHas('status', UsernameReminderController::GENERIC_MESSAGE);
-        $this->post('/forgot-username', ['email' => 'nobody-' . uniqid() . '@example.test'])
+        $this->post('/forgot-username', ['email' => 'nobody-'.uniqid().'@example.test'])
             ->assertRedirect()
             ->assertSessionHas('status', UsernameReminderController::GENERIC_MESSAGE);
 
@@ -81,7 +81,7 @@ class UsernameReminderTest extends TestCase
         Mail::fake();
         $inactive = $this->activeUser(['active' => 0]);
 
-        $this->post('/forgot-username', ['email' => 'ghost-' . uniqid() . '@example.test'])
+        $this->post('/forgot-username', ['email' => 'ghost-'.uniqid().'@example.test'])
             ->assertSessionHas('status', UsernameReminderController::GENERIC_MESSAGE);
         $this->post('/forgot-username', ['email' => $inactive->email])
             ->assertSessionHas('status', UsernameReminderController::GENERIC_MESSAGE);

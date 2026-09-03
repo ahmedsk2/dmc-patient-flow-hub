@@ -21,7 +21,7 @@ class WaveBTest extends TestCase
     private function admin(): User
     {
         return User::create([
-            'username' => 'wb_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'wb_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'WB Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
@@ -61,6 +61,7 @@ class WaveBTest extends TestCase
         $this->actingAs($this->admin())->get('/')->assertInertia(fn (AssertableInertia $p) => $p
             ->where('consultantBoard', function ($cb) {
                 $row = collect($cb)->firstWhere('name', 'ZZ New Old');
+
                 return $row && $row['new'] === 1 && $row['old'] === 1;
             })
         );
@@ -126,7 +127,7 @@ class WaveBTest extends TestCase
     public function test_bulk_import_classifies_icu_discharge_by_location(): void
     {
         $rows = "3001001,Ward Disch,40,M,Saudi,2024-01-01,2024-01-05,Alive,Ward\n"
-              . "3001002,Icu Disch,55,F,Saudi,2024-01-01,2024-01-06,Alive,ICU";
+              .'3001002,Icu Disch,55,F,Saudi,2024-01-01,2024-01-06,Alive,ICU';
         $this->actingAs($this->admin())->post('/import', ['rows' => $rows])->assertRedirect();
 
         $ward = Admission::whereHas('patient', fn ($q) => $q->where('mrn', '3001001'))->first();

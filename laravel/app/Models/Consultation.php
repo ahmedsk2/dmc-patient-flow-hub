@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use App\Casts\EncryptedNarrative;
-use AppCastsncryptedNarrative;
+use App\Support\DashboardCache;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -24,8 +24,11 @@ class Consultation extends Model
      *   signed_off — closed with a recorded response
      */
     public const STATUS_NEW = 'new';
+
     public const STATUS_ACTIVE = 'active';
+
     public const STATUS_ONGOING = 'ongoing';
+
     public const STATUS_SIGNED_OFF = 'signed_off';
 
     protected $guarded = ['id'];
@@ -33,8 +36,8 @@ class Consultation extends Model
     protected static function booted(): void
     {
         // Consultations feed the dashboard's 6-month consults chart (heavy tier) — bust on write.
-        static::saved(fn () => \App\Support\DashboardCache::bust());
-        static::deleted(fn () => \App\Support\DashboardCache::bust());
+        static::saved(fn () => DashboardCache::bust());
+        static::deleted(fn () => DashboardCache::bust());
     }
 
     protected function casts(): array
@@ -55,15 +58,41 @@ class Consultation extends Model
         ];
     }
 
-    public function patient(): BelongsTo { return $this->belongsTo(Patient::class); }
-    public function consultant(): BelongsTo { return $this->belongsTo(User::class, 'consultant_id'); }
-    public function enteredBy(): BelongsTo { return $this->belongsTo(User::class, 'entered_by'); }
+    public function patient(): BelongsTo
+    {
+        return $this->belongsTo(Patient::class);
+    }
+
+    public function consultant(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'consultant_id');
+    }
+
+    public function enteredBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'entered_by');
+    }
 
     /** W1 ledger relations. */
-    public function followups(): HasMany { return $this->hasMany(ConsultationFollowup::class); }
-    public function owningSpecialty(): BelongsTo { return $this->belongsTo(Specialty::class, 'owning_specialty_id'); }
-    public function signedOffBy(): BelongsTo { return $this->belongsTo(User::class, 'signed_off_by'); }
-    public function admission(): BelongsTo { return $this->belongsTo(Admission::class); }
+    public function followups(): HasMany
+    {
+        return $this->hasMany(ConsultationFollowup::class);
+    }
+
+    public function owningSpecialty(): BelongsTo
+    {
+        return $this->belongsTo(Specialty::class, 'owning_specialty_id');
+    }
+
+    public function signedOffBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'signed_off_by');
+    }
+
+    public function admission(): BelongsTo
+    {
+        return $this->belongsTo(Admission::class);
+    }
 
     /**
      * LEGACY/COMPAT scope, pre-dating the ledger. `signoff_date IS NULL` and `status <>
@@ -73,7 +102,10 @@ class Consultation extends Model
      * (grep confirms), but statistics/dashboard code outside this model reads signoff_date
      * directly, so it stays until that is migrated over to `status`. Prefer scopeOpen in new code.
      */
-    public function scopeActive(Builder $q): Builder { return $q->whereNull('signoff_date'); }
+    public function scopeActive(Builder $q): Builder
+    {
+        return $q->whereNull('signoff_date');
+    }
 
     /**
      * Everything still on the books — the three non-closed states. Kept in lockstep with

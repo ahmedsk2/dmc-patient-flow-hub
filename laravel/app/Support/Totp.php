@@ -9,7 +9,9 @@ namespace App\Support;
 class Totp
 {
     private const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'; // RFC 4648 base32
+
     private const PERIOD = 30;
+
     private const DIGITS = 6;
 
     /** Generate a new base32 secret (default 160 bits = 32 chars). */
@@ -30,13 +32,14 @@ class Totp
         if ($bits > 0) {
             $out .= self::ALPHABET[($buffer << (5 - $bits)) & 31];
         }
+
         return $out;
     }
 
     /** otpauth:// provisioning URI for QR codes. */
     public static function uri(string $secret, string $account, string $issuer): string
     {
-        $label = rawurlencode($issuer) . ':' . rawurlencode($account);
+        $label = rawurlencode($issuer).':'.rawurlencode($account);
         $params = http_build_query([
             'secret' => $secret,
             'issuer' => $issuer,
@@ -44,6 +47,7 @@ class Totp
             'digits' => self::DIGITS,
             'period' => self::PERIOD,
         ]);
+
         return "otpauth://totp/{$label}?{$params}";
     }
 
@@ -70,6 +74,7 @@ class Totp
                 return $counter + $i;
             }
         }
+
         return null;
     }
 
@@ -82,6 +87,7 @@ class Totp
             | ((ord($hash[$offset + 1]) & 0xFF) << 16)
             | ((ord($hash[$offset + 2]) & 0xFF) << 8)
             | (ord($hash[$offset + 3]) & 0xFF);
+
         return str_pad((string) ($binary % (10 ** self::DIGITS)), self::DIGITS, '0', STR_PAD_LEFT);
     }
 
@@ -103,6 +109,7 @@ class Totp
                 $out .= chr(($buffer >> $bits) & 0xFF);
             }
         }
+
         return $out;
     }
 
@@ -111,8 +118,9 @@ class Totp
     {
         $codes = [];
         for ($i = 0; $i < $count; $i++) {
-            $codes[] = strtoupper(bin2hex(random_bytes(2)) . '-' . bin2hex(random_bytes(2)));
+            $codes[] = strtoupper(bin2hex(random_bytes(2)).'-'.bin2hex(random_bytes(2)));
         }
+
         return $codes;
     }
 }

@@ -1,4 +1,5 @@
 <?php
+
 // laravel/app/Http/Controllers/StyleGuideController.php
 
 namespace App\Http\Controllers;

@@ -176,7 +176,7 @@ class DemoSeeder extends Seeder
             $specialtyId = $i < 6 ? 1 : (($i - 6) % 5) + 2;   // 6 hospitalists, then Cardiology..Endocrine
             $onService = $i % 3 !== 2;                        // ~2/3 on service
             $userRows[] = [
-                'username' => 'demo_consultant_' . ($i + 1),
+                'username' => 'demo_consultant_'.($i + 1),
                 'name' => $full,
                 'full_name' => $full,   // the board/consultant UI prepends the "Dr." honorific itself; seeding it here doubled it ("Dr. Dr. …")
                 'role' => 3,                                   // ROLE_CONSULTANT
@@ -184,7 +184,7 @@ class DemoSeeder extends Seeder
                 'active' => 1,
                 'on_service' => $onService ? 1 : 0,
                 'can_assign' => 1, 'can_add' => 1, 'can_manage' => 1, 'can_modify' => 1,
-                'email' => 'demo.consultant' . ($i + 1) . '@example.test',
+                'email' => 'demo.consultant'.($i + 1).'@example.test',
                 'password' => $pwd,
                 'pass_exp_date' => $today->copy()->addMonths(3)->toDateString(),
                 'created_at' => $now, 'updated_at' => $now,
@@ -230,8 +230,8 @@ class DemoSeeder extends Seeder
         $newPatient = function () use (&$pid, &$patientRows, &$patientMeta, $now, $nationalities) {
             $pid++;
             $mrn = (string) (40000000 + $pid);
-            $name = self::FIRST_NAMES[mt_rand(0, count(self::FIRST_NAMES) - 1)] . ' '
-                . self::LAST_NAMES[mt_rand(0, count(self::LAST_NAMES) - 1)];
+            $name = self::FIRST_NAMES[mt_rand(0, count(self::FIRST_NAMES) - 1)].' '
+                .self::LAST_NAMES[mt_rand(0, count(self::LAST_NAMES) - 1)];
             $age = mt_rand(18, 95);
             $patientRows[] = [
                 'mrn' => $mrn, 'name' => $name, 'gender' => mt_rand(0, 1) ? 'Male' : 'Female',
@@ -314,7 +314,7 @@ class DemoSeeder extends Seeder
             $pidLocal = $newPatient();
             $addAdmission([
                 'patient_id' => $pidLocal,
-                'bed' => ($icu ? 'ICU-' : 'W-') . mt_rand(1, 60),
+                'bed' => ($icu ? 'ICU-' : 'W-').mt_rand(1, 60),
                 'admitted_from' => $icu ? 'ICU' : $pick($admFrom),
                 'admit_date' => $admit->toDateString(),
                 'current_location' => $icu ? 'ICU' : 'Ward',
@@ -364,7 +364,7 @@ class DemoSeeder extends Seeder
             $consultantId = $pick($assignPool);
             $addAdmission([
                 'patient_id' => $pidLocal,
-                'bed' => 'W-' . mt_rand(1, 60),
+                'bed' => 'W-'.mt_rand(1, 60),
                 'admitted_from' => $pick(['ER', 'Referral', 'Direct']),
                 'admit_date' => $admit->toDateString(),
                 'current_location' => 'Ward',
@@ -385,8 +385,7 @@ class DemoSeeder extends Seeder
         }
 
         // 4c. active admissions (discharge_date NULL) — the live census
-        $activeAssigned = function (bool $icu, bool $longterm, ?string $medicalDischarge, int $daysAgoMax, bool $newAssign, bool $tb = false)
-        use (&$newPatient, &$addAdmission, $today, $now, $recentDays, $pick, $assignPool, $admFrom) {
+        $activeAssigned = function (bool $icu, bool $longterm, ?string $medicalDischarge, int $daysAgoMax, bool $newAssign, bool $tb = false) use (&$newPatient, &$addAdmission, $today, $now, $recentDays, $pick, $assignPool, $admFrom) {
             $daysAgo = $longterm ? mt_rand(30, 280) : max(1, $recentDays($daysAgoMax));
             $admit = $today->copy()->subDays($daysAgo);
             $medical = null;
@@ -399,7 +398,7 @@ class DemoSeeder extends Seeder
             $pidLocal = $newPatient();
             $addAdmission([
                 'patient_id' => $pidLocal,
-                'bed' => ($icu ? 'ICU-' : 'W-') . mt_rand(1, 60),
+                'bed' => ($icu ? 'ICU-' : 'W-').mt_rand(1, 60),
                 'admitted_from' => $icu ? 'ICU' : $pick($admFrom),
                 'admit_date' => $admit->toDateString(),
                 'current_location' => $icu ? 'ICU' : 'Ward',
@@ -445,7 +444,7 @@ class DemoSeeder extends Seeder
             $pidLocal = $newPatient();
             $addAdmission([
                 'patient_id' => $pidLocal,
-                'bed' => 'W-' . mt_rand(1, 60),
+                'bed' => 'W-'.mt_rand(1, 60),
                 'admitted_from' => $admFrom[mt_rand(0, count($admFrom) - 1)],
                 'admit_date' => $admit->toDateString(),
                 'current_location' => mt_rand(0, 1) ? 'Ward' : 'ER',
@@ -497,7 +496,7 @@ class DemoSeeder extends Seeder
                 'patient_id' => $pidLocal,
                 'patient_name' => $meta['name'],
                 'age' => $meta['age'],
-                'bed' => 'W-' . mt_rand(1, 60),
+                'bed' => 'W-'.mt_rand(1, 60),
                 'current_location' => $pick(['Ward', 'Ward', 'ICU', 'ER']),
                 'consultation_date' => $cDate->toDateString(),
                 'consultation_from' => $pick($consultFrom),

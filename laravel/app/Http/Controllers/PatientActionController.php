@@ -2,21 +2,28 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ModifyAdmissionRequest;
 use App\Models\Admission;
 use App\Models\Handover;
 use App\Models\HandoverRevision;
 use App\Models\HandoverSignature;
 use App\Models\Notification;
+use App\Models\Patient;
+use App\Models\Specialty;
 use App\Models\User;
 use App\Services\ShuffleService;
 use App\Support\Audit;
 use App\Support\AuditDiff;
+use App\Support\DashboardCache;
+use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Exists;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
@@ -32,7 +39,7 @@ class PatientActionController extends Controller
      * (N1-7). Used by assign, bulk-reassign (to side) and specialty transfer so an API caller can
      * never point a patient at an inactive or non-consultant account.
      */
-    private static function activeConsultantRule(): \Illuminate\Validation\Rules\Exists
+    private static function activeConsultantRule(): Exists
     {
         return Rule::exists('users', 'id')->where('role', User::ROLE_CONSULTANT)->where('active', 1);
     }
@@ -45,7 +52,7 @@ class PatientActionController extends Controller
     private function normalizeDates(array $attrs): array
     {
         foreach ($attrs as $k => $v) {
-            if ($v instanceof \Carbon\CarbonInterface) {
+            if ($v instanceof CarbonInterface) {
                 $attrs[$k] = $v->toDateString();
             }
         }
@@ -61,7 +68,7 @@ class PatientActionController extends Controller
      */
     private function bustDashboardCache(): void
     {
-        \App\Support\DashboardCache::bust();
+        DashboardCache::bust();
     }
 
     // ---- handover signature + soft gate (consultant-changing moves only) ------------------------
@@ -120,9 +127,9 @@ class PatientActionController extends Controller
                 }
                 Notification::create(['user_id' => $uid, 'type' => 'handover.incomplete', 'created_at' => now(),
                     'admission_id' => $a->id, 'payload' => [
-                    'admission_id' => $a->id, 'patient_name' => $a->patient?->name, 'mrn' => $a->patient?->mrn,
-                    'from_name' => $fromName, 'to_name' => $toName,
-                ]]);
+                        'admission_id' => $a->id, 'patient_name' => $a->patient?->name, 'mrn' => $a->patient?->mrn,
+                        'from_name' => $fromName, 'to_name' => $toName,
+                    ]]);
             }
         }
 
@@ -172,14 +179,14 @@ class PatientActionController extends Controller
      * failing a uniqueness check; demographics then update THAT patient only where the user
      * deliberately changed them (vs. the record loaded into the form).
      */
-    public function modify(\App\Http\Requests\ModifyAdmissionRequest $request, Admission $admission): RedirectResponse
+    public function modify(ModifyAdmissionRequest $request, Admission $admission): RedirectResponse
     {
         // capability gate lives in ModifyAdmissionRequest::authorize() (403 before validation)
         $patient = $admission->patient;
         $data = $request->validated();
 
         $target = ((string) $data['mrn'] !== (string) $patient->mrn)
-            ? \App\Models\Patient::where('mrn', $data['mrn'])->where('id', '<>', $patient->id)->first()
+            ? Patient::where('mrn', $data['mrn'])->where('id', '<>', $patient->id)->first()
             : null;
 
         // an ACTIVE admission may not be repointed onto a patient who ALREADY has an open episode —
@@ -189,7 +196,7 @@ class PatientActionController extends Controller
             throw ValidationException::withMessages(['mrn' => 'That patient already has an active admission.']);
         }
 
-        $newAdmitDate = \Carbon\Carbon::parse($data['admit_date'])->toDateString();
+        $newAdmitDate = Carbon::parse($data['admit_date'])->toDateString();
 
         // optional QUIET consultant change (legacy Modify semantics, J2-13): the assignment moves
         // but the new-assignment flags are untouched — no "New" badge, no handover gate
@@ -391,7 +398,7 @@ class PatientActionController extends Controller
         $this->bustDashboardCache();
 
         $msg = $r['assigned'] > 0
-            ? "Shuffle assigned {$r['assigned']} patient(s) across {$r['consultants']} consultant(s)." . ($r['skipped'] ? " {$r['skipped']} skipped (at capacity)." : '')
+            ? "Shuffle assigned {$r['assigned']} patient(s) across {$r['consultants']} consultant(s).".($r['skipped'] ? " {$r['skipped']} skipped (at capacity)." : '')
             : 'No unassigned patients to shuffle.';
 
         return back()->with('flash', ['type' => $r['assigned'] > 0 ? 'success' : 'error', 'message' => $msg]);
@@ -701,7 +708,7 @@ class PatientActionController extends Controller
             'consultant_id' => ['required', self::activeConsultantRule()],
             'acknowledged' => ['sometimes', 'boolean'],
         ]);
-        $specialty = \App\Models\Specialty::findOrFail($data['specialty_id']);
+        $specialty = Specialty::findOrFail($data['specialty_id']);
 
         // an internal handover to a DIFFERENT consultant used to be gated on a same-day handover
         // note. Soft gate (owner-approved, HC-T3): a stale/missing handover no longer blocks the

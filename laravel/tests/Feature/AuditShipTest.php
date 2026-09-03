@@ -25,7 +25,7 @@ class AuditShipTest extends TestCase
     private function actor(): User
     {
         return User::create([
-            'username' => 'ashp_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'ashp_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Ship Actor', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
         ]);
     }

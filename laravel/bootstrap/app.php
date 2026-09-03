@@ -1,9 +1,18 @@
 <?php
 
+use App\Http\Middleware\EnsureAdmin;
+use App\Http\Middleware\EnsureEmailVerified;
+use App\Http\Middleware\EnsureMfaEnrolled;
+use App\Http\Middleware\EnsurePasswordNotExpired;
+use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\RequireStepUp;
+use App\Http\Middleware\SecurityHeaders;
+use App\Http\Middleware\SessionTimeout;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -13,7 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // 2026-09 prod-readiness: session-less machine endpoints (/health deep probe, RFC 9116
         // security.txt) registered OUTSIDE the `web` group, exactly like `/up` above — see
         // routes/public.php for why. `/up` itself is untouched (Coolify polls it).
-        then: fn () => \Illuminate\Support\Facades\Route::group([], __DIR__.'/../routes/public.php'),
+        then: fn () => Route::group([], __DIR__.'/../routes/public.php'),
     )
     ->withMiddleware(function (Middleware $middleware): void {
         // Behind Cloudflare/Traefik TLS termination: trust forwarded headers so the app detects
@@ -49,21 +58,21 @@ return Application::configure(basePath: dirname(__DIR__))
         // SecurityHeaders sees and stamps them. (Router-level 404s never enter the group at
         // all; those static error pages carry no scripts or PHI.)
         $middleware->web(prepend: [
-            \App\Http\Middleware\SecurityHeaders::class,
+            SecurityHeaders::class,
         ]);
         $middleware->web(append: [
-            \App\Http\Middleware\HandleInertiaRequests::class,
+            HandleInertiaRequests::class,
         ]);
         // Browsers POST CSP violation reports with neither credentials nor a CSRF token —
         // the sink route (throttled, log-only) must be exempt or every report 419s.
         $middleware->validateCsrfTokens(except: ['csp-report']);
         $middleware->alias([
-            'admin' => \App\Http\Middleware\EnsureAdmin::class,
-            'email.verify' => \App\Http\Middleware\EnsureEmailVerified::class, // 2026-07-11 auth-hardening
-            'mfa.enroll' => \App\Http\Middleware\EnsureMfaEnrolled::class,
-            'pwd' => \App\Http\Middleware\EnsurePasswordNotExpired::class,
-            'session.timeout' => \App\Http\Middleware\SessionTimeout::class,   // Phase 4 — Item 2
-            'stepup' => \App\Http\Middleware\RequireStepUp::class,             // Phase 4 — Item 4
+            'admin' => EnsureAdmin::class,
+            'email.verify' => EnsureEmailVerified::class, // 2026-07-11 auth-hardening
+            'mfa.enroll' => EnsureMfaEnrolled::class,
+            'pwd' => EnsurePasswordNotExpired::class,
+            'session.timeout' => SessionTimeout::class,   // Phase 4 — Item 2
+            'stepup' => RequireStepUp::class,             // Phase 4 — Item 4
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

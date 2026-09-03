@@ -2,19 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\MetricQueries;
 use App\Http\Requests\StatisticsExportRequest;
 use App\Models\Admission;
 use App\Models\ConsultationReason;
+use App\Models\Setting;
+use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
+use Inertia\Response;
 use OpenSpout\Common\Entity\Row;
 use OpenSpout\Writer\XLSX\Writer as XlsxWriter;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
-use Inertia\Inertia;
-use Inertia\Response;
 
 /**
  * Unit statistics over a selectable date range. Queries are sargable: date filters use range
@@ -23,7 +26,7 @@ use Inertia\Response;
  */
 class StatisticsController extends Controller
 {
-    use \App\Http\Controllers\Concerns\MetricQueries;
+    use MetricQueries;
 
     private string $nonIcu = Admission::NON_ICU_SQL;
 
@@ -39,7 +42,9 @@ class StatisticsController extends Controller
         ]);
         $to = isset($data['to']) ? Carbon::parse($data['to']) : Carbon::today();
         $from = isset($data['from']) ? Carbon::parse($data['from']) : $to->copy()->startOfYear();
-        if ($from->gt($to)) { [$from, $to] = [$to, $from]; }
+        if ($from->gt($to)) {
+            [$from, $to] = [$to, $from];
+        }
         $f = $from->toDateString();
         $t = $to->toDateString();
         $interval = $data['interval'] ?? 'month';
@@ -66,7 +71,7 @@ class StatisticsController extends Controller
         // "72-hour" rule). The prior episode must have ended in an actual discharge ('discharge from
         // ward/ICU') — ward<->ICU and specialty transfers are continuations of care, not discharges,
         // so they are excluded (otherwise same-day transfer rows inflate the metric).
-        $readmitWindow = max(0, (int) (\App\Models\Setting::current()->readmission_window_days ?? 3));
+        $readmitWindow = max(0, (int) (Setting::current()->readmission_window_days ?? 3));
         $readmissions = (int) DB::table('admissions as a')
             ->join('admissions as prev', $this->readmissionJoin($readmitWindow))
             ->whereBetween('a.admit_date', [$f, $t])
@@ -90,11 +95,11 @@ class StatisticsController extends Controller
             ->join('admissions as prev', $this->readmissionJoin($readmitWindow))
             ->whereBetween('a.admit_date', [$f, $t])
             ->whereNull('a.deleted_at')->whereNull('prev.deleted_at')   // Phase 4 — Item 1
-            ->selectRaw($this->keyExpr('a.admit_date', $interval) . ' k, COUNT(DISTINCT a.id) c')
+            ->selectRaw($this->keyExpr('a.admit_date', $interval).' k, COUNT(DISTINCT a.id) c')
             ->groupBy('k')->pluck('c', 'k')->all();
         $losBy = DB::table('admissions')->whereBetween('discharge_date', [$f, $t])->whereNotNull('admit_date')
             ->whereRaw($this->nonIcu)->whereNull('deleted_at')->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
-            ->selectRaw($this->keyExpr('discharge_date', $interval) . ' k, ROUND(AVG(DATEDIFF(discharge_date, admit_date)), 1) los')
+            ->selectRaw($this->keyExpr('discharge_date', $interval).' k, ROUND(AVG(DATEDIFF(discharge_date, admit_date)), 1) los')
             ->groupBy('k')->pluck('los', 'k')->all();
 
         // day-interval bucket list is capped (~370) — surface it so the page can suggest Monthly
@@ -129,7 +134,9 @@ class StatisticsController extends Controller
             // under only_full_group_by; MariaDB can't match repeated raw expressions) — see Dashboard
             ->selectRaw("COALESCE(u.full_name, u.name) consultant, COALESCE(NULLIF(TRIM(a.discharge_to), ''), 'Unspecified') dest, COUNT(*) c")
             ->groupBy('consultant', 'dest')
-            ->get()->each(function ($r) use (&$byCons) { $byCons[$r->consultant][$r->dest] = (int) $r->c; });
+            ->get()->each(function ($r) use (&$byCons) {
+                $byCons[$r->consultant][$r->dest] = (int) $r->c;
+            });
         uasort($byCons, fn ($a, $b) => array_sum($b) <=> array_sum($a));
         $destByConsultant = [];
         foreach (array_slice($byCons, 0, 12, true) as $name => $dests) {
@@ -144,8 +151,17 @@ class StatisticsController extends Controller
         $losBuckets = ['0–2' => 0, '3–5' => 0, '6–10' => 0, '11–20' => 0, '21+' => 0];
         foreach ($losRows as $l) {
             $l = (int) $l;
-            if ($l <= 2) $losBuckets['0–2']++; elseif ($l <= 5) $losBuckets['3–5']++;
-            elseif ($l <= 10) $losBuckets['6–10']++; elseif ($l <= 20) $losBuckets['11–20']++; else $losBuckets['21+']++;
+            if ($l <= 2) {
+                $losBuckets['0–2']++;
+            } elseif ($l <= 5) {
+                $losBuckets['3–5']++;
+            } elseif ($l <= 10) {
+                $losBuckets['6–10']++;
+            } elseif ($l <= 20) {
+                $losBuckets['11–20']++;
+            } else {
+                $losBuckets['21+']++;
+            }
         }
 
         // top diagnoses (range)
@@ -165,7 +181,9 @@ class StatisticsController extends Controller
                 foreach ($chunk as $c) {
                     foreach (json_decode($c->indication ?? '', true) ?: [] as $id) {
                         $name = $reasonNames[$id] ?? null;
-                        if ($name) { $reasonTally[$name] = ($reasonTally[$name] ?? 0) + 1; }
+                        if ($name) {
+                            $reasonTally[$name] = ($reasonTally[$name] ?? 0) + 1;
+                        }
                     }
                 }
             });
@@ -206,7 +224,7 @@ class StatisticsController extends Controller
                     ->whereColumn('prev2.id', '<>', 'a.id')
                     ->whereColumn('prev2.id', '<>', 'prev.id')
                     ->whereNull('prev2.deleted_at')   // Phase 4 — Item 1: a soft-deleted prior episode is not a more-recent anchor
-                    ->where(fn ($w) => $w->whereIn('prev2.transfer_type', \App\Models\Admission::REAL_DISCHARGE_TYPES)
+                    ->where(fn ($w) => $w->whereIn('prev2.transfer_type', Admission::REAL_DISCHARGE_TYPES)
                         ->orWhereNull('prev2.transfer_type'))
                     ->where(fn ($w) => $w->whereColumn('prev2.discharge_date', '>', 'prev.discharge_date')
                         ->orWhere(fn ($e) => $e->whereColumn('prev2.discharge_date', '=', 'prev.discharge_date')
@@ -231,7 +249,7 @@ class StatisticsController extends Controller
             ->groupBy('consultant')->pluck('c', 'consultant')->all();
         // full ACTIVE-consultant roster with zeros (J2-3): a consultant with no activity in the
         // range still gets a bar, like the legacy per-physician tables built from the members list
-        $rosterNames = \App\Models\User::where('role', \App\Models\User::ROLE_CONSULTANT)->where('active', 1)
+        $rosterNames = User::where('role', User::ROLE_CONSULTANT)->where('active', 1)
             ->get(['full_name', 'name'])->map(fn ($u) => $u->full_name ?: $u->name);
         $perConsultant = collect(array_keys($admByCons))
             ->merge(array_keys($losByCons))->merge(array_keys($readmitByCons))
@@ -283,7 +301,7 @@ class StatisticsController extends Controller
             'destByConsultant' => $destByConsultant,
             // drill-down picker spans INACTIVE consultants too (K1-8): departed staff stay
             // queryable over historical ranges, like the registry filter
-            'consultants' => \App\Models\User::consultantOptions(activeOnly: false),
+            'consultants' => User::consultantOptions(activeOnly: false),
             'physician' => $physician,
             'compareData' => $compareData,
         ]);
@@ -363,7 +381,7 @@ class StatisticsController extends Controller
      */
     public function physician(int $consultantId, string $f, string $t, int $readmitWindow, string $interval, array $buckets): array
     {
-        $u = \App\Models\User::findOrFail($consultantId);
+        $u = User::findOrFail($consultantId);
 
         // bucketed activity time-series, scoped to this consultant (reuses the page's
         // interval buckets; $consultantId is validated+cast, safe in the raw predicate).
@@ -459,7 +477,7 @@ class StatisticsController extends Controller
      */
     private function readmissionJoin(int $window): \Closure
     {
-        return \App\Models\Admission::readmissionJoin($window);
+        return Admission::readmissionJoin($window);
     }
 
     /* ----------------------------- Phase 3 — §3.4 exports ----------------------------- */
@@ -473,9 +491,11 @@ class StatisticsController extends Controller
         $data = $request->validated();
         $to = isset($data['to']) ? Carbon::parse($data['to']) : Carbon::today();
         $from = isset($data['from']) ? Carbon::parse($data['from']) : $to->copy()->startOfYear();
-        if ($from->gt($to)) { [$from, $to] = [$to, $from]; }
+        if ($from->gt($to)) {
+            [$from, $to] = [$to, $from];
+        }
         $interval = $data['interval'] ?? 'month';
-        $window = max(0, (int) (\App\Models\Setting::current()->readmission_window_days ?? 3));
+        $window = max(0, (int) (Setting::current()->readmission_window_days ?? 3));
 
         return [$from, $to, $from->toDateString(), $to->toDateString(), $interval, $window];
     }
@@ -500,11 +520,11 @@ class StatisticsController extends Controller
         $readmitBy = DB::table('admissions as a')->join('admissions as prev', $this->readmissionJoin($window))
             ->whereBetween('a.admit_date', [$f, $t])
             ->whereNull('a.deleted_at')->whereNull('prev.deleted_at')   // Phase 4 — Item 1
-            ->selectRaw($this->keyExpr('a.admit_date', $interval) . ' k, COUNT(DISTINCT a.id) c')
+            ->selectRaw($this->keyExpr('a.admit_date', $interval).' k, COUNT(DISTINCT a.id) c')
             ->groupBy('k')->pluck('c', 'k')->all();
         $losBy = DB::table('admissions')->whereBetween('discharge_date', [$f, $t])->whereNotNull('admit_date')
             ->whereRaw($this->nonIcu)->whereNull('deleted_at')->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
-            ->selectRaw($this->keyExpr('discharge_date', $interval) . ' k, ROUND(AVG(DATEDIFF(discharge_date, admit_date)), 1) los')
+            ->selectRaw($this->keyExpr('discharge_date', $interval).' k, ROUND(AVG(DATEDIFF(discharge_date, admit_date)), 1) los')
             ->groupBy('k')->pluck('los', 'k')->all();
 
         $kpiGrid = $this->buildKpiGrid($buckets, $admBy, $disBy, $icuBy, $icuTransBy, $icuDeathBy, $wardDeathBy, $readmitBy, $consBy, $signBy, $losBy);
@@ -565,8 +585,8 @@ class StatisticsController extends Controller
         [, , $f, $t, $interval, $window] = $this->exportRange($request);
         $tables = $this->gatherExportTables($f, $t, $interval, $window);
 
-        $tmp = tempnam(sys_get_temp_dir(), 'stat') . '.xlsx';
-        $writer = new XlsxWriter();
+        $tmp = tempnam(sys_get_temp_dir(), 'stat').'.xlsx';
+        $writer = new XlsxWriter;
         $writer->openToFile($tmp);
 
         // Sheet 1 — KPI grid

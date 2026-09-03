@@ -15,6 +15,7 @@ use Illuminate\Console\Command;
 class AuditVerify extends Command
 {
     protected $signature = 'audit:verify {--from= : only rows created on/after this date} {--to= : only rows created on/before this date}';
+
     protected $description = 'Verify the tamper-evident audit_log hash chain';
 
     public function handle(): int
@@ -67,9 +68,9 @@ class AuditVerify extends Command
         }
 
         if ($broken) {
-            $this->error("Audit chain BROKEN — {$count} rows walked, " . count($broken) . ' issue(s):');
+            $this->error("Audit chain BROKEN — {$count} rows walked, ".count($broken).' issue(s):');
             foreach ($broken as $b) {
-                $this->line('  - ' . $b);
+                $this->line('  - '.$b);
             }
 
             return self::FAILURE;

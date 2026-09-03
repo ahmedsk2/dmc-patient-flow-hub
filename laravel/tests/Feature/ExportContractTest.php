@@ -22,7 +22,7 @@ class ExportContractTest extends TestCase
 
     private function admin(): User
     {
-        return User::create(['username' => 'ec_admin_' . substr(md5(uniqid('', true)), 0, 6),
+        return User::create(['username' => 'ec_admin_'.substr(md5(uniqid('', true)), 0, 6),
             'name' => 'EC Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }
@@ -30,7 +30,7 @@ class ExportContractTest extends TestCase
     private function seedAdmission(): void
     {
         Icd10::create(['code' => 'J18.9', 'name' => 'Pneumonia, unspecified organism']);
-        $c = User::create(['username' => 'ec_cons_' . substr(md5(uniqid('', true)), 0, 6),
+        $c = User::create(['username' => 'ec_cons_'.substr(md5(uniqid('', true)), 0, 6),
             'name' => 'Dr X', 'full_name' => 'Dr X Consultant', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1]);
         $p = Patient::create(['mrn' => '15000001', 'name' => 'Export Pt', 'age' => 60, 'gender' => 'Male', 'nationality' => 'Saudi Arabia']);
         $a = Admission::create(['patient_id' => $p->id, 'consultant_id' => $c->id,
@@ -42,13 +42,15 @@ class ExportContractTest extends TestCase
     /** Read the first two rows (header + first data row) of an XLSX BinaryFileResponse. */
     private function readXlsxRows(string $path): array
     {
-        $reader = new XlsxReader();
+        $reader = new XlsxReader;
         $reader->open($path);
         $rows = [];
         foreach ($reader->getSheetIterator() as $sheet) {
             foreach ($sheet->getRowIterator() as $i => $row) {
                 $rows[] = array_map(fn ($v) => (string) $v, $row->toArray());
-                if ($i >= 2) { break; }
+                if ($i >= 2) {
+                    break;
+                }
             }
             break;
         }

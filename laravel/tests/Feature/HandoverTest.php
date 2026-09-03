@@ -11,6 +11,7 @@ use App\Models\Notification;
 use App\Models\Patient;
 use App\Models\Specialty;
 use App\Models\User;
+use App\Support\DashboardCache;
 use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Crypt;
@@ -31,7 +32,7 @@ class HandoverTest extends TestCase
     private function user(array $overrides = []): User
     {
         return User::create(array_merge([
-            'username' => 'ho_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'ho_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'HO User', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $overrides));
@@ -518,9 +519,9 @@ class HandoverTest extends TestCase
     public function test_the_feed_lists_only_unread_ordinary_notifications(): void
     {
         $me = $this->user();
-        $read = \App\Models\Notification::create(['user_id' => $me->id, 'type' => 'handover.transfer',
+        $read = Notification::create(['user_id' => $me->id, 'type' => 'handover.transfer',
             'created_at' => now(), 'read_at' => now(), 'payload' => []]);
-        $unread = \App\Models\Notification::create(['user_id' => $me->id, 'type' => 'handover.transfer',
+        $unread = Notification::create(['user_id' => $me->id, 'type' => 'handover.transfer',
             'created_at' => now(), 'payload' => []]);
 
         $ids = collect($this->actingAs($me)->getJson('/api/notifications')->json('notifications'))->pluck('id')->all();
@@ -534,8 +535,8 @@ class HandoverTest extends TestCase
     public function test_clearing_empties_the_feed_but_keeps_unresolved_handover_alarms(): void
     {
         $me = $this->user();
-        \App\Models\Notification::create(['user_id' => $me->id, 'type' => 'handover.transfer', 'created_at' => now(), 'payload' => []]);
-        \App\Models\Notification::create(['user_id' => $me->id, 'type' => 'handover.incomplete',
+        Notification::create(['user_id' => $me->id, 'type' => 'handover.transfer', 'created_at' => now(), 'payload' => []]);
+        Notification::create(['user_id' => $me->id, 'type' => 'handover.incomplete',
             'created_at' => now(), 'admission_id' => 7, 'payload' => ['admission_id' => 7]]);
 
         $this->actingAs($me)->post('/notifications/read-all');
@@ -544,7 +545,7 @@ class HandoverTest extends TestCase
         $this->assertCount(0, $body['notifications'], 'ordinary items are cleared');
         $this->assertCount(1, $body['actionable'], 'the handover alarm survives');
         // nothing was deleted — the audit trail is intact
-        $this->assertSame(2, \App\Models\Notification::where('user_id', $me->id)->count());
+        $this->assertSame(2, Notification::where('user_id', $me->id)->count());
     }
 
     // ---- 8. inbox + preflight + board meta -------------------------------------------------------
@@ -778,7 +779,7 @@ class HandoverTest extends TestCase
         $this->admission(['consultant_id' => $me->id]);
 
         // the OLD definition counted both; transfer-driven counts none — this IS the backlog reset
-        $this->assertSame(0, \App\Models\Admission::handoverPending()->count());
+        $this->assertSame(0, Admission::handoverPending()->count());
     }
 
     public function test_handover_pending_counts_only_admissions_with_an_unresolved_reminder(): void
@@ -787,33 +788,33 @@ class HandoverTest extends TestCase
         $flagged = $this->admission(['consultant_id' => $me->id]);
         $this->admission(['consultant_id' => $me->id]);   // untouched → not pending
 
-        \App\Models\Notification::create(['user_id' => $me->id, 'type' => 'handover.incomplete',
+        Notification::create(['user_id' => $me->id, 'type' => 'handover.incomplete',
             'created_at' => now(), 'admission_id' => $flagged->id, 'payload' => ['admission_id' => $flagged->id]]);
 
-        $this->assertSame([$flagged->id], \App\Models\Admission::handoverPending()->pluck('id')->all());
+        $this->assertSame([$flagged->id], Admission::handoverPending()->pluck('id')->all());
     }
 
     public function test_resolving_the_reminder_clears_the_admission_from_pending(): void
     {
         $me = $this->user();
         $a = $this->admission(['consultant_id' => $me->id]);
-        \App\Models\Notification::create(['user_id' => $me->id, 'type' => 'handover.incomplete',
+        Notification::create(['user_id' => $me->id, 'type' => 'handover.incomplete',
             'created_at' => now(), 'admission_id' => $a->id, 'payload' => ['admission_id' => $a->id]]);
-        $this->assertSame(1, \App\Models\Admission::handoverPending()->count());
+        $this->assertSame(1, Admission::handoverPending()->count());
 
-        \App\Models\Notification::where('admission_id', $a->id)->update(['resolved_at' => now()]);
-        $this->assertSame(0, \App\Models\Admission::handoverPending()->count());
+        Notification::where('admission_id', $a->id)->update(['resolved_at' => now()]);
+        $this->assertSame(0, Admission::handoverPending()->count());
     }
 
     public function test_a_discharged_admission_is_never_pending(): void
     {
         $me = $this->user();
         $a = $this->admission(['consultant_id' => $me->id]);
-        \App\Models\Notification::create(['user_id' => $me->id, 'type' => 'handover.incomplete',
+        Notification::create(['user_id' => $me->id, 'type' => 'handover.incomplete',
             'created_at' => now(), 'admission_id' => $a->id, 'payload' => ['admission_id' => $a->id]]);
         $a->update(['discharge_date' => now()->toDateString()]);
 
-        $this->assertSame(0, \App\Models\Admission::handoverPending()->count());
+        $this->assertSame(0, Admission::handoverPending()->count());
     }
 
     // ---- TD-T5: consultants holding zero patients are hidden from the board/list/dashboard table --
@@ -823,7 +824,7 @@ class HandoverTest extends TestCase
         $busy = $this->user(['on_service' => 1]);
         $idle = $this->user(['on_service' => 1]);          // on service, ZERO patients
         $this->admission(['consultant_id' => $busy->id]);
-        $viewer = $this->user(['role' => \App\Models\User::ROLE_ADMIN]);
+        $viewer = $this->user(['role' => User::ROLE_ADMIN]);
 
         foreach (['/patients', '/active-list'] as $url) {
             $res = $this->actingAs($viewer)->get($url)->assertOk();
@@ -835,11 +836,11 @@ class HandoverTest extends TestCase
 
     public function test_dashboard_consultant_table_excludes_zero_patient_consultants(): void
     {
-        \App\Support\DashboardCache::bust();
+        DashboardCache::bust();
         $busy = $this->user(['on_service' => 1]);
         $idle = $this->user(['on_service' => 1]);
         $this->admission(['consultant_id' => $busy->id]);
-        $admin = $this->user(['role' => \App\Models\User::ROLE_ADMIN]);
+        $admin = $this->user(['role' => User::ROLE_ADMIN]);
 
         $res = $this->actingAs($admin)->get('/dashboard')->assertOk();
         $ids = collect(data_get($res->viewData('page')['props'], 'consultantBoard.*.id'))->all();

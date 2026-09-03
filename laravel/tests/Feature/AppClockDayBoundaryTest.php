@@ -49,16 +49,16 @@ class AppClockDayBoundaryTest extends TestCase
         Carbon::setTestNow();
         date_default_timezone_set($this->savedTz);
         config(['app.timezone' => $this->savedTz]);
-        DB::statement("SET time_zone = '" . now()->format('P') . "'");   // hand the session back aligned
+        DB::statement("SET time_zone = '".now()->format('P')."'");   // hand the session back aligned
         parent::tearDown();
     }
 
     private function admin(): User
     {
         return User::create([
-            'username' => 'clk_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'clk_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Clock Admin', 'role' => User::ROLE_ADMIN, 'active' => 1, 'password' => 'secret12345',
-            'email' => 'clk_' . substr(md5(uniqid('', true)), 0, 6) . '@example.test', 'email_verified_at' => now(),
+            'email' => 'clk_'.substr(md5(uniqid('', true)), 0, 6).'@example.test', 'email_verified_at' => now(),
             'pass_exp_date' => now()->toDateString(),
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);

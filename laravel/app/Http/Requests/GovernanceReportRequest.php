@@ -20,7 +20,7 @@ class GovernanceReportRequest extends FormRequest
     {
         return [
             'period_type' => ['required', 'in:month,quarter'],
-            'year' => ['required', 'integer', 'min:2000', 'max:' . (now()->year + 1)],
+            'year' => ['required', 'integer', 'min:2000', 'max:'.(now()->year + 1)],
             'month' => ['required_if:period_type,month', 'nullable', 'integer', 'min:1', 'max:12'],
             'quarter' => ['required_if:period_type,quarter', 'nullable', 'integer', 'min:1', 'max:4'],
         ];

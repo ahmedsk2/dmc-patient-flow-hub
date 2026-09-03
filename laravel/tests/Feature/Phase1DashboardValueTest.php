@@ -33,7 +33,7 @@ class Phase1DashboardValueTest extends TestCase
     private function admin(): User
     {
         return User::create([
-            'username' => 'p1_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'p1_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'P1 Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
@@ -42,7 +42,7 @@ class Phase1DashboardValueTest extends TestCase
     private function consultant(array $overrides = []): User
     {
         return User::create(array_merge([
-            'username' => 'p1c_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'p1c_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'P1 Consultant', 'full_name' => 'Dr P1', 'password' => 'secret12345',
             'role' => User::ROLE_CONSULTANT, 'active' => 1, 'on_service' => 1, 'specialty_id' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
@@ -144,7 +144,7 @@ class Phase1DashboardValueTest extends TestCase
     // Item 2 — KPI period-over-period deltas
     // =====================================================================================
 
-    public function test_deltas_admissions_uses_7day_mean_from_admBy_map(): void
+    public function test_deltas_admissions_uses_7day_mean_from_adm_by_map(): void
     {
         // 2 non-ICU admissions on each of the 7 prior days, 4 today
         foreach (range(1, 7) as $i) {
@@ -424,27 +424,25 @@ class Phase1DashboardValueTest extends TestCase
                 ->where('loadBands.maxSubs', (int) $s->max_subs));
     }
 
-    public function test_perConsultant_includes_specialty_id(): void
+    public function test_per_consultant_includes_specialty_id(): void
     {
         $c = $this->consultant(['specialty_id' => 2]);
         $this->admission(['consultant_id' => $c->id]);
 
         $this->actingAs($this->admin())->get('/')->assertOk()
             ->assertInertia(fn (AssertableInertia $p) => $p
-                ->where('perConsultant', fn ($rows) =>
-                    collect($rows)->every(fn ($r) => is_int($r['specialty_id']))
+                ->where('perConsultant', fn ($rows) => collect($rows)->every(fn ($r) => is_int($r['specialty_id']))
                     && collect($rows)->contains(fn ($r) => $r['specialty_id'] === 2)));
     }
 
-    public function test_perConsultant_includes_id(): void
+    public function test_per_consultant_includes_id(): void
     {
         $c = $this->consultant();
         $this->admission(['consultant_id' => $c->id]);
 
         $this->actingAs($this->admin())->get('/')->assertOk()
             ->assertInertia(fn (AssertableInertia $p) => $p
-                ->where('perConsultant', fn ($rows) =>
-                    collect($rows)->every(fn ($r) => is_int($r['id']) && $r['id'] > 0)
+                ->where('perConsultant', fn ($rows) => collect($rows)->every(fn ($r) => is_int($r['id']) && $r['id'] > 0)
                     && collect($rows)->contains(fn ($r) => $r['id'] === $c->id)));
     }
 

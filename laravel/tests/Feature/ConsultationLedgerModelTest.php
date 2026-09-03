@@ -25,7 +25,7 @@ class ConsultationLedgerModelTest extends TestCase
     private function user(int $role = User::ROLE_CONSULTANT, array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'w1m_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'w1m_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'W1 Model User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
@@ -95,7 +95,7 @@ class ConsultationLedgerModelTest extends TestCase
     {
         foreach ([Consultation::STATUS_NEW, Consultation::STATUS_ACTIVE, Consultation::STATUS_ONGOING, Consultation::STATUS_SIGNED_OFF] as $i => $status) {
             Consultation::create([
-                'mrn' => '7600001' . $i, 'patient_name' => 'Open Pt ' . $i,
+                'mrn' => '7600001'.$i, 'patient_name' => 'Open Pt '.$i,
                 'consultation_date' => '2026-08-05', 'indication' => [], 'status' => $status,
             ]);
         }
