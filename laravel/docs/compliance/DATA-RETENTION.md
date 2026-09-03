@@ -28,23 +28,61 @@
 4. **Destruction must be real, recorded and verifiable.** "Deleted from the table" is not
    destruction if a backup, an export, a snapshot or a printed sheet survives. Section 5 defines
    the method per artifact.
+5. **Every period in this schedule has to be applied twice, in two jurisdictions.** The unit runs
+   **two systems** (CONFIRMED-FACTS B1–B3): the **legacy PHP app on `dmc-im.com`, SiteGround,
+   United States** — the daily system, in its original un-hardened build — and the **Laravel app on
+   OCI Riyadh**, live in parallel with a full copy of the same data and the source of truth only
+   for the consultation ledger. Every mechanism named below (`audit:prune`, the encrypted off-box
+   backup, log rotation, soft deletes) exists **only on the Laravel side**. On the legacy side there
+   is no destruction mechanism, no retention configuration and no verification. §2.0 lists the
+   copies; nothing is "destroyed" until it is gone from both.
+6. **The hospital sets the periods; the processor executes them.** DMC is the controller; the
+   operator company holds the code, the hosting and the data and is the only party that can run any
+   destruction step. Until the controller–processor contract exists (CONFIRMED-FACTS A5), none of
+   these obligations is contractually binding on it [PLACEHOLDER — contract reference once signed].
 
 ---
 
 ## 2. Retention and destruction schedule
 
 Legend — **Today:** what actually happens now. **Proposed:** the period this draft recommends,
-pending the tags. **Mechanism:** the existing command/config or the GAP to build.
+pending the tags. **Mechanism:** the existing command/config or the GAP to build. **System:**
+*legacy daily* (SiteGround, US) · *Laravel* (OCI Riyadh, in-Kingdom) · *both*.
+
+### 2.0 Where the copies are (what any period has to reach)
+
+| # | Copy | System / location | Controlled by | Destruction mechanism today |
+|---|---|---|---|---|
+| C1 | The **daily** clinical database | Legacy PHP app, **SiteGround shared hosting, United States** | Operator company (account holder); SiteGround as sub-processor | **None.** No prune, no rotation, no documented deletion path [PLACEHOLDER — processor to state what deletion is possible on the account] |
+| C2 | The **parallel** clinical database | Laravel app, **OCI `me-riyadh-1`, in-Kingdom** | Operator company; Oracle as sub-processor | Soft deletes and an admin hard delete only; no scheduled prune (§2.1) |
+| C3 | Audit log + WORM archive | Laravel app + in-Kingdom OCI bucket | Operator company; Oracle | `audit:prune`, operator-run, never scheduled (§2.2) |
+| C4 | Encrypted database backups | In-Kingdom OCI bucket `dmc-db-backups` + `/var/backups/dmc/` on the host | Operator company (holds the keys and `APP_KEY`) | Bucket lifecycle (§2.3) |
+| C5 | Whatever SiteGround retains of the daily database | **United States**, inside SiteGround's platform | SiteGround | Unknown [VERIFY — SiteGround backup scope, retention and deletion on request] |
+| C6 | Migration dumps and exports | Operator workstations, the OCI host under `/home/ubuntu/migrate/dmc/` (CONFIRMED-FACTS D1) | Operator company | Manual, uninventoried **GAP** (§2.3) |
+| C7 | The `dmc-im.com` mailbox | SiteGround, **United States** | Operator company | Mailbox policy [VERIFY] (§2.6) |
+
+A destruction step that reaches only C2 has destroyed nothing while C1 and C5 hold the same rows.
 
 ### 2.1 Patient clinical records — **SENSITIVE**
 
-| Data | Trigger (start of clock) | Retention period | Today | Mechanism / GAP | Destruction method |
-|---|---|---|---|---|---|
-| `patients`, `admissions`, `admission_diagnoses`, `consultations`, `consultation_followups`, `handovers`, `handover_revisions`, `handover_signatures`, patient-bearing `notifications` rows | End of the last episode of care for that patient (last `discharge_date`), or the patient's death [VERIFY which trigger the regulation uses; special rules for minors or deceased patients] | **Set by the applicable Saudi medical-records regulation — [NEEDS LEGAL CONFIRMATION].** Do not assume a number from another jurisdiction. The period may differ between the primary medical record and a secondary operational system like this hub [VERIFY whether the hub is part of the medical record]. | Indefinite. Rows are soft-deleted at most (`deleted_at`); no purge exists. Data from the legacy system going back years was imported in full. | GAP — a scheduled `records:prune` (dry-run by default, `--confirm` gated, audited, refusing to run when the period is unset — mirroring `audit:prune`), **or** an anonymisation routine that strips identifiers but keeps statistics. Decision needed on delete-vs-anonymise [PLACEHOLDER — DPO + clinical owner]. | SQL delete of the patient graph (FKs cascade from `patients` → `admissions` → diagnoses/handovers; consultations `nullOnDelete`), then §5.1 caveats on InnoDB and backups. |
-| Soft-deleted patient / admission / consultation rows (`deleted_at` set) | `deleted_at` | Same as above (a soft delete is a correction, not a retention event) | Kept indefinitely | Included in the same prune | As above |
-| Derived TB classification | Follows `admission_diagnoses` | — | — | — | — |
+The hub is a **supplementary part of the medical record** (CONFIRMED-FACTS C1), so the clinical rows
+follow the medical-record period once counsel obtains it. The governing instrument has been
+identified — the Private Health Institutions Law Executive Regulations, whose Art. 3/3 delegates the
+figure to a Ministry annex [PROPOSED] — but **the annex has not been obtained, so no number is
+asserted anywhere in this document** [NEEDS LEGAL CONFIRMATION].
+
+| Data | System / copy | Trigger (start of clock) | Retention period | Today | Mechanism / GAP | Destruction method |
+|---|---|---|---|---|---|---|
+| `patients`, `admissions`, `admission_diagnoses`, `consultations`, `consultation_followups`, `handovers`, `handover_revisions`, `handover_signatures`, patient-bearing `notifications` rows | **Laravel (C2)** — the parallel copy; the consultation ledger is the only part of it that is the source of truth | End of the last episode of care for that patient (last `discharge_date`), or the patient's death [VERIFY which trigger the regulation uses; special rules for minors or deceased patients] | **Set by the applicable Saudi medical-records regulation — [NEEDS LEGAL CONFIRMATION].** Do not assume a number from another jurisdiction. The period may differ between the primary medical record and a supplementary operational system like this hub [VERIFY whether the hub is part of the medical record]. | Indefinite. Rows are soft-deleted at most (`deleted_at`); no purge exists. Data from the legacy system going back years was imported in full and is re-imported on each refresh (ROPA A10). | GAP — a scheduled `records:prune` (dry-run by default, `--confirm` gated, audited, refusing to run when the period is unset — mirroring `audit:prune`), **or** an anonymisation routine that strips identifiers but keeps statistics. Decision needed on delete-vs-anonymise [PLACEHOLDER — DPO + clinical owner]. | SQL delete of the patient graph (FKs cascade from `patients` → `admissions` → diagnoses/handovers; consultations `nullOnDelete`), then §5.1 caveats on InnoDB and backups. |
+| The **same clinical records** in the legacy daily database | **Legacy daily (C1)** — SiteGround, **United States**; this is the copy staff write to | As above | As above — the period applies to this copy first, because it is the operative record until cutover | Indefinite. No prune, no soft-delete convention, no destruction path documented; the build is the original un-hardened one | GAP — **the highest-priority retention gap.** Either the cutover retires this copy (CONFIRMED-FACTS D2) or a destruction path must be built on the SiteGround account [PLACEHOLDER — processor; cutover date] | Whatever SiteGround permits, plus destruction of C5; certificate required (§5.6) |
+| Soft-deleted patient / admission / consultation rows (`deleted_at` set) | Laravel (C2) | `deleted_at` | Same as above (a soft delete is a correction, not a retention event) | Kept indefinitely | Included in the same prune | As above |
+| Derived TB classification | Both | Follows `admission_diagnoses` | — | — | — | — |
 
 ### 2.2 Audit log
+
+**Laravel (C3) only.** The legacy daily system produces no comparable trail, so for the activity
+staff actually perform today there is nothing to retain, prune or verify — the retention question
+there is moot until cutover, and the accountability gap is recorded in ROPA A6 and DPIA R13.
 
 | Data | Trigger | Retention | Today | Mechanism | Destruction method |
 |---|---|---|---|---|---|
@@ -57,15 +95,21 @@ pending the tags. **Mechanism:** the existing command/config or the GAP to build
 
 ### 2.3 Backups and copies of the database
 
-| Data | Trigger | Retention | Today | Mechanism | Destruction method |
-|---|---|---|---|---|---|
-| Automated encrypted off-box backups *(being built)* | Backup creation | **Ninety days** (planned) [VERIFY sufficient against the clinical-record and audit periods — a backup only needs to cover recovery, not retention, because the live database and the WORM archive are the retention copies] | None exist | GAP — lifecycle rule on the backup bucket; backup-stale alert | Object expiry **plus** key management: if per-backup keys are used, destroy the key; otherwise verify the object and all versions are gone |
-| Manual pre-deploy dumps `~/pre-deploy-*.sql.gz` | Creation (DEPLOY-LARAVEL.md §7) | **Proposed: delete seven days after the deploy is verified**, or immediately after the next automated backup succeeds [PLACEHOLDER] | Accumulate on the host, unencrypted, no rule | GAP — encrypt at creation, ship off-box, cron delete | `shred -u` on the host (or secure delete appropriate to the filesystem [VERIFY]); confirm not in any home-directory backup |
-| Incident dumps / OCI volume snapshots named `INC-…` | Incident closure | For the duration of the incident **plus the legal hold**, then thirty days [PLACEHOLDER] | — | DPO releases the hold in writing | Delete the OCI backup/clone; verify no dependent clones remain |
-| Legacy database dumps (`dmc_prod` exports; historical `Demo.sql` at the legacy repository root) | Migration sign-off | **Destroy after `legacy:import` is signed off and the consultation cutover gate is ON** (DEPLOY-LARAVEL.md §3) [PLACEHOLDER — date] | Copies exist on operator machines [VERIFY inventory]; `Demo.sql` is not in the working tree and not in git history as of this draft [VERIFY local copies destroyed] | Manual inventory + destruction certificate | Secure delete every copy; if a dump is ever found in git history, purge it (history rewrite + force-push + collaborator re-clone) |
-| The legacy application's own database (`dmc_prod`) | Cutover | Keep read-only until the clinical-record period question is settled for the migrated rows [NEEDS LEGAL CONFIRMATION]; then destroy or archive | Live in parallel [VERIFY] | — | Drop database; destroy its backups |
+| Data | System / copy | Trigger | Retention | Today | Mechanism | Destruction method |
+|---|---|---|---|---|---|---|
+| Automated encrypted off-box backups | **Laravel (C4)** — in-Kingdom OCI bucket `dmc-db-backups` | Backup creation | **Ninety days** — a **placeholder pending legal**, not a sourced figure: the research found **no** backup-retention minimum in the instruments reviewed [PROPOSED — NOT FOUND, see PROPOSED-CITATIONS.md] [VERIFY sufficient against the clinical-record and audit periods — a backup only needs to cover recovery, not retention, because the live database and the WORM archive are the retention copies] | **Live**: nightly encrypted dump off-box, encrypted local copies in `/var/backups/dmc/` kept two days, a daily `backup:verify` staleness alert and a logged restore drill | Lifecycle rule on the backup bucket; backup-stale alert | Object expiry **plus** key management: destroy the backup encryption key and verify the object and all its versions are gone. Note separately that a dump restored without the `APP_KEY` in force when it was taken is **incomplete** — the encrypted narrative columns will not decrypt — so key custody is part of both recovery and destruction |
+| Whatever SiteGround retains of the **daily** database | **Legacy (C5)** — SiteGround, **United States** | Provider policy | Unknown | Unknown and unverified — no DPA, no stated retention, no deletion-on-request commitment on file | GAP — obtain the provider's backup scope, retention and deletion terms [VERIFY]; cover it in the transfer safeguard | Provider-side deletion request + written confirmation (§5.4) |
+| Manual pre-deploy dumps `~/pre-deploy-*.sql.gz` | Laravel host (C6) | Creation (DEPLOY-LARAVEL.md §7) | **Proposed: delete seven days after the deploy is verified**, or immediately after the next automated backup succeeds [PLACEHOLDER] | Accumulate on the host, unencrypted, no rule | GAP — encrypt at creation, ship off-box, cron delete | `shred -u` on the host (or secure delete appropriate to the filesystem [VERIFY]); confirm not in any home-directory backup |
+| Incident dumps / OCI volume snapshots named `INC-…` | Laravel (C6) | Incident closure | For the duration of the incident **plus the legal hold**, then thirty days [PLACEHOLDER] | — | DPO releases the hold in writing | Delete the OCI backup/clone; verify no dependent clones remain |
+| Legacy database dumps and exports | **C6** — operator workstations and the OCI host under `/home/ubuntu/migrate/dmc/` | Migration sign-off | **Destroy after `legacy:import` is signed off and the consultation cutover gate is ON** (DEPLOY-LARAVEL.md §3) [PLACEHOLDER — date] | CONFIRMED-FACTS D1 records the known copies: seven legacy `.sql` dumps plus export/reconciliation files on the owner's workstation, and a **plaintext** `dmc_demo.sql.gz`, a pre-refresh dump and leftover key files on the OCI host. A full inventory and destruction schedule is still owed **GAP**. The historical `Demo.sql` is not in the working tree and not in git history as of this draft [VERIFY local copies destroyed] | Manual inventory + destruction certificate | Secure delete every copy; if a dump is ever found in git history, purge it (history rewrite + force-push + collaborator re-clone) |
+| The legacy application's own database | **Legacy daily (C1)** — SiteGround, **United States**; still the live system of record | Cutover | Keep until cutover, then destroy or archive per the clinical-record period for the migrated rows [NEEDS LEGAL CONFIRMATION] | **Live and in daily use** — not a dormant copy; the plan is to replace the dmc-im.com code with the Laravel app at cutover (CONFIRMED-FACTS D2), at which point this database must be dealt with explicitly [PLACEHOLDER — cutover date] | — | Drop database; destroy C5 and every provider-side backup; obtain written confirmation from SiteGround (§5.4) |
 
 ### 2.4 Sessions, tokens and authentication state
+
+**Laravel (C2) only.** The legacy daily system keeps its own sessions and password-reset state on
+SiteGround (**US**) under the original build's settings — its session cookie has neither `Secure`
+nor `HttpOnly` (CONFIRMED-FACTS B2) — and none of the rows below describes it [PLACEHOLDER —
+legacy session/token retention, processor to state].
 
 | Data | Trigger | Retention | Today | Mechanism | Destruction method |
 |---|---|---|---|---|---|
@@ -78,14 +122,24 @@ pending the tags. **Mechanism:** the existing command/config or the GAP to build
 
 ### 2.5 Staff accounts
 
+**Two unsynchronised account sets.** Staff have an account in the legacy daily system (SiteGround,
+**US**, original build with admin self-registration) *and* an account in the Laravel app (OCI
+Riyadh). Every step below therefore has to be performed **in both systems**, and a departure handled
+in one leaves the other open [PLACEHOLDER — joiner/leaver procedure covering both systems].
+
 | Data | Trigger | Retention | Today | Mechanism | Destruction method |
 |---|---|---|---|---|---|
-| Active account | — | While employed / engaged | — | — | — |
+| Active account (each system separately) | — | While employed / engaged | Two account sets exist and are administered separately; a change in one does not reach the other | — | — |
 | Account after departure | HR leaving date [PLACEHOLDER — HR feed] | **Immediately:** set `active = 0` (Control → Users, audited `user.update`), revoke trusted devices, clear sessions. **Then:** soft-delete (`user.delete`, `deleted_at`) after **[PLACEHOLDER — proposed ninety days]**. **Identity fields (`name`, `full_name`) must be kept** for as long as any clinical or audit row attributes an action to the user (FKs are `nullOnDelete`; `actor_name` is denormalised into `audit_log` precisely so attribution survives). **Contact fields (`email`, `username`) may be scrubbed** after the soft-delete period [NEEDS LEGAL CONFIRMATION — employment-record retention rules] | Deactivation is manual; no scheduled review | GAP — quarterly access review; departure checklist | SQL update (scrub) rather than row delete; never hard-delete a user who appears in `audit_log.actor_id`, `admissions.*_by`, `handover_revisions.author_id`, etc. |
 | Applicants who never completed registration | `pending_registrations.expires_at` | Thirty minutes | See §2.4 | See §2.4 | SQL delete |
 | `report_recipients` | Removal by an admin (`report_recipient.remove`) | Until removed; review quarterly | Manual | — | Row delete (the audit row records the address) |
 
 ### 2.6 Logs, telemetry and outputs
+
+Unless a row says otherwise these are **Laravel (C2/C6)** artifacts. The legacy daily system's own
+logs and exports on SiteGround (**US**) are outside every rule below and have never been inventoried
+[VERIFY — legacy log and export inventory]. Note also that exports and printed sheets exist in
+**both** systems, and only the Laravel registry export leaves an audit row.
 
 | Data | Trigger | Retention | Today | Mechanism | Destruction method |
 |---|---|---|---|---|---|
@@ -95,7 +149,7 @@ pending the tags. **Mechanism:** the existing command/config or the GAP to build
 | `security.failed_logins`, `audit.integrity_failure` notifications | — | See §2.2 non-patient notifications | — | — | — |
 | Registry exports (CSV/XLSX) on staff devices | Download | **Proposed: delete within thirty days or on task completion, whichever is first; never retained on personal devices** [PLACEHOLDER] | No rule; server keeps no copy | Policy + training; the `registry.export*` audit row is the register of what exists | Secure delete on the device; empty recycle bin; check cloud-sync folders |
 | Audit-log exports, statistics exports | Download | As above (these are not audited — the user records the export manually [GAP]) | No rule | Policy | As above |
-| Monthly report PDF (aggregate) | Sent on the first of the month at 06:00 | At recipients' mailboxes per the hospital e-mail retention policy [VERIFY]; the relay provider's retention [VERIFY] | — | Mail policy | Mailbox deletion |
+| Monthly report PDF (aggregate) | Sent on the first of the month at 06:00 | At recipients' mailboxes per the hospital e-mail retention policy [VERIFY]; plus whatever **SiteGround** retains in the `dmc-im.com` mailbox and its logs, in the **United States** [VERIFY relay retention] | Template confirmed aggregate-only — no MRN, no name (CONFIRMED-FACTS C6) | Mail policy | Mailbox deletion; provider-side deletion per §5.4 |
 | Queued job payloads (`jobs` table) carrying the PDF | Job completion | `.env.example` sets `QUEUE_CONNECTION=sync`, so the job runs inline and nothing persists in `jobs` [VERIFY live value]; if a real queue driver is enabled, payloads persist until success and failures land in `failed_jobs` | — | `queue:prune-failed` if a queue driver is enabled | SQL delete |
 | Printed handover / service sheets | Printing | **End of shift or when superseded, whichever is first** [PLACEHOLDER — clinical rule] | No rule | Ward procedure | Cross-cut shredding in a confidential-waste bin |
 
@@ -103,8 +157,8 @@ pending the tags. **Mechanism:** the existing command/config or the GAP to build
 
 | Data | Retention | Notes |
 |---|---|---|
-| `settings` row, `.env` | Life of the system; secrets rotated per INCIDENT-RESPONSE.md §7.4 | Old secret values must not be kept anywhere after rotation |
-| Source code (GitHub) | Indefinite | Contains no personal data by design; keep the history clean (no `Demo.sql` in history as of this draft; legacy credentials were rotated after exposure) |
+| `settings` row, `.env` (both systems) | Life of the system; secrets rotated per INCIDENT-RESPONSE.md §7.4 | Old secret values must not be kept anywhere after rotation. The legacy build stores its secrets in plaintext configuration (CONFIRMED-FACTS B2) |
+| Source code (GitHub) | Indefinite | Contains no personal data by design; keep the history clean (no `Demo.sql` in history as of this draft; legacy credentials were rotated after exposure). The repository is **public** by a time-boxed owner decision and is to be made private before go-live (CONFIRMED-FACTS D3) |
 | Reference tables (`icd10`, `countries`, …) | Indefinite | Public data |
 | This documentation | Life of the system + the audit period | Versions kept in git |
 
@@ -114,9 +168,13 @@ pending the tags. **Mechanism:** the existing command/config or the GAP to build
 
 | Step | Who | How |
 |---|---|---|
-| Place a hold | DPO | Written note in the incident/complaint file naming the data (patients, date range, users) and the reason |
-| Suspend destruction | System owner | Do not run `audit:prune --confirm` or any future records prune; do not delete `INC-…` snapshots or dumps; extend log retention for the window |
+| Place a hold | DPO (once appointed; the owner interim) | Written note in the incident/complaint file naming the data (patients, date range, users) and the reason, and naming **which copies in §2.0 it covers** — a hold that names only the Laravel copy leaves the daily record unprotected |
+| Suspend destruction | System owner (processor side) | Do not run `audit:prune --confirm` or any future records prune; do not delete `INC-…` snapshots or dumps; extend log retention for the window; **freeze any legacy-side deletion or cutover step** for the affected rows |
 | Release | DPO | Written release; destruction resumes at the next scheduled run |
+
+Because the operator company, not the hospital, executes every one of these steps, a hold is only as
+good as the instruction the controller can give it — another reason the Art. 17 contract is the top
+action (CONFIRMED-FACTS A5).
 
 ---
 
@@ -130,13 +188,17 @@ pending the tags. **Mechanism:** the existing command/config or the GAP to build
 | 4 | Schedule `audit:prune` **dry-run** monthly with notification; document the quarterly operator run | GAP | [PLACEHOLDER] | [PLACEHOLDER] |
 | 5 | Backfill pre-chain audit hashes | [VERIFY] | [PLACEHOLDER] | [PLACEHOLDER] |
 | 6 | Confirm WORM bucket lifecycle expires objects after the seven-year lock | [VERIFY] | [PLACEHOLDER] | [PLACEHOLDER] |
-| 7 | Backups: ninety-day lifecycle rule; encrypt; stale alert; restore test | Being built | [PLACEHOLDER] | [PLACEHOLDER] |
+| 7 | Backups: ninety-day lifecycle rule; encrypt; stale alert; restore test | **Done for the Laravel copy** (nightly encrypted off-box dump, `backup:verify`, logged restore drill); the ninety-day figure remains a legal placeholder | [PLACEHOLDER] | [PLACEHOLDER] |
 | 8 | Encrypt-at-creation + off-box + seven-day delete for manual pre-deploy dumps | GAP | [PLACEHOLDER] | [PLACEHOLDER] |
-| 9 | Inventory and destroy legacy dumps; verify git-history purge | GAP | [PLACEHOLDER] | [PLACEHOLDER] |
+| 9 | Inventory and destroy legacy dumps (CONFIRMED-FACTS D1, incl. the plaintext dump and key files on the OCI host); verify git-history purge | GAP | [PLACEHOLDER] | [PLACEHOLDER] |
+| 9a | **Decide and record what happens to the legacy daily database (C1) and to SiteGround-held backups (C5)** — cutover date, destruction path, provider deletion confirmation | GAP — highest priority in this schedule | [PLACEHOLDER — owner + DPO] | [PLACEHOLDER] |
+| 9b | Obtain SiteGround's backup scope, retention and deletion terms; cover them in the transfer safeguard | GAP | [PLACEHOLDER — IT lead] | [PLACEHOLDER] |
+| 9c | **Sign the controller–processor contract** so these periods bind the operator company (IR Art. 17 minimum content [PROPOSED]) | GAP — top action (A0) | [PLACEHOLDER — DPO + owner] | [PLACEHOLDER] |
 | 10 | Nightly sweeps: expired sessions (file driver), `pending_registrations`, `trusted_devices` (after ninety days), `auth:clear-resets` | GAP | [PLACEHOLDER] | [PLACEHOLDER] |
 | 11 | Set `LOG_CHANNEL=daily`, `LOG_DAILY_DAYS` per the agreed period; Docker log rotation | [VERIFY live values] | [PLACEHOLDER] | [PLACEHOLDER] |
-| 12 | Departure checklist + quarterly access review | GAP | [PLACEHOLDER — HR / System owner] | [PLACEHOLDER] |
+| 12 | Departure checklist + quarterly access review, **covering both systems' account sets** | GAP | [PLACEHOLDER — HR / System owner] | [PLACEHOLDER] |
 | 13 | Staff rule for exports and printed sheets; add classification labels to exports | GAP | [PLACEHOLDER] | [PLACEHOLDER] |
+| 14 | Inventory the legacy schema, logs and exports on SiteGround so this schedule can be applied to C1/C5 at all | GAP | [PLACEHOLDER — processor] | [PLACEHOLDER] |
 
 ---
 
@@ -146,8 +208,11 @@ pending the tags. **Mechanism:** the existing command/config or the GAP to build
 
 - A `DELETE` removes the row logically; the bytes may persist in the tablespace until the page is
   reused, and in the binary log / redo log if enabled [VERIFY binlog configuration]. For sensitive
-  data this is acceptable **only** in combination with encrypted storage whose key is controlled
-  (planned at-rest encryption), and with backups expiring on schedule.
+  data this is acceptable **only** in combination with encrypted storage whose key is controlled and
+  with backups expiring on schedule. In the Laravel copy encryption at rest is **partial** — the
+  four narrative columns under `APP_KEY`, everything else relying on the cloud provider's default
+  volume encryption, whose keys the provider holds; on the legacy daily system neither condition
+  holds.
 - Soft delete (`deleted_at`) is **not** destruction.
 - Record every prune in the audit log (`audit.pruned` already does this for audit rows; the future
   records prune must do the same, with counts, not identifiers).
@@ -163,12 +228,15 @@ swap files, or `/tmp`.
 
 Delete the object **and** any versions; delete OCI volume backups/clones and check for dependent
 resources; where a customer-managed key protects the object, key destruction is the strongest
-form of erasure [VERIFY key-management setup once backups exist].
+form of erasure [VERIFY the key-management setup for the backup bucket and the audit archive].
 
 ### 5.4 Processor-held copies
 
-Ask the processor (relay provider, cloud provider) to confirm deletion per the DPA and keep the
-confirmation [PLACEHOLDER — DPA clauses].
+Ask the processor to confirm deletion per the DPA and keep the confirmation [PLACEHOLDER — DPA
+clauses]. Here that means, in order: the **operator company** (primary processor — no contract yet,
+so there is nothing to invoke), then its sub-processors **SiteGround** (the legacy host, its
+backups and the `dmc-im.com` mailbox), **Oracle/OCI** (compute, backups, audit archive) and
+**Cloudflare** (edge logs). None of these has a signed DPA on file [PLACEHOLDER — obtain and file].
 
 ### 5.5 Paper
 
@@ -207,16 +275,24 @@ Confidential and retained for the audit-log period.
    the name stays as long as the clinical/audit rows that cite it; contact details go.
 7. **Conflicts** (a legal hold vs an expiry, a data-subject destruction request vs the clinical
    period) are decided by the DPO in writing and recorded in the destruction log.
+8. **The parallel period is itself a retention question.** Running two systems means holding two
+   complete copies of the same sensitive dataset (ROPA A10), one of them outside the Kingdom on an
+   un-hardened build. Nothing in the law makes a duplicate unlawful in itself, but the duplicate has
+   no independent purpose once cutover happens, so the parallel window should be **as short as the
+   project allows** and should end with a documented destruction of the legacy copy and every
+   migration dump [PLACEHOLDER — cutover date; destruction certificate].
 
 ---
 
 ## 7. Review
 
-Review this schedule when legal confirms the clinical period; when the backup workstream ships;
-after any incident; and at least annually. Next review: [PLACEHOLDER].
+Review this schedule when legal confirms the clinical period; **at cutover, when the legacy copy is
+retired and this schedule stops needing to be applied twice**; after any incident; and at least
+annually. Next review: [PLACEHOLDER].
 
 ## 8. Change log
 
 | Date | Version | Change | Author |
 |---|---|---|---|
 | 2026-09-03 | 0.1 | Initial draft | [PLACEHOLDER] |
+| 2026-09-03 | 0.1 | Reworked to the confirmed framing: two-system principle and controller/processor split (§1.5–1.6); new §2.0 copy inventory C1–C7; legacy daily database and SiteGround-held backups added as rows in §2.1 and §2.3; automated encrypted backups corrected from "being built" to live with the ninety-day figure kept as a legal placeholder; §2.2/§2.4/§2.6 scoped to the Laravel copy; dual account sets in §2.5; legal holds, destruction methods and checklist items 9a–9c/14 extended to the legacy copy and the processor contract; §6.8 on the parallel period | [PLACEHOLDER] |
