@@ -306,7 +306,7 @@ Add one row per drill (monthly) and per real restore. This table *is* the eviden
 
 | Date (UTC) | Run by | Object | download s | restore s | total s | patients / admissions / users / consultations | Result / notes |
 |---|---|---|---|---|---|---|---|
-| _not yet run_ | | | | | | | first production drill pending |
+| 2026-09-03 03:07 | Claude Code (on the owner's instruction) | db-backups/dmc_demo/2026/09/dmc_demo-2026-09-03T030653Z.sql.gz.enc | 1 | 6 | 8 | 17435 / 37662 / 331 / 0 | DRILL OK — first production drill; scratch DB counts matched the live DB (COMPARE_LIVE=1); RTO for a 20 MB dump ≈ 8 s plus operator time |
 
 ---
 
