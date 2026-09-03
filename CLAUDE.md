@@ -99,7 +99,7 @@ composer-audit gate in CI passes.
    ├─ scripts/                smoke.sh, contrast.mjs, check-source-allowlist.mjs, coverage-gate.php, deploy-on-green.sh (opt-in, off),
    │                          backup/{db-backup.py, binlog-ship.py, db-restore-drill.sh, test_*.py}
    ├─ docs/                   runbooks + behaviour docs (§13) · docs/compliance/ (PDPL paper trail)
-   └─ .prod-ready/            local audit workspace — never commit
+   └─ .prod-ready/            local audit workspace — git-ignored except waivers.yml (the committed risk-acceptance record)
 ```
 
 Directory names under `resources/js` are capitalised (`Pages`, `Components`, `Layouts`). Windows
