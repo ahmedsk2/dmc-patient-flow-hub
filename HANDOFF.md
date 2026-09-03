@@ -111,8 +111,27 @@
    DEPLOY-LARAVEL §4.4 with the API method), second restore drill logged (7 s), the plaintext
    dumps + private deploy key + credential files under `/home/ubuntu/migrate/dmc/` **shredded**
    (only three harmless scripts and empty storage folders remain), Legacy CI switched to
-   manual-only, and MySQL binlog confirmed already ON (8.4 default, ROW, 30-day expiry) — off-box
-   binlog shipping + a PITR runbook are in progress. Deploy-on-green stays OFF by owner decision.
+   manual-only, and MySQL binlog confirmed already ON (8.4 default, ROW, 30-day expiry) — **hourly
+   off-box binlog shipping + PITR runbook shipped (PR #19, two adversarial reviews) and installed on
+   the host at 19:21 UTC**: first run archived both closed binlogs in 47 s, `--restore-check` OK,
+   cron `/etc/cron.d/dmc-binlog-ship` (minute 40) + `/etc/logrotate.d/dmc-backup` in place; RPO is
+   now ≤ 1 h for binlog-covered changes. **Then the follow-through docs landed:** PR #14 CODEOWNERS
+   + security-policy contact pointer, #15 one h1 per page, #16 DATABASE-AND-BEHAVIOR resynced from
+   code (14 corrections), #17 ten ADRs under `laravel/docs/adr/`, #18 the parked item 2(c) — RoPA /
+   retention / DPIA reworked to the processor-and-legacy-daily framing, C12/C13 reconciled, OPEN-ITEMS
+   regenerated (575 live markers, 30 keyword-final placeholders documented in its banner).
+   **Not yet deployed to production: everything merged after `a4dd4bd`/`9f81bb9`** — the h1 fix, the
+   binlog heartbeat check in `backup:verify`, and the docs; a deploy needs the owner's word.
+   **Run-3 score (full fresh audit of all 16 categories + five re-audits after the merges):
+   NEEDS FIXES 70/100, emphasis 76, 0 Critical / 12 High / 17 Medium / 5 Low** —
+   [`evidence/prod-ready-2026-09-03-closeout.md`](laravel/docs/compliance/evidence/prod-ready-2026-09-03-closeout.md).
+   Remaining Highs, all owner/infra: SEC-11 + CICD-11 (a second reviewer — waiver candidate with one
+   maintainer), OPS-02/03 (on-call + paging), CICD-08 (auto rollback; deploys stay manual by
+   decision) and the separate RES-12 drain step, DATA-02 (off-region backup copy) + CFG-10 (OCI
+   instance principal) + OBS-03/04 (error/metrics sink) — all need an OCI IAM step, CICD-05
+   (SBOM/attestations), I18N-02 (accepted: never pin the MySQL session time zone). Deploy-on-green stays OFF by owner decision — the owner's stated reason (2026-09-03): "I don't
+   want to autodeploy, to make sure nothing goes wrong on production" (recorded here so ADR 0005 has
+   its rationale).
    Contents: audit rows + `SECRET-`/`CONFIDENTIAL-` filename
    prefixes + PDF/print footers on every export (G1, G2); labels paired on the six remaining forms
    (UX-04 fully closed) with axe specs; `__Host-` session cookie in config (G14); ESLint + vue

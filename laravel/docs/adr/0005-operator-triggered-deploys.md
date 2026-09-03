@@ -25,8 +25,9 @@ Write the automated alternative but leave it inert: `laravel/scripts/deploy-on-g
 live image, then runs the smoke test and reports a red smoke as the rollback trigger. It is not
 installed and not wired to cron; enabling it is a documented, opt-in procedure.
 
-The record states the reason as an **owner decision** — "Auto Deploy is off on purpose"; a fuller
-written rationale is **not recorded**.
+The record states the reason as an **owner decision** — "Auto Deploy is off on purpose". The owner's
+own words, given on 2026-09-03 when offered deploy-on-green and recorded in `HANDOFF.md` item 5:
+"I don't want to autodeploy, to make sure nothing goes wrong on production."
 
 ## Consequences
 

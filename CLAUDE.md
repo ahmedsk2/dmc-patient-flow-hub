@@ -96,7 +96,8 @@ composer-audit gate in CI passes.
    ├─ database/migrations/    47 migrations — the authoritative schema
    ├─ resources/js/           Pages/<Module>/ · Components/ · Layouts/ · composables/ · lib/ · __tests__
    ├─ tests/Feature (105 files) · tests/Unit (2)
-   ├─ scripts/                smoke.sh, contrast.mjs, check-source-allowlist.mjs, backup/{db-backup.py,db-restore-drill.sh}
+   ├─ scripts/                smoke.sh, contrast.mjs, check-source-allowlist.mjs, coverage-gate.php, deploy-on-green.sh (opt-in, off),
+   │                          backup/{db-backup.py, binlog-ship.py, db-restore-drill.sh, test_*.py}
    ├─ docs/                   runbooks + behaviour docs (§13) · docs/compliance/ (PDPL paper trail)
    └─ .prod-ready/            local audit workspace — never commit
 ```
@@ -143,8 +144,9 @@ every minute, `audit:ship` hourly, `audit:verify-daily` 02:30, `backup:verify` 0
 07:00, the monthly report on the 1st at 06:00.
 
 **Audit trail.** `App\Support\Audit::log()` writes an `audit_log` row `{actor, action, entity,
-details JSON, ip}` for every write and for PHI reads (record opens when `log_record_opens` is on,
-handover reads, exports, registry searches). Rows are **hash-chained** (`prev_hash` + sha256
+details JSON, ip}` for every write and for PHI reads: exports, report PDFs and registry searches
+always; record opens and handover reads only while the `log_record_opens` setting is on (default
+off — verified against `HandoverController::show` on 2026-09-03). Rows are **hash-chained** (`prev_hash` + sha256
 `row_hash`, taken under a row lock), verified nightly, and shipped hourly as write-once NDJSON to the
 in-Kingdom bucket `dmc-audit-log`. `AuditDiff` records before/after on updates.
 
@@ -279,10 +281,15 @@ Each flow names its controller; per-endpoint database effects are in DATABASE-AN
 - **Never filter, sort, group or join on an encrypted column in SQL**, and never add one to an
   export, notification, log, dashboard or email payload. Raw reads (`DB::table`, `selectRaw`) return
   ciphertext; decrypt explicitly and add a test.
-- **Backups:** nightly (02:15 host time) encrypted off-box dump to the in-Kingdom bucket
-  `dmc-db-backups`; RPO ≤ 24 h; RTO is whatever the drill prints, plus the human steps; local
-  encrypted copy 2 days, bucket 90 days (**placeholder pending legal**); `backup:verify` alerts admins
-  in-app when the heartbeat is stale; monthly restore drill logged in `docs/BACKUP-AND-RESTORE.md` §8.
+- **Backups and point-in-time recovery:** nightly (02:15 host time) encrypted off-box dump to the
+  in-Kingdom bucket `dmc-db-backups`, plus **hourly encrypted binlog shipping** to the same bucket
+  (`scripts/backup/binlog-ship.py`, host cron at minute 40, installed 2026-09-03; MySQL 8.4 keeps
+  binlogs in ROW format for 30 days). RPO ≤ 1 h for binlog-covered changes, ≤ 24 h from the dump
+  alone; RTO is whatever the drill prints (7–8 s for the dump) plus the replay and the human steps;
+  local encrypted copy 2 days, bucket 90 days (**placeholder pending legal**); `backup:verify` alerts
+  admins in-app when either heartbeat is stale (the binlog half needs the container deployed from
+  `151a220` or later); restore drills logged in `docs/BACKUP-AND-RESTORE.md` §8, the replay
+  procedure in §10 (rehearse it on a throwaway container, never against `dmc_demo`).
 - **Audit:** tamper-evident chain, nightly verification, hourly off-box shipping (§5). Retention
   window is a setting; pruning is manual.
 - **Repository hygiene:** git history purged of the three historically leaked secrets; GitHub secret
@@ -416,7 +423,9 @@ CBAHI. State on 2026-09-03:
 
 - **Drafted, awaiting facts:** nine documents in [`laravel/docs/compliance/`](laravel/docs/compliance/)
   (privacy notice EN/AR, RoPA, DPIA, incident response, retention, classification, DPO, DPAs and
-  transfers) with **529 open markers** catalogued by file and line in
+  transfers) with **575 open markers** (regenerated 2026-09-03 after the RoPA / retention / DPIA
+  rework to the processor-and-legacy-daily framing; 30 further keyword-final placeholders such as
+  `[DPO NAME]` are listed in its banner) catalogued by file and line in
   [`OPEN-ITEMS.md`](laravel/docs/compliance/OPEN-ITEMS.md). Fill each only after the owner or the
   hospital's legal/DPO confirms it. Never invent a legal citation, retention period or entity name.
 - **Known compliance-relevant facts:** US-based SMTP relay for outbound mail (a transfer question);
@@ -433,8 +442,15 @@ CBAHI. State on 2026-09-03:
   legacy daily site **F** (`evidence/sec-web-2026-09-03.md`). Re-score only when it is genuinely useful.
 - **Engineering close-out (late 2026-09-03):** every code-only item from the re-score shipped in
   PR #10 and the hardening PR #11 and was **deployed as `a4dd4bd`** after an adversarial pre-deploy
-  review (smoke 15/15, audit chain intact). What remains is owner or infrastructure decisions only:
-  the ranked list lives in HANDOFF.md item 5.
+  review (smoke 15/15, audit chain intact); the same evening added the rollback rehearsal, restore
+  drills, point-in-time recovery (PR #19, installed on the host), CODEOWNERS, ADRs, the behaviour-doc
+  resync and the compliance rework (PRs #13–#18). **Third scoring run, full fresh audit of all 16
+  categories plus five re-audits after those merges: NEEDS FIXES 70/100, 0 Critical, 12 High,
+  17 Medium** (emphasis 76) —
+  [`evidence/prod-ready-2026-09-03-closeout.md`](laravel/docs/compliance/evidence/prod-ready-2026-09-03-closeout.md)
+  (read its orchestrator notes: two category drops are auditor variance, and the MySQL session
+  time-zone finding is an accepted, documented risk). Every remaining High is an owner or
+  infrastructure decision: the ranked list lives in HANDOFF.md item 5.
 - **Evidence pack:** [`EVIDENCE-PACK.md`](laravel/docs/compliance/EVIDENCE-PACK.md) maps the PDPL
   obligations and NCA domains to evidence, with the gap register G1–G16 (G1, G2 and G14 closed).
 
