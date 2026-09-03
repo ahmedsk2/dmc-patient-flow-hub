@@ -40,15 +40,20 @@ APP=$(docker ps -q -f "label=coolify.name=$APP_UUID" | head -1)
 LIVE=$(docker inspect --format '{{.Config.Image}}' "$APP" 2>/dev/null | sed -E 's/.*://')
 [ "$LIVE" = "$HEAD" ] && { log "main@${HEAD:0:7} already live"; exit 0; }
 
-# 3. token + no deployment in progress
+# 3. token + smoke script present + no deployment in progress. Every precondition that cannot be
+#    read is a reason NOT to deploy: an API error must never be mistaken for "nothing in progress",
+#    and a missing smoke script would leave this commit deployed but never smoke-tested (the next
+#    run sees it already live and stops at step 2).
 [ -r "$COOLIFY_TOKEN_FILE" ] || { log "no token file at $COOLIFY_TOKEN_FILE — not enabled"; exit 0; }
+[ -x "$SMOKE" ] || { log "smoke script not found or not executable at $SMOKE — not deploying"; exit 1; }
 TOKEN=$(tr -d '\r\n' < "$COOLIFY_TOKEN_FILE")
 AUTH="Authorization: Bearer $TOKEN"
 INPROG=$(curl -fsS -m 20 -H "$AUTH" "$COOLIFY_API/deployments" | python3 -c "
 import sys,json
 d=json.load(sys.stdin); d=d if isinstance(d,list) else d.get('deployments',d.get('data',[]))
-print(sum(1 for x in d if x.get('application_uuid','')=='$APP_UUID' and x.get('status') in ('in_progress','queued')))" 2>/dev/null || echo 0)
-[ "${INPROG:-0}" = "0" ] || { log "a deployment is already in progress"; exit 0; }
+print(sum(1 for x in d if x.get('application_uuid','')=='$APP_UUID' and x.get('status') in ('in_progress','queued')))" 2>/dev/null || echo ERR)
+[ "$INPROG" != "ERR" ] || { log "could not read the deployment queue from Coolify — not deploying"; exit 1; }
+[ "$INPROG" = "0" ] || { log "a deployment is already in progress"; exit 0; }
 
 # 4. deploy + poll
 D=$(curl -fsS -m 30 -H "$AUTH" "$COOLIFY_API/deploy?uuid=$APP_UUID" | python3 -c 'import sys,json; print(json.load(sys.stdin)["deployments"][0]["deployment_uuid"])')
@@ -60,9 +65,6 @@ for _ in $(seq 1 40); do
 done
 [ "${S:-}" = "finished" ] || { log "deployment $D did not finish in time"; exit 1; }
 
-# 5. smoke against the public hostname; a red smoke is the rollback trigger (DEPLOY-LARAVEL.md §4)
-if [ -x "$SMOKE" ]; then
-  if bash "$SMOKE" "$PUBLIC_URL"; then log "main@${HEAD:0:7} deployed and smoke PASS"; else log "SMOKE FAILED after deploying ${HEAD:0:7} — roll back per §4.1"; exit 2; fi
-else
-  log "deployed ${HEAD:0:7}; smoke script not found at $SMOKE (skipped)"
-fi
+# 5. smoke against the public hostname; a red smoke is the rollback trigger (DEPLOY-LARAVEL.md §4).
+#    The script's presence was checked before deploying, so this never silently skips.
+if bash "$SMOKE" "$PUBLIC_URL"; then log "main@${HEAD:0:7} deployed and smoke PASS"; else log "SMOKE FAILED after deploying ${HEAD:0:7} — roll back per §4.1"; exit 2; fi

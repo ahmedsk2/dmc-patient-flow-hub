@@ -195,6 +195,26 @@ if [ "$CURL_RC" -eq 0 ] && [ -s "$TMP/login.hdr" ]; then
     else
         fail "x-powered-by leaks \"$xpb\" — set expose_php=Off in the image's php.ini, or strip it at the proxy"
     fi
+
+    # Session cookie (G14): __Host- prefix requires Secure + Path=/ + NO Domain, or browsers drop it
+    # silently and nobody can log in while every server-side check still looks green.
+    sc="$(header login set-cookie | grep -i -- '-session=' | head -1)"
+    if [ -z "$sc" ]; then
+        fail "session cookie — /login set no *-session cookie (StartSession not running on the web group?)"
+    else
+        sc_l="$(printf '%s' "$sc" | tr '[:upper:]' '[:lower:]')"
+        case "$sc_l" in
+            __host-*)
+                if printf '%s' "$sc_l" | grep -q 'domain='; then
+                    fail "session cookie is __Host- but carries a Domain attribute — browsers reject it (unset SESSION_DOMAIN)"
+                elif ! printf '%s' "$sc_l" | grep -q 'secure' || ! printf '%s' "$sc_l" | grep -q 'httponly'; then
+                    fail "session cookie is __Host- but not both Secure and HttpOnly: ${sc%%=*}"
+                else
+                    pass "session cookie ${sc%%=*}: Secure, HttpOnly, host-only (__Host- honoured)"
+                fi ;;
+            *) warn "session cookie ${sc%%=*} has no __Host- prefix (SESSION_SECURE_COOKIE unset, or SESSION_COOKIE overrides the name)" ;;
+        esac
+    fi
 else
     fail "security headers — no /login response to inspect"
 fi
