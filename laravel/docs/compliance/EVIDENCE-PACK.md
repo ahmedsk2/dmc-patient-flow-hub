@@ -23,9 +23,17 @@ repository** (the repo must hold no secrets, tokens or PHI).
 
 ## 1. System description and scope
 
+> **Confirmed parties (2026-09-03, see [`CONFIRMED-FACTS.md`](CONFIRMED-FACTS.md)).** Controller:
+> **Dammam Medical Complex**, under the **Eastern Health Cluster** (Saudi Health Holding Company) —
+> public-sector ownership, registering entity for counsel to confirm. Primary processor: **the
+> developer/operator company** (holds the code, OCI tenancy and domain; no controller–processor
+> contract yet — top action). Sub-processors: OCI (Oracle Systems Limited, Riyadh), Cloudflare Free
+> (US), SiteGround SMTP relay (US). **Daily system is still the legacy PHP app on `dmc-im.com`
+> (SiteGround, US) in its original un-hardened build**; the Laravel app runs in parallel until cutover.
+
 | Item | Evidence |
 |---|---|
-| What the system is, data held, hosting | [`../../CLAUDE.md`](../../CLAUDE.md) §1–§6 (repo root), [`ROPA.md`](ROPA.md) §1–§3 |
+| What the system is, data held, hosting | [`../../CLAUDE.md`](../../CLAUDE.md) §1–§6 (repo root), [`ROPA.md`](ROPA.md) §1–§3, [`CONFIRMED-FACTS.md`](CONFIRMED-FACTS.md) |
 | Data inventory and classification | [`DATA-CLASSIFICATION.md`](DATA-CLASSIFICATION.md) §3 (assets table), schema in `database/migrations/` |
 | Processors and data flows | [`DPA-AND-TRANSFERS.md`](DPA-AND-TRANSFERS.md) §1; [`DPIA.md`](DPIA.md) data-flow section |
 | Approximate volumes | ~17k patients, ~37k admission episodes, ~330 staff accounts ([`../../HANDOFF.md`](../../HANDOFF.md)) |
@@ -116,6 +124,10 @@ status; GitHub code-security settings; Coolify environment-variable list **with 
 | G7 | Required status checks on `main` not configured; SSH IP allow-list deferred | `docs/CI.md`, `HANDOFF.md` | owner | |
 | G8 | Legacy PHI dump copies not inventoried / destruction unconfirmed | `DATA-CLASSIFICATION.md` §3 | owner | |
 | G9 | Named roles (DPO, security lead, system owner, clinical data owner) not designated | all drafts | owner | |
+| G10 | **GitHub repository is public** (owner-accepted, time-boxed for free CI during development) | verified 2026-09-03 | owner | make private before go-live |
+| G11 | **Live daily system `dmc-im.com` is the original un-hardened legacy build over real PHI on a US host** (all systemic defects live) | verified 2026-09-03 | owner | before / at cutover |
+| G12 | **No controller–processor contract** between the hospital and the operator company | CONFIRMED-FACTS A5 | owner + legal | top priority |
+| G13 | US SMTP relay (SiteGround) + Cloudflare Free carry a cross-border transfer without SCCs/TRA on file | CONFIRMED-FACTS B5/B6 | legal + engineering | |
 
 ## 7. Proposed legal and framework citations
 

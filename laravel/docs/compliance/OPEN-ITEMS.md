@@ -1,5 +1,20 @@
 # Compliance drafts — open items to fill
 
+> **STATUS UPDATE 2026-09-03.** Progress since this catalogue was generated:
+> - **Cross-cutting facts confirmed with the owner** and applied to the drafts — see
+>   [`CONFIRMED-FACTS.md`](CONFIRMED-FACTS.md) (controller, primary processor = the operator company,
+>   OCI/Cloudflare/SiteGround processors, DPO status, dates/review, request channel, medical-record
+>   status, PHI-copy inventory, repo-public decision, classification evidence fills).
+> - **Legal / framework markers** now have proposed, source-cited answers in
+>   [`PROPOSED-CITATIONS.md`](PROPOSED-CITATIONS.md) (all `[PROPOSED]`, for counsel to verify).
+> - **Auditor evidence map** in [`EVIDENCE-PACK.md`](EVIDENCE-PACK.md).
+>
+> This catalogue below is the **original, unmodified** line-by-line list — use it as the master
+> checklist; a marker is closed when its value is filled in the draft AND recorded in
+> `CONFIRMED-FACTS.md` or confirmed by counsel via `PROPOSED-CITATIONS.md`. Remaining truly-open work:
+> the bracketed **[NAME]/[DATE]/contact placeholders** the hospital still owes, and the legal
+> **DECISION** rows reserved for counsel/DPO/clinical governance.
+
 Every bracketed marker below must be resolved by the hospital's legal / data-protection officer and clinical governance before these documents are finalised. Generated 2026-09-03; regenerate after edits.
 
 **Marker meanings:** `[VERIFY …]` = confirm a fact or the exact legal article/period against the source. `[NEEDS LEGAL CONFIRMATION]` = a lawyer must decide (usually a retention period). `[PLACEHOLDER]` = fill in a name / contact / entity. `[SET THIS]` / `[DATE]` = a concrete value or date. Arabic markers (`[تحقّق…]` etc.) mirror the English ones in the Arabic privacy notice.

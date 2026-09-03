@@ -4,8 +4,14 @@
 > what remains. This file is the standing map of the product: stack, architecture, data, flows,
 > operations and guardrails. Last rewritten 2026-09-03 (`main` at `31f0bfb` + this commit).
 >
-> **The shipped product is the Laravel application under [`laravel/`](laravel/).** The procedural-PHP
-> app at the repository root is **retired**; it lives on for history on the `renovation` branch (§14).
+> **The go-forward product is the Laravel application under [`laravel/`](laravel/)** — this is what all
+> repo work targets. **Ground truth as of 2026-09-03:** the Laravel app at `dmc-new.towardpcc.com` is
+> live with a **parallel copy** of the data but is **not yet the daily system**. The unit's daily
+> system is still the **legacy PHP app at `dmc-im.com`, hosted on SiteGround (United States)** — and
+> the live build there is the **original, un-hardened** one, not the `renovation` hardening (verified
+> 2026-09-03). The plan is to replace the dmc-im.com code with the Laravel app at cutover. Until then,
+> the legacy site carries the original systemic security defects over real PHI; see
+> [`docs/compliance/CONFIRMED-FACTS.md`](laravel/docs/compliance/CONFIRMED-FACTS.md) B1–B3.
 
 ---
 
@@ -16,9 +22,12 @@ ward ↔ ICU transfers, two-phase discharge, a per-specialty consultation ledger
 registry search with export, live dashboards, statistics and PDF reports, and an admin control panel.
 
 **It is a live clinical system holding real protected health information (PHI).** Roughly 17k
-patients, 37k admission episodes and 330 staff accounts. Live at `https://dmc-new.towardpcc.com`
-(Cloudflare-proxied) on one OCI host in Riyadh. **Saudi PDPL / SDAIA applies**: data stays in-Kingdom.
-There is **one environment**. There is no staging. Every deploy is a production change.
+patients, 37k admission episodes and 330 staff accounts. The Laravel app is live at
+`https://dmc-new.towardpcc.com` (Cloudflare-proxied) on one OCI host in Riyadh, running in parallel
+with the legacy daily system (see the scope note above) until cutover. **Saudi PDPL / SDAIA applies**:
+Laravel data stays in-Kingdom; the legacy daily system and the mail relay are on US hosting, which is
+the live cross-border exposure. There is **one Laravel environment**. There is no staging. Every
+deploy is a production change.
 
 ---
 

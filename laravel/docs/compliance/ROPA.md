@@ -1,5 +1,7 @@
 # Record of Processing Activities (ROPA) — DMC Internal Medicine patient-flow hub
 
+> **Confirmed inputs (2026-09-03) — see [`CONFIRMED-FACTS.md`](CONFIRMED-FACTS.md).** Controller: **Dammam Medical Complex**, under the **Eastern Health Cluster** (Saudi Health Holding Company); public-sector ownership, exact registering entity for counsel to confirm. Primary processor: **the developer/operator company** (holds the code, the OCI tenancy and the domain) — **no controller–processor contract exists yet (top action)**. DPO **not yet appointed** (treated as mandatory). The daily production system is still the **legacy PHP app on `dmc-im.com` (SiteGround, United States), original un-hardened build**; the Laravel app runs in parallel until cutover. Review: annual (next 2027-09-03), owner interim until a DPO is named. Legal citations are **[PROPOSED]** — see [`PROPOSED-CITATIONS.md`](PROPOSED-CITATIONS.md).
+
 > **DRAFT — for review by the hospital's legal / data-protection officer and clinical governance; not legal advice.**
 >
 > Version 0.1 · 2026-09-03 · Prepared from the codebase as it stands (`laravel/` on `main`).

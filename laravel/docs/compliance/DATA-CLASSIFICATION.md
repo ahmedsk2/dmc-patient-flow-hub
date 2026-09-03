@@ -2,7 +2,7 @@
 
 > **DRAFT — for review by the hospital's legal / data-protection officer and clinical governance; not legal advice.**
 >
-> Version 0.1 · 2026-09-03 · Scheme owner: [PLACEHOLDER — Information-security lead], with the DPO.
+> Version 0.1 · 2026-09-03 · Scheme owner: the developer/operator company as information-security lead [NAME — PLACEHOLDER], with the DPO once appointed.
 > Applies to every table, column, file, export, print-out and copy that originates from the hub.
 
 ---
@@ -81,7 +81,7 @@ Derived from [`../../database/migrations/`](../../database/migrations/); see
 | `password_reset_tokens` | `email`, `token` (hashed) | |
 | `trusted_devices` | `user_id`, `label`, `ip`, timestamps | IP = personal data |
 | `notifications` | non-patient rows | |
-| `cache`, `jobs` | transient; the queued monthly-report job carries the PDF bytes (Confidential while aggregate) [VERIFY queue driver] | |
+| `cache`, `jobs` | transient; `QUEUE_CONNECTION=sync` (verified 2026-09-03) so the monthly-report job runs inline — **no PDF bytes persist** in `jobs` | |
 
 ### 2.3 Public
 
@@ -93,23 +93,23 @@ Derived from [`../../database/migrations/`](../../database/migrations/); see
 
 | Artifact | Where it lives | Level | Contains | Handling summary |
 |---|---|---|---|---|
-| **MySQL data volume** (Docker) | OCI block/boot volume on the instance | **Secret** | Everything | At-rest encryption of PHI is **planned** (GAP); provider volume encryption [VERIFY]; access = host root only |
-| **Automated backups** *(being built)* | [PLACEHOLDER — in-Kingdom bucket] | **Secret** | Everything | Encrypted with a key held separately from the host; ninety-day retention; restore-tested; access logged |
+| **MySQL data volume** (Docker) | OCI block/boot volume on the instance | **Secret** | Everything | OCI encrypts all block/boot volumes at rest with AES-256 by default (Oracle-managed keys) [PROPOSED]; application-level encryption covers only the four narrative columns → **GAP for structured PHI**; access = host root only |
+| **Automated backups** *(live)* | OCI Object Storage `dmc-db-backups` (me-riyadh-1, in-Kingdom) + encrypted copies in `/var/backups/dmc/` | **Secret** | Everything | Encrypted with a key held separately from the host; ninety-day retention [NEEDS LEGAL CONFIRMATION]; restore-tested; access logged |
 | **Manual pre-deploy dumps** `~/pre-deploy-*.sql.gz`, incident dumps | Operator home directory on the host | **Secret** | Everything | **Today unencrypted on the same host** (GAP). Encrypt (`gpg`/`age`) at creation, move off-box, delete after the deploy is verified — see DATA-RETENTION.md |
-| **Legacy database dumps** (`dmc_prod` exports used for `legacy:import`; the historical `Demo.sql` referenced in the root `CLAUDE.md`) | Operator machines; historically the legacy working folder (not in the working tree and not in git history as of this draft) | **Secret** | Real PHI | Locate every copy; destroy after migration sign-off [VERIFY inventory of local copies] |
+| **Legacy database dumps** (`dmc_prod` exports for `legacy:import`, plus the live legacy DB behind `dmc-im.com`) | **Inventory (2026-09-03):** live legacy DB on SiteGround (US); developer workstation `Downloads/`: 7× `dbqeqbacgfvmhk*.sql` + `dmc_laravel_export.sql(.gz)` + `_recon.sql`; OCI host `/home/ubuntu/migrate/dmc/`: plaintext `dmc_demo.sql.gz` + a pre-refresh dump + leftover key files | **Secret** | Real PHI | Encrypt or destroy each copy on a schedule — **open action**, see DATA-RETENTION.md and EVIDENCE-PACK G8 |
 | **Audit archive NDJSON** | S3-compatible WORM bucket, seven-year lock, region me-riyadh-1 | **Secret** (inherits rows with MRNs) | Audit rows incl. actor, IP, details | Immutable; separate keys (`AUDIT_S3_*`); read access limited to the security lead and DPO |
 | **Audit-log exports** (`/audit/export`, `/audit/export-xlsx`) | Staff device | **Secret** | Same as above | Admin only; **not itself audited (GAP)** — record manually; delete after use |
 | **Registry exports** (CSV/XLSX) | Staff device | **Secret** | Row-level PHI | Admin only; audited with row count; no e-mail forwarding; delete within the period in DATA-RETENTION.md |
 | **Statistics exports** (XLSX/PDF) | Staff device | **Confidential** unless a cell identifies an individual → **Secret** | Aggregates, consultant names | Admin only; **not audited (GAP)** |
-| **Monthly report PDF** | E-mailed to `report_recipients` via the US relay; queued in `jobs` | **Confidential** (aggregate-only [VERIFY sample]) | Aggregates | Recipients list reviewed quarterly; no forwarding outside the hospital |
+| **Monthly report PDF** | E-mailed to `report_recipients` via the US relay (SiteGround) | **Confidential** (aggregate-only — template verified 2026-09-03 to carry no MRN or name) | Aggregates | Recipients list reviewed quarterly; no forwarding outside the hospital |
 | **Printed handover / service sheets** | Paper on the ward | **Secret** | Patient names, MRNs, narrative, code status | Named holder; never left on a desk; shred at end of shift or when superseded [PLACEHOLDER — clinical rule] |
 | **Application logs** `storage/logs/laravel-*.log` | Host | **Confidential**; **Secret if PHI leaks in** | Exceptions, CSP reports, integrity alerts, mail failures, IPs | `LOG_LEVEL=warning` in production; review for PHI after any incident; rotate |
 | **CSP violation reports** | Log lines only (never stored separately) | **Confidential** | URLs (PHI-free by design), directives, source file/line | Nothing to do beyond log handling |
 | **Session files** `storage/framework/sessions/*` | Host | **Secret** | Session payloads | Web user only; cleared on incident; garbage-collected |
 | **`.env` / Coolify environment** | Host / Coolify | **Secret** | `APP_KEY` (decrypts `mfa_secret` + `mail_password`), `DB_*`, `AUDIT_S3_*` | Never in chat, tickets, screenshots or git; rotate per INCIDENT-RESPONSE.md §7.4 |
-| **Source code** | GitHub (private) + host checkout | **Confidential** | Application logic, security controls, no data by design | Private repo; MFA for collaborators [VERIFY]; no secrets committed (legacy history exposure remediated by rotation) |
+| **Source code** | GitHub `ahmedsk2/dmc-patient-flow-hub` — **currently PUBLIC** (owner decision, time-boxed: kept public for free CI during development; **make private before go-live**) + host checkout | **Confidential** (but readable by anyone while public) | Application logic, security controls, no data by design; runbooks + infra identifiers readable | Secret scanning + push protection on; sole collaborator with 2FA; **no** secrets/PHI/origin-IP in history; see EVIDENCE-PACK G10 |
 | **Compiled assets** `public/build` | Host + repo | **Public** | JS/CSS | — |
-| **Browser** | Staff devices | Page props are **Secret** while rendered | Rendered PHI | Idle timeout thirty minutes; no offline caching by design [VERIFY cache headers]; lock screen policy [PLACEHOLDER] |
+| **Browser** | Staff devices | Page props are **Secret** while rendered | Rendered PHI | Idle timeout thirty minutes; no offline caching by design — authenticated pages send `no-store` (verified 2026-09-03); lock screen policy [PLACEHOLDER] |
 | **E-mail bodies** (OTP, reset, username reminder, integrity alert) | Relay + mailboxes | **Confidential** | Staff e-mail, codes, links | Codes single-use and expiring |
 | **OCI volume snapshots / clones** taken during incidents | OCI tenancy | **Secret** | Everything | Named `INC-…`; deleted only when the DPO releases the legal hold |
 | **This documentation** | Repo `docs/compliance/` | **Confidential** | Security posture, contacts once filled | Do not publish outside the hospital |
@@ -165,9 +165,9 @@ separate accreditation would be required [VERIFY].
 | Role | Responsibility |
 |---|---|
 | Data owner — clinical (Head of IM) [PLACEHOLDER] | Confirms the classification of clinical data; sets the printing and free-text rules |
-| Data owner — staff data (HR / System owner) [PLACEHOLDER] | Confirms classification of account data; departure process |
-| Information-security lead [PLACEHOLDER] | Maintains this scheme; maps DCC control refs; verifies technical handling |
-| DPO [PLACEHOLDER] | Approves any external sharing; owns breach decisions |
+| Data owner — staff data — DMC hospital administration [NAME — PLACEHOLDER] | Confirms classification of account data; departure process |
+| Information-security lead & system owner — the developer/operator company [NAME — PLACEHOLDER] | Maintains this scheme; maps DCC control refs; verifies technical handling |
+| DPO — **not yet appointed** (treated as mandatory; IR Art. 32(1)(c) [PROPOSED]) | Approves any external sharing; owns breach decisions |
 | Every user | Handles data per its level; reports suspected mishandling (INCIDENT-RESPONSE.md §5) |
 
 ---
@@ -185,13 +185,15 @@ separate accreditation would be required [VERIFY].
 
 | Gap | Owner | Target | Tracked in |
 |---|---|---|---|
-| PHI not encrypted at rest inside MySQL | [PLACEHOLDER] | [PLACEHOLDER] | DPIA action 2 |
-| No automated encrypted backup; manual dumps unencrypted on the host | [PLACEHOLDER] | [PLACEHOLDER] | DPIA action 1; DATA-RETENTION.md |
-| Exports unlabeled; statistics and audit-log exports unaudited | [PLACEHOLDER] | [PLACEHOLDER] | DPIA action 8 |
-| `log_record_opens` default OFF | [PLACEHOLDER — governance] | [PLACEHOLDER] | DPIA R6 |
-| Cloudflare edge decryption legal status | [PLACEHOLDER — legal] | [PLACEHOLDER] | DPIA R5 |
-| Paper handling rule for printed sheets | [PLACEHOLDER — clinical] | [PLACEHOLDER] | — |
-| Legacy PHI dump copies not inventoried | [PLACEHOLDER] | [PLACEHOLDER] | DATA-RETENTION.md |
+| Structured PHI relies on OCI volume encryption, not app-level column encryption | operator company | before go-live [DATE] | DPIA action 2 |
+| Loose plaintext dumps on the workstation and OCI host (automated encrypted off-box backup is now **live**) | operator company | [DATE] | DPIA action 1; DATA-RETENTION.md |
+| Exports unlabeled; statistics, audit-log and report exports unaudited (verified 2026-09-03) | operator company (engineering) | [DATE] | DPIA action 8; EVIDENCE-PACK G1/G2 |
+| `log_record_opens` default OFF (verified 2026-09-03) | DMC clinical governance | [DATE] | DPIA R6 |
+| Cloudflare edge decryption legal status (Free plan; Regional Services unavailable) | legal / DPO | [DATE] | DPIA R5 |
+| Paper handling rule for printed sheets | DMC clinical (Head of IM) | [DATE] | — |
+| Legacy PHI dump copies (now inventoried — DATA-CLASSIFICATION §3): encrypt or destroy on a schedule | operator company | [DATE] | DATA-RETENTION.md; EVIDENCE-PACK G8 |
+| **GitHub repo public until go-live** (owner-accepted, time-boxed) | owner | before go-live [DATE] | EVIDENCE-PACK G10 |
+| **Live legacy system on dmc-im.com is the original un-hardened build over real PHI (US host)** | owner | before/at cutover [DATE] | DPIA top risk; INCIDENT-RESPONSE.md |
 
 ---
 

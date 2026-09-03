@@ -9,10 +9,16 @@
   Inertia 2 + Vue 3 (`<script setup>`) + Tailwind v4 + MySQL 8.4 + **Chart.js 4** (MIT).
 - **Live** at `https://dmc-new.towardpcc.com` (Cloudflare-proxied), deployed via **Coolify** on an
   OCI Riyadh host. This is a **live clinical system with real PHI** (~17k patients, ~37k admissions,
-  ~331 users). **Saudi PDPL / SDAIA applies** (in-Kingdom data residency).
+  ~331 users). **Saudi PDPL / SDAIA applies** (in-Kingdom data residency for the Laravel app).
+- **GROUND TRUTH (2026-09-03):** the Laravel app runs **in parallel** with a copy of the data but is
+  **not yet the daily system**. Staff still use the **legacy PHP app at `dmc-im.com` on SiteGround
+  (US)**, and that live site is the **original un-hardened build** (verified) — the systemic
+  security defects are live over real PHI. Cutover replaces the dmc-im.com code with the Laravel app.
+  See [`laravel/docs/compliance/CONFIRMED-FACTS.md`](laravel/docs/compliance/CONFIRMED-FACTS.md).
 - **Branch model:** `main` is the single Laravel dev branch — **direct-to-main is the owner-consented
   workflow**. `renovation` points to the deployable legacy-PHP lineage. The legacy procedural-PHP app
-  still sits at the repo root but is **retired**, not the shipped product.
+  still sits at the repo root; it is the current **daily** system in its original build, and the
+  hardened `renovation` build was never deployed to dmc-im.com.
 - Infra facts, the exact deploy procedure, and environment gotchas are held in **Claude memory**
   (loaded automatically each session) — rely on it rather than re-deriving.
 

@@ -1,5 +1,7 @@
 # Data Protection Officer — designation template
 
+> **Confirmed inputs (2026-09-03) — see [`CONFIRMED-FACTS.md`](CONFIRMED-FACTS.md).** Controller: **Dammam Medical Complex**, under the **Eastern Health Cluster** (Saudi Health Holding Company); public-sector ownership, exact registering entity for counsel to confirm. Primary processor: **the developer/operator company** (holds the code, the OCI tenancy and the domain) — **no controller–processor contract exists yet (top action)**. DPO **not yet appointed** (treated as mandatory). The daily production system is still the **legacy PHP app on `dmc-im.com` (SiteGround, United States), original un-hardened build**; the Laravel app runs in parallel until cutover. Review: annual (next 2027-09-03), owner interim until a DPO is named. Legal citations are **[PROPOSED]** — see [`PROPOSED-CITATIONS.md`](PROPOSED-CITATIONS.md).
+
 > **DRAFT — for review by the hospital's legal / data-protection officer; not legal advice.**
 >
 > Scope: the DMC Internal Medicine Patient-Flow Hub (“the hub”) and, by extension, the hospital as the
@@ -57,7 +59,7 @@ controller's data-protection function to do; the specific provisions must be cit
 | R8 | **Processors and transfers** — ensure written contracts with every processor, sufficient guarantees, and that any transfer outside the Kingdom meets the Data Transfer Regulations. | Sign-off on Cloudflare / OCI / SMTP / GitHub agreements and the Cloudflare transfer-risk assessment (`DPA-AND-TRANSFERS.md`). |
 | R9 | **Security oversight** — confirm technical and organisational measures are appropriate to sensitive data. | Review MFA coverage, role/capability grants, export audit, encryption-at-rest roll-out, backup restore tests. |
 | R10 | **Training and awareness** for staff who handle personal data. | Annual PDPL briefing for all hub users; onboarding note for new accounts. |
-| R11 | **Point of contact** for the competent authority and for data subjects; keep the hospital's registration with the authority current. | Publish contact details (section 4); register / update the controller and DPO details on the authority's national platform [VERIFY — National Data Governance Platform registration requirement]. |
+| R11 | **Point of contact** for the competent authority and for data subjects; keep the hospital's registration with the authority current. | Publish contact details (section 4); register / update the controller and DPO details on the authority's National Register (National Data Governance Platform) — **mandatory** for a controller that processes sensitive data [PROPOSED — Rules Governing the National Register of Controllers, Art. 2]. |
 | R12 | **Reporting** — periodic report to top management on compliance status, incidents, requests and open risks. | Quarterly one-page report; annual formal review. |
 
 ## 4. Publishing the contact
@@ -108,7 +110,7 @@ DESIGNATION OF DATA PROTECTION OFFICER
 تعيين مسؤول حماية البيانات
 
 Pursuant to the Personal Data Protection Law of the Kingdom of Saudi Arabia and its Implementing
-Regulations [VERIFY ARTICLE], [HOSPITAL LEGAL NAME] (Commercial Registration / Licence No.
+Regulations [VERIFY ARTICLE], Dammam Medical Complex, Eastern Health Cluster (Saudi Health Holding Company) (Commercial Registration / Licence No.
 [PLACEHOLDER]), as controller, hereby designates:
 
     Name:          [DPO NAME]
@@ -137,7 +139,7 @@ Schedule A — Responsibilities: sections 3 and 6 of docs/compliance/DPO.md (ver
 
 ```
 Name:          [Eng. / Dr. FIRST LAST]
-Position:      Head of Compliance & Risk, [HOSPITAL LEGAL NAME]
+Position:      Head of Compliance & Risk, Dammam Medical Complex, Eastern Health Cluster (Saudi Health Holding Company)
 Deputy:        [FIRST LAST], Information Security Officer
 Contact:       dpo@[hospital-domain].sa · +966 [XX XXX XXXX] · [P.O. Box], [City] [Postcode], Saudi Arabia
 Effective:     [2026-MM-DD]
