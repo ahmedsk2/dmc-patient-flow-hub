@@ -449,6 +449,7 @@ CBAHI. State on 2026-09-03:
 | Deploy / ops | `laravel/docs/{DEPLOY-LARAVEL, BACKUP-AND-RESTORE, ENCRYPTION-AT-REST, CI, RELEASE-CHECKLIST}.md` |
 | Behaviour / metrics | `laravel/docs/{DATABASE-AND-BEHAVIOR, DASHBOARD-AND-STATISTICS-METRICS, HANDOVER-COMPLIANCE, RECONCILIATION, UAT-TEST-PLAN}.md` |
 | Compliance (PDPL paper trail) | `laravel/docs/compliance/` + `OPEN-ITEMS.md` |
+| Decisions (ADRs) | [`laravel/docs/adr/`](laravel/docs/adr/) — backfilled MADR records of the load-bearing decisions, with a README index |
 | Legacy app (history only) | repo root `README.md`, `REVIEW-FINDINGS.md`, `RENOVATION-PLAN.md`, `PERMISSION-MATRIX.md`, `PROJECT-*.md`, `DEPLOY.md`, `SECURITY-*.md` |
 
 ---
