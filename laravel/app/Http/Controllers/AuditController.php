@@ -20,8 +20,15 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class AuditController extends Controller
 {
-    /** PHI-read actions (Item 3) get their own viewer category so break-glass events stand out. */
-    private const PHI_READ_ACTIONS = ['registry.search', 'registry.export', 'registry.export_xlsx', 'registry.open'];
+    /**
+     * PHI-read actions (Item 3) get their own viewer category so break-glass events stand out.
+     * The governance PDF carries MRN-level line lists and the audit-log exports carry the raw
+     * details JSON, so they belong here alongside the registry reads (G1 close-out, 2026-09-03).
+     */
+    private const PHI_READ_ACTIONS = [
+        'registry.search', 'registry.export', 'registry.export_xlsx', 'registry.open',
+        'report.pdf.governance', 'audit.export.csv', 'audit.export.xlsx',
+    ];
 
     public function index(AuditFilterRequest $request): Response
     {

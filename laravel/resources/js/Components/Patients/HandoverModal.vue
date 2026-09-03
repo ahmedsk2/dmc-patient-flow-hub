@@ -26,6 +26,7 @@ const emit = defineEmits(['saved', 'close']);
 const { fetchHandover } = useHandover();
 
 const data = ref(null);          // null | { body, checkpoints, today, updated_at, updated_by_name, revisions }
+const loadError = ref('');       // readable reason when the fetch failed (was a silent "Loading…" forever)
 const hForm = useForm({ body: '', checkpoints: defaultCheckpoints() });
 const editing = ref(false);
 const histOpen = ref(false);
@@ -39,9 +40,16 @@ watch(
     async ([open, id]) => {
         if (!open || !props.patient) { data.value = null; return; }
         const my = ++requestId;
-        data.value = null; editing.value = false; histOpen.value = false;
+        data.value = null; loadError.value = ''; editing.value = false; histOpen.value = false;
         hForm.reset(); hForm.clearErrors();
-        const d = await fetchHandover(props.patient.id);
+        let d;
+        try {
+            d = await fetchHandover(props.patient.id);
+        } catch (e) {
+            // a 403/404/419/500 or a dropped connection: say so instead of showing "Loading…" forever
+            if (my === requestId && props.open && props.patient?.id === id) loadError.value = e?.message || 'request failed';
+            return;
+        }
         // drop a fetch that resolved after a different patient opened (or the modal closed)
         if (my === requestId && props.open && props.patient?.id === id) {
             data.value = d;
@@ -63,7 +71,8 @@ defineExpose({ data, hForm, editing, histOpen, submitHandover });
 <template>
     <BaseModal :open="open" title="Handover" :subtitle="patient ? `${patient.name} · MRN ${patient.mrn}` : ''" size="lg" tall @close="close">
         <template v-if="patient">
-            <p v-if="!data" class="py-6 text-center text-sm text-ink-400">Loading…</p>
+            <p v-if="loadError" role="alert" class="py-6 text-center text-sm text-ink-600">Couldn't load this handover ({{ loadError }}). Close and reopen to try again.</p>
+            <p v-else-if="!data" class="py-6 text-center text-sm text-ink-400">Loading…</p>
             <template v-else>
                 <p class="mb-2 text-xs text-ink-400">
                     {{ data.updated_at ? `Last updated by ${data.updated_by_name || '—'} · ${fmtAt(data.updated_at)}` : 'No handover yet.' }}

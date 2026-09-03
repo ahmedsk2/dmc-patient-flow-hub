@@ -93,3 +93,29 @@ describe('HandoverModal — checkpoints', () => {
         expect(posts[0].checkpoints).toEqual(expect.objectContaining({ high_risk: true, code_status: 'dnr' }));
     });
 });
+
+describe('HandoverModal — fetch failure', () => {
+    it('shows a readable error instead of "Loading…" forever when the fetch rejects', async () => {
+        fetchHandover.mockRejectedValue(new Error('Request failed (403) while loading /admissions/7/handover'));
+        const w = mountWith();
+        await w.setProps({ open: true, patient });
+        await flushPromises();
+        expect(w.vm.data).toBeNull();
+        const alert = w.find('[role="alert"]');
+        expect(alert.exists()).toBe(true);
+        expect(alert.text()).toContain('Request failed (403)');
+        expect(w.text()).not.toContain('Loading…');
+    });
+    it('a later successful open clears the error', async () => {
+        fetchHandover.mockRejectedValueOnce(new Error('Network error while loading /admissions/7/handover: offline'));
+        const w = mountWith();
+        await w.setProps({ open: true, patient });
+        await flushPromises();
+        expect(w.find('[role="alert"]').exists()).toBe(true);
+        await w.setProps({ open: false, patient: null });
+        await w.setProps({ open: true, patient });
+        await flushPromises();
+        expect(w.find('[role="alert"]').exists()).toBe(false);
+        expect(w.vm.data.body).toBe('on insulin');
+    });
+});

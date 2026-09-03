@@ -20,7 +20,10 @@ Run from `laravel/` on the exact commit you will deploy.
 
 - [ ] `php artisan test --exclude-group pdf` — green. This pass **includes** the `slow-import` group; if your edit loop used `--exclude-group slow-import`, run `php artisan test --group slow-import` explicitly now. Never ship without it: it proves a data reload cannot destroy the consultation ledger.
 - [ ] `php artisan test --group pdf` — green (own process; dompdf segfaults if shared).
-- [ ] `npx vitest run` — green.
+- [ ] `vendor/bin/pint --test` — green (CI blocks on it; `--dirty` is enough locally).
+- [ ] `npx vitest run --coverage` — green **including the thresholds** in `vitest.config.js` (CI runs it this way).
+- [ ] `npm run lint` — clean at zero warnings (ESLint + eslint-plugin-vue; CI blocks on it).
+- [ ] PHP statement coverage over `app/` stays above the floor in `laravel-ci.yml` (`scripts/coverage-gate.php`, 83 % on 2026-09-03) — CI measures it; locally only if you have pcov.
 - [ ] `npm run build` then `git status --porcelain -- public/build` prints **nothing** (committed assets match source).
 - [ ] `npm run check-allowlist` — green (Tailwind `@source` allow-list snapshot unchanged, or the snapshot was updated on purpose).
 - [ ] `node scripts/contrast.mjs` — green (no WCAG / perceptual-distance regression).

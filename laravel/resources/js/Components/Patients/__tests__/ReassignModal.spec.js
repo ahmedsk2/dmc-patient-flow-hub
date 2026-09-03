@@ -287,3 +287,21 @@ describe('ReassignModal — unsaved-changes guard', () => {
         expect(w.emitted('close')).toBeFalsy();
     });
 });
+
+describe('ReassignModal — preflight failure', () => {
+    it('a rejected preflight shows why and keeps Confirm locked instead of "Checking handovers…" forever', async () => {
+        preflight.mockRejectedValue(new Error('Request failed (500) while loading /handovers/preflight?from_consultant_id=5'));
+        const w = mountWith();
+        w.vm.openModal(5);
+        await nextTick();
+        await new Promise((r) => setTimeout(r, 0));
+        await nextTick();
+        expect(w.vm.preflight.loading).toBe(false);
+        expect(w.vm.preflight.error).toContain('Request failed (500)');
+        expect(w.vm.preflightReady).toBe(false);
+        const alert = w.find('[role="alert"]');
+        expect(alert.exists()).toBe(true);
+        expect(alert.text()).toContain('Re-select the consultant');
+        expect(w.text()).not.toContain('Checking handovers…');
+    });
+});

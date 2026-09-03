@@ -63,7 +63,15 @@ const selectedIds = ref(new Set());
 const toggleSelected = (id) => { selectedIds.value.has(id) ? selectedIds.value.delete(id) : selectedIds.value.add(id); selectedIds.value = new Set(selectedIds.value); };
 const loadPreflight = async (id) => {
     preflight.value = { loading: true, rows: [] };
-    const rows = await preflightHandover(id);
+    let rows;
+    try {
+        rows = await preflightHandover(id);
+    } catch (e) {
+        // a failed check must not leave "Checking handovers…" (and a disabled Confirm) up forever —
+        // show why; re-selecting the consultant re-runs it. Confirm stays locked: no check, no move.
+        if (rForm.from_consultant_id === id) preflight.value = { loading: false, rows: [], error: e?.message || 'request failed' };
+        return;
+    }
     preflightBodies.value = Object.fromEntries(rows.filter((r) => !r.handover_today).map((r) => [r.id, r.body || '']));
     preflightCheckpoints.value = Object.fromEntries(rows.filter((r) => !r.handover_today).map((r) => [r.id, withCheckpointDefaults(r.checkpoints)]));
     selectedIds.value = new Set(rows.map((r) => r.id));   // all checked by default (legacy move-everything)
@@ -143,6 +151,7 @@ defineExpose({
                  needs a handover updated TODAY before the move unlocks -->
             <div v-if="preflight" class="rounded-xl bg-app/70 p-3 ring-1 ring-line">
                 <p v-if="preflight.loading" class="text-sm text-ink-400">Checking handovers…</p>
+                <p v-else-if="preflight.error" role="alert" class="text-sm text-ink-600">Couldn't check handovers ({{ preflight.error }}). Re-select the consultant to try again.</p>
                 <template v-else-if="preflight.rows.length">
                     <p class="text-xs font-semibold text-ink-600">{{ selectedIds.size }} of {{ preflight.rows.length }} patient(s) selected to move — uncheck to leave someone behind.</p>
                     <ul class="mt-2 max-h-44 space-y-1 overflow-auto">

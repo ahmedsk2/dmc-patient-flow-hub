@@ -34,8 +34,10 @@ class DashboardCache
      * lock and then read the fresh value instead of every ward workstation hammering the same
      * dozen queries at once. The TTL carries jitter for the same reason. Works on the `database`,
      * `file` and `array` stores (all lock-capable; `cache_locks` exists from the base migration).
-     * If the lock cannot be obtained within the wait, fall through to a plain remember — a stale
-     * or duplicated recompute beats an error page.
+     * If the lock cannot be obtained within the wait, re-read the key first (the holder has usually
+     * finished by then) and only then fall through to a plain remember — a stale or duplicated
+     * recompute beats an error page, and the re-read keeps a slow recompute from turning every
+     * waiter into a synchronised stampede the moment the wait expires.
      *
      * @return array<string, mixed>
      */
@@ -52,7 +54,9 @@ class DashboardCache
                 return Cache::remember(self::KEY, $ttl, $compute);
             });
         } catch (LockTimeoutException) {
-            return Cache::remember(self::KEY, $ttl, $compute);
+            $late = Cache::get(self::KEY);
+
+            return is_array($late) ? $late : Cache::remember(self::KEY, $ttl, $compute);
         }
     }
 }
