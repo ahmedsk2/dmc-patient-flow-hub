@@ -46,4 +46,14 @@ return [
         'secret' => env('AUDIT_S3_SECRET'),
     ],
 
+    // DATA-02: the encrypted nightly DB backups (scripts/backup/db-backup.py, run by host cron)
+    // land in a SEPARATE bucket on the same endpoint/region/credentials as the audit archive; its
+    // lifecycle/retention is configured on the bucket itself. `backup:verify` (scheduled daily in
+    // routes/console.php) only READS the heartbeat at {prefix}/LATEST.json from here — the app
+    // never writes backups. See docs/BACKUP-AND-RESTORE.md.
+    'db_backup' => [
+        'bucket' => env('DB_BACKUP_S3_BUCKET', 'dmc-db-backups'),
+        'prefix' => env('DB_BACKUP_S3_PREFIX', 'db-backups/dmc_demo'),
+    ],
+
 ];

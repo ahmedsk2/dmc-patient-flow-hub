@@ -31,6 +31,7 @@
 | CI | `.github/workflows/laravel-ci.yml` (workflow name **CI**). **As of 2026-09-02 GitHub Actions is billing-blocked and executes nothing.** The local gates in `RELEASE-CHECKLIST.md` are the real gate until that is fixed (§11). |
 
 There is **one** environment. There is no staging. Treat every deploy as a production change.
+      restore drill per [`BACKUP-AND-RESTORE.md`](BACKUP-AND-RESTORE.md); run the first drill and
 
 ---
 

@@ -70,6 +70,39 @@ final class S3SigV4
     }
 
     /**
+     * DATA-02: read one object (used by backup:verify to fetch the backup heartbeat). Same URL and
+     * the same three signed headers as putObject()/headObject(), empty-payload hash.
+     *
+     * @return string|null the body on 2xx; null ONLY when the object does not exist (404)
+     * @throws RuntimeException on any other non-2xx status (403, 5xx, …) — a caller must never be
+     *         able to mistake "could not read the bucket" for "the object is not there"
+     */
+    public function get(string $key): ?string
+    {
+        $this->assertConfigured();
+
+        $payloadHash = hash('sha256', '');
+        [$url, $headers] = $this->signedRequestHeaders('GET', $key, $payloadHash);
+
+        $response = Http::withHeaders($headers)->timeout(30)->get($url);
+
+        if ($response->status() === 404) {
+            return null;
+        }
+        if (! $response->successful()) {
+            throw new RuntimeException("S3 GET {$key} failed with HTTP {$response->status()}");
+        }
+
+        return $response->body();
+    }
+
+    /** True when endpoint, bucket and both credentials are present (what assertConfigured() checks). */
+    public function isConfigured(): bool
+    {
+        return (bool) ($this->endpoint && $this->bucket && $this->accessKey && $this->secret);
+    }
+
+    /**
      * Builds the request URL (path-style: {endpoint}/{bucket}/{key}) and the SigV4-signed
      * request headers (x-amz-content-sha256, x-amz-date, Authorization) for one call.
      *
@@ -124,7 +157,7 @@ final class S3SigV4
 
     private function assertConfigured(): void
     {
-        if (! $this->endpoint || ! $this->bucket || ! $this->accessKey || ! $this->secret) {
+        if (! $this->isConfigured()) {
             throw new RuntimeException('audit archive not configured');
         }
     }

@@ -28,3 +28,4 @@ Thumbs.db
 
 # prod-ready audit cache + reports (internal, contains infra detail)
 /.prod-ready
+__pycache__/
