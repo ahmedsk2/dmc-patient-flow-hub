@@ -1,7 +1,7 @@
 # HANDOFF — current state, and what remains
 
 > Single ground-truth orientation for the next review session. Read this first (with `CLAUDE.md`).
-> Last updated 2026-09-03; `main` @ `d560892`, CI green.
+> Last updated 2026-09-03 (after the `CLAUDE.md` rewrite); CI green.
 
 ## The product
 
@@ -47,8 +47,9 @@
 
 ## What remains (for the next session, with the owner)
 
-1. **Rewrite `CLAUDE.md`** to describe the **Laravel product as it is** — it currently describes the
-   retired legacy app. **This is the first task.**
+1. ~~**Rewrite `CLAUDE.md`** to describe the **Laravel product as it is**~~ — **DONE 2026-09-03.**
+   `CLAUDE.md` now maps the Laravel product; the legacy mental model lives in git history at
+   `31f0bfb` and on the `renovation` branch.
 2. **Fill the compliance placeholders.** 529 `[VERIFY]` / `[PLACEHOLDER]` / `[NEEDS LEGAL]` markers
    across the nine drafts, catalogued by file and line in
    [`laravel/docs/compliance/OPEN-ITEMS.md`](laravel/docs/compliance/OPEN-ITEMS.md). These need the
@@ -68,7 +69,7 @@
 | Deploy / ops | `laravel/docs/{DEPLOY-LARAVEL, BACKUP-AND-RESTORE, ENCRYPTION-AT-REST, CI, RELEASE-CHECKLIST}.md` |
 | Behaviour / metrics | `laravel/docs/{DATABASE-AND-BEHAVIOR, DASHBOARD-AND-STATISTICS-METRICS, HANDOVER-COMPLIANCE, RECONCILIATION, UAT-TEST-PLAN}.md` |
 | Compliance (PDPL paper trail) | `laravel/docs/compliance/` + `OPEN-ITEMS.md` (the placeholder checklist) |
-| Legacy app (history only) | repo root: `CLAUDE.md` legacy sections, `REVIEW-FINDINGS.md`, `RENOVATION-PLAN.md`, `PROJECT-*.md` |
+| Legacy app (history only) | repo root: `REVIEW-FINDINGS.md`, `RENOVATION-PLAN.md`, `PERMISSION-MATRIX.md`, `PROJECT-*.md`; the old `CLAUDE.md` at commit `31f0bfb` |
 
 ## Working style — token economy (the owner's standing priority)
 

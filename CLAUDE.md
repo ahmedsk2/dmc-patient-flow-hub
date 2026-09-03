@@ -1,525 +1,432 @@
-# CLAUDE.md — DMC Patient-Flow Hub (Internal Medicine)
+# CLAUDE.md — DMC Internal Medicine Patient-Flow Hub (Laravel)
 
-> **⚠️ SCOPE NOTE (2026-09-03).** The **shipped product is now the Laravel app under `laravel/`**
-> (live at `dmc-new.towardpcc.com`). Everything below describes the **legacy procedural-PHP app** at the
-> repo root, which is **retired** (kept only on the `renovation` lineage) — read it as history, not
-> current state. For current ground truth (what is live, what remains, the doc map) see
-> [`HANDOFF.md`](HANDOFF.md). **Rewriting this file to describe the Laravel product is the first task of
-> the next review session.**
-
-
-> **Phase 1 deliverable: a complete mental model of this codebase.**
-> This document describes the application *as it is* (not as it should be). It is the
-> orientation map for the renovation work. Detailed findings live in
-> [`REVIEW-FINDINGS.md`](REVIEW-FINDINGS.md); the remediation plan lives in
-> [`RENOVATION-PLAN.md`](RENOVATION-PLAN.md).
+> **Read [`HANDOFF.md`](HANDOFF.md) first every session.** It is the ground truth for what is live and
+> what remains. This file is the standing map of the product: stack, architecture, data, flows,
+> operations and guardrails. Last rewritten 2026-09-03 (`main` at `31f0bfb` + this commit).
 >
-> ⚠️ **This is a LIVE clinical system holding ~15,000 real patient records and ~323 user
-> accounts.** It currently has systemic, internet-exploitable security defects
-> (unauthenticated patient read/write/delete, SQL injection, trivial admin takeover,
-> plaintext secrets). Treat every file as security-sensitive. See **§9 Security reality**.
+> **The shipped product is the Laravel application under [`laravel/`](laravel/).** The procedural-PHP
+> app at the repository root is **retired**; it lives on for history on the `renovation` branch (§14).
 
 ---
 
-## 1. What this application is
+## 1. What this is
 
-A hospital **patient-flow "hub"** for an Internal Medicine unit (the code and database use
-legacy **`PICU`** identifiers throughout — treat `PICU`/`picupatients` as "the unit's
-patients", not specifically a pediatric ICU). It is used to:
+A hospital patient-flow hub for one Internal Medicine unit: admissions, consultant assignment,
+ward ↔ ICU transfers, two-phase discharge, a per-specialty consultation ledger, clinical handovers,
+registry search with export, live dashboards, statistics and PDF reports, and an admin control panel.
 
-- **Admit** patients into the unit and capture demographics + admission diagnosis (ICD-10).
-- **Assign** patients to consultants (manually or via an auto-balancing "shuffle").
-- Track each patient's **flow/state** (active → medically-discharged → fully discharged;
-  ward ↔ ICU; transfers; long-term; mortality).
-- Manage **consultations** (referrals to/from other services, with sign-off).
-- Produce **live dashboards/statistics** and **printable A4 reports** (KPIs, LOS,
-  readmissions, mortality, per-consultant and per-specialty activity).
-- Maintain a **registry / search** over historical admissions and consultations, with
-  Excel/CSV export.
-
-**Domain:** `dmc-im.com` ("DMC Internal Medicine"). **Stack:** PHP 8.3 (procedural) + MySQL
-(MyISAM/InnoDB mix) + HTML/CSS/JS on the **AdminLTE 3** admin template. **No framework, no
-package manager, no tests, no build step** for the app itself (vendored libraries only).
+**It is a live clinical system holding real protected health information (PHI).** Roughly 17k
+patients, 37k admission episodes and 330 staff accounts. Live at `https://dmc-new.towardpcc.com`
+(Cloudflare-proxied) on one OCI host in Riyadh. **Saudi PDPL / SDAIA applies**: data stays in-Kingdom.
+There is **one environment**. There is no staging. Every deploy is a production change.
 
 ---
 
-## 2. Project & file structure
+## 2. Guardrails (non-negotiable)
 
-Routing is **file-based**: each `.php` URL is an entry point. There is no router/front
-controller. Pages render full HTML (via `sidebar.php` + `footer.php`); AJAX endpoints
-return HTML fragments or JSON. The crucial structural fact:
+- **Never fabricate** clinical, handover or audit records. Never invent a legal or compliance fact.
+- **Never delete** `audit_log` or `notifications` rows. `audit:prune` is operator-run only, behind
+  `--confirm`, and is never scheduled.
+- **No PHI in URLs, logs, CSP reports or chat output.** Patient names and MRNs travel in POST bodies;
+  routes carry opaque ids (SPC-TM-011). Never paste a dump, a narrative or a patient row into output.
+- **The owner handles all secrets.** Never ask for one, print one, or commit one. `.env`, tokens and
+  SQL dumps are git-ignored and must stay that way.
+- **Confirm before** anything destructive or outward-facing: deploys, data reloads, deletions, emails,
+  DNS or firewall changes, anything that touches production data.
+- **Branch model:** `main` is the single Laravel dev branch and **direct-to-main is the consented
+  workflow**. `renovation` is the deployable legacy lineage. CI must be green before a deploy.
+- **Deploy only via the Coolify procedure** in `laravel/docs/DEPLOY-LARAVEL.md` and session memory.
+  Back up the database before any deploy that carries a migration.
+- **Token economy (owner's standing priority):** pin `haiku`/`sonnet` on every subagent; no
+  Workflow or adversarial fan-out unless asked or the change is genuinely high-risk (schema, auth,
+  clinical logic); read narrowly; prefer a fresh session per task.
 
-> **Two tiers of files.** *Page* files `require 'sidebar.php'` (which starts the session,
-> validates login, and defines the role arrays). *Action/AJAX* files in the subfolders
-> mostly `require 'dbconnect.php'` **only** — so they have a DB handle but **no session and
-> no authorization**. This split is the root of most security findings.
+---
 
-### Root — foundation / shared
-| File | Role |
-|---|---|
-| `dbconnect.php` | Opens global `$mysqli`. **Hardcoded DB credentials.** Included by most action files. |
-| `DBController.php` | OOP DB wrapper used by `Auth`. `runQuery/insert/update` = **prepared** (safe); `runBaseQuery` = raw. **Hardcoded DB credentials (duplicated).** |
-| `Auth.php` | Member + remember-me token queries (prepared). |
-| `Util.php` | CSPRNG token generator, `redirect()`, `clearAuthCookie()`. |
-| `authCookieSessionValidate.php` | Sets `$isLoggedIn` from `$_SESSION['member_id']` or remember-me cookies. |
-| `sidebar.php` | **The real auth gate for page files**: `session_start()` → validate → load `$user` → define `$access_PICU_*` role arrays → render AdminLTE sidebar. |
-| `footer.php` | HTML footer (contains developer email addresses in plaintext). |
-| `index.php` | Login (bcrypt `password_verify`; 3-month password expiry). |
-| `logout.php` | `session_destroy()` + cookie clear (does **not** invalidate the DB token). |
-| `register.php` | **Public self-registration** (position is client-supplied). |
-| `change-password.php`, `forget-password.php`, `forget-password-email.php`, `reset-password.php`, `send-reset-pass-by-admin.php` | Password lifecycle (see §6.6). |
-| `profile.php` | Self profile edit (IDOR on `member_id`). |
-| `control.php` | **Admin control panel** (settings thresholds, specialties, consultation reasons, user/capability management). Proper page gate, but delegates writes to unguarded endpoints. |
-| `dmc-users-update.php`, `dmc-users-delete.php` | **Unauthenticated** member update/delete (privilege escalation). |
+## 3. Stack
 
-### Root — clinical pages
-| File | Role |
-|---|---|
-| `dashboard.php` | Landing page; fetches `dashboard/1.php` + `dashboard/3.php` via JS `fetch()` and **`eval()`s** their inline scripts. |
-| `dmc-new-admissions.php` | New-admissions UI + inline assign handlers. |
-| `dmc-patients.php` | **Main active-patient list**; hosts all flow modals; inline reverse-discharge + transfer handlers. |
-| `active-list.php` | Read-only active board (opens in new tab). |
-| `tb-patients.php`, `registry-tb-patients.php` | Active / historical TB patients (diagnosis ∈ `tb_list`). |
-| `longterm.php` | Long-term patients list. |
-| `dmc-new-consultation.php`, `48consultation.php` | Active consultations + recent (≤48h) consultation registry / undo sign-off. |
-| `48discharge.php` | Recent (≤48h) discharges registry / undo discharge (Admin). |
-| `dmc-old-patients.php`, `dmc-old-patients-details.php` | Bulk historical-patient import via `picupatients_temp` staging. |
-| `search.php` | Registry search UI (Admin page). |
-| `statistics.php`, `allstat.php` | Statistics dashboards (Admin pages). |
-| `extract_data.php`, `export_patients.php`, `fetchicd10.php` | Excel export UI / export handler / ICD-10 typeahead. |
-| `reset-testcount.php`, `test-trans.php` | **Leftover dev/test artifacts that write to live patient data with no auth — must be deleted.** |
-| `errors.php` | Shared error-list partial (unescaped echo). |
-| `400/401/403/404/413/500.shtml` | Static error pages. |
-
-### Subdirectories
-| Dir | Contents | Auth status |
+| Layer | What | Pinned in |
 |---|---|---|
-| `newpatients/` | add, inline-update, **shuffle** (auto-assign), assign-to-primary, icu-transfer | mostly **no auth** |
-| `patients/` | modify, discharge (+submit), complete-discharge (+submit), icu-discharge (+submit), change-consultant (+submit), transfer fragments, **delete** | mostly **no auth** |
-| `consultations/` | add, modify, delete, details, specialty-dropdown | **no auth** (all) |
-| `registry/` | search-results (admissions / diagnosis / consultations), patient-details, modify, Excel export | **no auth** (all) |
-| `statistics/` | kpis, charts, charts1, time1, a4, a4-monthly | session-only or **no auth** |
-| `dashboard/` | `1.php`, `3.php` (data fragments); `2.php`, `4.php` are empty | **no auth** |
-| `vendor/` | jQuery 3.7.1, Bootstrap 5.3.3, AdminLTE, FontAwesome 6.5.2, Select2, Chart.js 4.4, moment.js, daterangepicker, html2canvas, **PHPMailer** _(PHPExcel was removed — Excel export now uses the bespoke root `xlsx-writer.php`)_ | third-party |
-| `css/`, `dist/` | AdminLTE theme + custom `css/main.css`; FontAwesome icon set | assets |
-| `work-orderes/` | AdminLTE build sources (unused at runtime; "orderes" is a typo) | dead weight |
+| Runtime | PHP 8.3, MySQL 8.4 (InnoDB, utf8mb4, real foreign keys) | `laravel/composer.json`, `docs/DEPLOY-LARAVEL.md` |
+| Backend | Laravel `^13.8`, Inertia (`inertiajs/inertia-laravel ^3.1`), dompdf `^3.1` (PDF), openspout `^5.3` (XLSX) | `composer.json` |
+| Frontend | Vue `^3.5` (`<script setup>`), `@inertiajs/vue3 ^3.3`, Tailwind CSS `^4`, Chart.js `^4` via `ChartCanvas.vue`, Vite `^8`, driver.js (tour), zxcvbn (password meter), qrcode (MFA enrolment) | `package.json` |
+| Tests | PHPUnit `^12` against a real MySQL `dmc_test`, Vitest `^3` + vitest-axe | `phpunit.xml`, `vitest.config.js` |
+| Hosting | Coolify v4 + Nixpacks on one OCI Ubuntu instance (`me-riyadh-1`), MySQL 8 container on the same host, Cloudflare in front | `docs/DEPLOY-LARAVEL.md` §0 |
 
-### Files I could NOT fully account for — see §10 Open Questions
-`48discharge.php`/`dmc-patients.php` "readmission" inline blocks; whether `dashboard/2.php`/`4.php` were ever used; the exact production value of the `members.active` column default.
+No SSR. No queue worker (`QUEUE_CONNECTION=sync`). No third-party auth or AWS SDK: TOTP and S3
+SigV4 signing are small in-house helpers under `app/Support/`. `public/build/` is **committed**, so
+the host never runs Node. As of 2026-09-03 `npm audit` reports 0 vulnerabilities and the blocking
+composer-audit gate in CI passes.
 
 ---
 
-## 3. Architecture & runtime
+## 4. Repository layout
 
-- **Procedural PHP**, server-rendered. A page = top-of-file PHP (auth + POST handling +
-  queries) followed by an HTML body with embedded PHP echoes and a block of inline jQuery.
-- **Two DB-access styles coexist:**
-  1. `DBController` prepared statements (`Auth` + a handful of endpoints).
-  2. Direct `$mysqli->query("… '$var' …")` / `mysqli_query()` with **string-interpolated
-     `$_REQUEST`** — the dominant pattern, and the SQL-injection surface.
-- **AJAX model:** pages POST to fragment endpoints with jQuery `$.post`; responses are
-  injected via `innerHTML`. The dashboard additionally `eval()`s `<script>` text from
-  fetched fragments ([dashboard.php:87](dashboard.php)).
-- **Includes/dependencies (typical page):** `sidebar.php` → (`dbconnect.php` +
-  `authCookieSessionValidate.php` → `Auth.php` → `DBController.php`, `Util.php`) … HTML …
-  `footer.php`. Action endpoints typically include just `dbconnect.php`.
-- **No autoloader, no namespaces, no composer.json** at the app root (only inside
-  `vendor/PHPMailer`). Libraries are committed copies.
-
----
-
-## 4. Data model
-
-15 tables. **There are no foreign-key constraints anywhere** (most tables are MyISAM,
-which cannot enforce them); all relationships are application-level conventions. Engines
-and charsets are **mixed** (InnoDB & MyISAM; latin1, utf8mb3, utf8mb4), which is itself a
-data-integrity/encoding risk. Row counts from `AUTO_INCREMENT`: `picupatients` ≈ **15,140**,
-`consultations` ≈ 970, `members` ≈ 323, `icd10` ≈ 72,751 (reference), `tbl_token_auth` ≈ 798.
-
-### Core tables (verified from `Demo.sql`)
-- **`picupatients`** (MyISAM, PK `ID`) — the central patient/admission record. One row per
-  admission *episode* (re-admission and ward↔ICU transfer create **new rows**). Key cols:
-  `MRN` (mediumtext!), `PNAME`, `ADMDATE`, `DISDATE`, `med_DISDATE`, `ADMFROM`, `DISTO`,
-  `MORTALITY` (status/outcome: 'Alive'/'Dead'/…), `admissiondiagnosis` (JSON array of ICD-10
-  ids), `BED`, `nationality` (country *name* string), `gender`, `age`, `consultant_id`,
-  `admitted_by`, `trans_discharge`, `trans_discharge_by`, `current_location` (ER/Ward/ICU),
-  `newassign`, `assigned_on`, `delay`, `longterm`. **Indexes:** PK + `idx_..._admdate(ADMDATE)`
-  + `idx_..._disdate(DISDATE)` only — **no index on `MRN`, `consultant_id`,
-  `current_location`, `admitted_by`**.
-- **`picupatients_temp`** (MyISAM, PK `ID`) — identical schema; **staging** for the
-  old-patient import flow only.
-- **`consultations`** (InnoDB, PK `id`) — `MRN` (**int** here vs mediumtext in picupatients —
-  type mismatch), `PNAME`, `age`, `BED`, `consultation_date`, `consultation_from`,
-  `current_location`, `entered_by_id`, `indication` (JSON of `consultation_reason` ids),
-  `consultant_id`, `signoff_date`, `other_ind`, `consultation_to_service`.
-- **`members`** (InnoDB latin1, PK `member_id`) — `member_name`, `member_password`
-  (varchar(64); bcrypt), `member_email`, `position` (role; see §5), `active`, `pass_exp_date`,
-  `full_name`, `on_service`, `specialty_id`, and capability flags `assign_access`,
-  `add_new_patient`, `manage_patient`, `modify_patient`.
-- **`tbl_token_auth`** (InnoDB, PK `id`) — remember-me tokens; `username` links to
-  `members.member_name` (by name, not id), `password_hash`, `selector_hash`, `is_expired`,
-  `expiry_date`.
-
-### Reference / config tables
-- **`icd10`** (MyISAM) — `id` (code), `name`; 72k ICD-10 diagnoses.
-- **`tb_list`** — `dx_id` (ICD-10 codes that classify a patient as TB).
-- **`position`** — roles **2=Registrar, 3=Consultant, 4=Resident, 5=Observer**.
-  **`0`=Admin is implicit and NOT in this table.**
-- **`speciality`** and **`other_specialities`** — two overlapping specialty lists
-  (column misspelled `specilaity` in both). Duplication.
-- **`consultation_reason`** — indication options (referenced by `consultations.indication`).
-- **`settings`** (single row, id=0) — operational thresholds: `min_hospitalist`(6),
-  `max_hospitalist`(30), `min_subs`(7), `max_subs`(5), `short_los`(5), `long_los`(11).
-  [NEEDS CLINICAL REVIEW]
-- **`countries`** — nationality reference (`code`, `name`).
-
-### Dead schema (exist but **no code reads/writes them**)
-- **`consultation_details`** (`consult_id` varchar, `daily_check`, `priority_consult`, `date`)
-- **`Notes`** (`consult_id`, `note`, `user_id`, `user_position`)
-
-These appear to be planned-but-unbuilt (or removed) features.
-
-### ER diagram (logical relationships — none are enforced FKs)
-
-```mermaid
-erDiagram
-    MEMBERS {
-        int member_id PK
-        varchar member_name
-        varchar member_password "bcrypt"
-        int position "role; 0=Admin implicit"
-        int specialty_id
-        int active
-        int on_service
-        int assign_access
-        int add_new_patient
-        int manage_patient
-        int modify_patient
-    }
-    PICUPATIENTS {
-        int ID PK
-        mediumtext MRN "not indexed"
-        mediumtext PNAME
-        date ADMDATE "indexed"
-        date DISDATE "indexed"
-        date med_DISDATE
-        json admissiondiagnosis "ICD-10 ids"
-        text current_location "ER/Ward/ICU"
-        text MORTALITY
-        int consultant_id "->members"
-        int admitted_by "->members"
-        int trans_discharge_by "->members"
-        text longterm
-    }
-    PICUPATIENTS_TEMP {
-        int ID PK
-        string staging "identical to picupatients"
-    }
-    CONSULTATIONS {
-        int id PK
-        int MRN "int (mismatch)"
-        json indication "->consultation_reason"
-        int entered_by_id "->members"
-        int consultant_id "->members"
-        date signoff_date
-    }
-    CONSULTATION_DETAILS {
-        int id PK
-        varchar consult_id "DEAD: unused"
-    }
-    NOTES {
-        int id PK
-        int consult_id "DEAD: unused"
-        int user_id
-    }
-    TBL_TOKEN_AUTH {
-        int id PK
-        varchar username "->members.member_name"
-    }
-    ICD10 {
-        varchar id "code"
-        varchar name
-        int autoid PK
-    }
-    TB_LIST {
-        int id PK
-        text dx_id "->icd10.id"
-    }
-    POSITION {
-        int id PK
-        text position
-    }
-    SPECIALITY {
-        int id PK
-        text specilaity
-    }
-    OTHER_SPECIALITIES {
-        int id PK
-        text specilaity
-    }
-    CONSULTATION_REASON {
-        int id PK
-        text consultation_reason
-    }
-    SETTINGS {
-        int id PK
-        int short_los
-        int long_los
-        int min_hospitalist
-        int max_hospitalist
-    }
-    COUNTRIES {
-        int id PK
-        char code
-        varchar name
-    }
-
-    MEMBERS ||--o{ PICUPATIENTS : "consultant_id / admitted_by / trans_discharge_by"
-    MEMBERS ||--o{ CONSULTATIONS : "consultant_id / entered_by_id"
-    MEMBERS }o--|| POSITION : "position"
-    MEMBERS }o--o| SPECIALITY : "specialty_id"
-    MEMBERS ||--o{ TBL_TOKEN_AUTH : "member_name = username"
-    PICUPATIENTS }o--o{ ICD10 : "admissiondiagnosis JSON"
-    PICUPATIENTS_TEMP ||..|| PICUPATIENTS : "import/confirm"
-    CONSULTATIONS }o--o{ CONSULTATION_REASON : "indication JSON"
-    CONSULTATIONS ||--o{ CONSULTATION_DETAILS : "consult_id (UNUSED)"
-    CONSULTATIONS ||--o{ NOTES : "consult_id (UNUSED)"
-    TB_LIST }o--o{ ICD10 : "dx_id"
-    PICUPATIENTS }o--o| COUNTRIES : "nationality (by name)"
+```
+/                      repo root — retired legacy PHP app (history only, §14) + project docs
+├─ HANDOFF.md          ground truth: what is live, what remains, doc map
+├─ CLAUDE.md           this file
+├─ .github/workflows/  laravel-ci.yml (the product's CI) · ci.yml (legacy CI — never merge them)
+└─ laravel/            THE PRODUCT
+   ├─ app/
+   │  ├─ Http/Controllers/   one controller per module (+ Auth/, Concerns/MetricQueries)
+   │  ├─ Http/Middleware/     SecurityHeaders, SessionTimeout, EnsureMfaEnrolled, EnsureEmailVerified,
+   │  │                       EnsurePasswordNotExpired, RequireStepUp, EnsureAdmin, HandleInertiaRequests
+   │  ├─ Http/Requests/       FormRequests for the riskier writes (admission, consultation, merge, exports)
+   │  ├─ Models/              20 Eloquent models (§6)
+   │  ├─ Casts/               EncryptedNarrative (§9)
+   │  ├─ Console/Commands/    audit:{ship,verify,verify-daily,prune}, backup:verify, dq:notify,
+   │  │                       legacy:import, scheduler:heartbeat
+   │  ├─ Jobs/ Mail/          GenerateMonthlyReport / GenerateMonthlyPdf; registration, reminder, report mails
+   │  ├─ Services/            ShuffleService (auto-assignment)
+   │  ├─ Support/             Audit, AuditDiff, DashboardCache, ReportSvg, S3SigV4, Totp
+   │  └─ Providers/           AppServiceProvider, RuntimeConfigServiceProvider (§5)
+   ├─ routes/                 web.php (all app routes) · public.php (session-less probes) · console.php (schedule)
+   ├─ database/migrations/    47 migrations — the authoritative schema
+   ├─ resources/js/           Pages/<Module>/ · Components/ · Layouts/ · composables/ · lib/ · __tests__
+   ├─ tests/Feature (105 files) · tests/Unit (2)
+   ├─ scripts/                smoke.sh, contrast.mjs, check-source-allowlist.mjs, backup/{db-backup.py,db-restore-drill.sh}
+   ├─ docs/                   runbooks + behaviour docs (§13) · docs/compliance/ (PDPL paper trail)
+   └─ .prod-ready/            local audit workspace — never commit
 ```
 
+Directory names under `resources/js` are capitalised (`Pages`, `Components`, `Layouts`). Windows
+hides case mistakes that Linux CI catches; the Inertia config is published to point at `Pages`.
+
 ---
 
-## 5. Roles, authorization & sessions
+## 5. Architecture and runtime
 
-### Identity & session
-- Login (`index.php`): prepared lookup by `member_name`, `password_verify` against bcrypt.
-  On success sets `$_SESSION['member_id'|'position'|'name']`. Password older than
-  `pass_exp_date + 3 months` → forced to `change-password.php`.
-- "Remember me": 16/32-char CSPRNG tokens, **bcrypt-hashed** in `tbl_token_auth`; plaintext
-  in cookies (`member_login`, `random_password`, `random_selector`), 30-day expiry.
-- `authCookieSessionValidate.php` validates session-or-cookie and sets `$isLoggedIn`.
+**Request pipeline** (`bootstrap/app.php`, `routes/web.php`):
 
-### Role model (`members.position`)
-`0`=Admin (implicit), `2`=Registrar, `3`=Consultant, `4`=Resident, `5`=Observer. Page-level
-gates use arrays defined in `sidebar.php`:
-- `$access_PICU_patients = [0,2,3,4]` (clinical pages; excludes Observer)
-- `$access_PICU_endorsement = [0,2,4]` ("All" vs "My" view; note Consultant=3 sees only "My")
-- `$access_PICU_control = [0]` (Admin-only: registry, statistics, control, old-patients)
-- Plus per-user **capability flags**: `assign_access`=Can Assign, `add_new_patient`=Can Add,
-  `manage_patient`=Can Manage, `modify_patient`=Can Modify.
+- `SecurityHeaders` is **prepended** to the `web` group so even 419/CSRF error responses get stamped:
+  per-request nonce CSP (`CSP_MODE` env; auto-relaxed while Vite's `public/hot` exists),
+  `frame-ancestors 'none'`, HSTS, `no-store` on authenticated pages. Violations POST to `/csp-report`
+  (throttled, log-only, CSRF-exempt).
+- `trustProxies` is pinned to loopback/private ranges plus Cloudflare's published CIDRs, never `*`,
+  so forged `X-Forwarded-For` cannot defeat the IP-keyed throttles or poison audit IPs.
+- Public routes: login (username **or** email, `throttle:auth`), phased registration, forgot
+  password, forgot username, `/mfa/challenge`, and the `/privacy` notice.
+- Authenticated group: `auth → session.timeout → email.verify → mfa.enroll → pwd`. Every user must
+  have a verified email, an enrolled TOTP authenticator and a password younger than three months
+  (NULL counts as expired) before any clinical page renders.
+- `admin` group inside it: registry, statistics, reports, recent activity, import, control panel,
+  audit viewer, trash, security page, data quality, patient merge, style guide.
+- `stepup` (fresh password re-check, `throttle:stepup`) on: reverse discharge, delete admission,
+  Control → System save and test email, delete user, patient merge.
+- Session-less machine routes in `routes/public.php`: `/up` (Coolify liveness), `/health` (DB +
+  storage + scheduler heartbeat; `200 ok` / `503 degraded`, no PHI), `/.well-known/security.txt`.
 
-### Intended permission matrix (from `permissions.docx`) — ⚠️ treat as DATED
-> Per the maintainer, `permissions.docx` is likely **out of date** — do **not** treat this matrix
-> as ground truth; the intended role/capability model must be **re-confirmed** with the
-> team/clinicians. This caveat affects only the *fine-grained* "which role may do X" mapping; the
-> **Critical** findings below (endpoints with *no* authorization at all, SQLi, admin takeover) are
-> wrong under **any** policy and stand regardless.
-| Area | Action | Intended |
+**Inertia** shares `auth.user` (id, name, role, `is_admin`, `mfa_enrolled`, `email_verified`, the four
+`can.*` flags), the idle/absolute timeout minutes and `flash` on every page
+(`HandleInertiaRequests`). The browser renders everything; the `useSessionTimeout` composable
+warns and logs out on idle.
+
+**Runtime config.** `RuntimeConfigServiceProvider` overrides `mail.*` and the timezone at boot from
+the `settings` row edited in Control → System, so SMTP and timezone changes need no restart. The SMTP
+password is stored encrypted and is write-only in the UI. `.env` values are the fallback.
+
+**Scheduler.** Nothing in the container runs it. A host root cron runs `php artisan schedule:run`
+every minute via `docker exec` on the container found **by label**. Scheduled: `scheduler:heartbeat`
+every minute, `audit:ship` hourly, `audit:verify-daily` 02:30, `backup:verify` 06:30, `dq:notify`
+07:00, the monthly report on the 1st at 06:00.
+
+**Audit trail.** `App\Support\Audit::log()` writes an `audit_log` row `{actor, action, entity,
+details JSON, ip}` for every write and for PHI reads (record opens when `log_record_opens` is on,
+handover reads, exports, registry searches). Rows are **hash-chained** (`prev_hash` + sha256
+`row_hash`, taken under a row lock), verified nightly, and shipped hourly as write-once NDJSON to the
+in-Kingdom bucket `dmc-audit-log`. `AuditDiff` records before/after on updates.
+
+---
+
+## 6. Data model
+
+Authoritative source: `laravel/database/migrations/`. Full data dictionary and what every button
+writes: [`laravel/docs/DATABASE-AND-BEHAVIOR.md`](laravel/docs/DATABASE-AND-BEHAVIOR.md).
+
+| Connection | Database | Use |
 |---|---|---|
-| New admissions | delete | Admin only |
-| | add new / from ICU | Can Add |
-| | assign / assign-to-primary | Can Assign |
-| | assign to me | any consultant |
-| Patient list | modify | Can Modify |
-| | transfer / discharge | primary consultant **or** Can Manage |
-| | label long-term | anyone |
-| Registry | access; same-day discharge reversal | Admin only |
-| Consultations | access | consultants + registrars |
-| | add | + residents |
-| | sign off | primary consultant **or** Can Manage |
-| | delete | Admin only |
-| Consultation registry | access; same-day signoff reversal | Admin only |
+| `mysql` (prod) | `dmc_demo`, app user `dmc_demo` (not root) | the live application database |
+| `mysql` (local default) | `dmc_laravel` | local development |
+| `mysql` (testing) | `dmc_test` | PHPUnit `RefreshDatabase` |
+| `legacy` (read-only) | `dmc_prod` | input of `legacy:import` only; the app never writes here |
 
-### How it is ACTUALLY enforced (the gap)
-- **Page files**: enforce `position` server-side (good) — *but several run their POST/
-  action handlers **before** the role check* (e.g. [dmc-patients.php:3](dmc-patients.php),
-  [dmc-old-patients.php:4](dmc-old-patients.php), [search.php:27](search.php)), so those
-  actions bypass the gate.
-- **Per-action enforcement (ownership / "primary consultant only" / capability)** is almost
-  entirely **UI-only** — the buttons are hidden, but the underlying endpoints don't check.
-- **Action/AJAX endpoints**: the overwhelming majority have **NO auth check at all**
-  (`require 'dbconnect.php'` only). Confirmed examples: `patients/dmc-patient-delete.php`,
-  all of `patients/*-submit.php`, `patients/dmc-patients-modify.php`, all of
-  `consultations/*`, all of `registry/*`, `dmc-users-update.php`, `dmc-users-delete.php`,
-  `newpatients/dmc-patients-add.php`, `export_patients.php`, `fetchicd10.php`,
-  `reset-testcount.php`, `test-trans.php`, `statistics/*` (session-only or none),
-  `dashboard/1.php` & `3.php`.
+**Core tables**
 
-**Net effect:** authorization is effectively cosmetic. See §9.
+- `users` — staff. `role` (0 Admin, 2 Registrar, 3 Consultant, 4 Resident, 5 Observer),
+  `specialty_id`, `active`, `on_service`, capability flags `can_assign / can_add / can_manage /
+  can_modify / can_coordinate_consultations`, `pass_exp_date`, TOTP fields (`mfa_secret` encrypted,
+  `mfa_recovery_codes`, `mfa_enrolled_at`, `mfa_last_counter` replay guard), `email_verified_at`,
+  `tour_completed_at`, `legacy_id`. Soft-deleted.
+- `patients` — one row per MRN (identity + demographics). Soft-deleted; admin **patient merge**
+  reconciles duplicates.
+- `admissions` — one row per **episode**; a readmission or ward ↔ ICU transfer opens a new row.
+  `consultant_id` NULL = unassigned. `medical_discharge_date` (phase 1) and `discharge_date`
+  (phase 2; NULL = active). `discharge_to` is a destination, `outcome` is strictly Alive/Dead.
+  `transfer_type`, `current_location` (ER/Ward/ICU), `is_longterm`, `assigned_at` (drives the
+  24-hour "New" badge), `admitted_by` / `discharged_by` from the session. Soft-deleted.
+- `admission_diagnoses` — one ICD-10 row per diagnosis (unique per admission).
+- `consultations` — the ledger: `status` ∈ `new / active / ongoing / signed_off`, indication JSON,
+  `to_service`, receiving `consultant_id`, `entered_by`, `signoff_date`, encrypted `response_note`.
+  Plus `consultation_followups` (encrypted daily `note`). Soft-deleted.
+- Handover subsystem — `handovers` (one current row per admission, encrypted `body`, six
+  checkpoint flags incl. `code_status`), `handover_revisions` (append-only, encrypted), `handover_signatures`
+  (created on consultant-to-consultant moves; bound to the revision actually read; voided when
+  superseded or when the patient's last episode closes), `notifications` (the bell; `resolved_at`,
+  `admission_id`).
+- `audit_log` — append-only, hash-chained (§5). `setting_changes` — history of every settings edit.
+- Auth support — `pending_registrations` (phased sign-up state before a user row exists),
+  `trusted_devices`, `password_reset_tokens`, `sessions`.
+- `settings` (single row) — LOS bands (`short_los` 5, `long_los` 11), shuffle min/max per pool,
+  `ward_beds` / `icu_beds` (still placeholders), `readmission_window_days` (3, clinically confirmed),
+  alert thresholds, `log_record_opens`, idle/absolute session timeouts (default 30 min / off),
+  `failed_login_threshold`, `dq_los_multiplier`, runtime mail + timezone, audit ship/retention,
+  `consultations_source_of_truth` (§11), `mfa_enforcement` (inert: MFA is mandatory regardless).
+- Reference — `icd10` (~72k), `tb_diagnoses`, `specialties` (`is_subspecialty`, `is_external`),
+  `consultation_reasons`, `countries`, `report_recipients`.
+
+**Derived admission states** (no status column): Unassigned = active + no consultant; Active Ward /
+Active ICU by `current_location`; Medically discharged ("still in") = `medical_discharge_date` set,
+`discharge_date` NULL; Long-term and TB are cross-cutting flags; Discharged = `discharge_date` set.
 
 ---
 
-## 6. Core flows (step by step)
+## 7. Roles, capabilities and authorization
 
-### 6.1 Admission
-1. User opens `dmc-new-admissions.php` (page-gated to `$access_PICU_patients`; "New
-   Admission" button shown if `add_new_patient=1`).
-2. Modal collects bed, MRN, name, age, gender, nationality, admit date, admit-from,
-   ICD-10 diagnosis (Select2 → `fetchicd10.php`). Client-side checks non-empty only.
-3. `$.post` → `newpatients/dmc-patients-add.php` (**no auth**): duplicate-MRN check
-   (`MRN=… AND DISDATE IS NULL`), then **string-interpolated INSERT** into `picupatients`.
-   `admitted_by` is taken from the POST body (spoofable), not the session.
-4. New row has `consultant_id = NULL` → enters the **unassigned queue**
-   (`DISDATE IS NULL AND consultant_id IS NULL`).
-5. Inline field edits on the page → `newpatients/dmc-new-patients-update.php` (**no auth**)
-   on every change event. `picupatients_temp` is **not** used here (only by old-patient import).
+- **Page access by role.** Clinical pages: Admin, Registrar, Consultant, Resident. **Observer is
+  read-only** everywhere. Admin-only: everything in the `admin` route group (§5).
+- **Per-action by capability.** `can_add` admits; `can_assign` assigns to a chosen consultant,
+  shuffles, bulk-reassigns; `can_manage` transfers/discharges any patient; `can_modify` edits patient
+  details; `can_coordinate_consultations` coordinates the ledger. The **primary consultant** may
+  manage their own admission without `can_manage` (`User::canManageAdmission`). Assign-to-me is open
+  to any clinical role, never Observer.
+- **Enforced server-side** in controllers and FormRequests, not just by hidden buttons. Capability
+  grants are broad by owner decision (e.g. Residents with Can-Manage); do not "tidy" them.
+- **Auth lifecycle:** mandatory TOTP MFA for every user (challenge expires after 5 minutes, 8
+  attempts, replay-guarded); an MFA login is never remembered; self-disable of MFA is removed, only
+  Control → Reset MFA clears it; mandatory email verification; phased self-registration (email
+  OTP + authenticator confirmed **before** the account row exists, then `active=0` pending admin
+  activation, role never Admin); password expiry at three months; idle timeout; step-up for §5's
+  sensitive actions; failed-login throttling keyed by IP and username.
 
-### 6.2 Assignment (3 paths)
-- **Auto "shuffle"** (`newpatients/dmc-patients-shuffle.php`): a 4-round balancing algorithm
-  driven by `settings` (min/max hospitalist & subs) and `members.on_service`/`specialty_id`.
-  Assignment UPDATEs use `… WHERE consultant_id IS NULL LIMIT 1` with **no specific patient
-  id** → nondeterministic, **race-prone** under concurrency. Login redirect lacks `exit()`,
-  and the capability check is commented out → effectively runnable by anyone. Emits
-  `var_dump` debug to the browser.
-- **Assign to primary** (`newpatients/dmc-assign-to-primary.php` → handler in
-  `dmc-new-admissions.php`): manual; note a broken HTML quote in the fragment currently
-  corrupts the submitted patient id.
-- **Assign to me** (handler in `dmc-new-admissions.php`): self-assign; `userid` from POST.
+---
 
-### 6.3 Patient-flow state machine (`picupatients`)
-States are derived from field combinations (no explicit status column):
+## 8. Core flows
 
-| State | Condition |
+Each flow names its controller; per-endpoint database effects are in DATABASE-AND-BEHAVIOR.md §5.
+
+1. **Admission** (`AdmissionsController`, `/admissions`): admit with demographics + ICD-10 typeahead →
+   `patients` upsert + new `admissions` row + diagnoses, consultant NULL → unassigned queue.
+2. **Assignment**: assign-to-primary, assign-to-me, or **shuffle** (`ShuffleService` balances
+   unassigned patients across on-service consultants using the settings min/max pools). Bulk
+   reassign moves a selected subset of one consultant's patients and is gated by the **same-day
+   handover rule**: a patient may move to a different consultant only if their handover was updated
+   today (first assignments exempt).
+3. **Board actions** (`PatientsController`, `PatientActionController`, `/patients`): modify,
+   long-term toggle, ward ↔ ICU transfer (closes the episode and opens a new one in a transaction,
+   bed and diagnoses carried), specialty transfer (external specialties close without reopening),
+   two-phase discharge (medical → complete) or one-step ICU discharge with outcome, admin
+   same-day reverse discharge, admin delete (step-up). `/active-list` is the printable census.
+4. **Handovers** (`HandoverController`): edit the note + checkpoints per admission; every save is a
+   revision; consultant-to-consultant moves create a signature the receiver must sign after reading
+   the bound revision; bell notifications and an `/handovers` inbox; persistent "incomplete
+   handover" reminders. Governance reference: `docs/HANDOVER-COMPLIANCE.md`.
+5. **Consultation ledger** (`ConsultationsController`, `ConsultationDashboardController`): create,
+   status moves through new → active → ongoing → signed off, daily follow-ups, sign-off with an
+   encrypted response note, admin same-day reverse sign-off, a per-service handover sheet and a
+   physician dashboard. This app is the **source of truth** for consultations since cutover (§11).
+6. **Registry and export** (`RegistryController`, admin): POST-only search over admissions,
+   diagnoses and consultations; CSV and XLSX export; every search and export is audited.
+7. **Dashboard, statistics, reports** (`DashboardController`, `StatisticsController`,
+   `ReportsController`, `Concerns\MetricQueries`): live KPIs, date-range statistics, annual A4
+   booklet and monthly report rendered to PDF with dompdf; the monthly job emails the prior month to
+   `report_recipients`. Every number's formula and caveats: `docs/DASHBOARD-AND-STATISTICS-METRICS.md`.
+   Conventions: active = `discharge_date IS NULL`; LOS = `DATEDIFF` in whole days; mortality counts
+   `outcome='Dead'`; readmission = same patient within `readmission_window_days` of a real discharge.
+8. **Recent activity** (`RecentController`, admin): yesterday + today; undo discharge / undo sign-off.
+9. **Administration** (`ControlController` and friends): settings, users, roles, capabilities,
+   specialties, indications, runtime SMTP/timezone, MFA reset, password-reset mail, bulk historical
+   import with preview (`ImportController`), patient merge, data-quality review, trash, audit viewer,
+   security page, in-app tour.
+
+---
+
+## 9. Security and privacy controls (what is actually in place)
+
+- **Transport:** Cloudflare proxy, minimum TLS 1.2, HSTS; the origin's 80/443 accept **only
+  Cloudflare ranges** (an unproxied DNS record or a direct curl gets nothing).
+- **Headers:** nonce CSP enforced + static header set (§5); `SESSION_SECURE_COOKIE`,
+  `SESSION_ENCRYPT=true`, `APP_DEBUG=false`, `LOG_LEVEL=warning`.
+- **Encryption at rest:** the four narrative columns (`handovers.body`, `handover_revisions.body`,
+  `consultations.response_note`, `consultation_followups.note`) via `App\Casts\EncryptedNarrative`
+  (AES-256-CBC + HMAC under `APP_KEY`; tolerant of legacy plaintext on read, logging it). Also
+  encrypted: `users.mfa_secret`, `settings.mail_password`. **`APP_KEY` is the root of trust**: a
+  backup without the key at the time of the dump is incomplete; never run `key:generate` on a live
+  environment. Rotation procedure and developer rules: `docs/ENCRYPTION-AT-REST.md`.
+- **Never filter, sort, group or join on an encrypted column in SQL**, and never add one to an
+  export, notification, log, dashboard or email payload. Raw reads (`DB::table`, `selectRaw`) return
+  ciphertext; decrypt explicitly and add a test.
+- **Backups:** nightly (02:15 host time) encrypted off-box dump to the in-Kingdom bucket
+  `dmc-db-backups`; RPO ≤ 24 h; RTO is whatever the drill prints, plus the human steps; local
+  encrypted copy 2 days, bucket 90 days (**placeholder pending legal**); `backup:verify` alerts admins
+  in-app when the heartbeat is stale; monthly restore drill logged in `docs/BACKUP-AND-RESTORE.md` §8.
+- **Audit:** tamper-evident chain, nightly verification, hourly off-box shipping (§5). Retention
+  window is a setting; pruning is manual.
+- **Repository hygiene:** git history purged of the three historically leaked secrets; GitHub secret
+  scanning + push protection + Dependabot on; `.gitignore` blocks `.env*`, `*.sql`, logs; gitleaks
+  and Semgrep run in CI; `.well-known/security.txt` and `SECURITY.md` carry the disclosure contact.
+- **Login trust badges** state six truthful claims only. **No framework badges** (ISO, SOC 2, CBAHI)
+  until a certificate exists.
+
+---
+
+## 10. Operations
+
+Runbooks: [`DEPLOY-LARAVEL.md`](laravel/docs/DEPLOY-LARAVEL.md) (topology, deploy, rollback, env
+vars, scheduler, import), [`BACKUP-AND-RESTORE.md`](laravel/docs/BACKUP-AND-RESTORE.md),
+[`RELEASE-CHECKLIST.md`](laravel/docs/RELEASE-CHECKLIST.md). Host access, the Coolify API method and
+environment gotchas are in session memory.
+
+- **Deploy:** Coolify builds `laravel/` with Nixpacks from `main` HEAD, tags the image with the
+  commit SHA, runs `migrate --force`, swaps the container. Coolify does **not** back up, test or smoke
+  for you. Verify with `scripts/smoke.sh` against the public hostname, then `/health`, the audit
+  chain and the scheduler heartbeat.
+- **Rollback:** app-only = redeploy the previous image. App + DB = restore the pre-deploy dump, then
+  roll the app back. **`migrate:rollback` is never the answer.** Keep migrations additive.
+- **Env vars:** `APP_URL` and `AUDIT_S3_*` are build-time (need a rebuild); everything else is
+  runtime (restart). The field name in the API is `is_buildtime`. `APP_TIMEZONE=Asia/Riyadh` is the
+  fallback for the in-app timezone; date columns are timezone-naive, so UTC drifts every "today" rule
+  by 3 hours.
+- **Sessions and logs live in the container** (`SESSION_DRIVER=file`): a redeploy signs everyone out
+  and discards the old container's logs unless `storage/` is a persistent volume.
+- **Data reload** (`php artisan legacy:import`): the most destructive operator command. It
+  **truncates target tables before its first legacy read**, resets user ids and MFA enrolment,
+  truncates handovers and notifications, needs `GRANT SELECT ON dmc_prod.*` for `dmc_demo`, and
+  respects the consultations cutover flag (§11). Always dump first; follow the keep-MFA snapshot →
+  import → verify → restore path in DEPLOY-LARAVEL.md §8; clear file sessions after.
+- **Local dev:** `laravel/README.md` has the full recipe (`composer install`, `npm ci`, `.env`,
+  `migrate`, `db:seed --class=DemoSeeder` or a local legacy import, first admin via tinker, `npm run
+  dev` + `php artisan serve --port=8001`). The Browser pane config `dmc-laravel` in `.claude/launch.json`
+  serves it on port 8001. Local dev must never point at production data.
+
+---
+
+## 11. Consultations cutover flag
+
+`settings.consultations_source_of_truth` records that **this app owns consultation data**. While ON
+(the production state) `legacy:import` preserves `consultations` and `consultation_followups`,
+re-pointing them to rebuilt patient/user rows by natural key, and refuses `--wipe-consultations`.
+Turning it OFF re-arms the next import to **destroy the ledger**. Never flip it without reading
+DEPLOY-LARAVEL.md §7. A failed import while ON requires a database restore before retrying. After
+any restore, check the flag.
+
+---
+
+## 12. Testing, CI and quality gates
+
+**CI** (`.github/workflows/laravel-ci.yml`, workflow "Laravel CI", path-scoped to `laravel/**`) has
+four jobs, all under a read-only token and SHA-pinned actions:
+
+| Job | Gates |
 |---|---|
-| Active (Ward/ER) | `DISDATE IS NULL`, `med_DISDATE IS NULL`, `current_location≠ICU` |
-| Active ICU | `DISDATE IS NULL`, `current_location='ICU'` |
-| Medically discharged / still in (phase-1) | `DISDATE IS NULL`, `med_DISDATE` set, `delay` set |
-| Long-term | `longterm='longterm'` (cross-cutting) |
-| TB | diagnosis ∈ `tb_list` (cross-cutting) |
-| Discharged from ward | `DISDATE` set, `trans_discharge='discharge from ward'` |
-| Discharged from ICU | `DISDATE` set, `trans_discharge='discharge from ICU'` |
-| Transferred out | `DISDATE` set, `trans_discharge IN ('other transfer','transfer to other speciality')`; a **new row** is created for the receiving location/consultant |
+| `frontend` | `npm ci`, `npm audit --omit=dev`, Vitest (+ axe), `npm run build`, Tailwind `@source` allow-list drift guard, contrast/perceptual-distance gate, build-reproducibility (`public/build` must be unchanged after a rebuild) |
+| `backend` | PHPUnit two-pass against MySQL 8 (everything except `pdf`, then `pdf` alone because dompdf segfaults in a shared process), `composer audit` arbitrated by `scripts/composer-audit-gate.php` (high/critical advisories block unless allow-listed with a reason) |
+| `secrets` | gitleaks |
+| `sast` | Semgrep, ERROR severity blocks |
 
-Transitions (all via **unauthenticated** `patients/*` endpoints): discharge (two-phase:
-medical → complete), ICU discharge (single-step), transfer (ward↔ICU / to specialty — creates
-a new row, **not atomic**, no transaction), reverse-discharge (clears `DISDATE/med_DISDATE/
-delay`), change-consultant (bulk), modify, delete (hard). `MORTALITY` is set on discharge
-('Alive'/'Dead'/LAMA/etc.). Audit attribution (`trans_discharge_by`, etc.) comes from
-client-supplied `userid` → **spoofable / unreliable**.
+CI was **green on 2026-09-03** (checked via `gh run list`). It only runs while **GitHub Actions
+billing is enabled**; when billing lapses, jobs are created with zero steps and prove nothing, so
+the same gates must be run locally per RELEASE-CHECKLIST.md. Required status checks on `main` are
+not yet configured (CI.md preamble). The legacy `ci.yml` is a separate pipeline; never merge them.
 
-### 6.4 Consultations lifecycle
-Create (`consultations/dmc-consultation-add.php`, no auth) → view active
-(`signoff_date IS NULL`; a role filter exists but is **dead code**
-[dmc-new-consultation.php:89](dmc-new-consultation.php), so everyone sees all) → modify
-(prepared, but no ownership check) → **sign off** (`signoff_date=CURDATE()` via
-string-interpolated handler; no ownership check) → admin registry `48consultation.php`
-(undo same-day signoff) → delete (`consultations/dmc-consultation-delete.php`, no auth).
-`consultation_details`/`Notes` are **not implemented**.
+**Baselines (2026-09-03):** PHPUnit ~926 tests (+56 in the `pdf` group), Vitest 717.
 
-### 6.5 Live statistics & dashboards
-- **Dashboard** (`dashboard.php`): on load, JS `fetch()`es `dashboard/1.php` then
-  `dashboard/3.php`, injects HTML, and `eval()`s their inline scripts to render Chart.js
-  charts. **Refresh = full page reload only** (no polling/websockets).
-- **dashboard/1.php**: 30-day admissions/discharges (31× full-scan prepared loop), current
-  census, per-consultant last-day activity, consultations — **no auth**.
-- **dashboard/3.php**: top diagnoses (JSON_CONTAINS join), YTD counts, avg LOS, capacity
-  utilization (`active / (hospitalist_n × max_hospitalist) × 100`), per-consultant counts
-  (PHP-side aggregation + **N+1** name lookups) — **no auth**.
-- **statistics.php / allstat.php** (Admin pages) drive AJAX endpoints `statistics/kpis.php`,
-  `charts.php`, `charts1.php`, `time1.php` for KPI/per-physician charts. These compute
-  admissions, discharges, transfers-to-ICU, ICU/ward mortality, consultations, sign-offs,
-  LOS, and 72-hour readmissions. Heavy **N+1** and date-function-wrapped (index-defeating)
-  queries; several **cross-year aggregation bugs**; readmission window logic is suspect
-  [NEEDS CLINICAL REVIEW].
+**Run locally from `laravel/`:**
 
-### 6.6 Password lifecycle (security-critical)
-- **Register** (`register.php`, public): bcrypt-hashes password (good), but `position` is
-  taken from POST with no server-side validation → `position=0` ⇒ **self-register as Admin**.
-- **Change** (`change-password.php`): verifies old password, bcrypts new; UPDATE is
-  string-built (session-sourced id).
-- **Forgot / admin-reset**: emails a link whose token is `md5(member_email)` +
-  **`md5(member_password-bcrypt-hash)`** — **deterministic, non-expiring, not single-use**.
-- **Reset** (`reset-password.php`): validates token via
-  `… where md5(member_email)='$email' and md5(member_password)='$pass'` — **string-built from
-  `$_GET` ⇒ SQL injection**; the UPDATE is likewise string-built.
-
-### 6.7 Printed A4 reports
-`statistics/a4.php` (yearly) and `statistics/a4-monthly.php` (per-month) render multi-page
-`<page>`-element HTML sized for **A4 landscape** via `@page`/print CSS, with Chart.js charts.
-**Output is browser print, not server-side PDF.** Both run **without authentication** and
-issue ~1,800 / ~3,500+ queries per load (12-month loops with per-day census + N+1
-readmission sub-queries). One report page is `display:none` and never prints.
-
----
-
-## 7. Configuration, secrets, environment
-
-- **DB credentials hardcoded** in `dbconnect.php` **and** `DBController.php` (duplicated):
-  host `localhost`, a real-looking user/password, db name. **Rotate immediately.**
-- **SMTP credentials hardcoded** in `forget-password-email.php` and
-  `send-reset-pass-by-admin.php` (`info@dmc-im.com` / a plaintext password). **Rotate.**
-- `.htaccess`: PHP 8.3 handler; **force-redirects `dmc-im.com` → `http://www.dmc-im.com`
-  (plain HTTP, not HTTPS)**; long static-asset cache. `php.ini`: only `mysqli.max_links=200`.
-- **Committed runtime artifacts:** `php_errorlog` (322 KB; 1,566 error/SQL/PHI-pattern hits)
-  and `consultations/php_errorlog`. `permissions.docx` (the spec). `Demo.sql` (512 KB dump
-  **containing real PHI** — do not redistribute).
-- Branding references `innovia.ai` / `healthpro.Ai` (white-label origin).
-- **Third-party libraries** (vendored, unmanaged): jQuery 3.7.1, Bootstrap 5.3.3, AdminLTE,
-  FontAwesome 6.5.2, Select2, Chart.js 4.4, moment.js, daterangepicker, html2canvas,
-  PHPMailer (current-ish). _(PHPExcel was **removed** — the Excel export in `registry/export-results-exel.php`
-  now uses the bespoke, dependency-free root `xlsx-writer.php`; no Composer/PhpSpreadsheet needed.)_
-- **No `.env`, no config separation, no secrets manager, no `.gitignore`, no CI, no tests.**
-
-### Run/deploy (observed)
-Apache + mod_php (PHP 8.3), MySQL, on shared hosting
-(`/home/customer/www/dmc-im.com/public_html/`). To run locally: import `Demo.sql` into MySQL,
-point `dbconnect.php`/`DBController.php` at it, serve the folder with PHP 8.3, browse
-`index.php`.
-
----
-
-## 8. Conventions & gotchas for anyone editing this code
-
-- Patient identity in the UI is the row **`ID`**; clinicians think in **`MRN`** (which is
-  un-indexed and inconsistently typed). A re-admission/transfer is a **new row**, so a
-  patient = *many* `picupatients` rows over time.
-- "Active" has **multiple definitions** across files (sometimes just `DISDATE IS NULL`,
-  sometimes also excluding ICU/long-term/TB/medically-discharged). Confirm the intended
-  definition before changing any count.
-- Audit fields (`admitted_by`, `trans_discharge_by`, `entered_by_id`, `user_id`) are written
-  from **client-supplied** values — do not trust them as a record of who did what.
-- Many endpoints emit `var_dump`/debug output; the dashboard `eval()`s fetched scripts.
-- `specilaity` is the (consistent) misspelling of "speciality" in two tables.
-
----
-
-## 9. Security reality (read before touching anything)
-
-This system, as configured, is **exploitable by an unauthenticated attacker over the
-internet**. The dominant, *systemic* issues (full detail + line numbers in
-`REVIEW-FINDINGS.md`):
-
-1. **Broken access control** — most action endpoints have no auth; patient PHI can be read,
-   modified, and **deleted** without logging in (e.g. `patients/dmc-patient-delete.php`,
-   `registry/dmc-search-patients-modify.php`, `reset-testcount.php`).
-2. **Trivial privilege escalation** — `dmc-users-update.php` (unauth) sets any account's
-   `position=0`; `register.php` accepts `position=0`. Either ⇒ full Admin.
-3. **SQL injection** — pervasive string-interpolated `$_REQUEST` in queries across
-   `patients/`, `newpatients/`, `consultations/`, `registry/`, `statistics/`, auth/reset flows.
-4. **XSS** — patient data echoed without escaping throughout search/registry/modal views.
-5. **No HTTPS** (`.htaccess` forces HTTP); **plaintext DB & SMTP secrets** in code.
-6. **Broken password reset** (md5-of-hash token, SQL-injectable).
-7. **No CSRF protection**, **no audit trail**, **no transactions** on multi-step writes.
-8. **Dev artifacts in prod** that destroy/modify live data (`reset-testcount.php`,
-   `test-trans.php`) and a **committed error log** leaking internals.
-
----
-
-## 10. Open questions (could not determine from the code/dump alone)
-
-- **DB default of `members.active`** — does self-registration create an *active* account
-  immediately? (Determines whether the `register.php` admin-escalation is self-contained.)
-- **Is the app actually internet-facing**, or only on a hospital intranet/VPN? (Changes the
-  exploitability blast radius, not the defects themselves.)
-- **Backups & DR**: is there any DB backup/retention process? None is in the repo.
-- **Clinical correctness** [NEEDS CLINICAL REVIEW]: meaning/intended use of `settings`
-  thresholds (`short_los`/`long_los`/`min_*`/`max_*`); the "72-hour readmission" window
-  (code uses a 30-day lookback); LOS computed via `strtotime/86400` (DST drift); the
-  shuffle auto-assignment policy; `MORTALITY` value vocabulary; the two-phase
-  (medical vs complete) discharge semantics.
-- **Were `consultation_details`/`Notes`, `dashboard/2.php`/`4.php` ever live?** They exist
-  but are unused now.
-- **Intended environments** (dev/staging/prod separation) — none is evident.
-- **Who operates/maintains it now** (the white-label vendor vs the hospital)?
+```bash
+php artisan test --exclude-group pdf      # includes the slow-import group — never ship without it
+php artisan test --group pdf
+npx vitest run
+npm run build && git status --porcelain -- public/build   # must print nothing
+npm run check-allowlist && npm run contrast
+composer audit && npm audit --omit=dev
 ```
+
+**Test conventions:** Feature tests build fixtures inline (idiom: `tests/Feature/Round5J1Test.php`),
+not via factories. Because MFA and email verification are mandatory, any fixture user needs
+`mfa_secret`, `mfa_enrolled_at`, `email_verified_at` and a recent `pass_exp_date` or the middleware
+redirects the test. Run the isolated suite on a throwaway database to avoid races on shared `dmc_test`.
+`tests/Feature/LegacyImportTest.php` (`slow-import`) is what proves a reload cannot destroy the ledger.
+
+---
+
+## 13. Conventions and gotchas
+
+- **Tailwind v4 extractor mints utilities from `.vue` comments and string literals.** The
+  `@source` allow-list snapshot is the guard; de-spell class-like tokens in comments/strings.
+  Never write `*/` inside a comment in `app.css` (it ends the block and breaks cold builds; the Vite
+  cache masks it once).
+- **Publish vendor configs whose defaults embed paths** (Inertia's page directory).
+- **Eloquent `encrypted` casts decrypt on `toArray()`**; use `$hidden` for anything that must not ship
+  to the client (pattern: `Setting::$mail_password`).
+- **`Schema::hasTable` throws (not false) when the DB is unreachable** inside a boot-time provider;
+  `RuntimeConfigServiceProvider` wraps it, keep it that way (it crashed `package:discover` in CI once).
+- **Theme tokens:** brand solid `#00727b`; status tints use theme-invariant `bg-tint-X text-on-X`
+  steps. Tailwind v4 Preflight makes `<button>` cursor default; a base-layer rule restores pointer.
+- **Attribution is session-sourced** everywhere (`admitted_by`, `discharged_by`, `entered_by`); never
+  accept a user id from the request for it.
+- **"Active" is `discharge_date IS NULL`** canonically; per-page ICU-excluding variants are
+  intentional. Confirm the definition before changing any count.
+- **Readmission window, LOS bands and shuffle limits are clinically confirmed** (2026-06-09) and
+  admin-tunable; `ward_beds` / `icu_beds` are still placeholders.
+- **Hard deletes of patient data** happen only via the explicit admin delete (step-up, audited) and
+  consultation delete; routine flow never destroys rows. Recovery is via backups and the trash page.
+- **`laravel/.prod-ready/` and the root `docs/` folder** (metrics notes, deferred backlog,
+  renovation history) are working notes, not product code.
+- Legacy identifiers (`PICU`, `picupatients`, `specilaity`) survive only in the `legacy` connection
+  and import code; the Laravel schema uses the names in §6.
+
+---
+
+## 14. Compliance and audit-readiness status
+
+PDPL / SDAIA applies; the hospital may also pursue NCA ECC / DCC and, if chosen, ISO 27001, SOC 2 or
+CBAHI. State on 2026-09-03:
+
+- **Drafted, awaiting facts:** nine documents in [`laravel/docs/compliance/`](laravel/docs/compliance/)
+  (privacy notice EN/AR, RoPA, DPIA, incident response, retention, classification, DPO, DPAs and
+  transfers) with **529 open markers** catalogued by file and line in
+  [`OPEN-ITEMS.md`](laravel/docs/compliance/OPEN-ITEMS.md). Fill each only after the owner or the
+  hospital's legal/DPO confirms it. Never invent a legal citation, retention period or entity name.
+- **Known compliance-relevant facts:** US-based SMTP relay for outbound mail (a transfer question);
+  in-Kingdom hosting, backups and audit archive; a 90-day backup retention placeholder;
+  `APP_KEY` escrowed by the owner; SSH IP allow-list deferred by the owner.
+- **Readiness scoring:** the last `/prod-ready` scorecard (`laravel/.prod-ready/last-report.md`)
+  was taken on 2026-09-02 **before** the remediation that shipped on 2026-09-03; it reads 27/100
+  BLOCKED and is stale. Re-score only when it is genuinely useful.
+- **Evidence pack:** to be built as items close, mapping each required control to where it is
+  satisfied in this repo and infrastructure (HANDOFF.md item 3).
+
+---
+
+## 15. Doc map
+
+| Area | Files |
+|---|---|
+| Ground truth / what remains | `HANDOFF.md` |
+| Product overview, local setup | `laravel/README.md`, `laravel/SECURITY.md` |
+| Deploy / ops | `laravel/docs/{DEPLOY-LARAVEL, BACKUP-AND-RESTORE, ENCRYPTION-AT-REST, CI, RELEASE-CHECKLIST}.md` |
+| Behaviour / metrics | `laravel/docs/{DATABASE-AND-BEHAVIOR, DASHBOARD-AND-STATISTICS-METRICS, HANDOVER-COMPLIANCE, RECONCILIATION, UAT-TEST-PLAN}.md` |
+| Compliance (PDPL paper trail) | `laravel/docs/compliance/` + `OPEN-ITEMS.md` |
+| Legacy app (history only) | repo root `README.md`, `REVIEW-FINDINGS.md`, `RENOVATION-PLAN.md`, `PERMISSION-MATRIX.md`, `PROJECT-*.md`, `DEPLOY.md`, `SECURITY-*.md` |
+
+---
+
+## 16. Legacy appendix
+
+The procedural PHP + MySQL app at the repository root was the original system. It was security-
+hardened on the `renovation` branch, reconciled row-for-row against the Laravel app
+(`laravel/docs/RECONCILIATION.md`), and then retired when the Laravel app went live. Its data was
+loaded through `legacy:import` and its identifiers map via the `legacy_id` columns. Do not edit,
+deploy or reason from the root PHP files for product work. The full legacy mental model that used
+to live in this file is in git history at commit `31f0bfb` and on the `renovation` branch.
