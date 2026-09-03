@@ -90,9 +90,11 @@
    verified; ~~(3)~~ **DONE** — SMTP `timeout` 10 s; ~~(4)~~ **DONE** — "today" bound from the app
    clock in place of raw `CURDATE()` (Dashboard / DataQuality / Registry), regression-tested by
    `AppClockDayBoundaryTest` — **never** by pinning the MySQL session time zone (it would shift every
-   `TIMESTAMP` column by three hours); (5) **MOSTLY DONE** — CI on PHP 8.3 / MySQL 8.4, blocking Pint
-   gate (codebase normalised), Vitest coverage thresholds enforced; **open:** a PHP coverage floor
-   (Collision printed no table with pcov on PHPUnit 12 — diagnose before re-adding); (6) **open,
+   `TIMESTAMP` column by three hours); ~~(5)~~ **DONE** — CI on PHP 8.3 / MySQL 8.4, blocking Pint
+   gate (codebase normalised), Vitest coverage thresholds enforced, and a PHP statement-coverage
+   floor of 83% over `app/` enforced by `scripts/coverage-gate.php` from PHPUnit's Clover report
+   (measured 86.15% on 2026-09-03; Collision's own `--coverage` table never rendered on the runner,
+   so the gate reads the file PHPUnit writes); (6) **open,
    owner** — name incident roles / DPO / sign the processor contract; ~~(7)~~ **DONE** — labelled
    Login and Admission forms, axe-clean. Runbook/README wording about CI updated in the same
    follow-through.

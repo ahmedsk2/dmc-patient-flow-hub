@@ -180,9 +180,10 @@ jobs:
         run: php artisan test --exclude-group pdf --coverage-clover coverage/clover.xml
 
       - name: PHP coverage floor (TST-02) — statements over app/
-        # Floor set on 2026-09-03 below the first measured value; raise it as coverage grows, never
-        # lower it to make a build pass (a reason in the PR if it must move down).
-        run: php scripts/coverage-gate.php coverage/clover.xml 60
+        # Measured 86.15% (5338/6196 statements) on 2026-09-03; floor sits three points under it.
+        # Raise it as coverage grows, never lower it to make a build pass (a reason in the PR if it
+        # must move down).
+        run: php scripts/coverage-gate.php coverage/clover.xml 83
 
       - name: Test suite — pass 2 (pdf group, isolated process)
         # dompdf's native font-compression state accumulates across tests and segfaults PHP
