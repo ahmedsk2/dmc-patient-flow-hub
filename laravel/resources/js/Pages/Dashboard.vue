@@ -9,9 +9,11 @@ import Sparkline from '@/Components/Sparkline.vue';
 import { useChartTheme } from '@/composables/useChartTheme';
 import { useReducedMotion, chartAnimations } from '@/composables/useReducedMotion';
 import { locTone, deltaChipClass, formatDate } from '@/lib/ui.js';
+import { barOptions, groupedBarData, barData, doughnutOptions, doughnutData, areaOptions as buildAreaOptions, areaData as buildAreaData } from '@/lib/chartConfig';
+import { areaGradient, centerTotalPlugin } from '@/lib/chartjs';
 
 // theme-aware chart colors (grid/axis read CSS tokens; donut gaps match the card)
-const { gridColor, axisColor, strokeColor, series } = useChartTheme();
+const { gridColor, axisColor, strokeColor, inkColor, series } = useChartTheme();
 // prefers-reduced-motion → every chart's draw animation is gated through chartAnimations(reduced)
 const { reduced } = useReducedMotion();
 
@@ -209,105 +211,91 @@ const occUnits = computed(() => [
 // warning/critical as fractions of capacity — the OccupancyTracker design defaults, kept explicit here.
 const occThresholds = { warning: 0.85, critical: 0.95 };
 
-// PNG-export-only toolbar (no zoom/pan clutter) — applied to every chart on this page.
-const dlToolbar = { show: true, tools: { download: true, selection: false, zoom: false, zoomin: false, zoomout: false, pan: false, reset: false } };
+// hex '#rrggbb' → 'rgba(r,g,b,alpha)', so the area-fill gradient stays theme-reactive (the series
+// tokens flip on dark mode) instead of a hardcoded rgba literal going stale against the palette.
+const hexToRgba = (hex, alpha) => {
+    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
+    if (!m) return `rgba(0,0,0,${alpha})`;
+    const [r, g, b] = m.slice(1).map((h) => parseInt(h, 16));
+    return `rgba(${r},${g},${b},${alpha})`;
+};
 
-// direct end-of-line labels for the trend area (replaces the top legend): a pill at each series'
-// last point. Null-safe when there are no labels (empty period).
-const areaAnnotations = computed(() => {
-    const labels = props.trend.labels;
-    if (!labels.length) return {};
-    const lastX = new Date(labels[labels.length - 1]).getTime();
-    const end = (data, text, color) => ({
-        x: lastX, y: data[data.length - 1] ?? 0,
-        marker: { size: 0 },
-        label: { text, borderWidth: 0, offsetY: -6, textAnchor: 'end',
-            style: { color: '#fff', background: color, fontWeight: 700, fontSize: '11px', padding: { left: 6, right: 6, top: 2, bottom: 2 } } },
-    });
-    return { points: [
-        end(props.trend.admissions, 'Admissions', series.value.primary),
-        end(props.trend.discharges, 'Discharges', series.value.muted),
-    ] };
-});
-const areaOptions = computed(() => ({
-    chart: { type: 'area', toolbar: dlToolbar, fontFamily: 'inherit', animations: chartAnimations(reduced) },
-    colors: [series.value.primary, series.value.muted],
-    dataLabels: { enabled: false },
-    stroke: { curve: 'smooth', width: 2.5 },
-    fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 90] } },
-    grid: { borderColor: gridColor.value, strokeDashArray: 4, padding: { left: 8, right: 64 } },   // right pad = room for the end-labels
-    xaxis: { categories: props.trend.labels, type: 'datetime', labels: { style: { colors: axisColor.value }, datetimeFormatter: { day: 'dd MMM' } }, axisBorder: { show: false }, axisTicks: { show: false }, tickAmount: 6 },
-    yaxis: { labels: { style: { colors: axisColor.value } } },
-    legend: { show: false },   // direct-labelled at each line's end instead (+ ChartFigure caption/table)
-    annotations: areaAnnotations.value,
-    tooltip: { x: { format: 'ddd, dd MMM' } },
+// trend area — smooth filled line, gradient fill top→bottom per series (Chart.js has no
+// ApexCharts-style end-of-line annotation labels, so the two series now identify themselves via
+// the legend-off + ChartFigure's caption/table, same as every other chart on this page).
+const areaOptions = computed(() => buildAreaOptions({ gridColor: gridColor.value, axisColor: axisColor.value, animation: chartAnimations(reduced) , legend: { position: 'top', align: 'end' } }));
+const areaData = computed(() => ({
+    labels: props.trend.labels,
+    ...buildAreaData([
+        { name: 'Admissions', data: props.trend.admissions, border: series.value.primary,
+            background: (c) => areaGradient(c, hexToRgba(series.value.primary, 0.35), hexToRgba(series.value.primary, 0.02)) },
+        { name: 'Discharges', data: props.trend.discharges, border: series.value.muted,
+            background: (c) => areaGradient(c, hexToRgba(series.value.muted, 0.35), hexToRgba(series.value.muted, 0.02)) },
+    ]),
 }));
-const areaSeries = computed(() => [
-    { name: 'Admissions', data: props.trend.admissions },
-    { name: 'Discharges', data: props.trend.discharges },
-]);
 
-const colOptions = (cats, colors) => ({
-    chart: { type: 'bar', toolbar: dlToolbar, fontFamily: 'inherit', stacked: false, animations: chartAnimations(reduced) },
-    colors, plotOptions: { bar: { borderRadius: 6, columnWidth: '55%' } },
-    dataLabels: { enabled: false }, grid: { borderColor: gridColor.value, strokeDashArray: 4 },
-    xaxis: { categories: cats, labels: { style: { colors: axisColor.value } }, axisBorder: { show: false }, axisTicks: { show: false } },
-    yaxis: { labels: { style: { colors: axisColor.value } } },
-    legend: { position: 'top', horizontalAlign: 'right', fontWeight: 600, labels: { colors: axisColor.value } },
-});
-const consultsSeries = computed(() => [{ name: 'New', data: props.consults.new }, { name: 'Signed off', data: props.consults.signed }]);
-const losSeries = computed(() => [{ name: 'Patients', data: props.los.data }]);
-// Reactive option getters (were inline colOptions() calls in the template, which never re-themed on
-// dark-mode flip because the template didn't track axisColor/series). As computeds they update.
-const consultsOptions = computed(() => colOptions(props.consults.labels, [series.value.primary, series.value.accent]));
-const losOptions = computed(() => colOptions(props.los.labels, [series.value.deep]));
+// shared bar-chart options: `legend` false (single-series los) or a top-right legend object
+// (2-series consults/act24). `chartAnimations(reduced)` gates the draw animation.
+const colOptions = (legend = false) => barOptions({ gridColor: gridColor.value, axisColor: axisColor.value, animation: chartAnimations(reduced), legend });
+const consultsOptions = computed(() => colOptions({ position: 'top', align: 'end' }));
+const losOptions = computed(() => colOptions(false));
+const consultsData = computed(() => ({
+    labels: props.consults.labels,
+    ...groupedBarData([{ name: 'New', data: props.consults.new }, { name: 'Signed off', data: props.consults.signed }], [series.value.primary, series.value.accent]),
+}));
+const losData = computed(() => ({ labels: props.los.labels, ...barData('Patients', props.los.data, series.value.deep) }));
 
-// Both donuts are DIRECT-LABELLED on the slice (dataLabels: % for the mix, raw count for the
-// consult pair) and keep only a MINIMAL bottom legend for slice IDENTITY. The legend is not removed
-// outright because a value-only slice label doesn't say WHICH slice, and a tiny slice (e.g. a small
-// long-term segment) drops its on-slice label below ApexCharts' min-angle threshold — the compact
-// legend is the reliable identifier. `chartAnimations(reduced)` gates the draw animation.
-const donutLegend = { position: 'bottom', fontSize: '12px', fontWeight: 600, markers: { size: 7 }, itemMargin: { horizontal: 8, vertical: 0 } };
+// Both donuts are DIRECT-LABELLED on the slice (% for the mix, raw count for the consult pair) and
+// keep only a MINIMAL bottom legend for slice IDENTITY (doughnutOptions' default legend). A
+// value-only slice label doesn't say WHICH slice, and a tiny slice (e.g. a small long-term segment)
+// can drop its on-slice label — the compact legend is the reliable identifier.
 const donutOptions = computed(() => ({
-    chart: { type: 'donut', toolbar: dlToolbar, fontFamily: 'inherit', animations: chartAnimations(reduced), events: {
-        // drill-through (Item 3): the long-term slice → the long-term board view. Hospitalist /
-        // subspecialty slices map to a per-admission field the board can't filter coarsely yet, so
-        // only long-term drills for now (consistent with the donut's own definition).
-        dataPointSelection: (_e, _c, config) => {
-            if (['hospitalist', 'subspecialty', 'longterm'][config.dataPointIndex] === 'longterm') drillTo({ view: 'longterm' });
-        },
-    } },
-    colors: [series.value.primary, series.value.accent, series.value.deep],
-    labels: ['Hospitalist', 'Sub-specialty', 'Long-term'],
-    legend: { ...donutLegend, labels: { colors: axisColor.value } },
-    dataLabels: { enabled: true, formatter: (v) => Math.round(v) + '%' },
-    stroke: { width: 2, colors: [strokeColor.value] },
-    plotOptions: { pie: { donut: { size: '70%', labels: { show: true, total: { show: true, label: 'Census', color: axisColor.value, formatter: (w) => w.globals.seriesTotals.reduce((a, b) => a + b, 0) } } } } },
+    ...doughnutOptions({
+        axisColor: axisColor.value, animation: chartAnimations(reduced),
+        datalabel: { color: strokeColor.value, formatter: (v, ctx) => {
+            const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + (b || 0), 0);
+            return total ? Math.round(v / total * 100) + '%' : '0%';
+        } },
+    }),
+    // drill-through (Item 3): the long-term slice → the long-term board view. Hospitalist /
+    // subspecialty slices map to a per-admission field the board can't filter coarsely yet, so
+    // only long-term drills for now (consistent with the donut's own definition).
+    onClick: (_e, elements) => {
+        const i = elements[0]?.index;
+        if (i !== undefined && ['hospitalist', 'subspecialty', 'longterm'][i] === 'longterm') drillTo({ view: 'longterm' });
+    },
 }));
-const donutSeries = computed(() => [props.mix.hospitalist, props.mix.subspecialty, props.mix.longterm]);
+const donutData = computed(() => ({
+    labels: ['Hospitalist', 'Sub-specialty', 'Long-term'],
+    ...doughnutData([props.mix.hospitalist, props.mix.subspecialty, props.mix.longterm], [series.value.primary, series.value.accent, series.value.deep], strokeColor.value),
+}));
+// centre-hole total (the old ApexCharts donut.labels.total) — a per-chart plugin instance, not
+// global, so only the census donut shows it.
+const donutPlugins = computed(() => [centerTotalPlugin({ value: props.donutTotal, label: 'Census', valueColor: inkColor.value, labelColor: axisColor.value })]);
 
 // consultation donut — legacy dashboard/1.php pair: [signed off today or yesterday, active] (J2-5).
 // W0: the slice used to be captioned 24h while the query spanned today + yesterday. signoff_date is
 // a date, not a timestamp, so the honest name is the one below.
-const consultDonutOptions = computed(() => ({
-    chart: { type: 'donut', toolbar: dlToolbar, fontFamily: 'inherit', animations: chartAnimations(reduced) },
-    colors: [series.value.accent, series.value.primary],
-    labels: ['Signed off (today + yesterday)', 'Active'],
-    legend: { ...donutLegend, labels: { colors: axisColor.value } },
-    dataLabels: { enabled: true, formatter: (v, o) => o.w.globals.series[o.seriesIndex] },
-    stroke: { width: 2, colors: [strokeColor.value] },
-    plotOptions: { pie: { donut: { size: '70%' } } },
+const consultDonutOptions = computed(() => doughnutOptions({
+    axisColor: axisColor.value, animation: chartAnimations(reduced),
+    datalabel: { color: strokeColor.value, formatter: (v) => v },
 }));
-const consultDonutSeries = computed(() => [props.consultDonut.signedTodayOrYesterday, props.consultDonut.active]);
+const consultDonutData = computed(() => ({
+    labels: ['Signed off (today + yesterday)', 'Active'],
+    ...doughnutData([props.consultDonut.signedTodayOrYesterday, props.consultDonut.active], [series.value.accent, series.value.primary], strokeColor.value),
+}));
 
 const consultantMax = computed(() => Math.max(1, ...props.perConsultant.map((c) => c.c)));
 
 // per-consultant activity since yesterday (grouped bars)
-const act24Options = computed(() => colOptions(props.activity24h.map((r) => r.name), [series.value.info, series.value.accent]));
-const act24Series = computed(() => [
-    { name: 'Admissions', data: props.activity24h.map((r) => r.admissions) },
-    { name: 'Discharges', data: props.activity24h.map((r) => r.discharges) },
-]);
+const act24Options = computed(() => colOptions({ position: 'top', align: 'end' }));
+const act24Data = computed(() => ({
+    labels: props.activity24h.map((r) => r.name),
+    ...groupedBarData([
+        { name: 'Admissions', data: props.activity24h.map((r) => r.admissions) },
+        { name: 'Discharges', data: props.activity24h.map((r) => r.discharges) },
+    ], [series.value.info, series.value.accent]),
+}));
 
 // YTD counter strip
 const ytdCards = computed(() => [
@@ -529,7 +517,7 @@ onUnmounted(() => clearInterval(autoRefresh));
                     <span class="rounded-full bg-ink-50 px-3 py-1 text-xs font-semibold text-ink-500">Last 30 days</span>
                 </div>
                 <ChartFigure title="Admissions vs Discharges" caption="Daily non-ICU admissions versus discharges over the last 30 days; each line is labelled at its end." :columns="['Day', 'Admissions', 'Discharges']" :rows="trendRows">
-                    <apexchart role="img" v-if="hasTrend" type="area" height="300" :options="areaOptions" :series="areaSeries" aria-label="Area chart: admissions versus discharges over the last 30 days" />
+                    <ChartCanvas role="img" v-if="hasTrend" type="line" :height="300" :data="areaData" :options="areaOptions" aria-label="Area chart: admissions versus discharges over the last 30 days" />
                     <p v-else class="grid h-[300px] place-items-center text-sm text-ink-400">No data for this period.</p>
                 </ChartFigure>
             </div>
@@ -544,7 +532,7 @@ onUnmounted(() => clearInterval(autoRefresh));
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h2 class="mb-2 font-semibold text-ink-700">Consultations</h2>
                 <ChartFigure title="Consultations" caption="New consultations versus sign-offs over the last six months." :columns="['Month', 'New', 'Signed off']" :rows="consultsRows">
-                    <apexchart role="img" v-if="hasConsults" type="bar" height="260" :options="consultsOptions" :series="consultsSeries" aria-label="Bar chart: consultations received and signed off" />
+                    <ChartCanvas role="img" v-if="hasConsults" type="bar" :height="260" :data="consultsData" :options="consultsOptions" aria-label="Bar chart: consultations received and signed off" />
                     <p v-else class="grid h-[260px] place-items-center text-sm text-ink-400">No data for this period.</p>
                 </ChartFigure>
             </div>
@@ -552,14 +540,14 @@ onUnmounted(() => clearInterval(autoRefresh));
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h2 class="mb-2 font-semibold text-ink-700">Consultations <span class="font-normal text-ink-400">(sign-offs today + yesterday vs active)</span></h2>
                 <ChartFigure title="Consultations — sign-offs today and yesterday vs active" caption="Consultations signed off today or yesterday, versus those still awaiting sign-off. Sign-off is recorded as a calendar date with no time of day, so this counts two calendar days rather than a rolling 24 hours." :columns="['Status', 'Count']" :rows="consultDonutRows">
-                    <apexchart role="img" v-if="hasConsultDonut" type="donut" height="260" :options="consultDonutOptions" :series="consultDonutSeries" :aria-label="`Donut chart: ${consultDonut.signedTodayOrYesterday} consultations signed off today or yesterday, ${consultDonut.active} active`" />
+                    <ChartCanvas role="img" v-if="hasConsultDonut" type="doughnut" :height="260" :data="consultDonutData" :options="consultDonutOptions" :aria-label="`Donut chart: ${consultDonut.signedTodayOrYesterday} consultations signed off today or yesterday, ${consultDonut.active} active`" />
                     <p v-else class="grid h-[260px] place-items-center text-sm text-ink-400">No data for this period.</p>
                 </ChartFigure>
             </div>
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h2 class="mb-2 font-semibold text-ink-700">Length of Stay <span class="font-normal text-ink-400">(this year)</span></h2>
                 <ChartFigure title="Length of Stay" caption="Distribution of length of stay (days) for non-ICU discharges this year." :columns="['LOS (days)', 'Patients']" :rows="losRows">
-                    <apexchart role="img" v-if="hasLos" type="bar" height="260" :options="losOptions" :series="losSeries" aria-label="Bar chart: length-of-stay distribution this year" />
+                    <ChartCanvas role="img" v-if="hasLos" type="bar" :height="260" :data="losData" :options="losOptions" aria-label="Bar chart: length-of-stay distribution this year" />
                     <p v-else class="grid h-[260px] place-items-center text-sm text-ink-400">No data for this period.</p>
                 </ChartFigure>
             </div>
@@ -568,7 +556,7 @@ onUnmounted(() => clearInterval(autoRefresh));
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h2 class="mb-2 font-semibold text-ink-700">Current patients: <span class="nums">{{ donutTotal }}</span> <span class="font-normal text-ink-400">(incl. {{ donutTb }} TB)</span></h2>
                 <ChartFigure title="Current patients by service" caption="Assigned non-ICU census by service line (Hospitalist, Sub-specialty, Long-term)." :columns="['Service', 'Patients']" :rows="mixRows">
-                    <apexchart role="img" v-if="hasMix" type="donut" height="260" :options="donutOptions" :series="donutSeries" :aria-label="`Donut chart: assigned non-ICU census by service — ${donutTotal} patients including ${donutTb} TB`" />
+                    <ChartCanvas role="img" v-if="hasMix" type="doughnut" :height="260" :data="donutData" :options="donutOptions" :plugins="donutPlugins" :aria-label="`Donut chart: assigned non-ICU census by service — ${donutTotal} patients including ${donutTb} TB`" />
                     <p v-else class="grid h-[260px] place-items-center text-sm text-ink-400">No data for this period.</p>
                 </ChartFigure>
             </div>
@@ -644,7 +632,7 @@ onUnmounted(() => clearInterval(autoRefresh));
         <div class="mt-5 rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
             <h2 class="mb-2 font-semibold text-ink-700">Admissions / Discharges per consultant <span class="font-normal text-ink-400">(since yesterday)</span></h2>
             <ChartFigure title="Admissions / Discharges per consultant" caption="Per-consultant admissions and discharges since yesterday." :columns="['Consultant', 'Admissions', 'Discharges']" :rows="act24Rows">
-                <apexchart role="img" v-if="hasAct24" type="bar" height="280" :options="act24Options" :series="act24Series" aria-label="Grouped bar chart: admissions and discharges per consultant since yesterday" />
+                <ChartCanvas role="img" v-if="hasAct24" type="bar" :height="280" :data="act24Data" :options="act24Options" aria-label="Grouped bar chart: admissions and discharges per consultant since yesterday" />
                 <p v-else class="grid h-[280px] place-items-center text-sm text-ink-400">No data for this period.</p>
             </ChartFigure>
         </div>

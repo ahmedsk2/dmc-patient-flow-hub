@@ -1,7 +1,7 @@
 import { createApp, h } from 'vue';
 import { createInertiaApp, router } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
-import VueApexCharts from 'vue3-apexcharts';
+import ChartCanvas from '@/Components/ChartCanvas.vue';
 
 // Wave 2, Item 10: onboarding tour. driver.js is bundled (self-hosted — no CDN, PHI-safe). Its base
 // CSS is themed to EHC tokens in resources/css/app.css (.dark + prefers-reduced-motion blocks).
@@ -36,7 +36,7 @@ createInertiaApp({
     setup({ el, App, props, plugin }) {
         createApp({ render: () => h(App, props) })
             .use(plugin)
-            .use(VueApexCharts)
+            .component('ChartCanvas', ChartCanvas)
             .mount(el);
     },
     progress: {

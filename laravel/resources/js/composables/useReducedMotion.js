@@ -1,10 +1,10 @@
 import { ref, onMounted, onUnmounted, unref } from 'vue';
 
 // prefers-reduced-motion, reactive. The global CSS block in app.css already neutralizes CSS
-// transitions/animations for reduced-motion users, but ApexCharts runs its OWN JS-driven draw
+// transitions/animations for reduced-motion users, but Chart.js runs its OWN JS-driven draw
 // animation (enabled by default) that CSS can't reach — so a chart still animates in on load unless
-// its `animations` option is turned off. This composable exposes that flag; chartAnimations() maps
-// it to the option object the charts feed ApexCharts.
+// its `animation` option is turned off. This composable exposes that flag; chartAnimations() maps
+// it to the value a Chart.js `options.animation` expects.
 //
 // SSR-safe: with no window/matchMedia (server render, or jsdom without the stub) we report
 // `reduced = false` (motion allowed) and wire no listener, so importing never throws.
@@ -22,11 +22,12 @@ export function useReducedMotion() {
     return { reduced };
 }
 
-// Maps the reduced-motion flag to an ApexCharts `animations` option. Accepts the ref or a plain
-// boolean (unref handles both) so it reads as `chartAnimations(reduced)` inside an option computed.
-// The enabled branch mirrors the easeinout/600 the dashboard charts already used.
+// Maps the reduced-motion flag to a Chart.js `options.animation` value. Accepts the ref or a
+// plain boolean (unref handles both) so it reads as `animation: chartAnimations(reduced)` inside an
+// option computed. Reduced → `false` (Chart.js draws instantly); otherwise a 600ms ease that
+// mirrors the easeinout/600 the dashboards used under ApexCharts.
 export function chartAnimations(reduced) {
     return unref(reduced)
-        ? { enabled: false }
-        : { enabled: true, easing: 'easeinout', speed: 600 };
+        ? false
+        : { duration: 600, easing: 'easeInOutQuart' };
 }

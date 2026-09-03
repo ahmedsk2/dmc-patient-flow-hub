@@ -5,6 +5,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import ChartFigure from '@/Components/ChartFigure.vue';
 import { useChartTheme } from '@/composables/useChartTheme';
 import { useReducedMotion, chartAnimations } from '@/composables/useReducedMotion';
+import { barOptions, barData } from '@/lib/chartConfig';
 
 // theme-aware chart colours (grid/axis read CSS tokens) — never local hex.
 const { gridColor, axisColor, series } = useChartTheme();
@@ -57,31 +58,19 @@ const ageingRows = computed(() => [
     ['Date unknown', props.ageing.unknown],
 ]);
 const hasAgeing = computed(() => ageingRows.value.some(([, v]) => v > 0));
-const ageingOptions = computed(() => ({
-    chart: { type: 'bar', toolbar: { show: false }, fontFamily: 'inherit', animations: chartAnimations(reduced) },
-    colors: [series.value.primary],
-    plotOptions: { bar: { borderRadius: 6, columnWidth: '55%' } },
-    dataLabels: { enabled: false },
-    grid: { borderColor: gridColor.value, strokeDashArray: 4 },
-    xaxis: { categories: ageingRows.value.map(([label]) => label), labels: { style: { colors: axisColor.value } }, axisBorder: { show: false }, axisTicks: { show: false } },
-    yaxis: { labels: { style: { colors: axisColor.value } } },
-    legend: { show: false },
+const ageingData = computed(() => ({
+    labels: ageingRows.value.map(([label]) => label),
+    ...barData('Open consults', ageingRows.value.map(([, v]) => v), series.value.primary),
 }));
-const ageingSeries = computed(() => [{ name: 'Open consults', data: ageingRows.value.map(([, v]) => v) }]);
+const ageingOptions = computed(() => barOptions({ gridColor: gridColor.value, axisColor: axisColor.value, animation: chartAnimations(reduced) }));
 
 const hasTrend = computed(() => (props.trend.labels || []).length > 0
     && (props.trend.data || []).some((v) => v > 0));
-const trendOptions = computed(() => ({
-    chart: { type: 'bar', toolbar: { show: false }, fontFamily: 'inherit', animations: chartAnimations(reduced) },
-    colors: [series.value.deep],
-    plotOptions: { bar: { borderRadius: 6, columnWidth: '55%' } },
-    dataLabels: { enabled: false },
-    grid: { borderColor: gridColor.value, strokeDashArray: 4 },
-    xaxis: { categories: props.trend.labels, labels: { style: { colors: axisColor.value } }, axisBorder: { show: false }, axisTicks: { show: false } },
-    yaxis: { labels: { style: { colors: axisColor.value } } },
-    legend: { show: false },
+const trendData = computed(() => ({
+    labels: props.trend.labels,
+    ...barData('Consultations', props.trend.data, series.value.deep),
 }));
-const trendSeries = computed(() => [{ name: 'Consultations', data: props.trend.data }]);
+const trendOptions = computed(() => barOptions({ gridColor: gridColor.value, axisColor: axisColor.value, animation: chartAnimations(reduced) }));
 const trendRows = computed(() => (props.trend.labels || []).map((m, i) => [m, props.trend.data[i] ?? 0]));
 
 // A NULL median means "no qualifying rows yet" — rendering 0.0 would read as instant turnaround.
@@ -173,7 +162,7 @@ const loadMax = computed(() => Math.max(1, ...(props.perConsultant || []).map((r
                 <ChartFigure title="Ageing of open consultations"
                              caption="Open consultations grouped by how long they have been open, measured from the request time or, for historical rows, the consultation date."
                              :columns="['Age', 'Open consults']" :rows="ageingRows">
-                    <apexchart v-if="hasAgeing" role="img" type="bar" height="260" :options="ageingOptions" :series="ageingSeries" aria-label="Bar chart: open consultations by age" />
+                    <ChartCanvas v-if="hasAgeing" role="img" type="bar" :height="260" :data="ageingData" :options="ageingOptions" aria-label="Bar chart: open consultations by age" />
                     <p v-else class="grid h-[260px] place-items-center text-sm text-ink-400">No open consultations.</p>
                 </ChartFigure>
                 <!-- VISIBLE, not just the chart's sr-only caption: this is the honesty statement that a
@@ -191,7 +180,7 @@ const loadMax = computed(() => Math.max(1, ...(props.perConsultant || []).map((r
                 <ChartFigure title="Consultation volume"
                              caption="Consultations received per month over the last six months."
                              :columns="['Month', 'Consultations']" :rows="trendRows">
-                    <apexchart v-if="hasTrend" role="img" type="bar" height="260" :options="trendOptions" :series="trendSeries" aria-label="Bar chart: consultations per month over the last six months" />
+                    <ChartCanvas v-if="hasTrend" role="img" type="bar" :height="260" :data="trendData" :options="trendOptions" aria-label="Bar chart: consultations per month over the last six months" />
                     <p v-else class="grid h-[260px] place-items-center text-sm text-ink-400">No data for this period.</p>
                 </ChartFigure>
             </div>

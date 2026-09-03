@@ -1,6 +1,6 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 
-// Theme-aware ApexCharts colors. Charts hard-coded light-only grid/axis/stroke hex values
+// Theme-aware chart colors (engine-agnostic hex/token values; consumed by Chart.js options). Charts hard-coded light-only grid/axis/stroke hex values
 // that vanished (white-on-white) in dark mode. These refs read the CSS theme tokens
 // (--chart-grid / --chart-axis / --chart-stroke) and refresh whenever the .dark class flips
 // — the AppLayout toggle dispatches a `dmc-theme-change` event on document.

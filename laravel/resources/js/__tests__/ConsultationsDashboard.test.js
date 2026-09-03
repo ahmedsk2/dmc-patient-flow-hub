@@ -42,7 +42,7 @@ const mountAs = (user, over = {}) => {
     authUser = user;
     return shallowMount(ConsultationsDashboard, {
         props: baseProps(over),
-        global: { renderStubDefaultSlot: true, stubs: { apexchart: true, teleport: true } },
+        global: { renderStubDefaultSlot: true, stubs: { ChartCanvas: true, teleport: true } },
     });
 };
 

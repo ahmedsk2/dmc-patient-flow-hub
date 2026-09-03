@@ -60,18 +60,18 @@ describe('useReducedMotion', () => {
 });
 
 describe('chartAnimations', () => {
-    // The whole point: ApexCharts animates its draw by default — reduced motion must turn it OFF.
-    it('disables the ApexCharts draw animation when reduced', () => {
-        expect(chartAnimations(true)).toEqual({ enabled: false });
+    // The whole point: Chart.js animates its draw by default — reduced motion must turn it OFF (migrated off ApexCharts' {enabled} shape to a Chart.js options.animation value 2026-09-03).
+    it('disables the Chart.js draw animation when reduced', () => {
+        expect(chartAnimations(true)).toBe(false);
     });
 
     it('enables the branded easeinout/600 animation when motion is allowed', () => {
-        expect(chartAnimations(false)).toEqual({ enabled: true, easing: 'easeinout', speed: 600 });
+        expect(chartAnimations(false)).toEqual({ duration: 600, easing: 'easeInOutQuart' });
     });
 
     // Reads as chartAnimations(reduced) with the composable's ref passed straight through.
     it('unwraps a ref so it toggles enabled either way', () => {
-        expect(chartAnimations(ref(true)).enabled).toBe(false);
-        expect(chartAnimations(ref(false)).enabled).toBe(true);
+        expect(chartAnimations(ref(true))).toBe(false);
+        expect(chartAnimations(ref(false))).toEqual({ duration: 600, easing: 'easeInOutQuart' });
     });
 });

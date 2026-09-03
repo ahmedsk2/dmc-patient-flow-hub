@@ -56,10 +56,15 @@ const baseProps = (over = {}) => ({
     ...over,
 });
 
+// A declared-props stub (not the generic `true` auto-stub) so `.props('data')` returns the real
+// object the page built — the auto-stub only reflects primitives via stringified DOM attributes,
+// which loses the `{labels, datasets}` shape a plain `true` stub would flatten to "[object Object]".
+const ChartCanvasStub = { name: 'ChartCanvas', props: ['type', 'data', 'options', 'plugins', 'height'], template: '<canvas />' };
+
 const mountAs = (user, over = {}) => {
     authUser = user;
     // renderStubDefaultSlot so the AppLayout stub renders the page body (the band lives there).
-    return shallowMount(Dashboard, { props: baseProps(over), global: { renderStubDefaultSlot: true, stubs: { apexchart: true, teleport: true } } });
+    return shallowMount(Dashboard, { props: baseProps(over), global: { renderStubDefaultSlot: true, stubs: { ChartCanvas: ChartCanvasStub, teleport: true } } });
 };
 
 describe('Dashboard — admin landing band (Wave 1, Item 7)', () => {
@@ -263,15 +268,15 @@ describe('Dashboard — consultation donut relabel (W0 Task 2)', () => {
         ]);
     });
 
-    it('renders the apexchart with a series/aria-label built from signedTodayOrYesterday, not the old signed24h key', () => {
+    it('renders the chart with a data/aria-label built from signedTodayOrYesterday, not the old signed24h key', () => {
         const w = mountAs({ role: 0, is_admin: true }, {
             consultDonut: { signedTodayOrYesterday: 3, active: 4 },
         });
-        const chart = w.find('apexchart-stub');
+        const chart = findDonutFigure(w).findComponent({ name: 'ChartCanvas' });
         expect(chart.exists()).toBe(true);
-        // The stub reflects the `:series` array prop as its stringified DOM attribute — proves
-        // consultDonutSeries itself reads signedTodayOrYesterday, not just the template aria-label.
-        expect(chart.attributes('series')).toBe('3,4');
+        // The stub keeps the `:data` object prop accessible as a real component prop — proves
+        // consultDonutData itself reads signedTodayOrYesterday, not just the template aria-label.
+        expect(chart.props('data').datasets[0].data).toEqual([3, 4]);
         expect(chart.attributes('aria-label')).toBe(
             'Donut chart: 3 consultations signed off today or yesterday, 4 active',
         );
@@ -284,7 +289,7 @@ describe('Dashboard — consultation donut relabel (W0 Task 2)', () => {
         });
         const figure = findDonutFigure(w);
         expect(figure.props('rows')).toEqual([]);
-        expect(w.find('apexchart-stub').exists()).toBe(false);
+        expect(w.find('chart-canvas-stub').exists()).toBe(false);
         expect(w.text()).toContain('No data for this period.');
     });
 
@@ -293,7 +298,7 @@ describe('Dashboard — consultation donut relabel (W0 Task 2)', () => {
             consultDonut: { signedTodayOrYesterday: 0, active: 0 },
         });
         expect(findDonutFigure(w).props('rows')).toEqual([]);
-        expect(w.find('apexchart-stub').exists()).toBe(false);
+        expect(w.find('chart-canvas-stub').exists()).toBe(false);
     });
 });
 
