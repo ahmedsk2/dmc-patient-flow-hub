@@ -51,7 +51,7 @@ describe('useHandover', () => {
     });
 
     it('fetchHandover GETs the handover URL and returns parsed JSON', async () => {
-        global.fetch.mockResolvedValue({ json: () => Promise.resolve({ body: 'hi', today: true }) });
+        global.fetch.mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({ body: 'hi', today: true }) });
         const { fetchHandover } = useHandover();
         const data = await fetchHandover(7);
         expect(global.fetch.mock.calls[0][0]).toBe('/admissions/7/handover');
@@ -59,11 +59,25 @@ describe('useHandover', () => {
     });
 
     it('preflight GETs the consultant preflight URL and returns parsed rows', async () => {
-        global.fetch.mockResolvedValue({ json: () => Promise.resolve([{ id: 1 }]) });
+        global.fetch.mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve([{ id: 1 }]) });
         const { preflight } = useHandover();
         const rows = await preflight(9);
         expect(global.fetch.mock.calls[0][0]).toBe('/handovers/preflight?from_consultant_id=9');
         expect(rows).toEqual([{ id: 1 }]);
+    });
+
+    // TST-10: readers fail with a readable Error instead of an opaque TypeError from deep inside
+    // fetch()/json(), so callers (or the global unhandledrejection net) can act on it.
+    it('fetchHandover rejects with a readable error on a non-ok response', async () => {
+        global.fetch.mockResolvedValue({ ok: false, status: 500, json: () => Promise.resolve({}) });
+        const { fetchHandover } = useHandover();
+        await expect(fetchHandover(7)).rejects.toThrow(/Request failed \(500\)/);
+    });
+
+    it('preflight rejects with a network error when fetch itself fails', async () => {
+        global.fetch.mockRejectedValue(new TypeError('Failed to fetch'));
+        const { preflight } = useHandover();
+        await expect(preflight(9)).rejects.toThrow(/Network error/);
     });
 
     it('saving toggles true during the request and back to false after', async () => {

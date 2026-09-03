@@ -436,10 +436,14 @@ class RegistryController extends Controller
 
     /* ---------- Exports (mode-aware, de-identified) ---------- */
 
-    /** Legacy export filename — downstream spreadsheets key on Export-DD-MM-YYYY (C6). */
+    /**
+     * Legacy export filename — downstream spreadsheets key on Export-DD-MM-YYYY (C6).
+     * Classification: row-level patient data export — SECRET- filename prefix
+     * (DATA-CLASSIFICATION.md §4/§6).
+     */
     private function exportFilename(string $ext): string
     {
-        return 'Export-'.now()->format('d-m-Y').'.'.$ext;
+        return 'SECRET-Export-'.now()->format('d-m-Y').'.'.$ext;
     }
 
     /** Row count of the CURRENT export mode's query — one cheap COUNT for the PHI-read audit detail. */

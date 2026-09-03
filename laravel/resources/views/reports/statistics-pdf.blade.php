@@ -30,9 +30,13 @@
     table.data tr.even td { background: #f7fafa; }
     .panel { border: 2px solid #9aa1a6; background: #f7f8f7; padding: 10px 12px; margin-top: 8px; }
     .foot { margin-top: 14px; border-top: 1px solid #e3eaea; padding-top: 6px; text-align: center; color: #5b6a6e; font-size: 8px; }
+    /* DATA-CLASSIFICATION.md §4/§6: every export carries its level — a running footer on EVERY page */
+    .classification-foot { position: fixed; bottom: 4pt; left: 0; right: 0; text-align: center; font-size: 8pt; color: #9aa1a6; }
 </style>
 </head>
 <body>
+
+<div class="classification-foot">CONFIDENTIAL — Internal use / خاص — للاستخدام الداخلي</div>
 
 {{-- =============== PAGE 1 — HEADLINE KPIs + KPI GRID =============== --}}
 <div class="page">

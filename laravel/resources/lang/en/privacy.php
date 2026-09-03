@@ -26,7 +26,7 @@ return [
         'version' => '0.1-draft',
         'drafted' => '2026-09-03',
         'effective' => '[EFFECTIVE DATE — on approval]',
-        'controller' => '[HOSPITAL LEGAL NAME]',
+        'controller' => 'Dammam Medical Complex, Eastern Health Cluster (Saudi Health Holding Company)',
     ],
 
     'labels' => [
@@ -46,7 +46,7 @@ return [
             'id' => 'about',
             'heading' => '1. About this notice',
             'blocks' => [
-                ['type' => 'p', 'text' => 'This notice explains how [HOSPITAL LEGAL NAME] (“the hospital”, “we”) uses information about you in the DMC Internal Medicine Patient-Flow Hub (“the hub”). The hub is an internal software tool used only by hospital staff of the Internal Medicine unit to coordinate your care while you are admitted under that unit.'],
+                ['type' => 'p', 'text' => 'This notice explains how Dammam Medical Complex, Eastern Health Cluster (Saudi Health Holding Company) (“the hospital”, “we”) uses information about you in the DMC Internal Medicine Patient-Flow Hub (“the hub”). The hub is an internal software tool used only by hospital staff of the Internal Medicine unit to coordinate your care while you are admitted under that unit.'],
                 ['type' => 'p', 'text' => 'The hub is not the hospital’s main medical record (the hospital information system) and does not replace it. It holds only the working information the unit needs to run your admission from day to day. The hospital’s general patient privacy notice [REFERENCE / LINK — PLACEHOLDER] also applies to you; this notice adds the details that are specific to the hub.'],
                 ['type' => 'p', 'text' => 'Patients do not log in to the hub and do not use it directly. This notice is written for you because information about you is processed in it, and because the Personal Data Protection Law of the Kingdom of Saudi Arabia (the “PDPL”) [VERIFY CITATION — Royal Decree M/19 of 1443H, as amended] gives you the right to know how your personal data is used.'],
             ],
@@ -55,7 +55,7 @@ return [
             'id' => 'controller',
             'heading' => '2. Who is responsible for your data',
             'blocks' => [
-                ['type' => 'p', 'text' => 'The controller of your personal data is: [HOSPITAL LEGAL NAME], [HOSPITAL ADDRESS], [COMMERCIAL REGISTRATION / MOH LICENCE NUMBER — PLACEHOLDER].'],
+                ['type' => 'p', 'text' => 'The controller of your personal data is: Dammam Medical Complex, Eastern Health Cluster (Saudi Health Holding Company), [HOSPITAL ADDRESS], [COMMERCIAL REGISTRATION / MOH LICENCE NUMBER — PLACEHOLDER].'],
                 ['type' => 'p', 'text' => 'The hub is operated by the hospital’s Internal Medicine department. Questions about this notice can be sent to the hospital’s Data Protection Officer: [DPO NAME], [DPO EMAIL], [DPO PHONE], [DPO POSTAL ADDRESS].'],
             ],
         ],
@@ -94,7 +94,7 @@ return [
                     'producing statistics about the unit’s activity (for example numbers of admissions, length of stay, readmissions and mortality). These figures are aggregated and used to run and improve the service.',
                 ]],
                 ['type' => 'p', 'text' => 'The hub is not used for marketing, advertising, behavioural analytics, tracking, profiling, automated decision-making or artificial-intelligence features, and your data is never sold, rented or shared for any commercial purpose.'],
-                ['type' => 'p', 'text' => 'Legal basis. Under the PDPL, health data may be processed without your consent where the processing is carried out by a provider of health services and is necessary to provide those services, limited to what the services require and to the staff who need it [VERIFY ARTICLE]. We rely on this basis for the clinical purposes above. We also process some of the data to comply with the hospital’s legal duties to keep medical records and to allow lawful supervision by the competent health authorities [VERIFY ARTICLE] [NEEDS LEGAL CONFIRMATION]. We do not rely on your consent for the core clinical purpose, so withdrawing consent does not apply to it [NEEDS LEGAL CONFIRMATION].'],
+                ['type' => 'p', 'text' => 'Legal basis. The PDPL allows health data to be processed without separate consent only in limited situations. For the clinical purposes above, the hospital relies on processing that is required to deliver your care as a licensed health-care provider — under a law or arrangement that applies to it — together with the additional controls the law sets specifically for health data. The exact legal article is being confirmed by the hospital’s legal advisers and is not stated here as settled [PROPOSED — under legal review]. We also process some data to meet the hospital’s legal duty to keep medical records and to allow lawful supervision by the competent health authorities [PROPOSED] [NEEDS LEGAL CONFIRMATION]. Because we do not rely on your consent for the core clinical purpose, withdrawing consent does not apply to it [NEEDS LEGAL CONFIRMATION].'],
             ],
         ],
         [
@@ -118,7 +118,7 @@ return [
                 ['type' => 'table', 'head' => ['Provider', 'What they do', 'Where', 'Patient data?'], 'rows' => [
                     ['Oracle Cloud Infrastructure (OCI)', 'Hosts the application, its database and its backups.', 'Riyadh region, Saudi Arabia.', 'Yes — encrypted in transit; encryption of stored data is being introduced.'],
                     ['Cloudflare', 'Sits in front of the website to block attacks and to provide the secure (TLS) connection. It sees traffic momentarily as it passes through its edge servers.', 'A non-Saudi provider. The edge servers observed serving the hub are located in the Kingdom [NEEDS LEGAL CONFIRMATION — contractual localisation].', 'In transit only — nothing is stored by Cloudflare for the hub’s purpose.'],
-                    ['Transactional email relay', 'Sends one-time codes, password-reset and username-reminder emails to staff, and a monthly statistics PDF that contains aggregate numbers only.', 'Currently hosted in the United States.', 'No — staff email addresses and aggregate figures only; never patient-level data.'],
+                    ['Transactional email relay — the dmc-im.com mailbox, provided by SiteGround', 'Sends one-time codes, password-reset and username-reminder emails to staff, and a monthly statistics PDF that contains aggregate numbers only.', 'United States.', 'No — staff email addresses and aggregate figures only; never patient-level data.'],
                     ['GitHub', 'Stores the hub’s source code.', 'Outside the Kingdom.', 'No — code only, no patient data.'],
                 ]],
                 ['type' => 'p', 'text' => 'Transfers outside the Kingdom. We do not transfer your patient data outside the Kingdom to store or process it. The only provider outside Saudi Arabia that ever handles traffic containing patient data is the network-security provider above, and only in encrypted transit. Where the PDPL treats this as a transfer or disclosure outside the Kingdom, the hospital applies the safeguards the PDPL and its Data Transfer Regulations require: the transfer must be for a purpose the law permits, limited to the minimum necessary, backed by appropriate safeguards such as standard contractual clauses or binding rules approved by the competent authority (or a destination recognised as offering an adequate level of protection), and preceded by a risk assessment [VERIFY ARTICLE] [NEEDS LEGAL CONFIRMATION]. The hospital is reviewing options to keep this traffic wholly within the Kingdom.'],
@@ -172,7 +172,7 @@ return [
                     'withdraw consent where consent is the legal basis (this does not apply to the core clinical purpose described above) [NEEDS LEGAL CONFIRMATION]; and',
                     'complain to the competent authority (see section 12).',
                 ]],
-                ['type' => 'p', 'text' => 'How to exercise them. Requests are handled by the hospital’s Medical Records / Health Information Management (HIM) office, which holds your full record and can verify your identity: [HIM OFFICE — LOCATION, EMAIL, PHONE, OPENING HOURS]. Please tell them that your request concerns the Internal Medicine Patient-Flow Hub so that the hub’s data is included. We will respond within the time the PDPL Implementing Regulations allow [VERIFY PERIOD], and normally free of charge [VERIFY]. If you cannot act for yourself, your legal guardian or authorised representative may act on your behalf on presenting proof of authority [NEEDS LEGAL CONFIRMATION].'],
+                ['type' => 'p', 'text' => 'How to exercise them. Requests are handled by the hospital’s Medical Records / Health Information Management (HIM) office, which holds your full record and can verify your identity: [HIM OFFICE — LOCATION, EMAIL, PHONE, OPENING HOURS]. Please tell them that your request concerns the Internal Medicine Patient-Flow Hub so that the hub’s data is included. We will respond within the time the PDPL Implementing Regulations allow — 30 days, which may be extended once by up to a further 30 days with notice to you [PROPOSED] — and normally free of charge [VERIFY]. If you cannot act for yourself, your legal guardian or authorised representative may act on your behalf on presenting proof of authority [NEEDS LEGAL CONFIRMATION].'],
             ],
         ],
         [

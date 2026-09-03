@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use Closure;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -18,8 +20,39 @@ class DashboardCache
 {
     public const KEY = 'dashboard.heavy';
 
+    /** Base TTL in seconds; a small random jitter is added so expiries do not line up. */
+    public const TTL = 300;
+
     public static function bust(): void
     {
         Cache::forget(self::KEY);
+    }
+
+    /**
+     * RES-08 — single-flight recompute. On a miss (expiry or a bust from a patient-flow write)
+     * only ONE request recomputes the heavy aggregations; concurrent requests wait briefly on the
+     * lock and then read the fresh value instead of every ward workstation hammering the same
+     * dozen queries at once. The TTL carries jitter for the same reason. Works on the `database`,
+     * `file` and `array` stores (all lock-capable; `cache_locks` exists from the base migration).
+     * If the lock cannot be obtained within the wait, fall through to a plain remember — a stale
+     * or duplicated recompute beats an error page.
+     *
+     * @return array<string, mixed>
+     */
+    public static function remember(Closure $compute): array
+    {
+        $hit = Cache::get(self::KEY);
+        if (is_array($hit)) {
+            return $hit;
+        }
+
+        $ttl = self::TTL + random_int(0, 30);
+        try {
+            return Cache::lock(self::KEY.':lock', 10)->block(5, function () use ($compute, $ttl) {
+                return Cache::remember(self::KEY, $ttl, $compute);
+            });
+        } catch (LockTimeoutException) {
+            return Cache::remember(self::KEY, $ttl, $compute);
+        }
     }
 }

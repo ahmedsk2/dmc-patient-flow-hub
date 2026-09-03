@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\AuditFilterRequest;
 use App\Models\AuditLog;
+use App\Support\Audit;
 use Inertia\Inertia;
 use Inertia\Response;
 use OpenSpout\Common\Entity\Row;
@@ -107,14 +108,38 @@ class AuditController extends Controller
 
     /* ---------- Exports (CSV + XLSX through ONE writeExport, like RegistryController) ---------- */
 
-    /** Legacy export filename convention — Audit-Export-DD-MM-YYYY (RegistryController parity). */
+    /**
+     * Legacy export filename convention — Audit-Export-DD-MM-YYYY (RegistryController parity).
+     * Classification: row-level export of the audit trail (actor identity, IPs, entity ids per
+     * row) — SECRET- filename prefix (DATA-CLASSIFICATION.md §4/§6).
+     */
     private function exportFilename(string $ext): string
     {
-        return 'Audit-Export-'.now()->format('d-m-Y').'.'.$ext;
+        return 'SECRET-Audit-Export-'.now()->format('d-m-Y').'.'.$ext;
+    }
+
+    /**
+     * prod-ready G1: one break-glass audit row per audit-log export request. Exporting the audit
+     * trail itself is a read-of-audit-trail event (the rows carry actor identity, IPs and
+     * PHI-adjacent detail JSON), so it earns its own audit row just like a registry export. The
+     * filters are non-PHI (actor id, action, entity type/id, date range, ip) and logged verbatim —
+     * no redaction needed (unlike RegistryController's free-text search/diagnosis terms).
+     */
+    private function logExport(AuditFilterRequest $request, string $action): void
+    {
+        Audit::log($action, 'audit_log', null, [
+            'filters' => array_filter(
+                $request->only(['actor_id', 'action', 'entity_type', 'entity_id', 'category', 'from', 'to', 'ip']),
+                fn ($v) => $v !== null && $v !== ''
+            ),
+            'row_count' => $this->filtered($request)->count(),
+        ]);
     }
 
     public function export(AuditFilterRequest $request): StreamedResponse
     {
+        $this->logExport($request, 'audit.export.csv');
+
         return response()->streamDownload(function () use ($request) {
             $out = fopen('php://output', 'w');
             $this->writeExport($request, fn (array $row) => fputcsv($out, array_map(self::csvSafe(...), $row)));
@@ -124,6 +149,8 @@ class AuditController extends Controller
 
     public function exportXlsx(AuditFilterRequest $request): BinaryFileResponse
     {
+        $this->logExport($request, 'audit.export.xlsx');
+
         $tmp = tempnam(sys_get_temp_dir(), 'aud').'.xlsx';
         $writer = new XlsxWriter;
         $writer->openToFile($tmp);

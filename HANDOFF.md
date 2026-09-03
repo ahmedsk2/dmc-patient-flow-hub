@@ -6,7 +6,7 @@
 ## The product
 
 - **The shipped product is the Laravel app under [`laravel/`](laravel/).** Stack: Laravel 13 +
-  Inertia 2 + Vue 3 (`<script setup>`) + Tailwind v4 + MySQL 8.4 + **Chart.js 4** (MIT).
+  Inertia 3 + Vue 3 (`<script setup>`) + Tailwind v4 + MySQL 8.4 + **Chart.js 4** (MIT).
 - **Live** at `https://dmc-new.towardpcc.com` (Cloudflare-proxied), deployed via **Coolify** on an
   OCI Riyadh host. This is a **live clinical system with real PHI** (~17k patients, ~37k admissions,
   ~331 users). **Saudi PDPL / SDAIA applies** (in-Kingdom data residency for the Laravel app).
@@ -90,14 +90,30 @@
    verified; ~~(3)~~ **DONE** — SMTP `timeout` 10 s; ~~(4)~~ **DONE** — "today" bound from the app
    clock in place of raw `CURDATE()` (Dashboard / DataQuality / Registry), regression-tested by
    `AppClockDayBoundaryTest` — **never** by pinning the MySQL session time zone (it would shift every
-   `TIMESTAMP` column by three hours); (5) **MOSTLY DONE** — CI on PHP 8.3 / MySQL 8.4, blocking Pint
-   gate (codebase normalised), Vitest coverage thresholds enforced; **open:** a PHP coverage floor
-   (Collision printed no table with pcov on PHPUnit 12 — diagnose before re-adding); (6) **open,
+   `TIMESTAMP` column by three hours); ~~(5)~~ **DONE** — CI on PHP 8.3 / MySQL 8.4, blocking Pint
+   gate (codebase normalised), Vitest coverage thresholds enforced, and a PHP statement-coverage
+   floor of 83% over `app/` enforced by `scripts/coverage-gate.php` from PHPUnit's Clover report
+   (measured 86.15% on 2026-09-03; Collision's own `--coverage` table never rendered on the runner,
+   so the gate reads the file PHPUnit writes); (6) **open,
    owner** — name incident roles / DPO / sign the processor contract; ~~(7)~~ **DONE** — labelled
    Login and Admission forms, axe-clean. Runbook/README wording about CI updated in the same
-   follow-through. Still open from the report: CICD-08 (manual smoke/rollback), OBS-01/03/04/05,
-   DATA-02/04, OPS-02/06, CMP-03/06, the `__Host-` cookie prefix (G14), root `README.md`
-   ("22 tests").
+   follow-through.
+   **Engineering close-out (same day, one PR):** audit rows + `SECRET-`/`CONFIDENTIAL-` filename
+   prefixes + PDF/print footers on every export (G1, G2); labels paired on the six remaining forms
+   (UX-04 fully closed) with axe specs; `__Host-` session cookie in config (G14); ESLint + vue
+   plugin as a blocking CI gate with a zero-warning baseline (TST-04); unhandled-rejection net +
+   readable fetch errors (TST-10); `mb_strtolower` on login lookups (I18N-05); ChartCanvas
+   code-split (PERF-01); monthly-report per-recipient failure isolation (RES-05); dashboard
+   single-flight cache with jittered TTL (RES-08); JSON stderr log channel wired, production opt-in
+   via `LOG_STACK=daily,stderr` (OBS-01 code part); in-app privacy text synced with the drafts;
+   `scripts/deploy-on-green.sh` prepared (not enabled); drain-step settings documented (RES-12);
+   legacy CI no longer fires on docs-only changes; root README current. **Still open and all
+   owner / infrastructure decisions, not code:** enable deploy-on-green and the drain step
+   (CICD-08 / RES-12), pick a log sink and set `LOG_STACK` (OBS-01/03/04/05), binlog or a second
+   backup region + instance principal (DATA-02/04), SLOs and a rollback rehearsal (OPS-02/06),
+   PERF-03 pagination, the PHI copies still on the host under `/home/ubuntu/migrate/dmc/`, repo
+   private before go-live, the legacy daily site, contracts / DPO / names / counsel decisions
+   (CMP-03/06 and item 2 above).
 
 ## Doc map
 

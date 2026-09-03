@@ -5,7 +5,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
 import { localToday } from '@/lib/ui.js';
 
-const props = defineProps({ consultants: Array, countries: Array, locations: Array, admitFrom: Array });
+defineProps({ consultants: Array, countries: Array, locations: Array, admitFrom: Array });
 
 const today = localToday();
 // Accessible names: pair each <label for> with its control id (UX-04). Same fid() idiom as PatientForm.

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Http\Controllers\ReportsController;
 use App\Jobs\GenerateMonthlyPdf;
 use App\Models\Admission;
+use App\Models\AuditLog;
 use App\Models\Patient;
 use App\Models\User;
 use App\Support\Totp;
@@ -74,5 +75,24 @@ class ReliabilityTest extends TestCase
 
         Storage::disk('local')->assertExists("reports/monthly-2024-{$admin->id}.pdf");
         $this->assertDatabaseHas('notifications', ['user_id' => $admin->id, 'type' => 'report.ready']);
+    }
+
+    // ---- prod-ready G1 + DATA-CLASSIFICATION.md §4/§6: the generated-booklet download -------------
+
+    public function test_download_generated_writes_audit_row_and_has_confidential_filename(): void
+    {
+        Storage::fake('local');
+        $admin = $this->admin();
+        $key = "monthly-2024-{$admin->id}.pdf";
+        Storage::disk('local')->put("reports/{$key}", '%PDF-1.4 fake');
+
+        $res = $this->actingAs($admin)->get("/reports/pdf-download/{$key}");
+        $res->assertOk();
+        $res->assertDownload("CONFIDENTIAL-{$key}");
+
+        $this->assertSame(1, AuditLog::where('action', 'report.pdf.download')->count());
+        $row = AuditLog::where('action', 'report.pdf.download')->first();
+        $this->assertSame('report', $row->entity_type);
+        $this->assertSame($key, $row->details['key']);
     }
 }

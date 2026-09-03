@@ -157,6 +157,16 @@ describe('Consultations/Handover — printing', () => {
     });
 });
 
+// DATA-CLASSIFICATION.md §4: every printed sheet carries the bilingual classification label. It is
+// print-only (hidden on screen, .print-classification), but the text must still be in the DOM.
+describe('Handover — print classification label (DATA-CLASSIFICATION.md §4)', () => {
+    it('carries the bilingual SECRET / سري classification line', () => {
+        const text = mountPage().find('.print-classification').text();
+        expect(text).toContain('SECRET — Patient data');
+        expect(text).toContain('سري — بيانات مرضى');
+    });
+});
+
 describe('Handover is reachable from the Clinical nav', () => {
     // Asserted at source level: mounting AppLayout.vue would mean stubbing Inertia's Head/Link/
     // router/usePage plus the tour, session-timeout and recent-patient modules for what is a

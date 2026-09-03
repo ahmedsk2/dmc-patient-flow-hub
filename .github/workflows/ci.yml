@@ -22,9 +22,9 @@ name: Legacy CI
 on:
   push:
     branches: [ main, master, renovation ]
-    paths-ignore: [ 'laravel/**', '.github/workflows/laravel-ci.yml', 'docs/superpowers/**', 'README.md', 'SECURITY.md', '.gitignore' ]
+    paths-ignore: [ 'laravel/**', '.github/workflows/laravel-ci.yml', 'docs/**', '**.md', '.gitignore' ]
   pull_request:
-    paths-ignore: [ 'laravel/**', '.github/workflows/laravel-ci.yml', 'docs/superpowers/**', 'README.md', 'SECURITY.md', '.gitignore' ]
+    paths-ignore: [ 'laravel/**', '.github/workflows/laravel-ci.yml', 'docs/**', '**.md', '.gitignore' ]
 
 jobs:
   lint-and-test:

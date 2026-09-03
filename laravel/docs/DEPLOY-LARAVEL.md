@@ -53,7 +53,7 @@ Once live: `/up` returns 200 (Laravel's built-in liveness route, registered in `
 
 ## 2. Before every deploy
 
-- [ ] **Gates green locally and the release recorded** — follow [`RELEASE-CHECKLIST.md`](RELEASE-CHECKLIST.md). CI is not executing (§0), so nothing else proves the release.
+- [ ] **Gates green on the pull request and the release recorded** — follow [`RELEASE-CHECKLIST.md`](RELEASE-CHECKLIST.md). The four Laravel CI checks are required on `main` (§0/§11), so a merged commit is green by construction; run the local gates too when you changed something the CI runtime cannot exercise.
 - [ ] **Know which migrations this deploy carries.** The currently-deployed SHA is on Coolify's *Deployments* tab; then:
   ```bash
   git log --oneline <deployed-sha>..main -- laravel/database/migrations
@@ -230,6 +230,8 @@ Nothing inside the container runs the Laravel scheduler. It is driven by a **hos
 
 Because the script looks the container up **by label**, it survives every redeploy. It does **not** survive the application being deleted and recreated in Coolify (new uuid) — update the script if that ever happens. If the scheduler is ever moved to a Coolify *Scheduled Task*, remove this cron so tasks do not run twice.
 
+**Deploy-on-green (prepared, opt-in).** Deploys are operator-triggered today (Auto Deploy is off on purpose). `scripts/deploy-on-green.sh` is a host-side alternative that deploys `main` only when the Laravel CI run for that exact commit is green and the commit is not already the live image, then runs the smoke test and reports a red smoke as the rollback trigger. To enable: place a Coolify API token in a root-only file (`/root/.coolify-deploy-token`, mode 600 — never in the repo), copy the script to `/usr/local/bin/`, and add a root cron such as `*/5 * * * * /usr/local/bin/deploy-on-green.sh`. Because `main` only accepts green pull requests, "green" here is redundant protection, not the only gate. The nightly database backup is scheduled separately in `/etc/cron.d/dmc-db-backup` (see BACKUP-AND-RESTORE.md §2.5).
+
 Scheduled (`routes/console.php`):
 
 | Task | When | Notes |
@@ -295,6 +297,8 @@ Nothing here is needed for a routine release; it is what it takes to recreate pr
 
 - **Migrations are cumulative and batched.** One deploy can apply several releases' migrations in one batch. Read the list the deploy log prints and compare it with §2's expectation.
 - **`migrate:rollback` is not a rollback here** — §4.3. DB rollback = restore the dump.
+- **No drain step on the container swap (RES-12, open).** Coolify starts the new container, repoints Traefik and stops the old one; a request in flight on the old container at that instant is cut. Two settings close most of it and are not yet applied: give the app a stop grace period (Coolify → application → *Advanced* → stop timeout, e.g. 30 s, which becomes `docker stop -t`) and make PHP-FPM finish in-flight work inside it (`process_control_timeout = 20s` in the image's `php-fpm.conf`). Until then, deploy in the agreed low-activity window and warn the clinical owner (§2).
+- **Deploy-on-green is prepared, not enabled.** `scripts/deploy-on-green.sh` (host-side) deploys `main` only when the Laravel CI run for that exact commit is green and it is not already live, then runs the smoke test; wire it as a host cron only after the operator has read §6 and decided to move from operator-triggered deploys (Auto Deploy is off by design).
 - **Logs live in the container; sessions no longer do.** Since 2026-09-03 `SESSION_DRIVER=database` and `CACHE_STORE=database` (runtime env vars): sessions and the dashboard cache survive a redeploy and the session-revocation paths (password reset, MFA reset, self password change) actually work — with `file` they deleted `sessions` rows no session lived in. `LOG_CHANNEL` still writes under `storage/`, so a redeploy discards the previous container's log files unless `storage/` is mounted as a persistent volume in Coolify (check the app's *Storages* tab). Ship logs elsewhere before relying on them for an investigation.
 - **A code change that "did not take"** is not stale OPcache any more (new container = fresh process). It is either a deploy that did not actually finish (check *Deployments*), or a build-time env var changed without a rebuild (§5). Hashed asset filenames make Cloudflare caching a non-issue for `/build/*`.
 - **Never build assets on the host.** `public/build/` is committed; CI's build-reproducibility check (§11) fails if a `.vue`/CSS/JS change was pushed without rebuilding. Fix = `npm run build` locally, commit the diff.

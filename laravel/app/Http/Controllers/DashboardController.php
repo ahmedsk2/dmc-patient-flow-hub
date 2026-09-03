@@ -95,7 +95,8 @@ class DashboardController extends Controller
         // Live KPIs (census, today's counts, boarding, occupancy, recent, myUnit, alerts) stay OUTSIDE.
         // $admBy/$disBy are returned out of the cache because the Item-2 delta block consumes them.
         $nonIcu = $this->nonIcu;
-        $heavy = Cache::remember(DashboardCache::KEY, 300, function () use ($today, $monthStart, $yearStart, $nonIcu) {
+        // single-flight + jittered TTL (RES-08) — see DashboardCache::remember()
+        $heavy = DashboardCache::remember(function () use ($today, $monthStart, $yearStart, $nonIcu) {
             // 31-point admissions-vs-discharges trend: today-30 .. today INCLUSIVE, like the legacy
             // 31-day loop (dashboard/1.php) — non-ICU (J2-2)
             $start30 = Carbon::today()->subDays(30)->toDateString();

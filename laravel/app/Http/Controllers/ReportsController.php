@@ -10,6 +10,7 @@ use App\Jobs\GenerateMonthlyPdf;
 use App\Models\Admission;
 use App\Models\Setting;
 use App\Models\User;
+use App\Support\Audit;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -85,7 +86,11 @@ class ReportsController extends Controller
         $year = (int) ($request->validated('year') ?: Carbon::today()->year);
         $pdf = Pdf::loadView('reports.annual-pdf', $this->gather($year))->setPaper('a4', 'landscape');
 
-        return $pdf->download("dmc-annual-report-{$year}.pdf");
+        // prod-ready G1: break-glass row for the annual booklet export — aggregate figures only
+        Audit::log('report.pdf.annual', 'report', null, ['year' => $year]);
+
+        // classification: aggregate-only export (DATA-CLASSIFICATION.md §4/§6) — CONFIDENTIAL- filename prefix
+        return $pdf->download("CONFIDENTIAL-dmc-annual-report-{$year}.pdf");
     }
 
     /**
@@ -135,7 +140,11 @@ class ReportsController extends Controller
             'generatedAt' => now()->format('D, d M Y · H:i'),
         ])->setPaper('a4', 'landscape');
 
-        return $pdf->download("scorecard-{$user->id}-{$f}-{$t}.pdf");
+        // prod-ready G1: break-glass row for the scorecard export — consultant id only, no patient data
+        Audit::log('report.pdf.consultant', 'report', null, ['consultant_id' => $user->id, 'from' => $f, 'to' => $t]);
+
+        // classification: aggregate-only export (DATA-CLASSIFICATION.md §4/§6) — CONFIDENTIAL- filename prefix
+        return $pdf->download("CONFIDENTIAL-scorecard-{$user->id}-{$f}-{$t}.pdf");
     }
 
     /** Phase 3 — §3.2: the Governance / M&M pack form (month/quarter picker + download). */
@@ -239,7 +248,20 @@ class ReportsController extends Controller
             'generatedAt' => now()->format('D, d M Y · H:i'),
         ])->setPaper('a4', 'landscape');
 
-        return $pdf->download("governance-{$data['year']}-".($data['period_type'] === 'quarter' ? "Q{$data['quarter']}" : sprintf('%02d', $data['month'])).'.pdf');
+        // prod-ready G1: break-glass row for the governance pack — the pack itself carries MRNs, so
+        // this is a PHI-read event; the audit DETAIL stays counts-only (period + line-list sizes),
+        // never the MRNs/ages/consultants those line lists actually contain.
+        // Query-string values arrive as strings; store the period as integers so the JSON detail
+        // is typed consistently with the annual/monthly rows (and with what the viewer filters on).
+        Audit::log('report.pdf.governance', 'report', null, [
+            'year' => (int) $data['year'], 'period_type' => $data['period_type'],
+            'month' => isset($data['month']) ? (int) $data['month'] : null,
+            'quarter' => isset($data['quarter']) ? (int) $data['quarter'] : null,
+            'death_count' => $deathRows->count(), 'readmit_count' => $readmitRows->count(),
+        ]);
+
+        // classification: row-level patient data (MRN line lists) — SECRET- filename prefix
+        return $pdf->download('SECRET-governance-'.$data['year'].'-'.($data['period_type'] === 'quarter' ? "Q{$data['quarter']}" : sprintf('%02d', $data['month'])).'.pdf');
     }
 
     /** Primary (seq-first) diagnosis name per admission id, for the governance death list. */
@@ -431,7 +453,13 @@ class ReportsController extends Controller
         $this->boundSyncRender();
         $pdf = Pdf::loadView('reports.monthly-pdf', $this->gatherBooklet($year))->setPaper('a4', 'landscape');
 
-        return $pdf->download("dmc-monthly-report-{$year}.pdf");
+        // prod-ready G1: break-glass row for the synchronous monthly-booklet export (aggregate
+        // figures only). The ?async=1 path is a dispatch, not an export — it returns no file, so it
+        // is not logged here; the eventual download is covered by downloadGenerated() below.
+        Audit::log('report.pdf.monthly', 'report', null, ['year' => $year]);
+
+        // classification: aggregate-only export (DATA-CLASSIFICATION.md §4/§6) — CONFIDENTIAL- filename prefix
+        return $pdf->download("CONFIDENTIAL-dmc-monthly-report-{$year}.pdf");
     }
 
     /**
@@ -445,7 +473,12 @@ class ReportsController extends Controller
         abort_unless(Storage::disk('local')->exists($path), 404);
         $abs = Storage::disk('local')->path($path);
 
-        return response()->download($abs, basename($path))->deleteFileAfterSend();
+        // prod-ready G1: break-glass row for the queued-generated booklet download — the storage
+        // key is a non-PHI filename (monthly-{year}-{userId}.pdf, see GenerateMonthlyPdf)
+        Audit::log('report.pdf.download', 'report', null, ['key' => $key]);
+
+        // classification: aggregate-only export (DATA-CLASSIFICATION.md §4/§6) — CONFIDENTIAL- filename prefix
+        return response()->download($abs, 'CONFIDENTIAL-'.basename($path))->deleteFileAfterSend();
     }
 
     private function gatherMonth(int $year, int $month): array

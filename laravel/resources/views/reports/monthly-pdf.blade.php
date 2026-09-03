@@ -24,9 +24,13 @@
     .panel { border: 2px solid #9aa1a6; background: #f7f8f7; padding: 8px 10px; margin-top: 6px; }
     .chart-title { text-align: center; font-size: 11px; font-weight: 500; color: #2f4f4f; margin: 6px 0 2px; }
     .foot { margin-top: 8px; text-align: center; color: #5b6a6e; font-size: 8px; }
+    /* DATA-CLASSIFICATION.md §4/§6: every export carries its level — a running footer on EVERY page */
+    .classification-foot { position: fixed; bottom: 4pt; left: 0; right: 0; text-align: center; font-size: 8pt; color: #9aa1a6; }
 </style>
 </head>
 <body>
+
+<div class="classification-foot">CONFIDENTIAL — Internal use / خاص — للاستخدام الداخلي</div>
 
 @if (empty($months))
     <div class="page-last">

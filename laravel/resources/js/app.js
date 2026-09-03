@@ -1,7 +1,11 @@
-import { createApp, h } from 'vue';
+import { createApp, h, defineAsyncComponent } from 'vue';
 import { createInertiaApp, router } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
-import ChartCanvas from '@/Components/ChartCanvas.vue';
+
+// PERF-01: ChartCanvas (and with it chart.js + the datalabels plugin) is code-split into its own
+// chunk and fetched only by the pages that render a chart, instead of riding in the entry bundle
+// for every login and board view. The global name is unchanged, so pages keep using <ChartCanvas>.
+const ChartCanvas = defineAsyncComponent(() => import('@/Components/ChartCanvas.vue'));
 
 // Wave 2, Item 10: onboarding tour. driver.js is bundled (self-hosted — no CDN, PHI-safe). Its base
 // CSS is themed to EHC tokens in resources/css/app.css (.dark + prefers-reduced-motion blocks).
@@ -27,6 +31,13 @@ router.on('invalid', (event) => {
         event.preventDefault();
         window.location.href = '/login';
     }
+});
+
+// TST-10: last-resort net for a promise nobody caught (a raw fetch() that lost the network, a
+// background refresh that failed). Logged, never swallowed silently, never sent anywhere — the
+// app has no telemetry sink by design (PHI). Individual call sites handle their own failures.
+window.addEventListener('unhandledrejection', (event) => {
+    console.error('[unhandled promise rejection]', event.reason);
 });
 
 createInertiaApp({

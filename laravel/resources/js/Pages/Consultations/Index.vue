@@ -508,9 +508,11 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
         <div v-if="consultations.last_page > 1" class="mt-4 flex items-center justify-between text-sm text-ink-500">
             <span class="nums">Showing {{ consultations.from }}–{{ consultations.to }} of {{ consultations.total }}</span>
             <div class="flex gap-1">
+                <!-- eslint-disable vue/no-v-text-v-html-on-component -- `:is` only ever resolves to a native element here; v-html renders the paginator's HTML entities -->
                 <component :is="l.url ? 'button' : 'span'" v-for="l in consultations.links" :key="l.label" :type="l.url ? 'button' : undefined" @click="l.url && goPage(l.url)"
                     class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold transition"
                     :class="l.active ? 'bg-brand-solid text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" />
+                <!-- eslint-enable vue/no-v-text-v-html-on-component -->
             </div>
         </div>
         <!-- edit consultation modal -->

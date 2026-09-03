@@ -45,7 +45,7 @@ describe('ErrorSummary', () => {
             attachTo: document.body,
         });
         const link = w.get('a');
-        const evt = await link.trigger('click');
+        await link.trigger('click');
         expect(focusSpy).toHaveBeenCalledTimes(1);
         expect(input.scrollIntoView).toHaveBeenCalledTimes(1);
         w.unmount();

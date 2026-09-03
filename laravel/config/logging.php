@@ -1,5 +1,6 @@
 <?php
 
+use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
@@ -94,6 +95,10 @@ return [
             'processors' => [PsrLogMessageProcessor::class],
         ],
 
+        // OBS-01: JSON lines on stderr so the container runtime (Coolify / docker logs) receives
+        // structured, machine-parseable events that survive the container — the `daily` file
+        // channel is lost on every redeploy unless storage/ is a persistent volume. Production
+        // opts in with LOG_CHANNEL=stack + LOG_STACK=daily,stderr (runtime env; see .env.example).
         'stderr' => [
             'driver' => 'monolog',
             'level' => env('LOG_LEVEL', 'debug'),
@@ -101,7 +106,7 @@ return [
             'handler_with' => [
                 'stream' => 'php://stderr',
             ],
-            'formatter' => env('LOG_STDERR_FORMATTER'),
+            'formatter' => env('LOG_STDERR_FORMATTER', JsonFormatter::class),
             'processors' => [PsrLogMessageProcessor::class],
         ],
 

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, watch, onMounted } from 'vue';
+import { ref, reactive, computed, watch, onMounted, useId } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
@@ -15,6 +15,10 @@ import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
 import { localToday, vFocus, xsrf, formatDate } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
+
+// Accessible names: pair each <label for> with its control id (UX-04). Same fid() idiom as PatientForm.
+const uid = useId();
+const fid = (name) => `registry-${uid}-${name}`;
 
 const props = defineProps({
     mode: String, results: Object, filters: Object, options: Object,
@@ -260,7 +264,7 @@ const toggleExpand = (id) => {
             </div>
             <!-- DIAGNOSIS -->
             <div v-else class="flex flex-wrap items-end gap-3">
-                <div class="grow"><label class="text-xs text-ink-400">Diagnosis keyword</label><input v-model="f.keyword" v-focus @keyup.enter="apply" :class="[fld, 'w-full']" aria-label="Diagnosis keyword search" placeholder="e.g. pneumonia, sepsis…" autocomplete="off" /></div>
+                <div class="grow"><label :for="fid('keyword')" class="text-xs text-ink-400">Diagnosis keyword</label><input :id="fid('keyword')" v-model="f.keyword" v-focus @keyup.enter="apply" :class="[fld, 'w-full']" aria-label="Diagnosis keyword search" placeholder="e.g. pneumonia, sepsis…" autocomplete="off" /></div>
                 <div><label for="reg-dx-from" class="text-xs text-ink-400">Admitted from</label><input id="reg-dx-from" v-model="f.from" type="date" :class="fld" /></div>
                 <div><label for="reg-dx-to" class="text-xs text-ink-400">to</label><input id="reg-dx-to" v-model="f.to" type="date" :class="fld" /></div>
                 <button @click="apply" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover">Search</button>
@@ -405,6 +409,7 @@ const toggleExpand = (id) => {
             <span class="nums">Showing {{ results.from }}–{{ results.to }} of {{ results.total }}</span>
             <!-- SPC-TM-011: page changes route through goPage() — with a term active the POST body
                  re-carries it (the links themselves are term-less GET URLs from the paginator) -->
+            <!-- eslint-disable-next-line vue/no-v-text-v-html-on-component -- `:is` only ever resolves to a native element; v-html renders the paginator's HTML entities -->
             <div class="flex gap-1"><component :is="l.url ? 'button' : 'span'" v-for="l in results.links" :key="l.label" :type="l.url ? 'button' : undefined" @click="l.url && goPage(l.url)" class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold transition" :class="l.active ? 'bg-brand-solid text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-500')" v-html="l.label" /></div>
         </div>
 

@@ -31,7 +31,7 @@ class UsernameReminderController extends Controller
     {
         $request->validate(['email' => ['required', 'string', 'email']]);
 
-        $user = User::where('email', strtolower(trim($request->input('email'))))
+        $user = User::where('email', mb_strtolower(trim($request->input('email'))))   // multibyte-safe (I18N-05)
             ->where('active', 1)
             ->first();
 

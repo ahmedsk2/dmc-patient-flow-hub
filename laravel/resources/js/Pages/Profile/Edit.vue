@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, useId } from 'vue';
 import { Link, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PasswordMeter from '@/Components/PasswordMeter.vue';
@@ -9,6 +9,10 @@ import { formatDate } from '@/lib/ui.js';
 const props = defineProps({ profile: Object, trustedDevices: { type: Array, default: () => [] } });
 
 const { ask } = useConfirm();
+
+// Accessible names: pair each <label for> with its control id (UX-04). Same fid() idiom as PatientForm.
+const uid = useId();
+const fid = (name) => `profile-${uid}-${name}`;
 
 // Trusted devices: browsers this user opted to skip the two-factor code on. Revoking is the only
 // remedy for having ticked the box on the wrong machine, so it lives here rather than behind an
@@ -56,11 +60,11 @@ const field = 'w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm out
             <section class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <h3 class="mb-4 font-bold text-ink-800">Profile details</h3>
                 <div class="grid gap-4 sm:grid-cols-2">
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Full name</label><input v-model="pForm.full_name" :class="[field, pForm.errors.full_name && 'border-danger-500']" /><p v-if="pForm.errors.full_name" class="mt-1 text-xs text-on-danger">{{ pForm.errors.full_name }}</p></div>
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Email</label><input v-model="pForm.email" type="email" :class="[field, pForm.errors.email && 'border-danger-500']" /><p v-if="pForm.errors.email" class="mt-1 text-xs text-on-danger">{{ pForm.errors.email }}</p></div>
-                    <div class="sm:col-span-2"><label class="mb-1 block text-sm font-semibold text-ink-700">Username</label>
-                        <input v-model="pForm.username" autocomplete="username" :class="[field, 'sm:max-w-xs', pForm.errors.username && 'border-danger-500']" />
-                        <p v-if="pForm.errors.username" class="mt-1 text-xs text-on-danger">{{ pForm.errors.username }}</p>
+                    <div><label :for="fid('full_name')" class="mb-1 block text-sm font-semibold text-ink-700">Full name</label><input :id="fid('full_name')" v-model="pForm.full_name" :aria-describedby="pForm.errors.full_name ? fid('full_name') + '-err' : undefined" :class="[field, pForm.errors.full_name && 'border-danger-500']" /><p v-if="pForm.errors.full_name" :id="fid('full_name') + '-err'" class="mt-1 text-xs text-on-danger">{{ pForm.errors.full_name }}</p></div>
+                    <div><label :for="fid('email')" class="mb-1 block text-sm font-semibold text-ink-700">Email</label><input :id="fid('email')" v-model="pForm.email" type="email" :aria-describedby="pForm.errors.email ? fid('email') + '-err' : undefined" :class="[field, pForm.errors.email && 'border-danger-500']" /><p v-if="pForm.errors.email" :id="fid('email') + '-err'" class="mt-1 text-xs text-on-danger">{{ pForm.errors.email }}</p></div>
+                    <div class="sm:col-span-2"><label :for="fid('username')" class="mb-1 block text-sm font-semibold text-ink-700">Username</label>
+                        <input :id="fid('username')" v-model="pForm.username" autocomplete="username" :aria-describedby="pForm.errors.username ? fid('username') + '-err' : undefined" :class="[field, 'sm:max-w-xs', pForm.errors.username && 'border-danger-500']" />
+                        <p v-if="pForm.errors.username" :id="fid('username') + '-err'" class="mt-1 text-xs text-on-danger">{{ pForm.errors.username }}</p>
                         <p class="mt-1 text-xs text-ink-400">This is your <strong>login name</strong> — changing it changes what you type to sign in. Letters, numbers, dashes and underscores only.</p>
                     </div>
                 </div>
@@ -75,9 +79,9 @@ const field = 'w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm out
                 <h3 class="mb-1 font-bold text-ink-800">Change password</h3>
                 <p class="mb-4 text-sm text-ink-400">At least 8 characters, with letters and numbers.</p>
                 <div class="grid gap-4 sm:grid-cols-3">
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Current</label><input v-model="wForm.current_password" type="password" :class="[field, wForm.errors.current_password && 'border-danger-500']" /><p v-if="wForm.errors.current_password" class="mt-1 text-xs text-on-danger">{{ wForm.errors.current_password }}</p></div>
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">New</label><input v-model="wForm.password" type="password" :class="[field, wForm.errors.password && 'border-danger-500']" /><PasswordMeter :password="wForm.password" @score="pwScore = $event" /><p v-if="wForm.errors.password" class="mt-1 text-xs text-on-danger">{{ wForm.errors.password }}</p></div>
-                    <div><label class="mb-1 block text-sm font-semibold text-ink-700">Confirm</label><input v-model="wForm.password_confirmation" type="password" :class="field" /></div>
+                    <div><label :for="fid('current_password')" class="mb-1 block text-sm font-semibold text-ink-700">Current</label><input :id="fid('current_password')" v-model="wForm.current_password" type="password" :aria-describedby="wForm.errors.current_password ? fid('current_password') + '-err' : undefined" :class="[field, wForm.errors.current_password && 'border-danger-500']" /><p v-if="wForm.errors.current_password" :id="fid('current_password') + '-err'" class="mt-1 text-xs text-on-danger">{{ wForm.errors.current_password }}</p></div>
+                    <div><label :for="fid('new_password')" class="mb-1 block text-sm font-semibold text-ink-700">New</label><input :id="fid('new_password')" v-model="wForm.password" type="password" :aria-describedby="wForm.errors.password ? fid('new_password') + '-err' : undefined" :class="[field, wForm.errors.password && 'border-danger-500']" /><PasswordMeter :password="wForm.password" @score="pwScore = $event" /><p v-if="wForm.errors.password" :id="fid('new_password') + '-err'" class="mt-1 text-xs text-on-danger">{{ wForm.errors.password }}</p></div>
+                    <div><label :for="fid('password_confirmation')" class="mb-1 block text-sm font-semibold text-ink-700">Confirm</label><input :id="fid('password_confirmation')" v-model="wForm.password_confirmation" type="password" :class="field" /></div>
                 </div>
                 <div class="mt-4 flex items-center gap-3">
                     <button @click="savePassword" :disabled="wForm.processing || pwTooWeak" class="rounded-xl bg-navy-800 px-5 py-2.5 text-sm font-semibold text-white hover:bg-navy-900 disabled:opacity-50">Update password</button>

@@ -109,7 +109,15 @@ class MonthlyReportMailTest extends TestCase
         // the Mailable carries the booklet PDF as an application/pdf attachment with the dmc-monthly
         // filename pattern — the emailed PDF == the downloadable PDF (same gatherBooklet code path)
         $mail = new MonthlyReportMail(2024, 6, '%PDF-1.4 fake');
-        $mail->assertHasSubject('DMC Internal Medicine — Monthly Report June 2024');
+        // DATA-CLASSIFICATION.md §4/§6: aggregate-only figures — subject carries a leading CONFIDENTIAL —
+        $mail->assertHasSubject('CONFIDENTIAL — DMC Internal Medicine — Monthly Report June 2024');
         $mail->assertHasAttachedData('%PDF-1.4 fake', 'dmc-monthly-2024-06.pdf', ['mime' => 'application/pdf']);
+    }
+
+    public function test_emailed_subject_starts_with_confidential_prefix(): void
+    {
+        $mail = new MonthlyReportMail(2024, 6, '%PDF-1.4 fake');
+        $mail->build();
+        $this->assertStringStartsWith('CONFIDENTIAL — ', $mail->subject);
     }
 }

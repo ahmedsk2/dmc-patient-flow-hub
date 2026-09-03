@@ -38,7 +38,7 @@ class AuthController extends Controller
         $user = User::where('active', 1)
             ->where(function ($q) use ($identifier) {
                 $q->where('username', $identifier)
-                    ->orWhere('email', strtolower($identifier));
+                    ->orWhere('email', mb_strtolower($identifier));   // multibyte-safe (I18N-05)
             })
             ->first();
         if (! $user || ! Hash::check($data['password'], $user->password)) {

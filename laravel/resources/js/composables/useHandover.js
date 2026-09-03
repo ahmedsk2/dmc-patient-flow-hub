@@ -33,14 +33,26 @@ export function useHandover() {
         }
     }
 
-    async function fetchHandover(admissionId) {
-        const res = await fetch(`/admissions/${admissionId}/handover`, { headers: { Accept: 'application/json' } });
+    // TST-10: a lost network or a non-JSON error page used to surface as an opaque TypeError from
+    // deep inside fetch()/json(); both readers now fail with a readable Error the caller (or the
+    // global unhandledrejection net in app.js) can act on. Return shapes are unchanged on success.
+    async function readJson(url) {
+        let res;
+        try {
+            res = await fetch(url, { headers: { Accept: 'application/json' } });
+        } catch (e) {
+            throw new Error(`Network error while loading ${url}: ${e?.message ?? e}`);
+        }
+        if (!res.ok) throw new Error(`Request failed (${res.status}) while loading ${url}`);
         return res.json();
     }
 
-    async function preflight(fromConsultantId) {
-        const res = await fetch(`/handovers/preflight?from_consultant_id=${fromConsultantId}`, { headers: { Accept: 'application/json' } });
-        return res.json();
+    function fetchHandover(admissionId) {
+        return readJson(`/admissions/${admissionId}/handover`);
+    }
+
+    function preflight(fromConsultantId) {
+        return readJson(`/handovers/preflight?from_consultant_id=${fromConsultantId}`);
     }
 
     return { saving, saveHandover, fetchHandover, preflight };

@@ -127,9 +127,15 @@ return [
     |
     */
 
+    // `__Host-` prefix (G14 / sec-web SPC-WEB-001): the browser then refuses the cookie unless it
+    // is Secure, has Path=/ and no Domain — which is exactly production's configuration
+    // (SESSION_SECURE_COOKIE=true, SESSION_DOMAIN unset). Applied only when the cookie is marked
+    // secure so plain-http local development keeps a working session. Renaming the cookie signs
+    // everyone out once at the deploy that ships it.
     'cookie' => env(
         'SESSION_COOKIE',
-        Str::slug((string) env('APP_NAME', 'laravel')).'-session'
+        (filter_var(env('SESSION_SECURE_COOKIE', false), FILTER_VALIDATE_BOOL) ? '__Host-' : '')
+            .Str::slug((string) env('APP_NAME', 'laravel')).'-session'
     ),
 
     /*

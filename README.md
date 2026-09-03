@@ -8,8 +8,10 @@ printable/PDF reports).
 
 | | Where | Branch | Status |
 |---|---|---|---|
-| **Laravel re-platform** (go-forward) | [`laravel/`](laravel/) | `main` | Full feature parity, tested (22 tests + CI), reconciled row-for-row against the live data |
-| **Renovated legacy PHP app** | repo root (`*.php`) | `renovation` (also present here) | The original procedural app, security-hardened; kept guarded and deployable as fallback |
+| **Laravel re-platform** (the product) | [`laravel/`](laravel/) | `main` (protected — pull requests only, four required CI checks) | Feature-complete, ~930 PHPUnit + ~730 Vitest tests in CI, reconciled row-for-row against the legacy data; live at `dmc-new.towardpcc.com` in parallel until cutover |
+| **Legacy PHP app** | repo root (`*.php`) | `renovation` (hardened lineage) | Retired from development. The unit's daily system is still the *original* build of this app at `dmc-im.com` until cutover replaces it with the Laravel app |
+
+Orientation for anyone working here: read [`HANDOFF.md`](HANDOFF.md) (ground truth, what remains) and [`CLAUDE.md`](CLAUDE.md) (the product map) first.
 
 Start here:
 

@@ -160,6 +160,45 @@ class AuditViewerTest extends TestCase
         $this->assertStringContainsString('spreadsheet', strtolower($res->headers->get('Content-Type') ?? ''));
     }
 
+    // ---- prod-ready G1: exporting the audit trail is itself a break-glass, audited event -------
+
+    public function test_csv_export_writes_one_audit_row_with_filters_and_row_count(): void
+    {
+        $this->logRow('user.update', 'user', '2');
+
+        $this->actingAs($this->admin)->get('/audit/export?action=user.update')->assertOk();
+
+        $this->assertSame(1, AuditLog::where('action', 'audit.export.csv')->count());
+        $row = AuditLog::where('action', 'audit.export.csv')->first();
+        $this->assertSame('audit_log', $row->entity_type);
+        $this->assertSame('user.update', $row->details['filters']['action']);
+        // row_count reflects the table BEFORE this export's own audit row is written (1 seeded row)
+        $this->assertSame(1, $row->details['row_count']);
+    }
+
+    public function test_xlsx_export_writes_one_audit_row(): void
+    {
+        $this->logRow('user.update', 'user', '2');
+
+        $this->actingAs($this->admin)->get('/audit/export-xlsx')->assertOk();
+
+        $this->assertSame(1, AuditLog::where('action', 'audit.export.xlsx')->count());
+    }
+
+    // ---- DATA-CLASSIFICATION.md §4/§6: row-level exports carry a SECRET- filename ---------------
+
+    public function test_csv_export_filename_has_secret_prefix(): void
+    {
+        $this->actingAs($this->admin)->get('/audit/export')
+            ->assertDownload('SECRET-Audit-Export-'.now()->format('d-m-Y').'.csv');
+    }
+
+    public function test_xlsx_export_filename_has_secret_prefix(): void
+    {
+        $this->actingAs($this->admin)->get('/audit/export-xlsx')
+            ->assertDownload('SECRET-Audit-Export-'.now()->format('d-m-Y').'.xlsx');
+    }
+
     // ---- Item 2: per-patient activity panel ----------------------------------------------------
 
     public function test_edit_endpoint_returns_activity_for_admission(): void

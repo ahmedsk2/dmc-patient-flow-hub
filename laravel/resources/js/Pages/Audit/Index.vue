@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, computed } from 'vue';
+import { reactive, computed, useId } from 'vue';
 import { Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
@@ -23,6 +23,10 @@ const f = reactive({
 
 const apply = () => router.get('/audit', { ...f }, { preserveState: true, preserveScroll: true });
 const reset = () => router.get('/audit', {}, { preserveState: false });
+
+// Accessible names: pair each <label for> with its control id (UX-04). Same fid() idiom as PatientForm.
+const uid = useId();
+const fid = (name) => `audit-${uid}-${name}`;
 
 // querystring for the export links — same applied filters, drop empties
 const qs = computed(() => new URLSearchParams(
@@ -88,15 +92,15 @@ const pretty = (details) => JSON.stringify(details ?? {}, null, 2);
                     <option value="">Any category</option>
                     <option v-for="c in categories" :key="c" :value="c">{{ catLabel(c) }}</option>
                 </select>
-                <input v-model="f.action" @keyup.enter="apply" :class="fld" placeholder="Action (e.g. user.update)" />
+                <input v-model="f.action" @keyup.enter="apply" :class="fld" placeholder="Action (e.g. user.update)" aria-label="Action" />
                 <select v-model="f.entity_type" :class="fld" aria-label="Entity type">
                     <option value="">Any entity type</option>
                     <option v-for="t in entityTypes" :key="t" :value="t">{{ t }}</option>
                 </select>
-                <input v-model="f.entity_id" @keyup.enter="apply" :class="fld" placeholder="Entity ID" inputmode="numeric" />
-                <input v-model="f.ip" @keyup.enter="apply" :class="fld" placeholder="IP address" />
-                <div><label class="text-xs text-ink-400">From</label><input v-model="f.from" type="date" :class="fld" /></div>
-                <div><label class="text-xs text-ink-400">To</label><input v-model="f.to" type="date" :class="fld" /></div>
+                <input v-model="f.entity_id" @keyup.enter="apply" :class="fld" placeholder="Entity ID" inputmode="numeric" aria-label="Entity ID" />
+                <input v-model="f.ip" @keyup.enter="apply" :class="fld" placeholder="IP address" aria-label="IP address" />
+                <div><label :for="fid('from')" class="text-xs text-ink-400">From</label><input :id="fid('from')" v-model="f.from" type="date" :class="fld" /></div>
+                <div><label :for="fid('to')" class="text-xs text-ink-400">To</label><input :id="fid('to')" v-model="f.to" type="date" :class="fld" /></div>
             </div>
             <div class="mt-3 flex flex-wrap items-center gap-2">
                 <button @click="apply" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover">Apply</button>
@@ -158,6 +162,7 @@ const pretty = (details) => JSON.stringify(details ?? {}, null, 2);
 
         <div v-if="logs.last_page > 1" class="mt-4 flex items-center justify-between text-sm text-ink-500">
             <span class="nums">Showing {{ logs.from }}–{{ logs.to }} of {{ logs.total }}</span>
+            <!-- eslint-disable-next-line vue/no-v-text-v-html-on-component -- Link forwards attrs to its single <a> root and gets no slot content, so v-html renders the paginator's HTML entities as intended --->
             <div class="flex gap-1 overflow-x-auto"><component :is="l.url ? Link : 'span'" v-for="l in logs.links" :key="l.label" :href="l.url || undefined" preserve-scroll class="grid h-9 min-w-9 shrink-0 place-items-center rounded-lg px-2 text-sm font-semibold transition" :class="l.active ? 'bg-brand-solid text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" /></div>
         </div>
     </AppLayout>
