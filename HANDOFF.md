@@ -95,7 +95,17 @@
    (Collision printed no table with pcov on PHPUnit 12 — diagnose before re-adding); (6) **open,
    owner** — name incident roles / DPO / sign the processor contract; ~~(7)~~ **DONE** — labelled
    Login and Admission forms, axe-clean. Runbook/README wording about CI updated in the same
-   follow-through. Still open from the report: CICD-08 (manual smoke/rollback), OBS-01/03/04/05,
+   follow-through.
+   **Engineering close-out (same day, one PR):** audit rows + `SECRET-`/`CONFIDENTIAL-` filename
+   prefixes + PDF/print footers on every export (G1, G2); labels paired on the six remaining forms
+   (UX-04 fully closed) with axe specs; `__Host-` session cookie in config (G14); ESLint + vue
+   plugin as a blocking CI gate with a zero-warning baseline (TST-04); unhandled-rejection net +
+   readable fetch errors (TST-10); `mb_strtolower` on login lookups (I18N-05); ChartCanvas
+   code-split (PERF-01); monthly-report per-recipient failure isolation (RES-05); dashboard
+   single-flight cache with jittered TTL (RES-08); JSON stderr log channel wired, production opt-in
+   via `LOG_STACK=daily,stderr` (OBS-01 code part); in-app privacy text synced with the drafts;
+   `scripts/deploy-on-green.sh` prepared (not enabled); drain-step settings documented (RES-12);
+   legacy CI no longer fires on docs-only changes; root README current. Still open from the report: CICD-08 (manual smoke/rollback), OBS-01/03/04/05,
    DATA-02/04, OPS-02/06, CMP-03/06, the `__Host-` cookie prefix (G14), root `README.md`
    ("22 tests").
 

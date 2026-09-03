@@ -8,7 +8,7 @@ vi.mock('driver.js', () => ({
     driver: (config) => { lastConfig.value = config; return { drive: driveSpy }; },
 }));
 
-import { useTour, isExcludedRoute } from '@/composables/useTour.js';
+import { isExcludedRoute } from '@/composables/useTour.js';
 import { buildSteps } from '@/lib/tourSteps.js';
 
 const admin = { role: 0, is_admin: true, can: {}, tour_completed_at: null };

@@ -80,13 +80,6 @@ const goHref = (href) => {
 // SPC-TM-011 (Wave 1): a Recent-Admissions row jumps to the board by POSTing the MRN in the body —
 // the term never enters a URL (goHref stays for the non-PII drill-through links only).
 const openPatient = (mrn) => router.post('/patients', { search: String(mrn ?? '') });
-const consultantIdByName = computed(() =>
-    Object.fromEntries((props.consultantBoard || []).map((c) => [c.name, c.id])));
-const drillToConsultant = (name) => {
-    const id = consultantIdByName.value[name];
-    if (id) drillTo({ consultant_id: id });
-};
-
 // ── KPI deltas (Item 2 + W4 polarity) ──────────────────────────────────────────────────────────
 // A delta {value, delta, direction} plus the KPI's own `polarity` → an up/down chip. The chip's
 // colour is driven by polarity + direction (deltaChipClass in lib/ui.js), NOT by the delta's own

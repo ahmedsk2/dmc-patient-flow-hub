@@ -7,7 +7,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
  * Phase 4 — Item 6: admin data-quality dashboard. Five collapsible canary cards, each with a row
  * count badge and per-row links to the patient board. Read-only hygiene checklist.
  */
-const props = defineProps({
+defineProps({
     overLos: { type: Array, default: () => [] },
     noDx: { type: Array, default: () => [] },
     badDates: { type: Array, default: () => [] },

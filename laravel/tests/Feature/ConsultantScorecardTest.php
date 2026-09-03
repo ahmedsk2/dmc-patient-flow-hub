@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\StatisticsController;
 use App\Models\Admission;
+use App\Models\AuditLog;
 use App\Models\Patient;
 use App\Models\User;
 use App\Support\Totp;
@@ -78,5 +79,47 @@ class ConsultantScorecardTest extends TestCase
         $physician = $stats->physician($c->id, '2024-06-01', '2024-06-30', 3, 'month', []);
         $this->assertSame(2, $direct);
         $this->assertSame($direct, $physician['numbers']['admissions']);
+    }
+
+    // ---- prod-ready G1: break-glass audit row on every consultant-scorecard export --------------
+
+    public function test_consultant_scorecard_pdf_writes_one_audit_row(): void
+    {
+        $c = $this->consultant();
+        $this->actingAs($this->admin())
+            ->get("/reports/consultant/{$c->id}/pdf?from=2024-01-01&to=2024-12-31")->assertOk();
+
+        $this->assertSame(1, AuditLog::where('action', 'report.pdf.consultant')->count());
+        $row = AuditLog::where('action', 'report.pdf.consultant')->first();
+        $this->assertSame('report', $row->entity_type);
+        $this->assertSame($c->id, $row->details['consultant_id']);
+        $this->assertSame('2024-01-01', $row->details['from']);
+        $this->assertSame('2024-12-31', $row->details['to']);
+    }
+
+    // ---- DATA-CLASSIFICATION.md §4/§6: aggregate export carries a CONFIDENTIAL- filename ---------
+
+    public function test_consultant_scorecard_pdf_filename_has_confidential_prefix(): void
+    {
+        $c = $this->consultant();
+        $this->actingAs($this->admin())
+            ->get("/reports/consultant/{$c->id}/pdf?from=2024-01-01&to=2024-12-31")
+            ->assertDownload("CONFIDENTIAL-scorecard-{$c->id}-2024-01-01-2024-12-31.pdf");
+    }
+
+    /**
+     * The consultant-pdf template carries ONE fixed-position classification footer (repeats on
+     * every dompdf page) positioned before the first page div — not duplicated per-page.
+     */
+    public function test_consultant_pdf_template_carries_confidential_classification_footer(): void
+    {
+        $html = file_get_contents(resource_path('views/reports/consultant-pdf.blade.php'));
+        $this->assertStringContainsString('CONFIDENTIAL — Internal use / خاص — للاستخدام الداخلي', $html);
+        $this->assertStringContainsString('position: fixed', $html);
+        $this->assertLessThan(
+            strpos($html, '<div class="page'),
+            strpos($html, '<div class="classification-foot">'),
+            'the classification footer must sit outside/above the per-page divs so dompdf repeats it on every page'
+        );
     }
 }

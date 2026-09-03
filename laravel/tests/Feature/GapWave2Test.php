@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Admission;
+use App\Models\AuditLog;
 use App\Models\Patient;
 use App\Models\User;
 use App\Support\Totp;
@@ -135,5 +136,62 @@ class GapWave2Test extends TestCase
         $this->assertStringStartsWith('%PDF', $resp->getContent());
         // 12 elapsed months × 2 landscape pages (exclude the /Pages tree node from the count)
         $this->assertSame(24, preg_match_all('~/Type\s*/Page[^s]~', $resp->getContent()));
+    }
+
+    // ---- prod-ready G1: break-glass audit row on the annual + monthly booklet exports ------------
+
+    public function test_annual_pdf_writes_one_audit_row(): void
+    {
+        $this->seedFixture();
+        $this->actingAs($this->admin())->get('/reports/pdf?year=2024')->assertOk();
+
+        $this->assertSame(1, AuditLog::where('action', 'report.pdf.annual')->count());
+        $row = AuditLog::where('action', 'report.pdf.annual')->first();
+        $this->assertSame('report', $row->entity_type);
+        $this->assertSame(2024, $row->details['year']);
+    }
+
+    public function test_monthly_pdf_writes_one_audit_row(): void
+    {
+        $this->seedFixture();
+        $this->actingAs($this->admin())->get('/reports/monthly/pdf?year=2024')->assertOk();
+
+        $this->assertSame(1, AuditLog::where('action', 'report.pdf.monthly')->count());
+        $row = AuditLog::where('action', 'report.pdf.monthly')->first();
+        $this->assertSame(2024, $row->details['year']);
+    }
+
+    // ---- DATA-CLASSIFICATION.md §4/§6: aggregate exports carry a CONFIDENTIAL- filename ------------
+
+    public function test_annual_pdf_filename_has_confidential_prefix(): void
+    {
+        $this->seedFixture();
+        $this->actingAs($this->admin())->get('/reports/pdf?year=2024')
+            ->assertDownload('CONFIDENTIAL-dmc-annual-report-2024.pdf');
+    }
+
+    public function test_monthly_pdf_filename_has_confidential_prefix(): void
+    {
+        $this->seedFixture();
+        $this->actingAs($this->admin())->get('/reports/monthly/pdf?year=2024')
+            ->assertDownload('CONFIDENTIAL-dmc-monthly-report-2024.pdf');
+    }
+
+    /**
+     * The annual + monthly booklet templates each carry ONE fixed-position classification footer
+     * (repeats on every dompdf page) positioned before the first page div — not duplicated per-page.
+     */
+    public function test_annual_and_monthly_pdf_templates_carry_confidential_classification_footer(): void
+    {
+        foreach (['annual-pdf', 'monthly-pdf'] as $view) {
+            $html = file_get_contents(resource_path("views/reports/{$view}.blade.php"));
+            $this->assertStringContainsString('CONFIDENTIAL — Internal use / خاص — للاستخدام الداخلي', $html, $view);
+            $this->assertStringContainsString('position: fixed', $html, $view);
+            $this->assertLessThan(
+                strpos($html, '<div class="page'),
+                strpos($html, '<div class="classification-foot">'),
+                "{$view}: the classification footer must sit outside/above the per-page divs so dompdf repeats it on every page"
+            );
+        }
     }
 }

@@ -9,7 +9,7 @@ import { useConfirm } from '@/composables/useConfirm';
  * trashed restore endpoints (an admission restore is rejected server-side if it would create a
  * duplicate active MRN).
  */
-const props = defineProps({
+defineProps({
     admissions: { type: Array, default: () => [] },
     consultations: { type: Array, default: () => [] },
     users: { type: Array, default: () => [] },

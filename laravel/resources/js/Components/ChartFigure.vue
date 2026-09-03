@@ -13,7 +13,7 @@
  * sr-only empty-state note stands in its place (overridable via the #empty slot). The visible chart
  * shows its own no-data state, so the look is still the caller's.
  */
-const props = defineProps({
+defineProps({
     // the chart's heading; also the data table's <caption>
     title: { type: String, required: true },
     // one-line plain-language summary read as the <figcaption>; falls back to the title

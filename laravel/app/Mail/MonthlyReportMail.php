@@ -26,7 +26,8 @@ class MonthlyReportMail extends Mailable
     {
         $name = Carbon::createFromDate($this->year, $this->month, 1)->format('F Y');
 
-        return $this->subject("DMC Internal Medicine — Monthly Report {$name}")
+        // classification: aggregate-only figures, no patient data attached (DATA-CLASSIFICATION.md §4/§6)
+        return $this->subject("CONFIDENTIAL — DMC Internal Medicine — Monthly Report {$name}")
             ->view('mail.monthly-report')
             ->with(['year' => $this->year, 'month' => $this->month, 'name' => $name])
             ->attachData($this->pdfContent, sprintf('dmc-monthly-%d-%02d.pdf', $this->year, $this->month),

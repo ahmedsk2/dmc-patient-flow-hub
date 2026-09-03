@@ -41,9 +41,13 @@
     .empty { color: #8a949c; font-style: italic; padding: 14px 5px; }
     .deident { font-size: 8px; color: #8a949c; margin-top: 4px; }
     .foot { margin-top: 14px; border-top: 1px solid #e3eaea; padding-top: 6px; text-align: center; color: #5b6a6e; font-size: 8px; }
+    /* DATA-CLASSIFICATION.md §4/§6: every export carries its level — a running footer on EVERY page */
+    .classification-foot { position: fixed; bottom: 4pt; left: 0; right: 0; text-align: center; font-size: 8pt; color: #9aa1a6; }
 </style>
 </head>
 <body>
+
+<div class="classification-foot">SECRET — Patient data / سري — بيانات مرضى</div>
 
 {{-- ============== PAGE 1 — SAFETY KPIs + TREND ============== --}}
 <div class="page">

@@ -77,6 +77,11 @@ jobs:
       # axe-core (via vitest-axe) over the three consultation-ledger pages mounted with
       # representative props. Any violation fails. It is also part of the full Vitest run below;
       # it runs on its own first so an accessibility regression is named as such in the run list.
+      # BLOCKING (TST-04): ESLint recommended + eslint-plugin-vue essential over resources/js
+      # (eslint.config.js). Zero warnings allowed so the count cannot creep.
+      - name: Lint (ESLint + eslint-plugin-vue) — blocking
+        run: npm run lint
+
       - name: Accessibility gate (vitest-axe)
         run: npx vitest run resources/js/__tests__/a11y.axe.spec.js
 
@@ -135,11 +140,11 @@ jobs:
         with:
           php-version: '8.3'   # production image is PHP 8.3 (Nixpacks, composer.json "php": "^8.3") — test the shipped runtime
           extensions: mbstring, pdo_mysql, gd, zip, intl, bcmath
-          # No PHP coverage driver yet. A `--coverage --min=` floor (TST-02) was tried on 2026-09-03
-          # with pcov enabled: PHPUnit ran green but Collision's coverage table never rendered in
-          # the job log and the floor could not trip, so it was removed rather than left as a gate
-          # that proves nothing. The enforced coverage floor today is the Vitest one (frontend job).
-          coverage: none
+          # pcov for the PHP coverage floor (TST-02). First attempt on 2026-09-03 printed no table:
+          # Collision renders it with Termwind, which needs a terminal width — the runner has none.
+          # COLUMNS/TERM are set on the test step for that reason; if the table still does not
+          # render, the fallback is a clover report gated by a small script.
+          coverage: pcov
 
       - name: Install Composer dependencies
         run: composer install --no-interaction --prefer-dist
@@ -168,8 +173,14 @@ jobs:
             sleep 1
           done
 
-      - name: Test suite — pass 1 (exclude pdf group)
-        run: php artisan test --exclude-group pdf
+      - name: Test suite — pass 1 (exclude pdf group) + coverage floor
+        # `--min` is the line-coverage floor (TST-02); raise it as coverage grows, never lower it to
+        # make a build pass. COLUMNS/TERM give Collision's Termwind renderer a terminal to draw the
+        # coverage table in (the runner has no TTY).
+        env:
+          COLUMNS: '140'
+          TERM: xterm-256color
+        run: php artisan test --exclude-group pdf --coverage --min=1
 
       - name: Test suite — pass 2 (pdf group, isolated process)
         # dompdf's native font-compression state accumulates across tests and segfaults PHP

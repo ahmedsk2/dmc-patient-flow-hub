@@ -297,6 +297,9 @@ const toggleBell = async () => {
         const d = await (await fetch('/api/notifications', { headers: { Accept: 'application/json' } })).json();
         notifications.value = d.notifications || [];
         actionable.value = d.actionable || [];
+    } catch (e) {
+        // TST-10: a failed refresh keeps whatever list is already shown; nothing else to do here
+        console.warn('notifications refresh failed', e);
     } finally {
         bellLoading.value = false;
     }
@@ -313,6 +316,9 @@ const clearNotifications = async () => {
         notifications.value = d.notifications || [];
         actionable.value = d.actionable || [];
         unreadOverride.value = d.unread ?? 0;   // still-open actionable reminders keep the badge lit
+    } catch (e) {
+        // TST-10: the server-side read-all may or may not have landed; the next open re-fetches
+        console.warn('clear notifications failed', e);
     } finally { clearing.value = false; }
 };
 const goInbox = () => { bellOpen.value = false; router.visit('/handovers'); };

@@ -131,6 +131,7 @@ const print = () => window.print();
 
             <footer class="mt-6 border-t border-line pt-3 text-center text-[11px] text-ink-400">
                 DMC Internal Medicine · Patient-Flow Hub · Confidential — contains patient-identifiable data
+                <p class="print-classification mt-1">SECRET — Patient data / <span lang="ar" dir="rtl">سري — بيانات مرضى</span></p>
             </footer>
         </div>
     </AppLayout>
@@ -138,6 +139,9 @@ const print = () => window.print();
 
 <style>
 @page { size: A4; margin: 12mm; }
+/* DATA-CLASSIFICATION.md §4: the bilingual classification line only belongs on the physical
+   printout, never on screen — the mirror image of .no-print below. */
+.print-classification { display: none; }
 @media print {
     aside, header.sticky { display: none !important; }
     [class*="pl-64"] { padding-left: 0 !important; }
@@ -145,5 +149,6 @@ const print = () => window.print();
     body { background: #fff !important; }
     .no-print { display: none !important; }
     .group-block { break-inside: avoid; }
+    .print-classification { display: block; }
 }
 </style>

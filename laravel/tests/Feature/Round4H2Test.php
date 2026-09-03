@@ -540,7 +540,8 @@ class Round4H2Test extends TestCase
 
         $res = $this->actingAs($this->admin())->get('/registry/export');
         $res->assertOk();
-        $res->assertDownload('Export-'.now()->format('d-m-Y').'.csv');
+        // DATA-CLASSIFICATION.md §4/§6: row-level patient data export — SECRET- filename prefix
+        $res->assertDownload('SECRET-Export-'.now()->format('d-m-Y').'.csv');
 
         $csv = $res->streamedContent();
         $this->assertStringContainsString('PNEUMONIA, UNSPECIFIED ORGANISM || TYPE 2 DIABETES MELLITUS WITHOUT COMPLICATIONS', $csv,
@@ -552,7 +553,8 @@ class Round4H2Test extends TestCase
 
         $xlsx = $this->actingAs($this->admin())->get('/registry/export-xlsx');
         $xlsx->assertOk();
-        $xlsx->assertDownload('Export-'.now()->format('d-m-Y').'.xlsx');
+        // DATA-CLASSIFICATION.md §4/§6: row-level patient data export — SECRET- filename prefix
+        $xlsx->assertDownload('SECRET-Export-'.now()->format('d-m-Y').'.xlsx');
     }
 
     // ---- C7: legacy URL redirects ----------------------------------------------------------------------------------

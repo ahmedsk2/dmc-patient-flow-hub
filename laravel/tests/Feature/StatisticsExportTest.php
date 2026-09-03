@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Admission;
+use App\Models\AuditLog;
 use App\Models\Patient;
 use App\Models\User;
 use App\Support\Totp;
@@ -111,5 +112,68 @@ class StatisticsExportTest extends TestCase
         $this->assertSame('Adm', $header[1]);
         // the Adm column of the first bucket equals the screen's kpiGrid[0].admissions (can't drift)
         $this->assertSame($expected, (int) $firstData[1]);
+    }
+
+    // ---- prod-ready G1: break-glass audit row on every statistics export --------------------
+
+    public function test_statistics_xlsx_export_writes_one_audit_row_with_range_and_counts(): void
+    {
+        $this->seedJune();
+        $this->actingAs($this->admin())
+            ->get('/statistics/export?from=2024-06-01&to=2024-06-30&interval=month')->assertOk();
+
+        $this->assertSame(1, AuditLog::where('action', 'statistics.export.xlsx')->count());
+        $row = AuditLog::where('action', 'statistics.export.xlsx')->first();
+        $this->assertSame('statistics', $row->entity_type);
+        $this->assertSame('2024-06-01', $row->details['from']);
+        $this->assertSame('2024-06-30', $row->details['to']);
+        $this->assertSame('month', $row->details['interval']);
+        $this->assertIsInt($row->details['kpi_grid_rows']);
+        $this->assertIsInt($row->details['per_consultant_rows']);
+        $this->assertIsInt($row->details['series_rows']);
+        // no PHI possible — the export is pure aggregate counts, not patient rows
+        $this->assertStringNotContainsString('mrn', strtolower(json_encode($row->details)));
+    }
+
+    public function test_statistics_pdf_export_writes_one_audit_row(): void
+    {
+        $this->seedJune();
+        $this->actingAs($this->admin())
+            ->get('/statistics/export/pdf?from=2024-06-01&to=2024-06-30&interval=month')->assertOk();
+
+        $this->assertSame(1, AuditLog::where('action', 'statistics.export.pdf')->count());
+        $row = AuditLog::where('action', 'statistics.export.pdf')->first();
+        $this->assertSame('2024-06-01', $row->details['from']);
+        $this->assertSame('2024-06-30', $row->details['to']);
+    }
+
+    // ---- DATA-CLASSIFICATION.md §4/§6: aggregate exports carry a CONFIDENTIAL- filename ------
+
+    public function test_statistics_xlsx_filename_has_confidential_prefix(): void
+    {
+        $this->actingAs($this->admin())->get('/statistics/export?from=2024-06-01&to=2024-06-30')
+            ->assertDownload('CONFIDENTIAL-dmc-statistics-2024-06-01-2024-06-30.xlsx');
+    }
+
+    public function test_statistics_pdf_filename_has_confidential_prefix(): void
+    {
+        $this->actingAs($this->admin())->get('/statistics/export/pdf?from=2024-06-01&to=2024-06-30')
+            ->assertDownload('CONFIDENTIAL-dmc-statistics-2024-06-01-2024-06-30.pdf');
+    }
+
+    /**
+     * The statistics-pdf template carries ONE fixed-position classification footer (repeats on
+     * every dompdf page) positioned before the first page div — not duplicated per-page.
+     */
+    public function test_statistics_pdf_template_carries_confidential_classification_footer(): void
+    {
+        $html = file_get_contents(resource_path('views/reports/statistics-pdf.blade.php'));
+        $this->assertStringContainsString('CONFIDENTIAL — Internal use / خاص — للاستخدام الداخلي', $html);
+        $this->assertStringContainsString('position: fixed', $html);
+        $this->assertLessThan(
+            strpos($html, '<div class="page'),
+            strpos($html, '<div class="classification-foot">'),
+            'the classification footer must sit outside/above the per-page divs so dompdf repeats it on every page'
+        );
     }
 }

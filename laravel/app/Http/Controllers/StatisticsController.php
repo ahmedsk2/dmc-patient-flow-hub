@@ -8,6 +8,7 @@ use App\Models\Admission;
 use App\Models\ConsultationReason;
 use App\Models\Setting;
 use App\Models\User;
+use App\Support\Audit;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -576,6 +577,28 @@ class StatisticsController extends Controller
     }
 
     /**
+     * prod-ready G1: one break-glass audit row per statistics export request — the validated date
+     * range/interval plus the row counts of every table the export actually emits (never the cell
+     * values themselves, which are pure aggregate counts anyway — no PHI is possible here).
+     * $includeSeries is false for the PDF (it renders only the KPI grid + per-consultant tables,
+     * never the interval-series sheet — the XLSX is the only export that emits all three).
+     */
+    private function logStatisticsExport(string $action, string $f, string $t, string $interval, array $tables, bool $includeSeries = true): void
+    {
+        $details = [
+            'from' => $f,
+            'to' => $t,
+            'interval' => $interval,
+            'kpi_grid_rows' => count($tables['kpiGrid']),
+            'per_consultant_rows' => count($tables['perConsultant']),
+        ];
+        if ($includeSeries) {
+            $details['series_rows'] = count($tables['series']);
+        }
+        Audit::log($action, 'statistics', null, $details);
+    }
+
+    /**
      * Multi-sheet XLSX of the currently-filtered statistics (openspout v5 supports named sheets).
      * Reuses the openspout writer pattern from RegistryController and the EXACT query methods —
      * the KPI-grid sheet is the §3.8 "export == index" drift contract.
@@ -584,6 +607,7 @@ class StatisticsController extends Controller
     {
         [, , $f, $t, $interval, $window] = $this->exportRange($request);
         $tables = $this->gatherExportTables($f, $t, $interval, $window);
+        $this->logStatisticsExport('statistics.export.xlsx', $f, $t, $interval, $tables);
 
         $tmp = tempnam(sys_get_temp_dir(), 'stat').'.xlsx';
         $writer = new XlsxWriter;
@@ -613,7 +637,8 @@ class StatisticsController extends Controller
 
         $writer->close();
 
-        return response()->download($tmp, "dmc-statistics-{$f}-{$t}.xlsx")->deleteFileAfterSend();
+        // classification: aggregate-only export (DATA-CLASSIFICATION.md §4/§6) — CONFIDENTIAL- filename prefix
+        return response()->download($tmp, "CONFIDENTIAL-dmc-statistics-{$f}-{$t}.xlsx")->deleteFileAfterSend();
     }
 
     /** Printable A4-landscape PDF of the currently-filtered statistics (KPI cards + grid + per-consultant). */
@@ -637,6 +662,7 @@ class StatisticsController extends Controller
                 ->whereBetween('a.admit_date', [$f, $t])->whereNull('a.deleted_at')->whereNull('prev.deleted_at')->distinct()->count('a.id'),
         ];
         $kpis['mortalityRate'] = $kpis['discharges'] > 0 ? round($kpis['deaths'] / $kpis['discharges'] * 100, 1) : 0.0;
+        $this->logStatisticsExport('statistics.export.pdf', $f, $t, $interval, $tables, includeSeries: false);
 
         $pdf = Pdf::loadView('reports.statistics-pdf', [
             'from' => $f, 'to' => $t, 'interval' => $interval, 'readmitWindow' => $window,
@@ -644,6 +670,7 @@ class StatisticsController extends Controller
             'generatedAt' => now()->format('D, d M Y · H:i'),
         ])->setPaper('a4', 'landscape');
 
-        return $pdf->download("dmc-statistics-{$f}-{$t}.pdf");
+        // classification: aggregate-only export (DATA-CLASSIFICATION.md §4/§6) — CONFIDENTIAL- filename prefix
+        return $pdf->download("CONFIDENTIAL-dmc-statistics-{$f}-{$t}.pdf");
     }
 }

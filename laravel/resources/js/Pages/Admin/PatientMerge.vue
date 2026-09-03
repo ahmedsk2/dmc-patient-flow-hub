@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { useForm, router } from '@inertiajs/vue3';
+import { useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { xsrf } from '@/lib/ui.js';
 
@@ -11,7 +11,7 @@ import { xsrf } from '@/lib/ui.js';
  * POST is step-up gated server-side; an out-of-window admin is bounced to /stepup, re-auths, and
  * comes back to retry. The "Possible duplicates" worklist pre-fills source/target on click.
  */
-const props = defineProps({
+defineProps({
     possibleDuplicates: { type: Array, default: () => [] },
 });
 

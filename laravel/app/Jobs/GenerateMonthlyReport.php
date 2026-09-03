@@ -11,6 +11,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 /**
@@ -35,8 +36,25 @@ class GenerateMonthlyReport implements ShouldQueue
         $pdf = Pdf::loadView('reports.monthly-pdf', $reports->gatherBooklet($this->year))->setPaper('a4', 'landscape');
         $pdfContent = $pdf->output();
 
+        // RES-05: one bad address or a relay hiccup must not abort the whole distribution — with
+        // QUEUE_CONNECTION=sync the send runs inline, so an exception here would stop the loop and
+        // silently skip every remaining recipient. Continue, remember who failed, log once.
+        $failed = [];
         foreach ($recipients as $r) {
-            Mail::to($r->email)->queue(new MonthlyReportMail($this->year, $this->month, $pdfContent));
+            try {
+                Mail::to($r->email)->queue(new MonthlyReportMail($this->year, $this->month, $pdfContent));
+            } catch (\Throwable $e) {
+                $failed[] = $r->email;
+                Log::warning('monthly report: send failed', [
+                    'recipient' => $r->email, 'year' => $this->year, 'month' => $this->month,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+        if ($failed !== [] && count($failed) === $recipients->count()) {
+            Log::error('monthly report: every send failed', [
+                'year' => $this->year, 'month' => $this->month, 'recipients' => count($failed),
+            ]);
         }
     }
 }

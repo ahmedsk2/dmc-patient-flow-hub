@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Admission;
+use App\Models\AuditLog;
 use App\Models\Patient;
 use App\Models\User;
 use App\Support\Totp;
@@ -102,5 +103,59 @@ class GovernancePdfTest extends TestCase
         $readmits = DB::table('admissions as a')->join('admissions as prev', Admission::readmissionJoin(3))
             ->whereBetween('a.admit_date', ['2024-06-01', '2024-06-30'])->distinct()->count('a.id');
         $this->assertSame(1, $readmits);
+    }
+
+    // ---- prod-ready G1: the governance pack carries MRNs — a PHI-read, break-glass event --------
+
+    public function test_governance_pdf_writes_one_audit_row_with_counts_not_mrn(): void
+    {
+        $d1 = Patient::create(['mrn' => '90000021', 'name' => 'D1', 'age' => 70]);
+        $base = ['is_longterm' => 0, 'is_new_assignment' => 0, 'current_location' => 'Ward'];
+        Admission::create([...$base, 'patient_id' => $d1->id, 'admit_date' => '2024-06-02', 'discharge_date' => '2024-06-08', 'outcome' => 'Dead', 'transfer_type' => 'discharge from ward']);
+
+        $this->actingAs($this->admin())
+            ->get('/reports/governance/pdf?period_type=month&year=2024&month=6')->assertOk();
+
+        $this->assertSame(1, AuditLog::where('action', 'report.pdf.governance')->count());
+        $row = AuditLog::where('action', 'report.pdf.governance')->first();
+        $this->assertSame('report', $row->entity_type);
+        $this->assertSame(2024, $row->details['year']);
+        $this->assertSame('month', $row->details['period_type']);
+        $this->assertSame(6, $row->details['month']);
+        $this->assertSame(1, $row->details['death_count']);
+        // never the MRN itself — counts only
+        $this->assertStringNotContainsString('90000021', json_encode($row->details));
+    }
+
+    // ---- DATA-CLASSIFICATION.md §4/§6: row-level (MRN) export carries a SECRET- filename --------
+
+    public function test_governance_pdf_filename_has_secret_prefix(): void
+    {
+        $this->actingAs($this->admin())
+            ->get('/reports/governance/pdf?period_type=month&year=2024&month=6')
+            ->assertDownload('SECRET-governance-2024-06.pdf');
+    }
+
+    public function test_governance_pdf_quarter_filename_has_secret_prefix(): void
+    {
+        $this->actingAs($this->admin())
+            ->get('/reports/governance/pdf?period_type=quarter&year=2024&quarter=2')
+            ->assertDownload('SECRET-governance-2024-Q2.pdf');
+    }
+
+    /**
+     * The governance-pdf template carries ONE fixed-position SECRET footer (repeats on every
+     * dompdf page) positioned before the first page div — not duplicated per-page.
+     */
+    public function test_governance_pdf_template_carries_secret_classification_footer(): void
+    {
+        $html = file_get_contents(resource_path('views/reports/governance-pdf.blade.php'));
+        $this->assertStringContainsString('SECRET — Patient data / سري — بيانات مرضى', $html);
+        $this->assertStringContainsString('position: fixed', $html);
+        $this->assertLessThan(
+            strpos($html, '<div class="page'),
+            strpos($html, '<div class="classification-foot">'),
+            'the classification footer must sit outside/above the per-page divs so dompdf repeats it on every page'
+        );
     }
 }

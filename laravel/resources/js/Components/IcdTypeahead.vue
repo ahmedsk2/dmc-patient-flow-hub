@@ -7,7 +7,7 @@ import { FIELD } from '@/lib/ui.js';
  * Keyboard: ArrowUp/ArrowDown move the highlight, Enter selects it, Esc closes the dropdown
  * (and stops there — a second Esc bubbles up to close the surrounding modal).
  */
-const props = defineProps({
+defineProps({
     placeholder: { type: String, default: 'Search ICD-10 (≥2 chars)…' },
     inputClass: { type: String, default: FIELD },
 });

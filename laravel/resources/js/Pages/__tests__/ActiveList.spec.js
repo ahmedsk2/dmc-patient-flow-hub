@@ -56,3 +56,13 @@ describe('ActiveList — print consultant filter', () => {
         expect(mountList().find('.report').classes()).toContain('max-w-full');
     });
 });
+
+// DATA-CLASSIFICATION.md §4: every printed sheet carries the bilingual classification label. It is
+// print-only (hidden on screen, .print-classification), but the text must still be in the DOM.
+describe('ActiveList — print classification label (DATA-CLASSIFICATION.md §4)', () => {
+    it('carries the bilingual SECRET / سري classification line', () => {
+        const text = mountList().find('.print-classification').text();
+        expect(text).toContain('SECRET — Patient data');
+        expect(text).toContain('سري — بيانات مرضى');
+    });
+});
