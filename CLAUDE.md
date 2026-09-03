@@ -266,8 +266,10 @@ Each flow names its controller; per-endpoint database effects are in DATABASE-AN
 
 - **Transport:** Cloudflare proxy, minimum TLS 1.2, HSTS; the origin's 80/443 accept **only
   Cloudflare ranges** (an unproxied DNS record or a direct curl gets nothing).
-- **Headers:** nonce CSP enforced + static header set (§5); `SESSION_SECURE_COOKIE`,
-  `SESSION_ENCRYPT=true`, `APP_DEBUG=false`, `LOG_LEVEL=warning`.
+- **Headers and cookie:** nonce CSP enforced + static header set (§5); the session cookie is
+  `__Host-`-prefixed (Secure, HttpOnly, host-only; `scripts/smoke.sh` checks it); `SESSION_ENCRYPT=true`,
+  `APP_DEBUG=false`. `LOG_LEVEL=warning` is set in Coolify only as a **build-time** variable, so the
+  runtime level is Laravel's default `debug` until the owner re-adds it as a runtime variable.
 - **Encryption at rest:** the four narrative columns (`handovers.body`, `handover_revisions.body`,
   `consultations.response_note`, `consultation_followups.note`) via `App\Casts\EncryptedNarrative`
   (AES-256-CBC + HMAC under `APP_KEY`; tolerant of legacy plaintext on read, logging it). Also
@@ -308,8 +310,10 @@ environment gotchas are in session memory.
   runtime (restart). The field name in the API is `is_buildtime`. `APP_TIMEZONE=Asia/Riyadh` is the
   fallback for the in-app timezone; date columns are timezone-naive, so UTC drifts every "today" rule
   by 3 hours.
-- **Sessions and logs live in the container** (`SESSION_DRIVER=file`): a redeploy signs everyone out
-  and discards the old container's logs unless `storage/` is a persistent volume.
+- **Sessions and cache are in the database** (`SESSION_DRIVER=database`, `CACHE_STORE=database`
+  since 2026-09-03), so a redeploy no longer signs everyone out. **Logs go to stderr as JSON lines**
+  (`LOG_CHANNEL=stderr`; read them with `docker logs` or Coolify's log viewer) and die with the
+  container: there is no log sink yet (OBS items, owner).
 - **Data reload** (`php artisan legacy:import`): the most destructive operator command. It
   **truncates target tables before its first legacy read**, resets user ids and MFA enrolment,
   truncates handovers and notifications, needs `GRANT SELECT ON dmc_prod.*` for `dmc_demo`, and
@@ -340,8 +344,8 @@ four jobs, all under a read-only token and SHA-pinned actions:
 
 | Job | Gates |
 |---|---|
-| `frontend` | `npm ci`, `npm audit --omit=dev`, Vitest (+ axe), `npm run build`, Tailwind `@source` allow-list drift guard, contrast/perceptual-distance gate, build-reproducibility (`public/build` must be unchanged after a rebuild) |
-| `backend` | PHPUnit two-pass against MySQL 8 (everything except `pdf`, then `pdf` alone because dompdf segfaults in a shared process), `composer audit` arbitrated by `scripts/composer-audit-gate.php` (high/critical advisories block unless allow-listed with a reason) |
+| `frontend` | `npm ci`, `npm audit --omit=dev`, `npm run lint` (ESLint + eslint-plugin-vue, zero warnings), Vitest `--coverage` (+ axe) with the thresholds in `vitest.config.js`, `npm run build`, Tailwind `@source` allow-list drift guard, contrast/perceptual-distance gate, build-reproducibility (`public/build` must be unchanged after a rebuild) |
+| `backend` | PHPUnit two-pass against MySQL 8.4 on PHP 8.3 (everything except `pdf` with `--coverage-clover`, then `pdf` alone because dompdf segfaults in a shared process), `scripts/coverage-gate.php` statement floor 83 % over `app/`, `composer audit` arbitrated by `scripts/composer-audit-gate.php` (high/critical advisories block unless allow-listed with a reason), `vendor/bin/pint --test` |
 | `secrets` | gitleaks |
 | `sast` | Semgrep, ERROR severity blocks |
 
@@ -352,14 +356,18 @@ the same gates must be run locally per RELEASE-CHECKLIST.md. Since 2026-09-03 th
 PR (no path filter), plus a blocking Pint gate and Vitest coverage thresholds. The legacy `ci.yml` is
 a separate pipeline; never merge them.
 
-**Baselines (2026-09-03):** PHPUnit ~926 tests (+56 in the `pdf` group), Vitest 717.
+**Baselines (2026-09-03, after PR #11):** PHPUnit 936 tests (+75 in the `pdf` group), PHP
+statement coverage 86.1 % (floor 83), Vitest 754 (floors lines/statements 80, branches 76,
+functions 44), ESLint zero warnings, Pint clean.
 
 **Run locally from `laravel/`:**
 
 ```bash
 php artisan test --exclude-group pdf      # includes the slow-import group — never ship without it
 php artisan test --group pdf
-npx vitest run
+vendor/bin/pint --test                    # ~10 min on Windows; --dirty for the files you touched
+npx vitest run --coverage                 # the thresholds only bite with --coverage
+npm run lint                              # ESLint + eslint-plugin-vue, zero warnings
 npm run build && git status --porcelain -- public/build   # must print nothing
 npm run check-allowlist && npm run contrast
 composer audit && npm audit --omit=dev
@@ -423,8 +431,12 @@ CBAHI. State on 2026-09-03:
   (delta table, orchestrator notes on auditor variance, ranked open items). The working cache in
   `laravel/.prod-ready/` is git-ignored. External header/TLS grades the same day: Laravel app **A**,
   legacy daily site **F** (`evidence/sec-web-2026-09-03.md`). Re-score only when it is genuinely useful.
-- **Evidence pack:** to be built as items close, mapping each required control to where it is
-  satisfied in this repo and infrastructure (HANDOFF.md item 3).
+- **Engineering close-out (late 2026-09-03):** every code-only item from the re-score shipped in
+  PR #10 and the hardening PR #11 and was **deployed as `a4dd4bd`** after an adversarial pre-deploy
+  review (smoke 15/15, audit chain intact). What remains is owner or infrastructure decisions only:
+  the ranked list lives in HANDOFF.md item 5.
+- **Evidence pack:** [`EVIDENCE-PACK.md`](laravel/docs/compliance/EVIDENCE-PACK.md) maps the PDPL
+  obligations and NCA domains to evidence, with the gap register G1–G16 (G1, G2 and G14 closed).
 
 ---
 

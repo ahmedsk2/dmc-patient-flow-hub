@@ -50,7 +50,8 @@
 - **Login:** a trust-badge row of six **truthful** claims (encrypted in transit / at rest, MFA,
   in-Kingdom hosting, backups, privacy-notice link). No framework badges until certificates exist.
 - **Docs:** pruned of dev scaffolding; PDPL paper-trail drafts in `laravel/docs/compliance/`.
-- **Gate baselines:** PHPUnit ~926 (+56 in the `pdf` group), Vitest 717.
+- **Gate baselines (2026-09-03, after PR #11):** PHPUnit 936 (+75 in the `pdf` group), PHP statement
+  coverage 86.1 % (floor 83), Vitest 754 (floors 80/80/76/44), ESLint zero warnings, Pint clean.
 
 ## What remains (for the next session, with the owner)
 
@@ -98,7 +99,14 @@
    owner** — name incident roles / DPO / sign the processor contract; ~~(7)~~ **DONE** — labelled
    Login and Admission forms, axe-clean. Runbook/README wording about CI updated in the same
    follow-through.
-   **Engineering close-out (same day, one PR):** audit rows + `SECRET-`/`CONFIDENTIAL-` filename
+   **Engineering close-out (same day, PR #10 + hardening PR #11) — DEPLOYED as `a4dd4bd` at
+   17:13 UTC on 2026-09-03** after an adversarial pre-deploy review (five lenses, three refuters
+   each; all ten raised findings refuted, six cheap hardenings folded into #11): smoke 15/15 with
+   the new `__Host-` cookie check, `/health` ok, audit chain intact, image tag = main HEAD. Note:
+   production's `LOG_CHANNEL` is already `stderr`, so the JSON log format went live with this
+   deploy (Coolify's log viewer now shows JSON lines); and `LOG_LEVEL=warning` exists in Coolify
+   only as a **build-time** variable, so the runtime level is Laravel's default `debug` — add it as
+   a runtime variable (owner). Contents: audit rows + `SECRET-`/`CONFIDENTIAL-` filename
    prefixes + PDF/print footers on every export (G1, G2); labels paired on the six remaining forms
    (UX-04 fully closed) with axe specs; `__Host-` session cookie in config (G14); ESLint + vue
    plugin as a blocking CI gate with a zero-warning baseline (TST-04); unhandled-rejection net +
