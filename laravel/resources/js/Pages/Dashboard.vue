@@ -529,7 +529,7 @@ onUnmounted(() => clearInterval(autoRefresh));
                     <span class="rounded-full bg-ink-50 px-3 py-1 text-xs font-semibold text-ink-500">Last 30 days</span>
                 </div>
                 <ChartFigure title="Admissions vs Discharges" caption="Daily non-ICU admissions versus discharges over the last 30 days; each line is labelled at its end." :columns="['Day', 'Admissions', 'Discharges']" :rows="trendRows">
-                    <apexchart v-if="hasTrend" type="area" height="300" :options="areaOptions" :series="areaSeries" aria-label="Area chart: admissions versus discharges over the last 30 days" />
+                    <apexchart role="img" v-if="hasTrend" type="area" height="300" :options="areaOptions" :series="areaSeries" aria-label="Area chart: admissions versus discharges over the last 30 days" />
                     <p v-else class="grid h-[300px] place-items-center text-sm text-ink-400">No data for this period.</p>
                 </ChartFigure>
             </div>
@@ -544,7 +544,7 @@ onUnmounted(() => clearInterval(autoRefresh));
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h2 class="mb-2 font-semibold text-ink-700">Consultations</h2>
                 <ChartFigure title="Consultations" caption="New consultations versus sign-offs over the last six months." :columns="['Month', 'New', 'Signed off']" :rows="consultsRows">
-                    <apexchart v-if="hasConsults" type="bar" height="260" :options="consultsOptions" :series="consultsSeries" aria-label="Bar chart: consultations received and signed off" />
+                    <apexchart role="img" v-if="hasConsults" type="bar" height="260" :options="consultsOptions" :series="consultsSeries" aria-label="Bar chart: consultations received and signed off" />
                     <p v-else class="grid h-[260px] place-items-center text-sm text-ink-400">No data for this period.</p>
                 </ChartFigure>
             </div>
@@ -552,14 +552,14 @@ onUnmounted(() => clearInterval(autoRefresh));
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h2 class="mb-2 font-semibold text-ink-700">Consultations <span class="font-normal text-ink-400">(sign-offs today + yesterday vs active)</span></h2>
                 <ChartFigure title="Consultations — sign-offs today and yesterday vs active" caption="Consultations signed off today or yesterday, versus those still awaiting sign-off. Sign-off is recorded as a calendar date with no time of day, so this counts two calendar days rather than a rolling 24 hours." :columns="['Status', 'Count']" :rows="consultDonutRows">
-                    <apexchart v-if="hasConsultDonut" type="donut" height="260" :options="consultDonutOptions" :series="consultDonutSeries" :aria-label="`Donut chart: ${consultDonut.signedTodayOrYesterday} consultations signed off today or yesterday, ${consultDonut.active} active`" />
+                    <apexchart role="img" v-if="hasConsultDonut" type="donut" height="260" :options="consultDonutOptions" :series="consultDonutSeries" :aria-label="`Donut chart: ${consultDonut.signedTodayOrYesterday} consultations signed off today or yesterday, ${consultDonut.active} active`" />
                     <p v-else class="grid h-[260px] place-items-center text-sm text-ink-400">No data for this period.</p>
                 </ChartFigure>
             </div>
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h2 class="mb-2 font-semibold text-ink-700">Length of Stay <span class="font-normal text-ink-400">(this year)</span></h2>
                 <ChartFigure title="Length of Stay" caption="Distribution of length of stay (days) for non-ICU discharges this year." :columns="['LOS (days)', 'Patients']" :rows="losRows">
-                    <apexchart v-if="hasLos" type="bar" height="260" :options="losOptions" :series="losSeries" aria-label="Bar chart: length-of-stay distribution this year" />
+                    <apexchart role="img" v-if="hasLos" type="bar" height="260" :options="losOptions" :series="losSeries" aria-label="Bar chart: length-of-stay distribution this year" />
                     <p v-else class="grid h-[260px] place-items-center text-sm text-ink-400">No data for this period.</p>
                 </ChartFigure>
             </div>
@@ -568,7 +568,7 @@ onUnmounted(() => clearInterval(autoRefresh));
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h2 class="mb-2 font-semibold text-ink-700">Current patients: <span class="nums">{{ donutTotal }}</span> <span class="font-normal text-ink-400">(incl. {{ donutTb }} TB)</span></h2>
                 <ChartFigure title="Current patients by service" caption="Assigned non-ICU census by service line (Hospitalist, Sub-specialty, Long-term)." :columns="['Service', 'Patients']" :rows="mixRows">
-                    <apexchart v-if="hasMix" type="donut" height="260" :options="donutOptions" :series="donutSeries" :aria-label="`Donut chart: assigned non-ICU census by service — ${donutTotal} patients including ${donutTb} TB`" />
+                    <apexchart role="img" v-if="hasMix" type="donut" height="260" :options="donutOptions" :series="donutSeries" :aria-label="`Donut chart: assigned non-ICU census by service — ${donutTotal} patients including ${donutTb} TB`" />
                     <p v-else class="grid h-[260px] place-items-center text-sm text-ink-400">No data for this period.</p>
                 </ChartFigure>
             </div>
@@ -644,7 +644,7 @@ onUnmounted(() => clearInterval(autoRefresh));
         <div class="mt-5 rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
             <h2 class="mb-2 font-semibold text-ink-700">Admissions / Discharges per consultant <span class="font-normal text-ink-400">(since yesterday)</span></h2>
             <ChartFigure title="Admissions / Discharges per consultant" caption="Per-consultant admissions and discharges since yesterday." :columns="['Consultant', 'Admissions', 'Discharges']" :rows="act24Rows">
-                <apexchart v-if="hasAct24" type="bar" height="280" :options="act24Options" :series="act24Series" aria-label="Grouped bar chart: admissions and discharges per consultant since yesterday" />
+                <apexchart role="img" v-if="hasAct24" type="bar" height="280" :options="act24Options" :series="act24Series" aria-label="Grouped bar chart: admissions and discharges per consultant since yesterday" />
                 <p v-else class="grid h-[280px] place-items-center text-sm text-ink-400">No data for this period.</p>
             </ChartFigure>
         </div>
