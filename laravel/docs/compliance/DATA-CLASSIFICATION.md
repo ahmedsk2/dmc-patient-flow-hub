@@ -124,12 +124,12 @@ Derived from [`../../database/migrations/`](../../database/migrations/); see
 
 | Aspect | Rule | How it is met today | DCC ref. |
 |---|---|---|---|
-| Labelling | Every export file name, e-mail subject, printed sheet and document carries **SECRET — Patient data** (EN) / **سري — بيانات مرضى** (AR) | Not automated; exports are unlabeled (GAP — add a header row / PDF footer) | [VERIFY] |
+| Labelling | Every export file name, e-mail subject, printed sheet and document carries **SECRET — Patient data** (EN) / **سري — بيانات مرضى** (AR) | **Automated in the Laravel app since 2026-09-03** (C13): row-level downloads carry a `SECRET-` filename prefix (registry exports, audit-log exports, the governance PDF), that PDF renders the bilingual footer, and the printable census and service handover sheet carry the same label on screen and in print. **The legacy daily system's exports and printouts remain unlabelled** (GAP until cutover) | [VERIFY] |
 | Access | Named individuals with a clinical or operational need; MFA always; admin-only for bulk views and exports; break-glass logging for record opens where enabled | Roles/capabilities, `admin` routes, mandatory MFA, `log_record_opens` (default OFF) | [VERIFY] |
 | Storage | Encrypted at rest; keys separate from data; in-Kingdom only | **GAP for the MySQL volume (planned)**; audit archive in-Kingdom; backups (being built) to be encrypted | [VERIFY] |
 | Transit | TLS 1.2+ everywhere; no plain-text protocols; no personal e-mail, chat or removable media | Cloudflare edge TLS 1.2 min + HSTS; SMTP TLS [VERIFY]; edge decryption is an open legal point (DPIA R5) | [VERIFY] |
 | Sharing outside the hospital | Prohibited unless the DPO approves and a contract/legal basis exists; minimum necessary; pseudonymise where possible | No external sharing exists by design | [VERIFY] |
-| Copies / exports | Only when needed for a defined task; recorded (automatically or manually); deleted when the task ends; never synced to personal cloud storage | Registry exports audited with row count; audit/statistics exports unaudited (GAP) | [VERIFY] |
+| Copies / exports | Only when needed for a defined task; recorded (automatically or manually); deleted when the task ends; never synced to personal cloud storage | **Every Laravel export and report PDF is audited since 2026-09-03** (C12) — registry exports with row count, plus `statistics.export.*`, `audit.export.*` and `report.pdf.*`; the governance PDF and the audit-log exports sit in the viewer's PHI-read category. **Legacy exports leave no record at all** (GAP until cutover) | [VERIFY] |
 | Printing | Only from the designated handover/service sheet; collected immediately; never left unattended; shredded (cross-cut) at end of shift or when superseded | Print pages exist; paper rule to be set [PLACEHOLDER] | [VERIFY] |
 | Logging of access | All writes and PHI reads/exports audited with actor + IP; audit rows immutable and shipped off-box | `App\Support\Audit`, hash chain, hourly ship, nightly verify | [VERIFY] |
 | Disposal | Database rows: per DATA-RETENTION.md; files: cryptographic erasure (delete + key destruction) or secure wipe; paper: cross-cut shredding; cloud objects: delete + confirm no versions/snapshots remain | See DATA-RETENTION.md §5 | [VERIFY] |
@@ -139,7 +139,7 @@ Derived from [`../../database/migrations/`](../../database/migrations/); see
 
 | Aspect | Rule | How it is met today | DCC ref. |
 |---|---|---|---|
-| Labelling | **CONFIDENTIAL** (EN) / **خاص** or **مقيد** per the hospital's convention (AR) [VERIFY term] | Not automated | [VERIFY] |
+| Labelling | **CONFIDENTIAL** (EN) / **خاص** or **مقيد** per the hospital's convention (AR) [VERIFY term] | **Automated in the Laravel app since 2026-09-03** (C13): aggregate downloads carry a `CONFIDENTIAL-` filename prefix (statistics, annual, monthly and consultant PDFs) and each of those PDFs renders the bilingual footer. Legacy output is unlabelled | [VERIFY] |
 | Access | Hospital staff with a role-based need; MFA for system access | Roles; admin-only for audit/config/statistics | [VERIFY] |
 | Storage | Access-controlled; encryption at rest recommended; in-Kingdom preferred | Same host as Secret data (inherits its controls) | [VERIFY] |
 | Transit | TLS; hospital e-mail acceptable internally; staff personal data may leave the Kingdom only under a documented transfer safeguard | US SMTP relay carries staff e-mail/OTPs — safeguard [VERIFY] | [VERIFY] |
@@ -174,7 +174,7 @@ separate accreditation would be required [VERIFY].
 
 ## 6. Labelling, reclassification and review
 
-- **Labelling:** exports and printed sheets should carry the level in both languages; until automated, users add it manually to file names (`SECRET-registry-2026-09.xlsx`) [PLACEHOLDER — engineering to add headers/footers].
+- **Labelling:** exports and printed sheets should carry the level in both languages. **Automated in the Laravel app since 2026-09-03** — the filename prefix is applied by the controller (`SECRET-Export-…`, `CONFIDENTIAL-dmc-statistics-…`) and every report PDF and print view carries the bilingual footer, so users no longer label Laravel output by hand. **Anything exported or printed from the legacy daily system still has to be labelled manually** until cutover [PLACEHOLDER — interim instruction to staff].
 - **Reclassification down** (e.g. Secret → Confidential after true anonymisation) requires the DPO's written confirmation that no individual can be re-identified, including by combination with other hospital data.
 - **Reclassification up** is automatic under the inheritance rule and needs no approval.
 - **Review:** annually, on any new table/column (each migration should state the level of any new personal-data column in its docblock — proposed convention), and after any incident.
@@ -187,7 +187,7 @@ separate accreditation would be required [VERIFY].
 |---|---|---|---|
 | Structured PHI relies on OCI volume encryption, not app-level column encryption | operator company | before go-live [DATE] | DPIA action 2 |
 | Loose plaintext dumps on the workstation and OCI host (automated encrypted off-box backup is now **live**) | operator company | [DATE] | DPIA action 1; DATA-RETENTION.md |
-| Exports unlabeled; statistics, audit-log and report exports unaudited (verified 2026-09-03) | operator company (engineering) | [DATE] | DPIA action 8; EVIDENCE-PACK G1/G2 |
+| ~~Exports unlabeled; statistics, audit-log and report exports unaudited~~ — **closed for the Laravel app 2026-09-03** (C12/C13: every export and report PDF audited, `SECRET-`/`CONFIDENTIAL-` prefixes, PDF and print footers). **Still open for the legacy daily system, whose exports are unaudited and unlabelled** | owner (cutover) | before/at cutover [DATE] | DPIA action 8, R6; EVIDENCE-PACK G1/G2 |
 | `log_record_opens` default OFF (verified 2026-09-03) | DMC clinical governance | [DATE] | DPIA R6 |
 | Cloudflare edge decryption legal status (Free plan; Regional Services unavailable) | legal / DPO | [DATE] | DPIA R5 |
 | Paper handling rule for printed sheets | DMC clinical (Head of IM) | [DATE] | — |

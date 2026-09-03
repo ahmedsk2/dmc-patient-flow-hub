@@ -50,8 +50,8 @@
 | C9 | Break-glass logging | `log_record_opens` = **0 (OFF)** in production; enabling it is a governance decision. | VERIFIED |
 | C10 | Audit retention | `audit_retention_years` = 6 (internal choice; no sector rule found requiring six — ECC baseline is ≥12 months [PROPOSED]). | VERIFIED |
 | C11 | Session timeout | Idle 30 min; absolute off; trusted-device 24 h. | VERIFIED |
-| C12 | Export auditing gap | **Registry exports are audited; statistics exports, audit-log exports and report PDFs are NOT.** Confirmed engineering gap. | VERIFIED |
-| C13 | Export labelling gap | No classification label on exports or printed sheets. | VERIFIED |
+| C12 | Export auditing | **Closed 2026-09-03** (PR #10, deployed as `a4dd4bd`). Every export and report PDF now writes an `audit_log` row: `statistics.export.xlsx`, `statistics.export.pdf`, `audit.export.csv`, `audit.export.xlsx`, `report.pdf.annual`, `report.pdf.consultant`, `report.pdf.governance`, `report.pdf.monthly`, `report.pdf.download` — alongside the pre-existing `registry.search`, `registry.export`, `registry.export_xlsx`, `registry.open`. `report.pdf.governance` and the two audit-log exports are grouped under the audit viewer's **PHI-read** category (`AuditController::PHI_READ_ACTIONS`) because they carry MRN-level content. **Laravel side only — the legacy daily system's own statistics and export pages remain entirely unaudited.** | VERIFIED |
+| C13 | Export labelling | **Closed 2026-09-03** (PR #10). Download filenames carry a `SECRET-` prefix for row-level patient data (registry exports, audit-log exports, the governance PDF) or `CONFIDENTIAL-` for aggregate output (statistics, annual, monthly, consultant PDFs), and every report PDF renders a bilingual classification footer; the printable census and the service handover sheet carry the same label on screen and in print. **Laravel side only — legacy exports and printed output are unlabelled.** | VERIFIED |
 
 ## D. PHI-copy inventory and standing decisions
 
