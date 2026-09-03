@@ -414,13 +414,15 @@ CBAHI. State on 2026-09-03:
 - **Known compliance-relevant facts:** US-based SMTP relay for outbound mail (a transfer question);
   in-Kingdom hosting, backups and audit archive; a 90-day backup retention placeholder;
   `APP_KEY` escrowed by the owner; SSH IP allow-list deferred by the owner.
-- **Readiness scoring:** re-scored **2026-09-03** after the remediation: **BLOCKED 58/100**
-  (emphasis view 70), up from 27/37 on 2026-09-02. The block is two CI/CD process Criticals
-  (no required status checks on `main`; manual smoke/rollback), both cheap to close. Full report:
-  [`laravel/docs/compliance/evidence/prod-ready-2026-09-03.md`](laravel/docs/compliance/evidence/prod-ready-2026-09-03.md)
-  (the working cache in `laravel/.prod-ready/` is git-ignored). External header/TLS grades the same
-  day: Laravel app **A**, legacy daily site **F** (`evidence/sec-web-2026-09-03.md`). Re-score only
-  when it is genuinely useful.
+- **Readiness scoring:** two runs on **2026-09-03**. Morning, after the remediation: **BLOCKED
+  58/100** (emphasis 70; two CI/CD process Criticals), up from 27/37 on 2026-09-02 —
+  [`evidence/prod-ready-2026-09-03.md`](laravel/docs/compliance/evidence/prod-ready-2026-09-03.md).
+  Evening, after the same-day fixes were deployed and the branch rule applied: **NEEDS FIXES
+  62/100, 0 Critical, 14 High** (emphasis 72) —
+  [`evidence/prod-ready-2026-09-03-rescore.md`](laravel/docs/compliance/evidence/prod-ready-2026-09-03-rescore.md)
+  (delta table, orchestrator notes on auditor variance, ranked open items). The working cache in
+  `laravel/.prod-ready/` is git-ignored. External header/TLS grades the same day: Laravel app **A**,
+  legacy daily site **F** (`evidence/sec-web-2026-09-03.md`). Re-score only when it is genuinely useful.
 - **Evidence pack:** to be built as items close, mapping each required control to where it is
   satisfied in this repo and infrastructure (HANDOFF.md item 3).
 

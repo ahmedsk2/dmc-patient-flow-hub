@@ -76,9 +76,14 @@
    free CI during development), sign the **controller–processor contract** (none exists), appoint
    the **DPO**, decide on the **legacy daily site** (original un-hardened build live on SiteGround
    US — graded F; hardened `renovation` build never deployed there; owner plans cutover instead).
-5. ~~Optionally re-run `/prod-ready`~~ — **DONE 2026-09-03: BLOCKED 58/100** (emphasis 70; was
-   27/37). Report + ranked fixes:
+5. ~~Optionally re-run `/prod-ready`~~ — **DONE 2026-09-03, twice.** Morning: **BLOCKED 58/100**
+   (emphasis 70; was 27/37) —
    [`evidence/prod-ready-2026-09-03.md`](laravel/docs/compliance/evidence/prod-ready-2026-09-03.md).
+   Evening re-score after the fixes below shipped: **NEEDS FIXES 62/100, 0 Critical, 14 High**
+   (emphasis 72) —
+   [`evidence/prod-ready-2026-09-03-rescore.md`](laravel/docs/compliance/evidence/prod-ready-2026-09-03-rescore.md)
+   (delta table + ranked open items; read its orchestrator notes on auditor variance before
+   comparing category numbers).
    **Top fixes — status after the same-day follow-through (PR #7 merged, deployed as `3fbbd73`,
    smoke 14/14, audit chain intact):** ~~(1)~~ **DONE** — four required, admin-enforced status
    checks on `main`, PR-only; ~~(2)~~ **DONE** — `SESSION_DRIVER`/`CACHE_STORE=database` live and
