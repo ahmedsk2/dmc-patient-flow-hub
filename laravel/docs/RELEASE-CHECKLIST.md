@@ -14,7 +14,7 @@
 |---|---|---|---|
 | ☐ no ☐ yes: | ☐ no ☐ yes: | ☐ none ☐ restart ☐ rebuild: | |
 
-## 1. Gates — all local, all green (CI is billing-blocked and proves nothing, §11)
+## 1. Gates — green in CI on the pull request (required status checks on `main`, §11), and locally if you touched anything the CI runtime cannot see
 
 Run from `laravel/` on the exact commit you will deploy.
 

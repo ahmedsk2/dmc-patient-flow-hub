@@ -15,8 +15,9 @@
   (US)**, and that live site is the **original un-hardened build** (verified) — the systemic
   security defects are live over real PHI. Cutover replaces the dmc-im.com code with the Laravel app.
   See [`laravel/docs/compliance/CONFIRMED-FACTS.md`](laravel/docs/compliance/CONFIRMED-FACTS.md).
-- **Branch model:** `main` is the single Laravel dev branch — **direct-to-main is the owner-consented
-  workflow**. `renovation` points to the deployable legacy-PHP lineage. The legacy procedural-PHP app
+- **Branch model (changed 2026-09-03):** `main` is **protected — pull requests only**, with the four
+  Laravel CI jobs as required, admin-enforced status checks (branch, `gh pr create`, merge on green;
+  direct pushes are rejected). `renovation` points to the deployable legacy-PHP lineage. The legacy procedural-PHP app
   still sits at the repo root; it is the current **daily** system in its original build, and the
   hardened `renovation` build was never deployed to dmc-im.com.
 - Infra facts, the exact deploy procedure, and environment gotchas are held in **Claude memory**
@@ -78,16 +79,20 @@
 5. ~~Optionally re-run `/prod-ready`~~ — **DONE 2026-09-03: BLOCKED 58/100** (emphasis 70; was
    27/37). Report + ranked fixes:
    [`evidence/prod-ready-2026-09-03.md`](laravel/docs/compliance/evidence/prod-ready-2026-09-03.md).
-   **Next engineering work = its Top fixes:** (1) required status checks on `main` + deploy only on
-   green; (2) `SESSION_DRIVER=database` + `CACHE_STORE=database` (fixes the no-op session revocation
-   SEC-04, single-container coupling PERF-07, and the redeploy-logout gotcha); (3) SMTP `timeout` in
-   `config/mail.php`; (4) bind "today" from the app clock in place of raw `CURDATE()` (Dashboard / DataQuality /
-   Registry) — **never** by pinning the MySQL session time zone, which would shift every
-   `TIMESTAMP` column by three hours on read; (5) CI runtime parity PHP 8.3 / MySQL 8.4 + Pint gate +
-   coverage floor; (6) name incident roles / DPO / contract; (7) `for`/`id` labels on
-   `Auth/Login.vue` and `Admissions/Create.vue`. Also pending authorization: fix the three runbooks
-   that still say CI is billing-blocked (`DEPLOY-LARAVEL.md` §0/§11, `CI.md` preamble,
-   `RELEASE-CHECKLIST.md` §1) and root `README.md` ("22 tests").
+   **Top fixes — status after the same-day follow-through (PR #7 merged, deployed as `3fbbd73`,
+   smoke 14/14, audit chain intact):** ~~(1)~~ **DONE** — four required, admin-enforced status
+   checks on `main`, PR-only; ~~(2)~~ **DONE** — `SESSION_DRIVER`/`CACHE_STORE=database` live and
+   verified; ~~(3)~~ **DONE** — SMTP `timeout` 10 s; ~~(4)~~ **DONE** — "today" bound from the app
+   clock in place of raw `CURDATE()` (Dashboard / DataQuality / Registry), regression-tested by
+   `AppClockDayBoundaryTest` — **never** by pinning the MySQL session time zone (it would shift every
+   `TIMESTAMP` column by three hours); (5) **MOSTLY DONE** — CI on PHP 8.3 / MySQL 8.4, blocking Pint
+   gate (codebase normalised), Vitest coverage thresholds enforced; **open:** a PHP coverage floor
+   (Collision printed no table with pcov on PHPUnit 12 — diagnose before re-adding); (6) **open,
+   owner** — name incident roles / DPO / sign the processor contract; ~~(7)~~ **DONE** — labelled
+   Login and Admission forms, axe-clean. Runbook/README wording about CI updated in the same
+   follow-through. Still open from the report: CICD-08 (manual smoke/rollback), OBS-01/03/04/05,
+   DATA-02/04, OPS-02/06, CMP-03/06, the `__Host-` cookie prefix (G14), root `README.md`
+   ("22 tests").
 
 ## Doc map
 
