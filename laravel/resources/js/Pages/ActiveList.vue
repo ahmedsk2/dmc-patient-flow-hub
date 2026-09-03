@@ -53,7 +53,8 @@ const print = () => window.print();
         <div class="report mx-auto max-w-full rounded-2xl bg-card p-8 shadow-card ring-1 ring-line print:rounded-none print:shadow-none print:ring-0">
             <header class="mb-5 flex items-start justify-between border-b-2 border-brand-600 pb-3">
                 <div>
-                    <h1 class="text-2xl font-extrabold text-navy-900">DMC <span class="text-brand-600">Internal Medicine</span></h1>
+                    <!-- h2, not h1: AppLayout already renders the page's single h1 (UX-03) -->
+                    <h2 class="text-2xl font-extrabold text-navy-900">DMC <span class="text-brand-600">Internal Medicine</span></h2>
                     <p class="text-sm text-ink-500">Active Patient Census Board<span v-if="selected !== 'all'"> — Dr. {{ selectedName }}</span></p>
                 </div>
                 <div class="text-right text-xs text-ink-400">
