@@ -1,0 +1,5 @@
+# Accountable maintainer for everything in this repository (DOC-07, prod-ready 2026-09-03).
+# The repository owner develops and operates the Laravel product under laravel/ and the host it
+# runs on; there is no other engineering owner today. Pull requests to `main` are gated by the
+# four required Laravel CI checks (see laravel/docs/CI.md), not by review.
+*   @ahmedsk2
