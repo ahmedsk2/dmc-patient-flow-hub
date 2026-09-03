@@ -65,8 +65,8 @@ class DashboardController extends Controller
             ->leftJoin('users as u', 'u.id', '=', 'a.consultant_id')
             ->whereNull('a.discharge_date')->whereNotNull('a.medical_discharge_date')->whereNull('a.deleted_at')
             ->selectRaw('a.id, p.name, p.mrn, a.medical_discharge_date,
-                         DATEDIFF(CURDATE(), a.medical_discharge_date) delay_days,
-                         COALESCE(u.full_name, u.name) consultant')
+                         DATEDIFF(?, a.medical_discharge_date) delay_days,
+                         COALESCE(u.full_name, u.name) consultant', [$today])   // app-zone day, not the DB host's (I18N-02)
             ->orderByDesc('delay_days')->orderBy('a.id')->limit(10)->get()
             ->map(fn ($r) => [
                 'id' => (int) $r->id, 'name' => $r->name, 'mrn' => $r->mrn,
@@ -245,10 +245,12 @@ class DashboardController extends Controller
         // (dashboard/3.php: WEEK(ADMDATE) = WEEK(today)) is a seasonal "what does this week of
         // the year admit" view, not a rolling last-7-days window. DELIBERATE definition change
         // back to legacy (was: last 7 days).
-        $topDxWeekNum = (int) DB::selectOne('SELECT WEEK(CURDATE()) wk')->wk;
+        // "This week" is the app's calendar day, bound from PHP — MySQL's CURDATE() is the DB host's
+        // (UTC) day and is still yesterday between 00:00 and 03:00 local (I18N-02).
+        $topDxWeekNum = (int) DB::selectOne('SELECT WEEK(?) wk', [$today])->wk;
         $topDxWeek = DB::table('admission_diagnoses as ad')->join('admissions as a', 'a.id', '=', 'ad.admission_id')
             ->leftJoin('icd10 as i', 'i.code', '=', 'ad.icd10_code')
-            ->whereRaw('WEEK(a.admit_date) = WEEK(CURDATE())')->whereNull('a.deleted_at')   // Phase 4 — Item 1
+            ->whereRaw('WEEK(a.admit_date) = WEEK(?)', [$today])->whereNull('a.deleted_at')   // Phase 4 — Item 1
             ->selectRaw('ad.icd10_code code, MAX(i.name) name, COUNT(*) c')
             ->groupBy('ad.icd10_code')->orderByDesc('c')->limit(5)->get()
             ->map(fn ($r) => ['name' => $r->name ?: $r->code, 'count' => (int) $r->c])->all();   // plain array — cache round-trip safe
@@ -289,9 +291,10 @@ class DashboardController extends Controller
 
         // prior-week occupancy: point-in-time ward census exactly 7 days ago (single-query proxy for a
         // true rolling mean — clinically adequate, keeps the page fast). Promotable in Item 7 if needed.
+        $weekAgo = Carbon::today()->subDays(7)->toDateString();   // app-zone day, not the DB host's (I18N-02)
         $priorWeekOccupancy = round((float) (DB::table('admissions')
-            ->whereRaw('admit_date <= DATE_SUB(CURDATE(), INTERVAL 7 DAY)')
-            ->whereRaw('(discharge_date IS NULL OR discharge_date > DATE_SUB(CURDATE(), INTERVAL 7 DAY))')
+            ->whereRaw('admit_date <= ?', [$weekAgo])
+            ->whereRaw('(discharge_date IS NULL OR discharge_date > ?)', [$weekAgo])
             ->whereRaw($nonIcu)->whereNull('deleted_at')->count()) / $wardBeds * 100, 1);
 
         $deltas = [

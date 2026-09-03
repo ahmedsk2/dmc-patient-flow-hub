@@ -220,7 +220,8 @@ class RegistryController extends Controller
         } elseif ($group === 'admissions' && $key === 'los') {
             // mirrors Admission::lengthOfStay(): open admissions count through today, same as the
             // legacy DATEDIFF pattern already used across Dashboard/Reports/Recent controllers.
-            $query->orderByRaw("DATEDIFF(COALESCE(discharge_date, CURDATE()), admit_date) {$dir}");
+            // "today" bound from the app clock, not MySQL's CURDATE() (DB host is UTC) — I18N-02
+            $query->orderByRaw("DATEDIFF(COALESCE(discharge_date, ?), admit_date) {$dir}", [now()->toDateString()]);
         } elseif ($group === 'admissions') {
             $query->orderBy(['admit_date' => 'admit_date', 'discharge_date' => 'discharge_date', 'outcome' => 'outcome'][$key], $dir);
         } else {

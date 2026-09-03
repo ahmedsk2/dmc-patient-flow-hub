@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, useId } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
@@ -8,6 +8,9 @@ import { localToday } from '@/lib/ui.js';
 const props = defineProps({ consultants: Array, countries: Array, locations: Array, admitFrom: Array });
 
 const today = localToday();
+// Accessible names: pair each <label for> with its control id (UX-04). Same fid() idiom as PatientForm.
+const uid = useId();
+const fid = (name) => `admit-${uid}-${name}`;
 const form = useForm({
     mrn: '', name: '', age: '', gender: '', nationality: '',
     bed: '', admit_date: today, admitted_from: 'ER', current_location: 'Ward',
@@ -38,34 +41,34 @@ const field = 'w-full rounded-xl border border-ink-200 bg-card px-3.5 py-2.5 tex
                 </h2>
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-ink-700">MRN <span class="text-danger-500">*</span></label>
-                        <input v-model="form.mrn" :class="[field, form.errors.mrn && 'border-danger-500']" placeholder="Medical record number" inputmode="numeric" />
-                        <p v-if="form.errors.mrn" class="mt-1 text-xs text-on-danger">{{ form.errors.mrn }}</p>
+                        <label :for="fid('mrn')" class="mb-1 block text-sm font-semibold text-ink-700">MRN <span class="text-danger-500">*</span></label>
+                        <input :id="fid('mrn')" v-model="form.mrn" :aria-describedby="form.errors.mrn ? fid('mrn') + '-err' : undefined" :class="[field, form.errors.mrn && 'border-danger-500']" placeholder="Medical record number" inputmode="numeric" />
+                        <p v-if="form.errors.mrn" :id="fid('mrn') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.mrn }}</p>
                     </div>
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-ink-700">Full name <span class="text-danger-500">*</span></label>
-                        <input v-model="form.name" :class="[field, form.errors.name && 'border-danger-500']" placeholder="Patient name" />
-                        <p v-if="form.errors.name" class="mt-1 text-xs text-on-danger">{{ form.errors.name }}</p>
+                        <label :for="fid('name')" class="mb-1 block text-sm font-semibold text-ink-700">Full name <span class="text-danger-500">*</span></label>
+                        <input :id="fid('name')" v-model="form.name" :aria-describedby="form.errors.name ? fid('name') + '-err' : undefined" :class="[field, form.errors.name && 'border-danger-500']" placeholder="Patient name" />
+                        <p v-if="form.errors.name" :id="fid('name') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.name }}</p>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="mb-1 block text-sm font-semibold text-ink-700">Age <span class="text-danger-500">*</span></label>
-                            <input v-model="form.age" :class="[field, form.errors.age && 'border-danger-500']" inputmode="numeric" placeholder="Years" />
-                            <p v-if="form.errors.age" class="mt-1 text-xs text-on-danger">{{ form.errors.age }}</p>
+                            <label :for="fid('age')" class="mb-1 block text-sm font-semibold text-ink-700">Age <span class="text-danger-500">*</span></label>
+                            <input :id="fid('age')" v-model="form.age" :aria-describedby="form.errors.age ? fid('age') + '-err' : undefined" :class="[field, form.errors.age && 'border-danger-500']" inputmode="numeric" placeholder="Years" />
+                            <p v-if="form.errors.age" :id="fid('age') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.age }}</p>
                         </div>
                         <div>
-                            <label class="mb-1 block text-sm font-semibold text-ink-700">Gender <span class="text-danger-500">*</span></label>
-                            <select v-model="form.gender" :class="[field, form.errors.gender && 'border-danger-500']"><option value="">—</option><option>Male</option><option>Female</option></select>
-                            <p v-if="form.errors.gender" class="mt-1 text-xs text-on-danger">{{ form.errors.gender }}</p>
+                            <label :for="fid('gender')" class="mb-1 block text-sm font-semibold text-ink-700">Gender <span class="text-danger-500">*</span></label>
+                            <select :id="fid('gender')" v-model="form.gender" :aria-describedby="form.errors.gender ? fid('gender') + '-err' : undefined" :class="[field, form.errors.gender && 'border-danger-500']"><option value="">—</option><option>Male</option><option>Female</option></select>
+                            <p v-if="form.errors.gender" :id="fid('gender') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.gender }}</p>
                         </div>
                     </div>
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-ink-700">Nationality <span class="text-danger-500">*</span></label>
-                        <select v-model="form.nationality" :class="[field, form.errors.nationality && 'border-danger-500']">
+                        <label :for="fid('nationality')" class="mb-1 block text-sm font-semibold text-ink-700">Nationality <span class="text-danger-500">*</span></label>
+                        <select :id="fid('nationality')" v-model="form.nationality" :aria-describedby="form.errors.nationality ? fid('nationality') + '-err' : undefined" :class="[field, form.errors.nationality && 'border-danger-500']">
                             <option value="">Select country…</option>
                             <option v-for="c in countries" :key="c">{{ c }}</option>
                         </select>
-                        <p v-if="form.errors.nationality" class="mt-1 text-xs text-on-danger">{{ form.errors.nationality }}</p>
+                        <p v-if="form.errors.nationality" :id="fid('nationality') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.nationality }}</p>
                     </div>
                 </div>
             </section>
@@ -77,26 +80,26 @@ const field = 'w-full rounded-xl border border-ink-200 bg-card px-3.5 py-2.5 tex
                 </h2>
                 <div class="grid gap-4 sm:grid-cols-3">
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-ink-700">Admit date <span class="text-danger-500">*</span></label>
-                        <input v-model="form.admit_date" type="date" :max="today" :class="[field, form.errors.admit_date && 'border-danger-500']" />
-                        <p v-if="form.errors.admit_date" class="mt-1 text-xs text-on-danger">{{ form.errors.admit_date }}</p>
+                        <label :for="fid('admit_date')" class="mb-1 block text-sm font-semibold text-ink-700">Admit date <span class="text-danger-500">*</span></label>
+                        <input :id="fid('admit_date')" v-model="form.admit_date" type="date" :max="today" :aria-describedby="form.errors.admit_date ? fid('admit_date') + '-err' : undefined" :class="[field, form.errors.admit_date && 'border-danger-500']" />
+                        <p v-if="form.errors.admit_date" :id="fid('admit_date') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.admit_date }}</p>
                     </div>
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-ink-700">Admitted from</label>
-                        <select v-model="form.admitted_from" :class="field"><option v-for="a in admitFrom" :key="a">{{ a }}</option></select>
+                        <label :for="fid('admitted_from')" class="mb-1 block text-sm font-semibold text-ink-700">Admitted from</label>
+                        <select :id="fid('admitted_from')" v-model="form.admitted_from" :class="field"><option v-for="a in admitFrom" :key="a">{{ a }}</option></select>
                     </div>
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-ink-700">Location <span class="text-danger-500">*</span></label>
-                        <select v-model="form.current_location" :class="field"><option v-for="l in locations" :key="l">{{ l }}</option></select>
+                        <label :for="fid('current_location')" class="mb-1 block text-sm font-semibold text-ink-700">Location <span class="text-danger-500">*</span></label>
+                        <select :id="fid('current_location')" v-model="form.current_location" :class="field"><option v-for="l in locations" :key="l">{{ l }}</option></select>
                     </div>
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-ink-700">Bed <span class="text-danger-500">*</span></label>
-                        <input v-model="form.bed" :class="[field, form.errors.bed && 'border-danger-500']" placeholder="Bed / room" />
-                        <p v-if="form.errors.bed" class="mt-1 text-xs text-on-danger">{{ form.errors.bed }}</p>
+                        <label :for="fid('bed')" class="mb-1 block text-sm font-semibold text-ink-700">Bed <span class="text-danger-500">*</span></label>
+                        <input :id="fid('bed')" v-model="form.bed" :aria-describedby="form.errors.bed ? fid('bed') + '-err' : undefined" :class="[field, form.errors.bed && 'border-danger-500']" placeholder="Bed / room" />
+                        <p v-if="form.errors.bed" :id="fid('bed') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.bed }}</p>
                     </div>
                     <div class="sm:col-span-2">
-                        <label class="mb-1 block text-sm font-semibold text-ink-700">Consultant</label>
-                        <select v-model="form.consultant_id" :class="field">
+                        <label :for="fid('consultant_id')" class="mb-1 block text-sm font-semibold text-ink-700">Consultant</label>
+                        <select :id="fid('consultant_id')" v-model="form.consultant_id" :class="field">
                             <option value="">Leave unassigned (assignment queue)</option>
                             <option v-for="c in consultants" :key="c.id" :value="c.id">{{ c.name }}</option>
                         </select>

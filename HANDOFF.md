@@ -81,8 +81,9 @@
    **Next engineering work = its Top fixes:** (1) required status checks on `main` + deploy only on
    green; (2) `SESSION_DRIVER=database` + `CACHE_STORE=database` (fixes the no-op session revocation
    SEC-04, single-container coupling PERF-07, and the redeploy-logout gotcha); (3) SMTP `timeout` in
-   `config/mail.php`; (4) pin the MySQL session time zone (raw `CURDATE()` UTC-day bug in Dashboard /
-   DataQuality / Registry controllers); (5) CI runtime parity PHP 8.3 / MySQL 8.4 + Pint gate +
+   `config/mail.php`; (4) bind "today" from the app clock in place of raw `CURDATE()` (Dashboard / DataQuality /
+   Registry) — **never** by pinning the MySQL session time zone, which would shift every
+   `TIMESTAMP` column by three hours on read; (5) CI runtime parity PHP 8.3 / MySQL 8.4 + Pint gate +
    coverage floor; (6) name incident roles / DPO / contract; (7) `for`/`id` labels on
    `Auth/Login.vue` and `Admissions/Create.vue`. Also pending authorization: fix the three runbooks
    that still say CI is billing-blocked (`DEPLOY-LARAVEL.md` §0/§11, `CI.md` preamble,
