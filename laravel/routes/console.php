@@ -23,6 +23,12 @@ Schedule::command('dq:notify')->dailyAt('07:00')->name('data-quality-digest')->w
 // Log::critical's, notifies every active admin in-app, and best-effort emails report recipients.
 Schedule::command('audit:verify-daily')->dailyAt('02:30')->name('audit-integrity-check')->withoutOverlapping();
 
+// DATA-02: daily proof that last night's off-box encrypted DB backup (host cron, 02:15 host time,
+// scripts/backup/db-backup.py) actually landed — reads the LATEST.json heartbeat from the backup
+// bucket and alerts every active admin in-app (backup.stale) when it is older than 26h, missing,
+// or unverifiable. Runs well after the backup window in either app timezone (UTC or Asia/Riyadh).
+Schedule::command('backup:verify')->dailyAt('06:30')->name('backup-verify')->withoutOverlapping();
+
 // Task #230: off-box audit-log shipping. No-ops (warn + exit 0) when AUDIT_S3_* isn't configured,
 // so this is safe to leave scheduled everywhere. audit:prune (#232) is deliberately NEVER
 // scheduled — it deletes rows and is operator-run only, gated behind --confirm.
