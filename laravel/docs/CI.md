@@ -35,7 +35,8 @@ Nothing here can push, tag, comment, or publish.
 |---|---|---|
 | `npm audit --omit=dev --audit-level=moderate` | production npm advisories | any moderate+ advisory in a production dependency |
 | **Accessibility gate (vitest-axe)** | `resources/js/__tests__/a11y.axe.spec.js` | axe-core reports **any** violation on the consultation pages |
-| Vitest | the whole unit suite (includes the axe spec) | any test fails |
+| `npm run lint` (ESLint + eslint-plugin-vue, TST-04) | lint baseline | any error **or warning** (`--max-warnings=0`); the rules are in `eslint.config.js`, with the two deliberate exceptions documented there |
+| Vitest `--coverage` | the whole unit suite (includes the axe spec) + the coverage floor in `vitest.config.js` | any test fails, or lines / statements / branches / functions fall under 80 / 80 / 76 / 44 % |
 | `npm run build` | production build | build error |
 | `npm run check-allowlist` | class allow-list drift | a Tailwind utility appears that is not in the allow-list snapshot |
 | `node scripts/contrast.mjs` | AA contrast + perceptual distance of the palette tokens | a token pair falls below the threshold |
@@ -78,8 +79,10 @@ stable DOM root.
 | Step | Gate | Fails when |
 |---|---|---|
 | **composer audit → `scripts/composer-audit-gate.php`** | Composer advisories | a **high / critical** (or severity-less) advisory is not listed in `.composer-audit-ignore.json`; an ignore entry has expired; the report is missing/invalid |
-| PHPUnit pass 1 (`--exclude-group pdf`) | the suite against real MySQL 8 | any test fails |
+| PHPUnit pass 1 (`--exclude-group pdf --coverage-clover`) | the suite against real MySQL 8.4 on PHP 8.3; writes `coverage/clover.xml` (pcov) | any test fails |
+| **`scripts/coverage-gate.php coverage/clover.xml 83`** (TST-02) | PHP statement coverage over `app/` | below 83 % (measured 86.15 % on 2026-09-03), or no usable Clover report (exit 3 — a missing driver must not pass silently) |
 | PHPUnit pass 2 (`--group pdf`) | dompdf tests in an isolated process | any test fails |
+| `vendor/bin/pint --test` | Laravel Pint code style | any file would be rewritten |
 
 **The composer audit gate.** `composer audit` exits non-zero for *any* advisory (medium and low
 included), which is why the old pipeline ran it with `|| true` — and thereby swallowed the high ones
