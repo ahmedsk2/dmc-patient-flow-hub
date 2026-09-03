@@ -52,7 +52,7 @@ new/edit/sign-off forms, and a form with a validation error summary), `Pages/Con
 props, attached to the document, and runs axe-core over each. **No rule is disabled or filtered** —
 `toHaveNoViolations()` is asserted against axe's full default ruleset. The layout stub mirrors the real
 `AppLayout` skeleton (`<header><h1>` + `<main id="main-content">`) so landmark/heading rules run
-against a page shaped like production, and the `apexchart` stub renders the same `<div>` root the real
+against a page shaped like production, and the `ChartCanvas` stub renders the same `<div>` root the real
 component does, with the caller's attributes fallen through.
 
 What it cannot see: axe-core in jsdom has no layout engine, so **colour contrast** and anything needing
@@ -67,13 +67,14 @@ in a comment on a targeted `expect` with the offending node excluded, never a gl
 To cover another page: add a `describe` block in the same spec with that page's fixture idiom
 (copy from its existing unit test), mount via `mountAttached`, and call `audit(w)`.
 
-**Baseline on 2026-09-03.** The first run found one real violation: both `<apexchart>` elements in
+**Baseline on 2026-09-03.** The first run found one real violation: both chart elements in
 `Pages/Consultations/Dashboard.vue` carried an `aria-label` with no role (`aria-prohibited-attr`,
 serious — an `aria-label` on a plain `<div>` is ignored or misread by assistive tech). Fixed by adding
 `role="img"`, the idiom `Pages/Statistics/Index.vue` already uses and the one `ChartFigure` documents.
-**Known gap:** the six `<apexchart>` elements in the main `Pages/Dashboard.vue` have the same defect
-and are *not* covered by this gate (it audits the consultation pages only) — add that page to the
-spec and fix them the same way.
+The six charts in the main `Pages/Dashboard.vue` were given the same `role="img"` fix during the
+Chart.js migration. Charts render on Chart.js (`ChartCanvas`); the wrapper is jsdom-safe (no 2D
+context there), so the axe fixtures need no chart stub — the `ChartCanvas` stub above is only for a
+stable DOM root.
 
 ### `backend` — Backend (PHPUnit, MySQL, composer audit)
 

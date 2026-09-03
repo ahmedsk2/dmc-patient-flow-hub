@@ -48,7 +48,7 @@ a reconciliation suite proves the two systems produce **identical numbers** on t
 |---|---|
 | Backend language | **PHP 8.3** |
 | Framework (new app) | **Laravel 13** (Eloquent ORM, migrations, validation, middleware, password broker) |
-| Frontend (new app) | **Vue 3** (`<script setup>`) via **Inertia.js 2** (SPA without a separate API), **Tailwind CSS v4**, **ApexCharts** (vue3-apexcharts) |
+| Frontend (new app) | **Vue 3** (`<script setup>`) via **Inertia.js 2** (SPA without a separate API), **Tailwind CSS v4**, **Chart.js** (via a thin ChartCanvas wrapper) |
 | Build tooling | **Vite**, npm; **Composer** for PHP packages |
 | Database | **MySQL 8.4** (InnoDB, utf8mb4); separate read-only connection to the legacy DB for import |
 | PDF / Excel | **dompdf** (`barryvdh/laravel-dompdf`) for server-side A4 reports; **OpenSpout** for .xlsx export (legacy app: bespoke dependency-free `xlsx-writer.php`) |
@@ -96,7 +96,7 @@ unique MRN, consultant must exist, no duplicate diagnoses per admission).
 | How is the DB structured; what does each button write? | `laravel/docs/DATABASE-AND-BEHAVIOR.md` |
 | How is each statistic calculated? | `laravel/docs/DASHBOARD-AND-STATISTICS-METRICS.md` |
 | Do the old and new systems agree on the data? | `laravel/docs/RECONCILIATION.md` |
-| How do I run it locally? | `laravel/README-DMC.md` |
+| How do I run it locally? | `laravel/README.md` |
 | How do I deploy it? | `laravel/docs/DEPLOY-LARAVEL.md` (new) / `DEPLOY.md` (legacy) |
 | Business logic | `laravel/app/Http/Controllers/`, `laravel/app/Services/ShuffleService.php` |
 | Schema | `laravel/database/migrations/` |

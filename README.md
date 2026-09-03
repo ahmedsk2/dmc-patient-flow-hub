@@ -14,7 +14,7 @@ printable/PDF reports).
 Start here:
 
 - **Project overview for reviewers:** [`PROJECT-OVERVIEW.md`](PROJECT-OVERVIEW.md)
-- **Laravel local setup:** [`laravel/README-DMC.md`](laravel/README-DMC.md)
+- **Laravel local setup:** [`laravel/README.md`](laravel/README.md)
 - **Laravel production deploy:** [`laravel/docs/DEPLOY-LARAVEL.md`](laravel/docs/DEPLOY-LARAVEL.md)
 - **Legacy app deploy:** [`DEPLOY.md`](DEPLOY.md)
 - **Database & per-action behavior:** [`laravel/docs/DATABASE-AND-BEHAVIOR.md`](laravel/docs/DATABASE-AND-BEHAVIOR.md)

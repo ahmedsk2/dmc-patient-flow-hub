@@ -52,7 +52,7 @@ export are admin-only.
 |---|---|---|
 | Runtime | PHP 8.3+, MySQL 8 (InnoDB, utf8mb4) | `composer.json`, `docs/DEPLOY-LARAVEL.md` |
 | Backend | Laravel `^13.8`, Inertia (`inertiajs/inertia-laravel ^3.1`), dompdf `^3.1` (PDF), openspout `^5.3` (XLSX) | `composer.json` |
-| Frontend | Vue `^3.5` (`<script setup>`), `@inertiajs/vue3 ^3.3`, Tailwind CSS `^4`, ApexCharts `^5` via `vue3-apexcharts`, Vite `^8` | `package.json` |
+| Frontend | Vue `^3.5` (`<script setup>`), `@inertiajs/vue3 ^3.3`, Tailwind CSS `^4`, Chart.js `^4` via a thin `ChartCanvas` wrapper, Vite `^8` | `package.json` |
 | Tests | PHPUnit (Feature tests against a real MySQL database), Vitest `^3` | `phpunit.xml`, `vitest.config.js` |
 
 No SSR; the browser renders everything. `public/build/` is committed so the deploy host needs no
@@ -160,12 +160,12 @@ If you touch a `.vue`, CSS or JS source, run `npm run build` and commit the resu
 | [`docs/DASHBOARD-AND-STATISTICS-METRICS.md`](docs/DASHBOARD-AND-STATISTICS-METRICS.md) | Definition, formula and caveats for every dashboard / statistics / report number |
 | [`docs/HANDOVER-COMPLIANCE.md`](docs/HANDOVER-COMPLIANCE.md) | Handover lifecycle and audit reference for clinical governance |
 | [`docs/RECONCILIATION.md`](docs/RECONCILIATION.md) | How to verify the Laravel app reproduces the legacy system's numbers after a data load |
-| [`docs/LEGACY-VS-LARAVEL-DASHBOARD-COMPARISON.md`](docs/LEGACY-VS-LARAVEL-DASHBOARD-COMPARISON.md) | A worked dashboard comparison on a real dump |
-| [`docs/UAT-TEST-PLAN.md`](docs/UAT-TEST-PLAN.md) (+ `.docx`) | Hands-on UAT checklist for the testing team |
-| [`docs/REVIEW-2026-06-09.md`](docs/REVIEW-2026-06-09.md) | Earlier four-track review (functionality, security, performance, quality) |
-| [`docs/EHC-UI-WAVES-1-5-REPORT.md`](docs/EHC-UI-WAVES-1-5-REPORT.md) | UI/UX renovation verification report |
-| `docs/superpowers/specs/`, `docs/superpowers/plans/` | Design specs and implementation plans behind the larger changes |
-| [`README-DMC.md`](README-DMC.md) | The original re-platform write-up (partly historical — branch names and test counts have moved on) |
+| [`docs/UAT-TEST-PLAN.md`](docs/UAT-TEST-PLAN.md) | Hands-on UAT checklist for the testing team |
+| [`docs/BACKUP-AND-RESTORE.md`](docs/BACKUP-AND-RESTORE.md) | Encrypted off-box backup, `backup:verify`, and the restore drill |
+| [`docs/ENCRYPTION-AT-REST.md`](docs/ENCRYPTION-AT-REST.md) | Which clinical-narrative columns are encrypted at rest, and the APP_KEY obligations |
+| [`docs/CI.md`](docs/CI.md) | The four CI gates and how to extend them |
+| [`docs/RELEASE-CHECKLIST.md`](docs/RELEASE-CHECKLIST.md) | One-page pre-ship checklist |
+| [`docs/compliance/`](docs/compliance/) | PDPL paper trail — privacy notice (EN/AR), RoPA, DPIA, incident runbook, retention, classification, DPO, DPAs (drafts for legal review) |
 | [`SECURITY.md`](SECURITY.md) | Vulnerability-disclosure policy (identical copy at the repository root) |
 
 ## Security posture

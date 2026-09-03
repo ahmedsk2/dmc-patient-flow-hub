@@ -70,9 +70,9 @@ import ConsultationsIndex from '@/Pages/Consultations/Index.vue';
 import ConsultationsDashboard from '@/Pages/Consultations/Dashboard.vue';
 import Handover from '@/Pages/Consultations/Handover.vue';
 
-// vue3-apexcharts renders a <div> root and lets the caller's attributes (aria-label, …) fall through
+// ChartCanvas renders a <div> root and lets the caller's attributes (aria-label, …) fall through
 // onto it; the stub does the same so axe sees the element the real page produces, not a custom tag.
-const apexchartStub = { name: 'apexchart', inheritAttrs: true, template: '<div></div>' };
+const chartCanvasStub = { name: 'ChartCanvas', inheritAttrs: true, template: '<div></div>' };
 
 // jsdom has no canvas. axe's colour-contrast check probes one to sample backgrounds and jsdom logs
 // a "Not implemented: HTMLCanvasElement.prototype.getContext" error for every audit — noise, not a
@@ -205,7 +205,7 @@ const mountDashboard = (user, over = {}) => {
     authUser = user;
     return mountAttached(ConsultationsDashboard, {
         props: dashboardProps(over),
-        global: { stubs: { apexchart: apexchartStub, teleport: true } },
+        global: { stubs: { ChartCanvas: chartCanvasStub, teleport: true } },
     });
 };
 
