@@ -665,6 +665,10 @@ class EndToEndShipping(ShippingHarness, unittest.TestCase):
                 f"MYSQL_CONTAINER=c\nDB_NAME=dmc_demo\nKEYFILE={self.keyfile}\n"
                 f"LOCAL_DIR={self.local}\nBINLOG_LOG_FILE={self.cfg['BINLOG_LOG_FILE']}\n"
             )
+        # db_backup.load_config enforces mode 600 on the env file and the key file on POSIX (it is
+        # skipped on Windows, which is why this only ever failed on the Linux CI runner).
+        os.chmod(env_file, 0o600)
+        os.chmod(self.keyfile, 0o600)
         self.assertEqual(binlog_ship.main(["--env-file", env_file, "--dry-run"]), 0)
         self.assertEqual(self.fake.objects, {})
         self.assertIn("DRY-RUN ok active=binlog.000003", self.log())
