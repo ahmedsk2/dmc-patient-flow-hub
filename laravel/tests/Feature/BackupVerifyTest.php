@@ -25,7 +25,11 @@ class BackupVerifyTest extends TestCase
 
     private const HEARTBEAT_URL = 'fake-s3.example.test/dmc-db-backups/db-backups/dmc_demo/LATEST.json';
 
+    private const BINLOG_URL = 'fake-s3.example.test/dmc-db-backups/db-backups/dmc_demo/binlogs/LATEST.json';
+
     private const OBJECT = 'db-backups/dmc_demo/2026/09/dmc_demo-2026-09-03T021507Z.sql.gz.enc';
+
+    private const BINLOG_OBJECT = 'db-backups/dmc_demo/binlogs/2026/09/binlog.000003-2026-09-03T144007Z.gz.enc';
 
     private function configure(): void
     {
@@ -39,6 +43,8 @@ class BackupVerifyTest extends TestCase
             ],
             'services.db_backup.bucket' => 'dmc-db-backups',
             'services.db_backup.prefix' => 'db-backups/dmc_demo',
+            'services.db_backup.binlog_prefix' => 'db-backups/dmc_demo/binlogs',
+            'services.db_backup.binlog_max_age_hours' => 2,
         ]);
     }
 
@@ -60,11 +66,35 @@ class BackupVerifyTest extends TestCase
         ]);
     }
 
-    /** Heartbeat body from LATEST.json; everything else (the HEAD of the object) answers 200. */
-    private function fakeStorage(string|int $heartbeat, int $objectStatus = 200): void
+    /**
+     * The hourly binlog shipper's own heartbeat (scripts/backup/binlog-ship.py, §10). Same field
+     * names as the dump's, plus what tells a monitor the shipper is alive but not archiving.
+     */
+    private function binlogHeartbeat(Carbon $createdAt, array $failed = [], array $gaps = []): string
+    {
+        return json_encode([
+            'object' => self::BINLOG_OBJECT,
+            'bytes' => 4210688,
+            'sha256_of_ciphertext' => str_repeat('cd', 32),
+            'created_at' => $createdAt->clone()->utc()->format('Y-m-d\TH:i:s\Z'),
+            'binlog' => 'binlog.000003',
+            'shipped_this_run' => 1,
+            'failed_this_run' => count($failed),
+            'failed_binlogs' => $failed,
+            'known_gaps' => $gaps,
+        ]);
+    }
+
+    /**
+     * Heartbeat body from LATEST.json; everything else (the HEAD of the object) answers 200.
+     * The binlog heartbeat defaults to 404 = "point-in-time recovery not installed", which is the
+     * production state until an operator adds the hourly cron and must never alert on its own.
+     */
+    private function fakeStorage(string|int $heartbeat, int $objectStatus = 200, string|int $binlog = 404): void
     {
         Http::fake([
             self::HEARTBEAT_URL => is_int($heartbeat) ? Http::response('', $heartbeat) : Http::response($heartbeat, 200),
+            self::BINLOG_URL => is_int($binlog) ? Http::response('', $binlog) : Http::response($binlog, 200),
             'fake-s3.example.test/*' => Http::response('', $objectStatus),
         ]);
     }
@@ -228,6 +258,7 @@ class BackupVerifyTest extends TestCase
             self::HEARTBEAT_URL => function () use (&$ageHours) {
                 return Http::response($this->heartbeat(now()->subHours($ageHours)), 200);
             },
+            self::BINLOG_URL => Http::response('', 404),
             'fake-s3.example.test/*' => Http::response('', 200),
         ]);
         $admin = $this->user(User::ROLE_ADMIN);
@@ -245,6 +276,112 @@ class BackupVerifyTest extends TestCase
         $ageHours = 40;
         $this->artisan('backup:verify')->assertExitCode(1);
         $this->assertSame(2, Notification::where('user_id', $admin->id)->where('type', 'backup.stale')->count());
+    }
+
+    // ---- point-in-time recovery: the hourly binlog shipper's heartbeat (§10) --------------------
+
+    public function test_a_missing_binlog_heartbeat_means_not_installed_and_never_alerts(): void
+    {
+        $this->configure();
+        $this->fakeStorage($this->heartbeat(now()->subHours(4)), binlog: 404);
+        $this->user(User::ROLE_ADMIN);
+
+        $this->artisan('backup:verify')
+            ->expectsOutputToContain('NOT INSTALLED')
+            ->assertExitCode(0);
+
+        $this->assertSame(0, Notification::where('type', 'backup.stale')->count());
+        Http::assertSent(fn ($r) => $r->method() === 'GET' && $r->url() === 'https://'.self::BINLOG_URL);
+    }
+
+    public function test_a_fresh_binlog_heartbeat_passes_and_is_read_from_the_backup_bucket(): void
+    {
+        $this->configure();
+        $this->fakeStorage($this->heartbeat(now()->subHours(4)), binlog: $this->binlogHeartbeat(now()->subMinutes(20)));
+        $this->user(User::ROLE_ADMIN);
+
+        $this->artisan('backup:verify')->assertExitCode(0);
+
+        $this->assertSame(0, Notification::where('type', 'backup.stale')->count());
+        Http::assertSent(fn ($r) => $r->method() === 'GET'
+            && $r->url() === 'https://'.self::BINLOG_URL
+            && str_contains($r->header('Authorization')[0], 'AWS4-HMAC-SHA256'));
+    }
+
+    public function test_a_stale_binlog_heartbeat_alerts_every_active_admin(): void
+    {
+        $this->configure();
+        $this->fakeStorage($this->heartbeat(now()->subHours(4)), binlog: $this->binlogHeartbeat(now()->subHours(9)));
+        $admin = $this->user(User::ROLE_ADMIN);
+        $this->user(User::ROLE_OBSERVER);
+
+        $this->artisan('backup:verify')->assertExitCode(1);
+
+        $this->assertSame(1, Notification::where('type', 'backup.stale')->count());
+        $payload = Notification::where('user_id', $admin->id)->where('type', 'backup.stale')->first()->payload;
+        $this->assertSame('binlog_stale', $payload['reason']);
+        $this->assertSame(2, $payload['binlog_max_age_hours']);
+        $this->assertGreaterThanOrEqual(8, $payload['binlog_age_hours']);
+        $this->assertSame(self::BINLOG_OBJECT, $payload['binlog_object']);
+        $this->assertStringContainsString('falling behind', $payload['detail']);
+        $this->assertStringNotContainsString('test-secret', json_encode($payload));
+    }
+
+    public function test_the_binlog_window_is_configurable_by_option_and_by_config(): void
+    {
+        $this->configure();
+        $this->fakeStorage($this->heartbeat(now()->subHours(4)), binlog: $this->binlogHeartbeat(now()->subHours(9)));
+        $this->user(User::ROLE_ADMIN);
+
+        $this->artisan('backup:verify', ['--binlog-max-age-hours' => 12])->assertExitCode(0);
+        $this->assertSame(0, Notification::where('type', 'backup.stale')->count());
+
+        config(['services.db_backup.binlog_max_age_hours' => 12]);
+        $this->artisan('backup:verify')->assertExitCode(0);
+        $this->assertSame(0, Notification::where('type', 'backup.stale')->count());
+    }
+
+    public function test_a_shipper_that_is_alive_but_failing_files_still_alerts(): void
+    {
+        // The dangerous case: created_at is fresh, so an age-only check would call this healthy
+        // while binary logs quietly never reach the bucket.
+        $this->configure();
+        $failing = $this->binlogHeartbeat(now()->subMinutes(10), failed: ['binlog.000007', 'binlog.000008']);
+        $this->fakeStorage($this->heartbeat(now()->subHours(4)), binlog: $failing);
+        $admin = $this->user(User::ROLE_ADMIN);
+
+        $this->artisan('backup:verify')->assertExitCode(1);
+
+        $payload = Notification::where('user_id', $admin->id)->where('type', 'backup.stale')->first()->payload;
+        $this->assertSame('binlog_failed', $payload['reason']);
+        $this->assertSame(2, $payload['binlog_failed_this_run']);
+        $this->assertStringContainsString('binlog.000007', $payload['detail']);
+    }
+
+    public function test_a_malformed_binlog_heartbeat_is_an_error_not_a_pass(): void
+    {
+        $this->configure();
+        $this->fakeStorage($this->heartbeat(now()->subHours(4)), binlog: 'not json at all');
+        $admin = $this->user(User::ROLE_ADMIN);
+
+        $this->artisan('backup:verify')->assertExitCode(1);
+
+        $payload = Notification::where('user_id', $admin->id)->where('type', 'backup.stale')->first()->payload;
+        $this->assertSame('binlog_error', $payload['reason']);
+    }
+
+    public function test_a_stale_dump_is_reported_before_the_binlog_check_runs(): void
+    {
+        // The dump is the base of every recovery; its incident is the one that must be raised.
+        $this->configure();
+        $this->fakeStorage($this->heartbeat(now()->subHours(30)), binlog: $this->binlogHeartbeat(now()->subHours(9)));
+        $admin = $this->user(User::ROLE_ADMIN);
+
+        $this->artisan('backup:verify')->assertExitCode(1);
+
+        $payload = Notification::where('user_id', $admin->id)->where('type', 'backup.stale')->first()->payload;
+        $this->assertSame('stale', $payload['reason']);
+        $this->assertArrayNotHasKey('binlog_age_hours', $payload);
     }
 
     public function test_is_scheduled_daily(): void

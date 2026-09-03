@@ -54,6 +54,16 @@ return [
     'db_backup' => [
         'bucket' => env('DB_BACKUP_S3_BUCKET', 'dmc-db-backups'),
         'prefix' => env('DB_BACKUP_S3_PREFIX', 'db-backups/dmc_demo'),
+        // Point-in-time recovery (docs/BACKUP-AND-RESTORE.md §10). scripts/backup/binlog-ship.py
+        // defaults its own prefix to <S3_PREFIX>/binlogs, so this default tracks it. The window is
+        // hours, not the nightly 26: the shipper runs hourly, and a shipper that stopped is the
+        // failure that matters. A missing heartbeat means "not installed" and never alerts.
+        // Slashes are trimmed so a prefix written with a trailing "/" cannot produce a
+        // "//binlogs/LATEST.json" key that reads as "not installed" forever; an empty override falls
+        // back to the derived default for the same reason.
+        'binlog_prefix' => trim((string) env('DB_BACKUP_BINLOG_S3_PREFIX', ''), '/')
+            ?: trim((string) env('DB_BACKUP_S3_PREFIX', 'db-backups/dmc_demo'), '/').'/binlogs',
+        'binlog_max_age_hours' => (int) env('DB_BACKUP_BINLOG_MAX_AGE_HOURS', 2),
     ],
 
 ];

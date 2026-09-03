@@ -49,7 +49,11 @@ Config: /root/.dmc-backup.env (KEY=value, root-only, mode 600) — override with
 
 Exit codes: 0 success · 1 failure (one clear line on stderr) · 2 configuration error.
 Never prints secrets: stderr from child processes is truncated and scrubbed before it is logged.
-See laravel/docs/BACKUP-AND-RESTORE.md.
+
+This is the BASE backup (RPO 24 h). The INCREMENT that closes the gap between two nightly runs is
+the sibling binlog-ship.py, which archives MySQL's binary logs hourly using this file's SigV4
+client, config loader and encryption commands — keep the two side by side. See
+laravel/docs/BACKUP-AND-RESTORE.md (§10 for point-in-time recovery).
 """
 
 import argparse

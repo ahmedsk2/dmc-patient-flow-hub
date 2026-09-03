@@ -30,19 +30,36 @@ use Throwable;
  * incident is auto-resolved the moment a fresh backup is observed again, so the NEXT lapse mints a
  * new alert instead of being swallowed by last month's still-open one.
  *
+ * It ALSO checks the second half of the recovery story: the hourly binary-log shipper
+ * (scripts/backup/binlog-ship.py, docs/BACKUP-AND-RESTORE.md §10) writes its own
+ * `{binlog_prefix}/LATEST.json` with the same field names, and without it the RPO is 24 hours
+ * instead of one. A MISSING binlog heartbeat means point-in-time recovery is simply not installed
+ * yet — a documented state, reported but never alerted, because an alert nobody can action is noise.
+ * A heartbeat that has gone stale, or one that reports per-file failures while looking fresh, is a
+ * real incident and alerts exactly like a stale dump.
+ *
+ * Known limitation: this command is scheduled DAILY (06:30), so a dead hourly shipper surfaces
+ * in-app within a day, not within the 2-hour window itself. The faster signal is the shipper's own
+ * non-zero exit in /var/log/dmc-binlog-ship.cron.log; this is the backstop that makes sure a silent
+ * stop cannot go unnoticed indefinitely.
+ *
  * Exit code: 0 fresh, 1 anything else (cron/scheduler-visible). Secrets never reach the log,
  * the notification payload, or the console — only the bucket/key names and HTTP statuses do.
  *
- *   php artisan backup:verify [--max-age-hours=26]
+ *   php artisan backup:verify [--max-age-hours=26] [--binlog-max-age-hours=2]
  */
 class BackupVerify extends Command
 {
     public const TYPE = 'backup.stale';
 
     protected $signature = 'backup:verify
-        {--max-age-hours=26 : Alert when the newest backup heartbeat is older than this many hours}';
+        {--max-age-hours=26 : Alert when the newest backup heartbeat is older than this many hours}
+        {--binlog-max-age-hours= : Alert when the binlog shipper heartbeat is older than this many hours (default: services.db_backup.binlog_max_age_hours)}';
 
-    protected $description = 'Check the off-box DB backup heartbeat (LATEST.json) and alert active admins if the newest backup is stale, missing, or unverifiable';
+    protected $description = 'Check the off-box DB backup heartbeat (LATEST.json) and the hourly binlog shipper heartbeat, and alert active admins if either is stale, missing, or unverifiable';
+
+    /** Console/log wording for the point-in-time half, set by checkBinlogHeartbeat(). */
+    private string $binlogSummary = 'not checked';
 
     public function handle(): int
     {
@@ -109,13 +126,124 @@ class BackupVerify extends Command
             return $this->raiseIncident('error', "HEAD of the backup object returned HTTP {$head}", $context);
         }
 
+        // The dump is provably there. Now the increment that turns "last night" into "any second":
+        // the hourly binlog shipper's heartbeat (§10). Checked second because a dump you cannot
+        // verify is the bigger problem, and its incident should be the one that gets raised.
+        $binlogIncident = $this->checkBinlogHeartbeat($client);
+        if ($binlogIncident !== null) {
+            return $this->raiseIncident($binlogIncident['reason'], $binlogIncident['detail'],
+                $context + $binlogIncident['context']);
+        }
+
         $resolved = Notification::where('type', self::TYPE)->whereNull('resolved_at')->update(['resolved_at' => now()]);
 
-        Log::info('backup.verify_ok', $context);
+        Log::info('backup.verify_ok', $context + ['binlogs' => $this->binlogSummary]);
         $this->info("Backup OK — {$context['object']} is {$ageHours}h old (limit {$maxAgeHours}h)."
+            ." Point-in-time recovery: {$this->binlogSummary}."
             .($resolved ? " Resolved {$resolved} open backup.stale notification(s)." : ''));
 
         return self::SUCCESS;
+    }
+
+    /**
+     * The point-in-time half. Returns null when there is nothing to alert about — either the shipper
+     * is fresh, or it is NOT INSTALLED, which is a documented state (BACKUP-AND-RESTORE.md §10.2)
+     * rather than an incident: in that state the RPO is the nightly 24 h, which the check above
+     * already covers, and nagging every admin daily about a cron line only an operator can install
+     * would train them to ignore backup.stale.
+     *
+     * The object the heartbeat names is deliberately NOT HEAD-checked: unlike the single nightly
+     * dump, binary logs are a stream of objects under a lifecycle rule, so one having aged out is
+     * normal and would produce a false alarm. Completeness of the chain is the shipper's own job
+     * (it detects and records expired-unshipped holes) and `--restore-check`'s.
+     *
+     * @return array{reason:string,detail:string,context:array<string,mixed>}|null
+     */
+    private function checkBinlogHeartbeat(S3SigV4 $client): ?array
+    {
+        $maxAgeHours = max(1, (int) ($this->option('binlog-max-age-hours')
+            ?? config('services.db_backup.binlog_max_age_hours', 2)));
+        $key = trim((string) config('services.db_backup.binlog_prefix'), '/').'/LATEST.json';
+        $context = ['binlog_heartbeat' => $key, 'binlog_max_age_hours' => $maxAgeHours];
+
+        try {
+            $raw = $client->get($key);
+        } catch (Throwable $e) {
+            return [
+                'reason' => 'binlog_error',
+                'detail' => 'could not read the binlog heartbeat: '.$this->safeMessage($e),
+                'context' => $context,
+            ];
+        }
+
+        if ($raw === null) {
+            $this->binlogSummary = 'NOT INSTALLED — no binlog heartbeat; the RPO is the nightly 24 h (see BACKUP-AND-RESTORE.md §10.2)';
+            Log::info('backup.binlog_not_installed', $context);
+            $this->line("Point-in-time recovery: {$this->binlogSummary}");
+
+            return null;
+        }
+
+        $heartbeat = json_decode($raw, true);
+        if (! is_array($heartbeat) || empty($heartbeat['created_at'])) {
+            return [
+                'reason' => 'binlog_error',
+                'detail' => 'binlog heartbeat is malformed (expected JSON with "created_at")',
+                'context' => $context,
+            ];
+        }
+
+        try {
+            $createdAt = Carbon::parse((string) $heartbeat['created_at']);
+        } catch (Throwable) {
+            return [
+                'reason' => 'binlog_error',
+                'detail' => 'binlog heartbeat has an unparseable created_at',
+                'context' => $context,
+            ];
+        }
+
+        $ageHours = round(max(0.0, (float) $createdAt->diffInHours(now())), 1);
+        $failed = (array) ($heartbeat['failed_binlogs'] ?? []);
+        $failedCount = (int) ($heartbeat['failed_this_run'] ?? count($failed));
+        $context += [
+            'binlog_created_at' => $createdAt->utc()->toIso8601String(),
+            'binlog_age_hours' => $ageHours,
+            'binlog_object' => $heartbeat['object'] ?? null,
+            'binlog_failed_this_run' => $failedCount,
+            'binlog_known_gaps' => count((array) ($heartbeat['known_gaps'] ?? [])),
+        ];
+
+        if ($ageHours > $maxAgeHours) {
+            return [
+                'reason' => 'binlog_stale',
+                'detail' => "the binlog shipper last completed {$ageHours}h ago (limit {$maxAgeHours}h) — "
+                    .'point-in-time recovery is falling behind and the RPO is drifting back towards 24 h',
+                'context' => $context,
+            ];
+        }
+
+        // A fresh heartbeat with failures is the dangerous case: the shipper is alive, so an
+        // age-only check would call it healthy while binary logs quietly never reach the bucket.
+        if ($failedCount > 0) {
+            // Defensive: our shipper writes plain names, but a nested value must not turn the
+            // warning into an ErrorException that aborts the command after the dump check.
+            $names = implode(', ', array_map(
+                fn ($v) => is_scalar($v) ? (string) $v : (json_encode($v) ?: '?'),
+                array_slice($failed, 0, 5),
+            ));
+
+            return [
+                'reason' => 'binlog_failed',
+                'detail' => "the last binlog shipping run could not archive {$failedCount} file(s)"
+                    .($names !== '' ? ": {$names}" : '').' — see /var/log/dmc-binlog-ship.log',
+                'context' => $context,
+            ];
+        }
+
+        $this->binlogSummary = "fresh ({$ageHours}h old, limit {$maxAgeHours}h)";
+
+        return null;
     }
 
     /**
@@ -129,7 +257,7 @@ class BackupVerify extends Command
     {
         $payload = ['reason' => $reason, 'detail' => $detail] + $context;
 
-        if (in_array($reason, ['error', 'unconfigured'], true)) {
+        if (in_array($reason, ['error', 'unconfigured', 'binlog_error'], true)) {
             Log::error('backup.verify_failed', $payload);
         } else {
             Log::warning('backup.stale', $payload);

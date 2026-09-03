@@ -79,6 +79,7 @@ stable DOM root.
 | Step | Gate | Fails when |
 |---|---|---|
 | **composer audit → `scripts/composer-audit-gate.php`** | Composer advisories | a **high / critical** (or severity-less) advisory is not listed in `.composer-audit-ignore.json`; an ignore entry has expired; the report is missing/invalid |
+| `python3 -m unittest test_db_backup test_binlog_ship` (in `scripts/backup`) | the host-side backup and binlog-shipping tooling — Python that runs as root on the DB host, outside PHPUnit's reach | any test fails. Stdlib only; the runner's `python3` + `openssl` are the whole dependency list |
 | PHPUnit pass 1 (`--exclude-group pdf --coverage-clover`) | the suite against real MySQL 8.4 on PHP 8.3; writes `coverage/clover.xml` (pcov) | any test fails |
 | **`scripts/coverage-gate.php coverage/clover.xml 83`** (TST-02) | PHP statement coverage over `app/` | below 83 % (measured 86.15 % on 2026-09-03), or no usable Clover report (exit 3 — a missing driver must not pass silently) |
 | PHPUnit pass 2 (`--group pdf`) | dompdf tests in an isolated process | any test fails |

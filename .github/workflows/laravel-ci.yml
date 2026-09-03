@@ -173,6 +173,14 @@ jobs:
             sleep 1
           done
 
+      # BLOCKING. The backup/PITR tooling is Python that runs as root on the database host, outside
+      # every container and outside PHPUnit's reach — so without this step nothing exercised it on
+      # any push. Stdlib only; the Ubuntu runner already has python3 and openssl, which is the whole
+      # dependency list (the end-to-end cases skip themselves if openssl is ever missing).
+      - name: Backup tooling unit tests (Python)
+        working-directory: laravel/scripts/backup
+        run: python3 -m unittest -v test_db_backup test_binlog_ship
+
       - name: Test suite — pass 1 (exclude pdf group; collects coverage)
         # Coverage is collected by PHPUnit itself into a Clover file (pcov driver from setup-php).
         # `php artisan test --coverage --min` was tried twice and Collision printed no table on this
