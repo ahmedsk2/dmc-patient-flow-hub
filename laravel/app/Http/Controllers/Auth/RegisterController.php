@@ -205,7 +205,7 @@ class RegisterController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'username' => ['required', 'string', 'max:240', 'unique:users,username'],
+            'username' => ['required', 'string', 'max:64', 'alpha_dash', 'unique:users,username'],   // same rule as Control → Users (ControlController); a 240-char Markdown username used to reach the reminder mail
             'full_name' => ['required', 'string', 'max:191'],
             'email' => ['required', 'email', 'max:191', 'unique:users,email'],
             'role' => ['required', 'integer', 'in:2,3,4,5'],   // never admin via self-registration
