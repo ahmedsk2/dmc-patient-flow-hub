@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Head, useForm, Link, usePage } from '@inertiajs/vue3';
 import EhcLogo from '@/Components/EhcLogo.vue';
+import TrustBadges from '@/Components/TrustBadges.vue';
 
 // 2026-07-11 auth-hardening: no "remember me" — a persistent recaller cookie would auto-authenticate
 // past the now-mandatory MFA challenge. Every session re-authenticates with the second factor.
@@ -32,6 +33,7 @@ const flash = computed(() => usePage().props.flash);
                     <div><span class="block text-2xl font-bold text-brand-300">3,400</span>beds</div>
                     <div><span class="block text-2xl font-bold text-accent-400">24/7</span>live</div>
                 </div>
+                <TrustBadges class="mt-10" />
             </div>
             <div class="text-sm text-navy-300">
                 Eastern Health Cluster · <span class="text-brand-300">تجمع الشرقية الصحي</span>
