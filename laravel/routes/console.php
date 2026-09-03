@@ -27,3 +27,9 @@ Schedule::command('audit:verify-daily')->dailyAt('02:30')->name('audit-integrity
 // so this is safe to leave scheduled everywhere. audit:prune (#232) is deliberately NEVER
 // scheduled — it deletes rows and is operator-run only, gated behind --confirm.
 Schedule::command('audit:ship')->hourly()->name('audit-ship')->withoutOverlapping();
+
+// 2026-09 prod-readiness (OBS-07): scheduler liveness beacon. GET /health reports the scheduler
+// stale when this hasn't stamped the cache for 5 minutes — the check that catches a silently-dead
+// cron (a failure this deployment has already had once). Trivial on purpose: no DB, no mail, and
+// deliberately NOT withoutOverlapping (a stuck lock would itself fake a dead scheduler).
+Schedule::command('scheduler:heartbeat')->everyMinute()->name('scheduler-heartbeat');

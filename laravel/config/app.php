@@ -69,6 +69,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Application Version
+    |--------------------------------------------------------------------------
+    |
+    | 2026-09 prod-readiness (OBS-07): the deployed build's identity, surfaced by GET /health so
+    | an operator can tell WHICH build is answering. Set APP_VERSION to the git SHA at deploy
+    | time (Coolify: an env from the build; manual: `git rev-parse --short HEAD`). Read here, not
+    | via env() in the controller, so it survives `config:cache`. An unset/empty value reads as
+    | "unknown" rather than an empty string.
+    |
+    */
+
+    'version' => env('APP_VERSION') ?: 'unknown',
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------
     |

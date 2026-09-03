@@ -10,6 +10,10 @@ return Application::configure(basePath: dirname(__DIR__))
         web: __DIR__.'/../routes/web.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        // 2026-09 prod-readiness: session-less machine endpoints (/health deep probe, RFC 9116
+        // security.txt) registered OUTSIDE the `web` group, exactly like `/up` above — see
+        // routes/public.php for why. `/up` itself is untouched (Coolify polls it).
+        then: fn () => \Illuminate\Support\Facades\Route::group([], __DIR__.'/../routes/public.php'),
     )
     ->withMiddleware(function (Middleware $middleware): void {
         // Behind Cloudflare/Traefik TLS termination: trust forwarded headers so the app detects
