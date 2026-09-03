@@ -15,9 +15,11 @@ repository instead (see `laravel/README.md`) — it needs no real patient data.
 
 ## Reporting a vulnerability
 
-- **Email:** `security@<hospital domain>` **[SET THIS]** — the same address is published
-  machine-readably at `/.well-known/security.txt` (RFC 9116), sourced from the `SECURITY_CONTACT`
-  environment variable. Keep the two in step.
+- **Email:** the monitored address published machine-readably at
+  `https://dmc-new.towardpcc.com/.well-known/security.txt` (RFC 9116; a mailbox on the unit's
+  `dmc-im.com` domain, sourced from the `SECURITY_CONTACT` environment variable so it can be rotated
+  without a code change). That file is the single source of truth for the contact; this policy
+  deliberately does not repeat the address.
 - Do **not** open a public GitHub issue, discuss the finding publicly, or share it with third
   parties before a fix is deployed.
 - No PGP key is published at this time. If your report contains sensitive detail, say so in a
