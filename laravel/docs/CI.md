@@ -10,20 +10,17 @@ Two GitHub Actions workflows live at the repo root:
 They were both called `CI` until 2026-09; the run list conflated them. Do not merge them — the
 legacy app's canonical lineage is the `renovation` branch and its pipeline has its own fixtures.
 
-> **Actions billing / branch protection.** GitHub Actions was billing-blocked when these gates were
-> written (2026-09-03), so nothing below has executed in CI yet — every gate was run locally against
-> the same code with the same tools (see *Local reproduction*). The repository currently has only
-> no-force-push / no-delete protection on `main`. **Once Actions billing is restored, the four Laravel
-> CI checks must be added back as *required status checks* on `main`** (Settings → Branches → `main`
-> → Require status checks to pass): `Frontend (Vitest, axe, build, style gates)`,
-> `Backend (PHPUnit, MySQL, composer audit)`, `Secret scan (gitleaks)`,
-> `SAST (Semgrep, ERROR severity blocks)`. Watch the first run to green before flipping the
-> requirement on — the composer-audit gate is expected to be **red on its first run** (see below).
+> **Branch protection (updated 2026-09-03).** GitHub Actions runs and gates: the workflow has been
+> green on every push since billing was restored. The four Laravel CI checks — `Frontend (Vitest,
+> axe, build, style gates)`, `Backend (PHPUnit, MySQL, composer audit)`, `Secret scan (gitleaks)`,
+> `SAST (Semgrep, ERROR severity blocks)` — are **required status checks on `main`, enforced for
+> admins**, alongside no-force-push and no-delete. Consequence: **every change to `main` goes
+> through a pull request and merges only on green** (`gh pr create`, then `gh pr merge` once the
+> checks pass); direct pushes are rejected. Reviews are not required (single maintainer).
 >
-> Path-filter gotcha: a required check that does not run because the PR touched no matching path
-> shows as *Expected — waiting* and blocks the merge. If legacy-only or Laravel-only PRs are still a
-> thing, either require only the checks of the workflow every PR triggers, or add the paired
-> "skipped" workflow GitHub documents (same job names, `paths-ignore` mirror, exits 0).
+> The workflow deliberately has **no path filter**: a required check that does not run because a
+> commit touched no matching path shows as *Expected — waiting* and blocks the merge forever, so
+> the four jobs run on every push and PR to `main`, docs-only changes included.
 
 ## Laravel CI jobs
 

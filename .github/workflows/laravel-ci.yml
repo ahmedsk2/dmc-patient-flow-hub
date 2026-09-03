@@ -34,13 +34,16 @@ name: Laravel CI
 permissions:
   contents: read
 
+# No path filter on purpose (2026-09-03): the four jobs are REQUIRED status checks on `main` with
+# the rule enforced for admins. A required check that does not run because a commit touched no
+# matching path shows as "Expected — waiting" and blocks the merge forever, so CI runs on every
+# push and PR to `main`, docs-only ones included (~4 min). The legacy pipeline (ci.yml) keeps its
+# own path filter; it is not a required check.
 on:
   push:
     branches: [main]
-    paths: ['laravel/**', '.github/workflows/laravel-ci.yml']
   pull_request:
     branches: [main]
-    paths: ['laravel/**', '.github/workflows/laravel-ci.yml']
 
 concurrency:
   group: ci-${{ github.ref }}
