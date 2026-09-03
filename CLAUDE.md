@@ -1,5 +1,13 @@
 # CLAUDE.md — DMC Patient-Flow Hub (Internal Medicine)
 
+> **⚠️ SCOPE NOTE (2026-09-03).** The **shipped product is now the Laravel app under `laravel/`**
+> (live at `dmc-new.towardpcc.com`). Everything below describes the **legacy procedural-PHP app** at the
+> repo root, which is **retired** (kept only on the `renovation` lineage) — read it as history, not
+> current state. For current ground truth (what is live, what remains, the doc map) see
+> [`HANDOFF.md`](HANDOFF.md). **Rewriting this file to describe the Laravel product is the first task of
+> the next review session.**
+
+
 > **Phase 1 deliverable: a complete mental model of this codebase.**
 > This document describes the application *as it is* (not as it should be). It is the
 > orientation map for the renovation work. Detailed findings live in
