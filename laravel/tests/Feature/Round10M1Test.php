@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Mail\RegistrationCodeMail;
 use App\Models\Admission;
+use App\Models\Icd10;
 use App\Models\Patient;
 use App\Models\TbDiagnosis;
 use App\Models\User;
@@ -11,6 +12,7 @@ use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
@@ -35,7 +37,7 @@ class Round10M1Test extends TestCase
     private function user(int $role = User::ROLE_CONSULTANT, array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'm1_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'm1_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'M1 User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
             // 2026-07-11 auth-hardening: MFA is now mandatory for every user, always, and an
             // on-file-but-unverified email is now ALSO gated — default the fixture past both so
@@ -166,7 +168,7 @@ class Round10M1Test extends TestCase
      * Drives the full email-verify + TOTP-confirm flow, then submits the given store payload with
      * $email attached. Shared by any test in this file that still needs a real self-registered user.
      */
-    private function registerThroughFullFlow(string $email, array $storePayload): \Illuminate\Testing\TestResponse
+    private function registerThroughFullFlow(string $email, array $storePayload): TestResponse
     {
         Mail::fake();
         $this->post('/register/email/send', ['email' => $email])->assertOk();
@@ -186,7 +188,7 @@ class Round10M1Test extends TestCase
 
     public function test_donut_headline_counts_assigned_non_icu_only(): void
     {
-        \App\Models\Icd10::create(['code' => 'A15.0', 'name' => 'Tuberculosis of lung']);
+        Icd10::create(['code' => 'A15.0', 'name' => 'Tuberculosis of lung']);
         TbDiagnosis::create(['icd10_code' => 'A15.0']);
         $hosp = $this->user(User::ROLE_CONSULTANT, ['on_service' => 1, 'specialty_id' => 1]);
 

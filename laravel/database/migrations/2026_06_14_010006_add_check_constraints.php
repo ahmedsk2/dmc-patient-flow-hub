@@ -51,14 +51,14 @@ return new class extends Migration
         DB::statement('UPDATE patients SET age = NULL WHERE age IS NOT NULL AND age > 150');
 
         // Step 3 — add the named CHECK constraints
-        DB::statement("ALTER TABLE admissions ADD CONSTRAINT chk_discharge_gte_admit
-            CHECK (discharge_date IS NULL OR admit_date IS NULL OR discharge_date >= admit_date)");
-        DB::statement("ALTER TABLE admissions ADD CONSTRAINT chk_medical_discharge_gte_admit
-            CHECK (medical_discharge_date IS NULL OR admit_date IS NULL OR medical_discharge_date >= admit_date)");
-        DB::statement("ALTER TABLE admissions ADD CONSTRAINT chk_discharge_gte_medical
-            CHECK (discharge_date IS NULL OR medical_discharge_date IS NULL OR discharge_date >= medical_discharge_date)");
-        DB::statement("ALTER TABLE patients ADD CONSTRAINT chk_age_range
-            CHECK (age IS NULL OR (age >= 0 AND age <= 150))");
+        DB::statement('ALTER TABLE admissions ADD CONSTRAINT chk_discharge_gte_admit
+            CHECK (discharge_date IS NULL OR admit_date IS NULL OR discharge_date >= admit_date)');
+        DB::statement('ALTER TABLE admissions ADD CONSTRAINT chk_medical_discharge_gte_admit
+            CHECK (medical_discharge_date IS NULL OR admit_date IS NULL OR medical_discharge_date >= admit_date)');
+        DB::statement('ALTER TABLE admissions ADD CONSTRAINT chk_discharge_gte_medical
+            CHECK (discharge_date IS NULL OR medical_discharge_date IS NULL OR discharge_date >= medical_discharge_date)');
+        DB::statement('ALTER TABLE patients ADD CONSTRAINT chk_age_range
+            CHECK (age IS NULL OR (age >= 0 AND age <= 150))');
     }
 
     public function down(): void

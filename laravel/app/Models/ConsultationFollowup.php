@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use App\Casts\EncryptedNarrative;
-use AppCastsncryptedNarrative;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -35,6 +34,13 @@ class ConsultationFollowup extends Model
         ];
     }
 
-    public function consultation(): BelongsTo { return $this->belongsTo(Consultation::class); }
-    public function author(): BelongsTo { return $this->belongsTo(User::class, 'author_id'); }
+    public function consultation(): BelongsTo
+    {
+        return $this->belongsTo(Consultation::class);
+    }
+
+    public function author(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'author_id');
+    }
 }

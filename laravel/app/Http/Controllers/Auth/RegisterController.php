@@ -35,9 +35,13 @@ use Inertia\Response;
 class RegisterController extends Controller
 {
     private const CODE_TTL_MINUTES = 10;
+
     private const ROW_TTL_MINUTES = 30;
+
     private const MAX_SEND_COUNT = 5;
+
     private const MAX_VERIFY_ATTEMPTS = 5;
+
     private const RESEND_COOLDOWN_SECONDS = 60;
 
     public function show(): Response

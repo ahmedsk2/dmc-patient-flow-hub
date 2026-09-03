@@ -21,9 +21,13 @@ class User extends Authenticatable
     use SoftDeletes;
 
     public const ROLE_ADMIN = 0;
+
     public const ROLE_REGISTRAR = 2;
+
     public const ROLE_CONSULTANT = 3;
+
     public const ROLE_RESIDENT = 4;
+
     public const ROLE_OBSERVER = 5;
 
     public const ROLE_LABELS = [
@@ -70,11 +74,21 @@ class User extends Authenticatable
         ];
     }
 
-    public function isAdmin(): bool { return (int) $this->role === self::ROLE_ADMIN; }
+    public function isAdmin(): bool
+    {
+        return (int) $this->role === self::ROLE_ADMIN;
+    }
 
     /** Observers (role 5) are READ-ONLY everywhere — capability flags never override this. */
-    public function isObserver(): bool { return (int) $this->role === self::ROLE_OBSERVER; }
-    public function roleLabel(): string { return self::ROLE_LABELS[$this->role] ?? 'User'; }
+    public function isObserver(): bool
+    {
+        return (int) $this->role === self::ROLE_OBSERVER;
+    }
+
+    public function roleLabel(): string
+    {
+        return self::ROLE_LABELS[$this->role] ?? 'User';
+    }
 
     /**
      * D1 (legacy endorsement scope [0,2,4]): true ONLY for a plain consultant — everyone else
@@ -201,7 +215,10 @@ class User extends Authenticatable
         return $c->consultant_id !== null && (int) $c->consultant_id === (int) $this->id;
     }
 
-    public function mfaEnabled(): bool { return $this->mfa_secret !== null && $this->mfa_enrolled_at !== null; }
+    public function mfaEnabled(): bool
+    {
+        return $this->mfa_secret !== null && $this->mfa_enrolled_at !== null;
+    }
 
     /**
      * Consultant-picker options [{id, name}] — the one definition for every dropdown.
@@ -216,8 +233,23 @@ class User extends Authenticatable
                 'specialty_id' => $u->specialty_id, 'on_service' => (bool) $u->on_service]);
     }
 
-    public function specialty() { return $this->belongsTo(Specialty::class); }
-    public function admissions(): HasMany { return $this->hasMany(Admission::class, 'consultant_id'); }
-    public function consultations(): HasMany { return $this->hasMany(Consultation::class, 'consultant_id'); }
-    public function trustedDevices(): HasMany { return $this->hasMany(TrustedDevice::class); }
+    public function specialty()
+    {
+        return $this->belongsTo(Specialty::class);
+    }
+
+    public function admissions(): HasMany
+    {
+        return $this->hasMany(Admission::class, 'consultant_id');
+    }
+
+    public function consultations(): HasMany
+    {
+        return $this->hasMany(Consultation::class, 'consultant_id');
+    }
+
+    public function trustedDevices(): HasMany
+    {
+        return $this->hasMany(TrustedDevice::class);
+    }
 }

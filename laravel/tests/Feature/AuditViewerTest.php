@@ -28,7 +28,7 @@ class AuditViewerTest extends TestCase
     {
         parent::setUp();
         $this->admin = User::create([
-            'username' => 'av_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'av_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'AV Admin', 'full_name' => 'AV Admin', 'password' => 'secret12345',
             'role' => User::ROLE_ADMIN, 'active' => 1, 'can_modify' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
@@ -38,7 +38,7 @@ class AuditViewerTest extends TestCase
     private function consultant(): User
     {
         return User::create([
-            'username' => 'cons_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'cons_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Cons', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);

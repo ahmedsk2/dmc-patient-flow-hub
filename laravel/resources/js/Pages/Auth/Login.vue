@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, useId } from 'vue';
 import { Head, useForm, Link, usePage } from '@inertiajs/vue3';
 import EhcLogo from '@/Components/EhcLogo.vue';
 import TrustBadges from '@/Components/TrustBadges.vue';
@@ -7,6 +7,9 @@ import TrustBadges from '@/Components/TrustBadges.vue';
 // 2026-07-11 auth-hardening: no "remember me" — a persistent recaller cookie would auto-authenticate
 // past the now-mandatory MFA challenge. Every session re-authenticates with the second factor.
 const form = useForm({ username: '', password: '' });
+// Accessible names: pair each <label for> with its control id (UX-04). Same fid() idiom as PatientForm.
+const uid = useId();
+const fid = (name) => `login-${uid}-${name}`;
 const submit = () => form.post('/login', { onFinish: () => form.reset('password') });
 
 // guest-side flash (e.g. "sign-in expired" / "too many codes" from a rejected MFA challenge)
@@ -58,18 +61,20 @@ const flash = computed(() => usePage().props.flash);
 
                 <form @submit.prevent="submit" class="mt-8 space-y-5">
                     <div>
-                        <label class="mb-1.5 block text-sm font-semibold text-ink-700">Username or email</label>
-                        <input v-model="form.username" type="text" autofocus autocomplete="username"
+                        <label :for="fid('username')" class="mb-1.5 block text-sm font-semibold text-ink-700">Username or email</label>
+                        <input :id="fid('username')" v-model="form.username" type="text" autofocus autocomplete="username"
+                            :aria-describedby="form.errors.username ? fid('username') + '-err' : undefined"
                             class="w-full rounded-xl border border-ink-200 bg-card px-4 py-2.5 text-ink-800 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                             :class="{ 'border-danger-500': form.errors.username }" placeholder="Username or you@dmc-im.com" />
-                        <p v-if="form.errors.username" class="mt-1 text-xs text-on-danger">{{ form.errors.username }}</p>
+                        <p v-if="form.errors.username" :id="fid('username') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.username }}</p>
                     </div>
                     <div>
-                        <label class="mb-1.5 block text-sm font-semibold text-ink-700">Password</label>
-                        <input v-model="form.password" type="password" autocomplete="current-password"
+                        <label :for="fid('password')" class="mb-1.5 block text-sm font-semibold text-ink-700">Password</label>
+                        <input :id="fid('password')" v-model="form.password" type="password" autocomplete="current-password"
+                            :aria-describedby="form.errors.password ? fid('password') + '-err' : undefined"
                             class="w-full rounded-xl border border-ink-200 bg-card px-4 py-2.5 text-ink-800 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                             :class="{ 'border-danger-500': form.errors.password }" placeholder="••••••••" />
-                        <p v-if="form.errors.password" class="mt-1 text-xs text-on-danger">{{ form.errors.password }}</p>
+                        <p v-if="form.errors.password" :id="fid('password') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.password }}</p>
                     </div>
                     <button type="submit" :disabled="form.processing"
                         class="w-full rounded-xl bg-gradient-to-r from-brand-500 to-brand-700 px-4 py-3 font-semibold text-white shadow-lg shadow-brand-900/20 transition hover:from-brand-600 hover:to-brand-800 disabled:opacity-60">

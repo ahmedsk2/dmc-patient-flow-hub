@@ -22,7 +22,7 @@ class StepUpTest extends TestCase
     private function admin(array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'su_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'su_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'SU Admin', 'role' => User::ROLE_ADMIN, 'active' => 1, 'password' => 'secret12345',
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
@@ -99,7 +99,7 @@ class StepUpTest extends TestCase
 
     public function test_stepup_verify_mfa_admin_requires_totp(): void
     {
-        $secret = \App\Support\Totp::secret();
+        $secret = Totp::secret();
         $admin = $this->admin(['mfa_secret' => $secret, 'mfa_enrolled_at' => now()]);
 
         // correct password but missing TOTP code
@@ -112,7 +112,7 @@ class StepUpTest extends TestCase
     {
         $admin = $this->admin();
         $victim = User::create([
-            'username' => 'promo_' . substr(md5(uniqid('', true)), 0, 6),
+            'username' => 'promo_'.substr(md5(uniqid('', true)), 0, 6),
             'name' => 'Promo', 'role' => User::ROLE_CONSULTANT, 'active' => 1, 'password' => 'secret12345',
         ]);
 

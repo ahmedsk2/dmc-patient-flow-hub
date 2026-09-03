@@ -21,7 +21,7 @@ class AuditWriterTest extends TestCase
     private function user(): User
     {
         return User::create([
-            'username' => 'aud_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'aud_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'Audit Actor', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
         ]);
     }

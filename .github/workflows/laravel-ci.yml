@@ -78,7 +78,8 @@ jobs:
         run: npx vitest run resources/js/__tests__/a11y.axe.spec.js
 
       - name: Unit tests (Vitest)
-        run: npx vitest run
+        # --coverage enforces the thresholds in vitest.config.js (TST-02 floor); a drop fails the job.
+        run: npx vitest run --coverage
 
       - name: Build front-end assets
         run: npm run build
@@ -110,7 +111,7 @@ jobs:
         working-directory: laravel
     services:
       mysql:
-        image: mysql:8.0
+        image: mysql:8.4   # production runs MySQL 8.4 (docs/DEPLOY-LARAVEL.md §0) — test the shipped runtime
         env:
           MYSQL_DATABASE: dmc_test
           # phpunit.xml sets DB_DATABASE=dmc_test but not DB_HOST/PORT/USERNAME/PASSWORD, so those
@@ -129,8 +130,12 @@ jobs:
 
       - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2.37.2
         with:
-          php-version: '8.4'
+          php-version: '8.3'   # production image is PHP 8.3 (Nixpacks, composer.json "php": "^8.3") — test the shipped runtime
           extensions: mbstring, pdo_mysql, gd, zip, intl, bcmath
+          # No PHP coverage driver yet. A `--coverage --min=` floor (TST-02) was tried on 2026-09-03
+          # with pcov enabled: PHPUnit ran green but Collision's coverage table never rendered in
+          # the job log and the floor could not trip, so it was removed rather than left as a gate
+          # that proves nothing. The enforced coverage floor today is the Vitest one (frontend job).
           coverage: none
 
       - name: Install Composer dependencies
@@ -168,6 +173,12 @@ jobs:
         # ("Premature end of PHP process" inside gzcompress) if run in the same long pass as the
         # rest of the suite — a fresh process per pass avoids crossing that threshold.
         run: php artisan test --group pdf
+
+      # BLOCKING, deliberately LAST so a style drift never hides the test results above it.
+      # Laravel Pint (Laravel preset): the codebase was normalised once; any drift fails here.
+      # Fix locally with `vendor/bin/pint` and commit the result.
+      - name: Code style (Pint) — blocking
+        run: vendor/bin/pint --test
 
   secrets:
     name: Secret scan (gitleaks)

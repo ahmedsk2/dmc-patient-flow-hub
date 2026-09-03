@@ -26,7 +26,7 @@ class ConsultationCoordinatorTest extends TestCase
     private function user(int $role = User::ROLE_CONSULTANT, array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'w1c_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'w1c_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'W1 Coord User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));

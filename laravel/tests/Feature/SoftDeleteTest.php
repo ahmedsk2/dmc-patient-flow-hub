@@ -27,7 +27,7 @@ class SoftDeleteTest extends TestCase
     private function user(int $role, array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'sd_' . $role . '_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'sd_'.$role.'_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'SD User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
@@ -245,19 +245,29 @@ class SoftDeleteTest extends TestCase
             $out = ['discharges' => null, 'home' => 0, 'cons' => 0];
             $this->actingAs($admin)->get("/statistics?from={$from}&to={$to}")->assertOk()
                 ->assertInertia(function (AssertableInertia $p) use (&$out) {
-                    $p->where('kpis.discharges', function ($v) use (&$out) { $out['discharges'] = (int) $v; return true; })
-                      ->where('destinations', function ($d) use (&$out) {
-                          foreach (($d['labels'] ?? []) as $i => $lbl) {
-                              if ($lbl === 'Home') { $out['home'] = (int) ($d['data'][$i] ?? 0); }
-                          }
-                          return true;
-                      })
-                      ->where('perConsultant', function ($rows) use (&$out) {
-                          foreach ($rows as $r) {
-                              if (($r['name'] ?? null) === 'Dr Snapshot') { $out['cons'] = (int) ($r['discharges'] ?? 0); }
-                          }
-                          return true;
-                      });
+                    $p->where('kpis.discharges', function ($v) use (&$out) {
+                        $out['discharges'] = (int) $v;
+
+                        return true;
+                    })
+                        ->where('destinations', function ($d) use (&$out) {
+                            foreach (($d['labels'] ?? []) as $i => $lbl) {
+                                if ($lbl === 'Home') {
+                                    $out['home'] = (int) ($d['data'][$i] ?? 0);
+                                }
+                            }
+
+                            return true;
+                        })
+                        ->where('perConsultant', function ($rows) use (&$out) {
+                            foreach ($rows as $r) {
+                                if (($r['name'] ?? null) === 'Dr Snapshot') {
+                                    $out['cons'] = (int) ($r['discharges'] ?? 0);
+                                }
+                            }
+
+                            return true;
+                        });
                 });
 
             return $out;

@@ -56,8 +56,8 @@ class SecurityHeaders
                 // violation telemetry → the log-only /csp-report sink. report-uri is the
                 // universally-supported directive; report-to + the Reporting-Endpoints header
                 // below are its successor pair — browsers use whichever they understand.
-                ."report-uri /csp-report; "
-                ."report-to csp-endpoint";
+                .'report-uri /csp-report; '
+                .'report-to csp-endpoint';
 
             $header = $mode === 'report' ? 'Content-Security-Policy-Report-Only' : 'Content-Security-Policy';
             $response->headers->set($header, $policy);

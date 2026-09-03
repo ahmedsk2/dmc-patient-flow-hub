@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Notification;
 use App\Models\User;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -23,6 +24,7 @@ class BackupVerifyTest extends TestCase
     use RefreshDatabase;
 
     private const HEARTBEAT_URL = 'fake-s3.example.test/dmc-db-backups/db-backups/dmc_demo/LATEST.json';
+
     private const OBJECT = 'db-backups/dmc_demo/2026/09/dmc_demo-2026-09-03T021507Z.sql.gz.enc';
 
     private function configure(): void
@@ -43,7 +45,7 @@ class BackupVerifyTest extends TestCase
     private function user(int $role, int $active = 1): User
     {
         return User::create([
-            'username' => 'bkv_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'bkv_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Backup User', 'password' => 'secret12345', 'role' => $role, 'active' => $active,
         ]);
     }
@@ -78,11 +80,11 @@ class BackupVerifyTest extends TestCase
         $this->assertSame(0, Notification::where('type', 'backup.stale')->count());
 
         Http::assertSent(fn ($r) => $r->method() === 'GET'
-            && $r->url() === 'https://' . self::HEARTBEAT_URL
+            && $r->url() === 'https://'.self::HEARTBEAT_URL
             && str_contains($r->header('Authorization')[0], 'AWS4-HMAC-SHA256'));
         // the heartbeat's object is HEAD-checked too — a heartbeat pointing at nothing is not "fresh"
         Http::assertSent(fn ($r) => $r->method() === 'HEAD'
-            && $r->url() === 'https://fake-s3.example.test/dmc-db-backups/' . self::OBJECT);
+            && $r->url() === 'https://fake-s3.example.test/dmc-db-backups/'.self::OBJECT);
         Http::assertNotSent(fn ($r) => str_contains($r->url(), '/audit-archive/'));
     }
 
@@ -247,7 +249,7 @@ class BackupVerifyTest extends TestCase
 
     public function test_is_scheduled_daily(): void
     {
-        $events = collect(app(\Illuminate\Console\Scheduling\Schedule::class)->events())
+        $events = collect(app(Schedule::class)->events())
             ->filter(fn ($e) => str_contains((string) $e->command, 'backup:verify'));
 
         $this->assertCount(1, $events, 'backup:verify must be scheduled exactly once');

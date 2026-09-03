@@ -20,7 +20,7 @@ class TourTest extends TestCase
     private function user(int $role = User::ROLE_REGISTRAR, array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'tour_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'tour_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Tour User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));

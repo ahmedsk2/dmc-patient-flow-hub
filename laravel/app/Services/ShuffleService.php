@@ -32,7 +32,7 @@ class ShuffleService
     {
         $settings = Setting::current();
 
-        return DB::transaction(function () use ($settings, $actorId) {
+        return DB::transaction(function () use ($settings) {
             $unassigned = Admission::query()->whereNull('discharge_date')->whereNull('consultant_id')
                 ->orderBy('id')->get();
 
@@ -129,6 +129,7 @@ class ShuffleService
                 $best = $id;
             }
         }
+
         return $best;
     }
 
@@ -140,6 +141,7 @@ class ShuffleService
                 $best = $id;
             }
         }
+
         return $best;
     }
 }

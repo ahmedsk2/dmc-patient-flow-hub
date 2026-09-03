@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Notification;
+use App\Models\Setting;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -45,14 +47,14 @@ class HandleInertiaRequests extends Middleware
                 ] : null,
             ],
             // Phase 4 — Item 2: client idle-warning overlay reads these (server middleware is authoritative)
-            'idleTimeoutMinutes' => fn () => $user ? (int) \App\Models\Setting::current()->idle_timeout_minutes : 0,
-            'absTimeoutMinutes' => fn () => $user ? (int) \App\Models\Setting::current()->abs_timeout_minutes : 0,
+            'idleTimeoutMinutes' => fn () => $user ? (int) Setting::current()->idle_timeout_minutes : 0,
+            'absTimeoutMinutes' => fn () => $user ? (int) Setting::current()->abs_timeout_minutes : 0,
             'flash' => fn () => $request->session()->get('flash'),
             // bell badge — resolved-aware COUNT (user_id, read_at) that also folds in still-open
             // "handover.incomplete" actionable reminders (they persist until resolved, not read-all
             // dismissed); refreshed by every Inertia visit. Kept IDENTICAL to HandoverController::notifications' unread expression.
             'unreadNotifications' => fn () => $user
-                ? \App\Models\Notification::where('user_id', $user->id)->where(fn ($q) => $q
+                ? Notification::where('user_id', $user->id)->where(fn ($q) => $q
                     ->where(fn ($x) => $x->where('type', '!=', 'handover.incomplete')->whereNull('read_at'))
                     ->orWhere(fn ($x) => $x->where('type', 'handover.incomplete')->whereNull('resolved_at')))->count()
                 : 0,

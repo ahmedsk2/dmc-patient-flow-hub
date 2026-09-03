@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 /**
@@ -22,7 +23,7 @@ class SecurityHeadersTest extends TestCase
     private function admin(): User
     {
         return User::create([
-            'username' => 'sh_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'sh_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'SH Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
@@ -132,7 +133,7 @@ class SecurityHeadersTest extends TestCase
 
     public function test_csp_report_sink_accepts_a_browser_report_without_csrf_and_logs_it(): void
     {
-        \Illuminate\Support\Facades\Log::shouldReceive('warning')
+        Log::shouldReceive('warning')
             ->once()
             ->withArgs(fn ($message, $context) => $message === 'CSP violation reported'
                 && ($context['violated-directive'] ?? null) === 'script-src'

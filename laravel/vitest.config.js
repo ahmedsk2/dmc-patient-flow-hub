@@ -24,6 +24,19 @@ export default defineConfig({
         environment: 'jsdom',
         globals: true,
         include: ['resources/js/**/*.{test,spec}.{js,mjs,ts}'],
+        // Coverage floor (TST-02, prod-ready 2026-09-03). Scoped to the app's own source so vendor /
+        // build output never inflates or deflates the number. Thresholds sit just under the measured
+        // baseline of 2026-09-03 (lines 77.5 · branches 78.8 · functions 50.7 over 723 tests) — they
+        // stop coverage from silently eroding; raise them as coverage grows, never lower them to
+        // pass a build. Enforced only with `--coverage` (the CI frontend job); plain `vitest run`
+        // is unchanged.
+        coverage: {
+            provider: 'v8',
+            include: ['resources/js/**/*.{js,vue}'],
+            exclude: ['resources/js/**/__tests__/**', 'resources/js/**/*.{spec,test}.js'],
+            reporter: ['text-summary'],
+            thresholds: { lines: 75, statements: 75, branches: 76, functions: 48 },
+        },
     },
     resolve: {
         alias: { '@': resolve(__dirname, 'resources/js') },

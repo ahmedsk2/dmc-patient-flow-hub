@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\DashboardCache;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -19,8 +20,8 @@ class Admission extends Model
     {
         // Keep the dashboard heavy-tier cache fresh: bust on any admission write so a
         // clinician's own admit/assign/discharge shows up immediately, not after the TTL.
-        static::saved(fn () => \App\Support\DashboardCache::bust());
-        static::deleted(fn () => \App\Support\DashboardCache::bust());
+        static::saved(fn () => DashboardCache::bust());
+        static::deleted(fn () => DashboardCache::bust());
     }
 
     /**
@@ -70,11 +71,11 @@ class Admission extends Model
     {
         return function ($j) use ($window) {
             $j->on('prev.patient_id', '=', 'a.patient_id')
-              ->whereColumn('prev.discharge_date', '<=', 'a.admit_date')
-              ->whereRaw('DATEDIFF(a.admit_date, prev.discharge_date) BETWEEN 0 AND ?', [$window])
-              ->whereColumn('prev.id', '<>', 'a.id')
-              ->where(fn ($w) => $w->whereIn('prev.transfer_type', self::REAL_DISCHARGE_TYPES)
-                  ->orWhereNull('prev.transfer_type'));
+                ->whereColumn('prev.discharge_date', '<=', 'a.admit_date')
+                ->whereRaw('DATEDIFF(a.admit_date, prev.discharge_date) BETWEEN 0 AND ?', [$window])
+                ->whereColumn('prev.id', '<>', 'a.id')
+                ->where(fn ($w) => $w->whereIn('prev.transfer_type', self::REAL_DISCHARGE_TYPES)
+                    ->orWhereNull('prev.transfer_type'));
         };
     }
 
@@ -119,16 +120,46 @@ class Admission extends Model
         ];
     }
 
-    public function patient(): BelongsTo { return $this->belongsTo(Patient::class); }
-    public function consultant(): BelongsTo { return $this->belongsTo(User::class, 'consultant_id'); }
-    public function admittedBy(): BelongsTo { return $this->belongsTo(User::class, 'admitted_by'); }
-    public function dischargedBy(): BelongsTo { return $this->belongsTo(User::class, 'discharged_by'); }
-    public function diagnoses(): HasMany { return $this->hasMany(AdmissionDiagnosis::class); }
-    public function handover() { return $this->hasOne(Handover::class); }
-    public function handoverSignatures(): HasMany { return $this->hasMany(HandoverSignature::class); }
+    public function patient(): BelongsTo
+    {
+        return $this->belongsTo(Patient::class);
+    }
+
+    public function consultant(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'consultant_id');
+    }
+
+    public function admittedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'admitted_by');
+    }
+
+    public function dischargedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'discharged_by');
+    }
+
+    public function diagnoses(): HasMany
+    {
+        return $this->hasMany(AdmissionDiagnosis::class);
+    }
+
+    public function handover()
+    {
+        return $this->hasOne(Handover::class);
+    }
+
+    public function handoverSignatures(): HasMany
+    {
+        return $this->hasMany(HandoverSignature::class);
+    }
 
     /** Currently admitted (file not closed). */
-    public function scopeActive(Builder $q): Builder { return $q->whereNull('discharge_date'); }
+    public function scopeActive(Builder $q): Builder
+    {
+        return $q->whereNull('discharge_date');
+    }
 
     /**
      * Handover PENDING (transfer-driven): an ACTIVE admission carrying at least one UNRESOLVED
@@ -153,7 +184,10 @@ class Admission extends Model
         return $q->where(fn ($w) => $w->where('current_location', '<>', 'ICU')->orWhereNull('current_location'));
     }
 
-    public function scopeIcu(Builder $q): Builder { return $q->where('current_location', 'ICU'); }
+    public function scopeIcu(Builder $q): Builder
+    {
+        return $q->where('current_location', 'ICU');
+    }
 
     /**
      * Settings-driven LOS band (short/mid/long) — the ONE banding rule, shared by the board,
@@ -179,6 +213,7 @@ class Admission extends Model
             return null;
         }
         $end = $this->discharge_date ?? now();
+
         // Carbon 3 returns a float from diffInDays(); cast explicitly (whole days) to avoid the
         // implicit float->int deprecation that fired once per active patient on the board.
         return (int) $this->admit_date->diffInDays($end);

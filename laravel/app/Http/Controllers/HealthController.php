@@ -88,13 +88,13 @@ class HealthController extends Controller
     private function databaseAcceptsConnections(): bool
     {
         try {
-            $base = config('database.connections.' . config('database.default'));
+            $base = config('database.connections.'.config('database.default'));
             if (! is_array($base)) {
                 return false;
             }
 
             $base['options'] = ($base['options'] ?? []) + [PDO::ATTR_TIMEOUT => self::DB_TIMEOUT_SECONDS];
-            config(['database.connections.' . self::PROBE_CONNECTION => $base]);
+            config(['database.connections.'.self::PROBE_CONNECTION => $base]);
 
             $row = DB::connection(self::PROBE_CONNECTION)
                 ->selectOne('SELECT /*+ MAX_EXECUTION_TIME(2000) */ 1 AS ok');

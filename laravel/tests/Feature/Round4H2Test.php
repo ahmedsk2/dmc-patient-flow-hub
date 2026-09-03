@@ -3,10 +3,13 @@
 namespace Tests\Feature;
 
 use App\Models\Admission;
+use App\Models\Consultation;
 use App\Models\Country;
 use App\Models\Handover;
 use App\Models\HandoverSignature;
+use App\Models\Icd10;
 use App\Models\Patient;
+use App\Models\Setting;
 use App\Models\TbDiagnosis;
 use App\Models\User;
 use App\Services\ShuffleService;
@@ -49,7 +52,7 @@ class Round4H2Test extends TestCase
     private function user(int $role = User::ROLE_CONSULTANT, array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'h2_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'h2_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'H2 User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
@@ -74,7 +77,7 @@ class Round4H2Test extends TestCase
     private function admitPayload(array $overrides = []): array
     {
         Country::firstOrCreate(['name' => 'Saudi Arabia'], ['code' => 'SA']);
-        \Illuminate\Support\Facades\DB::table('icd10')->updateOrInsert(['code' => 'J18.9'], ['name' => 'Pneumonia']);   // Phase 4 — Item 5
+        DB::table('icd10')->updateOrInsert(['code' => 'J18.9'], ['name' => 'Pneumonia']);   // Phase 4 — Item 5
 
         return array_merge([
             'mrn' => (string) random_int(10000000, 99999999), 'name' => 'Full Payload', 'age' => 47,
@@ -238,12 +241,12 @@ class Round4H2Test extends TestCase
 
     public function test_reverse_signoff_is_same_day_only(): void
     {
-        $yesterday = \App\Models\Consultation::create(['mrn' => '91000010', 'patient_name' => 'Y Signoff',
+        $yesterday = Consultation::create(['mrn' => '91000010', 'patient_name' => 'Y Signoff',
             'consultation_date' => now()->subDays(2)->toDateString(), 'signoff_date' => now()->subDay()->toDateString()]);
         $this->actingAs($this->admin())->post("/consultations/{$yesterday->id}/reverse-signoff")->assertRedirect();
         $this->assertNotNull($yesterday->fresh()->signoff_date, 'yesterday\'s sign-off must NOT be reversible (legacy same-day undo)');
 
-        $today = \App\Models\Consultation::create(['mrn' => '91000011', 'patient_name' => 'T Signoff',
+        $today = Consultation::create(['mrn' => '91000011', 'patient_name' => 'T Signoff',
             'consultation_date' => now()->subDay()->toDateString(), 'signoff_date' => now()->toDateString()]);
         $this->actingAs($this->admin())->post("/consultations/{$today->id}/reverse-signoff")->assertRedirect();
         $this->assertNull($today->fresh()->signoff_date, 'same-day sign-offs remain reversible');
@@ -253,7 +256,7 @@ class Round4H2Test extends TestCase
 
     public function test_shuffle_load_excludes_medically_discharged_and_tb_patients(): void
     {
-        \App\Models\Setting::current()->update(['min_hospitalist' => 5, 'max_hospitalist' => 10, 'min_subs' => 0, 'max_subs' => 0]);
+        Setting::current()->update(['min_hospitalist' => 5, 'max_hospitalist' => 10, 'min_subs' => 0, 'max_subs' => 0]);
         TbDiagnosis::create(['icd10_code' => 'A15.0']);
         $a = $this->user(User::ROLE_CONSULTANT, ['on_service' => 1, 'specialty_id' => 1]);   // lower id wins ties
         $b = $this->user(User::ROLE_CONSULTANT, ['on_service' => 1, 'specialty_id' => 1]);
@@ -274,7 +277,7 @@ class Round4H2Test extends TestCase
     public function test_icu_queue_row_goes_to_a_hospitalist_even_when_a_subspecialist_is_less_loaded(): void
     {
         // hospitalist already AT CAP (max 1) — a ward row overflows to the sub, but an ICU row must not
-        \App\Models\Setting::current()->update(['min_hospitalist' => 0, 'max_hospitalist' => 1, 'min_subs' => 5, 'max_subs' => 10]);
+        Setting::current()->update(['min_hospitalist' => 0, 'max_hospitalist' => 1, 'min_subs' => 5, 'max_subs' => 10]);
         $hosp = $this->user(User::ROLE_CONSULTANT, ['on_service' => 1, 'specialty_id' => 1]);
         $sub = $this->user(User::ROLE_CONSULTANT, ['on_service' => 1, 'specialty_id' => 2]);
         $this->admission(['consultant_id' => $hosp->id]);   // hospitalist ward load 1 (= max); sub 0
@@ -448,8 +451,8 @@ class Round4H2Test extends TestCase
         // A user could have set a recaller BEFORE this deploy / before enrolling; enrolling MFA must
         // invalidate it by rotating remember_token, so the old cookie can never auto-auth past the challenge.
         $u = $this->user(User::ROLE_CONSULTANT, ['mfa_secret' => null, 'mfa_enrolled_at' => null, 'remember_token' => 'stale-preexisting-token']);
-        $secret = \App\Support\Totp::secret();
-        $this->withSession(['mfa.setup.secret' => $secret, 'mfa.setup.codes' => \App\Support\Totp::recoveryCodes()])
+        $secret = Totp::secret();
+        $this->withSession(['mfa.setup.secret' => $secret, 'mfa.setup.codes' => Totp::recoveryCodes()])
             ->actingAs($u)
             ->post('/mfa/confirm', ['code' => $this->totpCode($secret)])
             ->assertRedirect();
@@ -462,7 +465,7 @@ class Round4H2Test extends TestCase
     /** Current valid TOTP for a secret, via the app's own engine (private code() by reflection). */
     private function totpCode(string $secret): string
     {
-        $m = new \ReflectionMethod(\App\Support\Totp::class, 'code');
+        $m = new \ReflectionMethod(Totp::class, 'code');
         $m->setAccessible(true);
 
         return (string) $m->invoke(null, $secret, intdiv(now()->getTimestamp(), 30));
@@ -487,9 +490,9 @@ class Round4H2Test extends TestCase
     private function mfaUser(): User
     {
         return User::create([
-            'username' => 'h2m_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'h2m_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'H2 Mfa', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
-            'mfa_secret' => \App\Support\Totp::secret(), 'mfa_enrolled_at' => now(),
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
     }
 
@@ -528,8 +531,8 @@ class Round4H2Test extends TestCase
 
     public function test_export_uses_legacy_filename_uppercase_values_and_double_pipe_dx_join(): void
     {
-        \App\Models\Icd10::create(['code' => 'J18.9', 'name' => 'Pneumonia, unspecified organism']);
-        \App\Models\Icd10::create(['code' => 'E11.9', 'name' => 'Type 2 diabetes mellitus without complications']);
+        Icd10::create(['code' => 'J18.9', 'name' => 'Pneumonia, unspecified organism']);
+        Icd10::create(['code' => 'E11.9', 'name' => 'Type 2 diabetes mellitus without complications']);
         $p = Patient::create(['mrn' => '92000001', 'name' => 'Export Pt', 'gender' => 'Male', 'nationality' => 'Saudi Arabia']);
         $a = $this->admission(['discharge_to' => 'Home', 'outcome' => 'Alive'], $p);
         $a->diagnoses()->create(['seq' => 1, 'icd10_code' => 'J18.9']);
@@ -537,7 +540,7 @@ class Round4H2Test extends TestCase
 
         $res = $this->actingAs($this->admin())->get('/registry/export');
         $res->assertOk();
-        $res->assertDownload('Export-' . now()->format('d-m-Y') . '.csv');
+        $res->assertDownload('Export-'.now()->format('d-m-Y').'.csv');
 
         $csv = $res->streamedContent();
         $this->assertStringContainsString('PNEUMONIA, UNSPECIFIED ORGANISM || TYPE 2 DIABETES MELLITUS WITHOUT COMPLICATIONS', $csv,
@@ -549,7 +552,7 @@ class Round4H2Test extends TestCase
 
         $xlsx = $this->actingAs($this->admin())->get('/registry/export-xlsx');
         $xlsx->assertOk();
-        $xlsx->assertDownload('Export-' . now()->format('d-m-Y') . '.xlsx');
+        $xlsx->assertDownload('Export-'.now()->format('d-m-Y').'.xlsx');
     }
 
     // ---- C7: legacy URL redirects ----------------------------------------------------------------------------------

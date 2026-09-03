@@ -2,19 +2,23 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\MetricQueries;
 use App\Http\Requests\ConsultantScorecardRequest;
 use App\Http\Requests\GovernanceReportRequest;
 use App\Http\Requests\ReportYearRequest;
+use App\Jobs\GenerateMonthlyPdf;
 use App\Models\Admission;
 use App\Models\Setting;
 use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 /**
  * Annual + monthly activity reports. The Vue pages are print-styled; the true server-side PDFs
@@ -33,7 +37,7 @@ use Inertia\Response;
  */
 class ReportsController extends Controller
 {
-    use \App\Http\Controllers\Concerns\MetricQueries;
+    use MetricQueries;
 
     private string $nonIcu = Admission::NON_ICU_SQL;
 
@@ -96,7 +100,9 @@ class ReportsController extends Controller
         $data = $request->validated();
         $to = isset($data['to']) ? Carbon::parse($data['to']) : Carbon::today();
         $from = isset($data['from']) ? Carbon::parse($data['from']) : $to->copy()->startOfYear();
-        if ($from->gt($to)) { [$from, $to] = [$to, $from]; }
+        if ($from->gt($to)) {
+            [$from, $to] = [$to, $from];
+        }
         $f = $from->toDateString();
         $t = $to->toDateString();
 
@@ -156,7 +162,7 @@ class ReportsController extends Controller
             $startMonth = ($data['quarter'] - 1) * 3 + 1;
             $f = Carbon::createFromDate($data['year'], $startMonth, 1)->startOfMonth()->toDateString();
             $t = Carbon::createFromDate($data['year'], $startMonth, 1)->addMonths(2)->endOfMonth()->toDateString();
-            $title = 'Q' . $data['quarter'] . ' ' . $data['year'];
+            $title = 'Q'.$data['quarter'].' '.$data['year'];
         } else {
             $f = Carbon::createFromDate($data['year'], $data['month'], 1)->startOfMonth()->toDateString();
             $t = Carbon::createFromDate($data['year'], $data['month'], 1)->endOfMonth()->toDateString();
@@ -203,7 +209,7 @@ class ReportsController extends Controller
             ->leftJoin('users as u', 'u.id', '=', 'a.consultant_id')
             ->whereBetween('a.discharge_date', [$f, $t])->where('a.outcome', 'Dead')->whereNull('a.deleted_at')   // Phase 4 — Item 1
             ->select('a.id', 'p.mrn', 'p.age', DB::raw('DATEDIFF(a.discharge_date, a.admit_date) los'),
-                'a.current_location', DB::raw("COALESCE(u.full_name, u.name) consultant"))
+                'a.current_location', DB::raw('COALESCE(u.full_name, u.name) consultant'))
             ->orderBy('a.discharge_date')->get();
         // primary diagnosis name per death (small set — one whereIn load)
         $deathIds = $deathList->pluck('id');
@@ -220,7 +226,7 @@ class ReportsController extends Controller
             ->leftJoin('users as u', 'u.id', '=', 'a.consultant_id')
             ->whereBetween('a.admit_date', [$f, $t])->whereNull('a.deleted_at')->whereNull('prev.deleted_at')->distinct()   // Phase 4 — Item 1
             ->select('p.mrn', 'p.age', 'a.admit_date', DB::raw('DATEDIFF(a.admit_date, prev.discharge_date) gap_days'),
-                DB::raw("COALESCE(u.full_name, u.name) consultant"))
+                DB::raw('COALESCE(u.full_name, u.name) consultant'))
             ->orderBy('a.admit_date')->get()
             ->map(fn ($r) => ['mrn' => $r->mrn, 'age' => $r->age,
                 'admit_date' => $r->admit_date, 'gap_days' => $r->gap_days, 'consultant' => $r->consultant ?: '—']);
@@ -233,7 +239,7 @@ class ReportsController extends Controller
             'generatedAt' => now()->format('D, d M Y · H:i'),
         ])->setPaper('a4', 'landscape');
 
-        return $pdf->download("governance-{$data['year']}-" . ($data['period_type'] === 'quarter' ? "Q{$data['quarter']}" : sprintf('%02d', $data['month'])) . '.pdf');
+        return $pdf->download("governance-{$data['year']}-".($data['period_type'] === 'quarter' ? "Q{$data['quarter']}" : sprintf('%02d', $data['month'])).'.pdf');
     }
 
     /** Primary (seq-first) diagnosis name per admission id, for the governance death list. */
@@ -271,14 +277,14 @@ class ReportsController extends Controller
 
         // long-stay (threshold flavour) = ward discharge with LOS strictly greater than long_los
         $longLos = (int) (Setting::current()->long_los ?? 11);
-        $longStayByMonth = $this->byMonth('discharge_date', $start, $end, $this->nonIcu . " AND admit_date IS NOT NULL AND DATEDIFF(discharge_date, admit_date) > {$longLos}");
+        $longStayByMonth = $this->byMonth('discharge_date', $start, $end, $this->nonIcu." AND admit_date IS NOT NULL AND DATEDIFF(discharge_date, admit_date) > {$longLos}");
 
         // ---- legacy booklet families (grouped ports of statistics/a4.php) ----
         $consByMonth = $this->byMonth('consultation_date', $start, $end, '1=1', 'consultations');
         $sgnByMonth = $this->byMonth('signoff_date', $start, $end, '1=1', 'consultations');
         $icuTransByMonth = $this->byMonth('discharge_date', $start, $end, "discharge_to = 'Intensive Care (ICU)'");
         $weekendByMonth = $capEnd >= $start
-            ? $this->byMonth('discharge_date', $start, $capEnd, $this->nonIcu . ' AND DAYOFWEEK(discharge_date) IN (6,7)') // Fri/Sat (D4)
+            ? $this->byMonth('discharge_date', $start, $capEnd, $this->nonIcu.' AND DAYOFWEEK(discharge_date) IN (6,7)') // Fri/Sat (D4)
             : [];
         $readmitWindow = max(0, (int) (Setting::current()->readmission_window_days ?? 3));
         $readmitByMonth = $this->readmitsByMonth($start, $end, $readmitWindow);
@@ -411,12 +417,12 @@ class ReportsController extends Controller
      * month. Synchronous by default (existing behaviour); ?async=1 dispatches the queued job
      * (§3.6) which stores the PDF and notifies the requester when ready.
      */
-    public function monthlyPdf(Request $request): SymfonyResponse|\Illuminate\Http\RedirectResponse
+    public function monthlyPdf(Request $request): SymfonyResponse|RedirectResponse
     {
         $year = (int) ($request->query('year') ?: Carbon::today()->year);
 
         if ($request->boolean('async')) {
-            \App\Jobs\GenerateMonthlyPdf::dispatch($year, (int) auth()->id());
+            GenerateMonthlyPdf::dispatch($year, (int) auth()->id());
 
             return back()->with('flash', ['type' => 'info',
                 'message' => 'Your PDF is being generated — you will be notified when it is ready.']);
@@ -436,8 +442,8 @@ class ReportsController extends Controller
     public function downloadGenerated(string $key): SymfonyResponse
     {
         $path = "reports/{$key}";
-        abort_unless(\Illuminate\Support\Facades\Storage::disk('local')->exists($path), 404);
-        $abs = \Illuminate\Support\Facades\Storage::disk('local')->path($path);
+        abort_unless(Storage::disk('local')->exists($path), 404);
+        $abs = Storage::disk('local')->path($path);
 
         return response()->download($abs, basename($path))->deleteFileAfterSend();
     }
@@ -505,7 +511,7 @@ class ReportsController extends Controller
         $disByMonth = $this->byMonth('discharge_date', $start, $end, $this->nonIcu);
         $deathByMonth = $this->byMonth('discharge_date', $start, $end, "outcome = 'Dead'");
         $weekendByMonth = $capEnd >= $start
-            ? $this->byMonth('discharge_date', $start, $capEnd, $this->nonIcu . ' AND DAYOFWEEK(discharge_date) IN (6,7)') // Fri/Sat (D4)
+            ? $this->byMonth('discharge_date', $start, $capEnd, $this->nonIcu.' AND DAYOFWEEK(discharge_date) IN (6,7)') // Fri/Sat (D4)
             : [];
         $readmitWindow = max(0, (int) (Setting::current()->readmission_window_days ?? 3));
         $readmitByMonth = $this->readmitsByMonth($start, $end, $readmitWindow);
@@ -524,7 +530,9 @@ class ReportsController extends Controller
             ->whereNull('deleted_at')   // Phase 4 — Item 1
             ->selectRaw("DATE_FORMAT(discharge_date, '%Y-%m') mk, COALESCE(discharge_to, '') dst, COUNT(*) c")
             ->groupBy('mk', 'dst')->get()
-            ->each(function ($r) use (&$destByMonth) { $destByMonth[$r->mk][$r->dst] = (int) $r->c; });
+            ->each(function ($r) use (&$destByMonth) {
+                $destByMonth[$r->mk][$r->dst] = (int) $r->c;
+            });
 
         // per-(month, consultant) physical LOS — one grouped query; zeros for every active consultant
         $consultants = User::where('role', User::ROLE_CONSULTANT)->where('active', 1)
@@ -535,12 +543,16 @@ class ReportsController extends Controller
             ->whereRaw('DATEDIFF(discharge_date, admit_date) >= 0')
             ->selectRaw("DATE_FORMAT(discharge_date, '%Y-%m') mk, consultant_id cid, ROUND(AVG(DATEDIFF(discharge_date, admit_date)), 1) v")
             ->groupBy('mk', 'cid')->get()
-            ->each(function ($r) use (&$cLosByMonth) { $cLosByMonth[$r->mk][(int) $r->cid] = (float) $r->v; });
+            ->each(function ($r) use (&$cLosByMonth) {
+                $cLosByMonth[$r->mk][(int) $r->cid] = (float) $r->v;
+            });
 
         $months = [];
         for ($m = 1; $m <= 12; $m++) {
             $first = Carbon::createFromDate($year, $m, 1)->startOfDay();
-            if ($first->gte($today)) { continue; } // legacy rule: skip months not yet started
+            if ($first->gte($today)) {
+                continue;
+            } // legacy rule: skip months not yet started
             $key = sprintf('%04d-%02d', $year, $m);
 
             $days = ['labels' => [], 'admissions' => [], 'discharges' => [], 'consultations' => [], 'signoffs' => []];
@@ -637,7 +649,7 @@ class ReportsController extends Controller
         $rows = DB::table('admissions')->whereRaw($this->nonIcu)->whereNull('deleted_at')   // Phase 4 — Item 1
             ->where(function ($q) use ($yStart, $yEnd) {
                 $q->where(fn ($w) => $w->where('admit_date', '<=', $yEnd)
-                        ->where(fn ($x) => $x->whereNull('discharge_date')->orWhere('discharge_date', '>=', $yStart)))
+                    ->where(fn ($x) => $x->whereNull('discharge_date')->orWhere('discharge_date', '>=', $yStart)))
                     ->orWhereBetween('admit_date', [$yStart, $yEnd])
                     ->orWhereBetween('discharge_date', [$yStart, $yEnd]);
             })
@@ -665,7 +677,7 @@ class ReportsController extends Controller
                     }
                     // long stay — spans the month, or active with >30 days before month end
                     if (($dis !== null && $adm !== null && $adm < $first && $dis >= $last)
-                        || ($dis === null && $adm !== null && date('Y-m-d', strtotime($adm . ' +30 days')) < $last)) {
+                        || ($dis === null && $adm !== null && date('Y-m-d', strtotime($adm.' +30 days')) < $last)) {
                         $l++;
                     }
                 }

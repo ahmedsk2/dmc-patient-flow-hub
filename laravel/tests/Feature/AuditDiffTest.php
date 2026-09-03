@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Support\AuditDiff;
 use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -25,7 +26,7 @@ class AuditDiffTest extends TestCase
     private function admin(): User
     {
         return User::create([
-            'username' => 'ad_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'ad_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Diff Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
             'can_modify' => 1, 'can_manage' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
@@ -100,7 +101,7 @@ class AuditDiffTest extends TestCase
         $a = Admission::create(['patient_id' => $p->id, 'admit_date' => '2024-01-10',
             'current_location' => 'Ward', 'is_longterm' => 0, 'is_new_assignment' => 0]);
         AdmissionDiagnosis::create(['admission_id' => $a->id, 'seq' => 1, 'icd10_code' => 'A01']);
-        \Illuminate\Support\Facades\DB::table('icd10')->insert(['code' => 'A02', 'name' => 'Typhoid']);   // Phase 4 — Item 5: added code must exist
+        DB::table('icd10')->insert(['code' => 'A02', 'name' => 'Typhoid']);   // Phase 4 — Item 5: added code must exist
 
         $this->actingAs($admin)->post("/admissions/{$a->id}/modify", [
             'mrn' => '70000009', 'name' => 'Dx Pt', 'admit_date' => '2024-01-10', 'current_location' => 'Ward',
@@ -137,7 +138,7 @@ class AuditDiffTest extends TestCase
     {
         $admin = $this->admin();
         $target = User::create([
-            'username' => 'tgt_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'tgt_'.substr(md5(uniqid('', true)), 0, 8),
             'full_name' => 'Target User', 'name' => 'Target User',
             'password' => 'secret12345', 'role' => User::ROLE_RESIDENT, 'active' => 1,
         ]);

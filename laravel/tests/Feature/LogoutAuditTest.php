@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\AuditLog;
 use App\Models\Setting;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -24,7 +25,7 @@ class LogoutAuditTest extends TestCase
     private function user(array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'lo_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'lo_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Logout User', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
         ], $extra));
     }
@@ -95,7 +96,7 @@ class LogoutAuditTest extends TestCase
     public function test_session_within_timeout_windows_writes_no_session_timeout_row(): void
     {
         $this->setTimeouts(30, 0);
-        $user = $this->user(['mfa_secret' => \App\Support\Totp::secret(), 'mfa_enrolled_at' => now()]);
+        $user = $this->user(['mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
 
         $this->actingAs($user)
             ->withSession(['last_activity_at' => now()->subMinutes(5)->getTimestamp()])

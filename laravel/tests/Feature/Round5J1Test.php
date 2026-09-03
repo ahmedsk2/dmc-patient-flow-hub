@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\Admission;
+use App\Models\AuditLog;
 use App\Models\Consultation;
 use App\Models\ConsultationReason;
+use App\Models\Country;
 use App\Models\Icd10;
 use App\Models\Patient;
 use App\Models\TbDiagnosis;
@@ -39,7 +41,7 @@ class Round5J1Test extends TestCase
     private function user(int $role = User::ROLE_CONSULTANT, array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'j1_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'j1_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'J1 User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
@@ -64,8 +66,8 @@ class Round5J1Test extends TestCase
 
     public function test_registry_style_modify_payload_saves(): void
     {
-        \App\Models\Country::firstOrCreate(['name' => 'Saudi Arabia'], ['code' => 'SA']);
-        \Illuminate\Support\Facades\DB::table('icd10')->insert(['code' => 'J18.9', 'name' => 'Pneumonia']);   // Phase 4 — Item 5: code must exist
+        Country::firstOrCreate(['name' => 'Saudi Arabia'], ['code' => 'SA']);
+        DB::table('icd10')->insert(['code' => 'J18.9', 'name' => 'Pneumonia']);   // Phase 4 — Item 5: code must exist
         $a = $this->admission(['admit_date' => '2026-06-01', 'admitted_from' => 'ER', 'current_location' => 'Ward'],
             Patient::create(['mrn' => '92000001', 'name' => 'Registry Edit', 'age' => 50, 'gender' => 'Male']));
 
@@ -197,7 +199,7 @@ class Round5J1Test extends TestCase
         // 501 codes whose NAME matches the keyword; the patient carries the 501st
         $rows = [];
         for ($i = 1; $i <= 501; $i++) {
-            $rows[] = ['code' => 'ZZ' . str_pad((string) $i, 4, '0', STR_PAD_LEFT), 'name' => "Capwide condition {$i}"];
+            $rows[] = ['code' => 'ZZ'.str_pad((string) $i, 4, '0', STR_PAD_LEFT), 'name' => "Capwide condition {$i}"];
         }
         foreach (array_chunk($rows, 250) as $chunk) {
             Icd10::insert($chunk);
@@ -348,7 +350,7 @@ class Round5J1Test extends TestCase
             ->post("/admissions/{$a->id}/bed", ['bed' => 'B-03'])->assertRedirect()->assertSessionHasNoErrors();
         $this->assertSame('B-03', $a->fresh()->bed);
         // the audit trail keeps recording the change
-        $this->assertSame('B-02', \App\Models\AuditLog::where('action', 'admission.bed')
+        $this->assertSame('B-02', AuditLog::where('action', 'admission.bed')
             ->latest('id')->first()->details['was'] ?? null);
     }
 

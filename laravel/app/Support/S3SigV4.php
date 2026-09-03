@@ -20,14 +20,18 @@ use RuntimeException;
 final class S3SigV4
 {
     private ?string $endpoint;
+
     private ?string $bucket;
+
     private string $region;
+
     private ?string $accessKey;
+
     private ?string $secret;
 
     /**
-     * @param array{endpoint?:?string,bucket?:?string,region?:?string,access_key?:?string,secret?:?string}|null $config
-     *        Defaults to config('services.audit_archive'); pass explicitly in tests to avoid touching global config.
+     * @param  array{endpoint?:?string,bucket?:?string,region?:?string,access_key?:?string,secret?:?string}|null  $config
+     *                                                                                                                     Defaults to config('services.audit_archive'); pass explicitly in tests to avoid touching global config.
      */
     public function __construct(?array $config = null)
     {
@@ -74,8 +78,9 @@ final class S3SigV4
      * the same three signed headers as putObject()/headObject(), empty-payload hash.
      *
      * @return string|null the body on 2xx; null ONLY when the object does not exist (404)
+     *
      * @throws RuntimeException on any other non-2xx status (403, 5xx, …) — a caller must never be
-     *         able to mistake "could not read the bucket" for "the object is not there"
+     *                          able to mistake "could not read the bucket" for "the object is not there"
      */
     public function get(string $key): ?string
     {
@@ -111,9 +116,9 @@ final class S3SigV4
     private function signedRequestHeaders(string $method, string $key, string $payloadHash): array
     {
         $host = parse_url($this->endpoint, PHP_URL_HOST) ?: $this->endpoint;
-        $canonicalUri = '/' . rawurlencode($this->bucket) . '/'
-            . implode('/', array_map('rawurlencode', explode('/', ltrim($key, '/'))));
-        $url = rtrim($this->endpoint, '/') . $canonicalUri;
+        $canonicalUri = '/'.rawurlencode($this->bucket).'/'
+            .implode('/', array_map('rawurlencode', explode('/', ltrim($key, '/'))));
+        $url = rtrim($this->endpoint, '/').$canonicalUri;
 
         $amzDate = gmdate('Ymd\THis\Z');
         $dateStamp = substr($amzDate, 0, 8);
@@ -168,10 +173,10 @@ final class S3SigV4
      * this can be (and is, in tests/Unit/S3SigV4Test.php) exercised directly against the published
      * AWS SigV4 GET-object test vector with no live endpoint involved.
      *
-     * @param array<string,string> $headers lowercase header name => raw value, containing EVERY
-     *        header that must be signed (host, x-amz-date, x-amz-content-sha256, and — for the
-     *        test vector only — range). Canonical headers and the signed-headers list are both
-     *        derived from this array, sorted by header name, exactly as SigV4 requires.
+     * @param  array<string,string>  $headers  lowercase header name => raw value, containing EVERY
+     *                                         header that must be signed (host, x-amz-date, x-amz-content-sha256, and — for the
+     *                                         test vector only — range). Canonical headers and the signed-headers list are both
+     *                                         derived from this array, sorted by header name, exactly as SigV4 requires.
      */
     public static function signature(
         string $method,
@@ -189,7 +194,7 @@ final class S3SigV4
 
         $canonicalHeaders = '';
         foreach ($headers as $name => $value) {
-            $canonicalHeaders .= strtolower($name) . ':' . trim((string) $value) . "\n";
+            $canonicalHeaders .= strtolower($name).':'.trim((string) $value)."\n";
         }
         $signedHeaderNames = implode(';', array_map('strtolower', array_keys($headers)));
 
@@ -212,7 +217,7 @@ final class S3SigV4
             hash('sha256', $canonicalRequest),
         ]);
 
-        $kDate = hash_hmac('sha256', $dateStamp, 'AWS4' . $secretKey, true);
+        $kDate = hash_hmac('sha256', $dateStamp, 'AWS4'.$secretKey, true);
         $kRegion = hash_hmac('sha256', $region, $kDate, true);
         $kService = hash_hmac('sha256', $service, $kRegion, true);
         $kSigning = hash_hmac('sha256', 'aws4_request', $kService, true);

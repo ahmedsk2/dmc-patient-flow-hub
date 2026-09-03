@@ -2,29 +2,30 @@
 
 namespace Tests\Feature;
 
-use App\Support\Totp;
-
+use App\Http\Controllers\StatisticsController;
 use App\Models\Admission;
 use App\Models\Patient;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
 /** Phase 3 — §3.1: per-consultant scorecard PDF (auth, validation, value). */
-#[\PHPUnit\Framework\Attributes\Group('pdf')]
+#[Group('pdf')]
 class ConsultantScorecardTest extends TestCase
 {
     use RefreshDatabase;
 
     private function admin(): User
     {
-        return User::create(['username' => 'sc_admin_' . substr(md5(uniqid('', true)), 0, 6),
+        return User::create(['username' => 'sc_admin_'.substr(md5(uniqid('', true)), 0, 6),
             'name' => 'SC Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }
 
     private function consultant(): User
     {
-        return User::create(['username' => 'sc_cons_' . substr(md5(uniqid('', true)), 0, 6),
+        return User::create(['username' => 'sc_cons_'.substr(md5(uniqid('', true)), 0, 6),
             'name' => 'Dr Cons', 'full_name' => 'Dr Consultant', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }
 
@@ -73,7 +74,7 @@ class ConsultantScorecardTest extends TestCase
         // direct DB query gives — the scorecard cannot diverge from the screen drill-down
         $direct = (int) Admission::where('consultant_id', $c->id)
             ->whereBetween('admit_date', ['2024-06-01', '2024-06-30'])->whereRaw(Admission::NON_ICU_SQL)->count();
-        $stats = app(\App\Http\Controllers\StatisticsController::class);
+        $stats = app(StatisticsController::class);
         $physician = $stats->physician($c->id, '2024-06-01', '2024-06-30', 3, 'month', []);
         $this->assertSame(2, $direct);
         $this->assertSame($direct, $physician['numbers']['admissions']);

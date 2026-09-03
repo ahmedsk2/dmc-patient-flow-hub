@@ -17,9 +17,9 @@ class AuditDiff
     /**
      * Compute {field: {from: oldVal, to: newVal}} for every field that changed.
      *
-     * @param array $before assoc array of old values keyed by field name
-     * @param array $after  assoc array of new values (same keys; extra keys in $after appear as new)
-     * @param array $omit   field names to skip entirely (passwords, internal flags)
+     * @param  array  $before  assoc array of old values keyed by field name
+     * @param  array  $after  assoc array of new values (same keys; extra keys in $after appear as new)
+     * @param  array  $omit  field names to skip entirely (passwords, internal flags)
      */
     public static function diff(array $before, array $after, array $omit = []): array
     {

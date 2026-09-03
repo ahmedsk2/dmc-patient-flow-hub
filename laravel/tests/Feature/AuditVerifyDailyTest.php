@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AuditLog;
 use App\Models\Notification;
 use App\Models\User;
 use App\Support\Audit;
@@ -25,7 +26,7 @@ class AuditVerifyDailyTest extends TestCase
     private function actor(): User
     {
         return User::create([
-            'username' => 'avd_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'avd_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Audit Actor', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
         ]);
     }
@@ -33,7 +34,7 @@ class AuditVerifyDailyTest extends TestCase
     private function admin(): User
     {
         return User::create([
-            'username' => 'avdadm_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'avdadm_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Daily Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
         ]);
     }
@@ -58,17 +59,17 @@ class AuditVerifyDailyTest extends TestCase
         for ($i = 0; $i < 3; $i++) {
             Audit::log("test.{$i}", 'admission', (string) $i);
         }
-        $mid = \App\Models\AuditLog::orderBy('id')->get()[1];
+        $mid = AuditLog::orderBy('id')->get()[1];
         DB::table('audit_log')->where('id', $mid->id)->update(['row_hash' => '00']);
 
         $admin1 = $this->admin();
         $admin2 = $this->admin();
         $inactiveAdmin = User::create([
-            'username' => 'avdinact_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'avdinact_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Inactive Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 0,
         ]);
         $nonAdmin = User::create([
-            'username' => 'avdcons_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'avdcons_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'A Consultant', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
         ]);
 
@@ -91,7 +92,7 @@ class AuditVerifyDailyTest extends TestCase
         for ($i = 0; $i < 3; $i++) {
             Audit::log("test.{$i}", 'admission', (string) $i);
         }
-        $mid = \App\Models\AuditLog::orderBy('id')->get()[1];
+        $mid = AuditLog::orderBy('id')->get()[1];
         DB::table('audit_log')->where('id', $mid->id)->update(['row_hash' => '00']);
 
         $admin = $this->admin();
@@ -113,7 +114,7 @@ class AuditVerifyDailyTest extends TestCase
         for ($i = 0; $i < 3; $i++) {
             Audit::log("test.{$i}", 'admission', (string) $i);
         }
-        $mid = \App\Models\AuditLog::orderBy('id')->get()[1];
+        $mid = AuditLog::orderBy('id')->get()[1];
         DB::table('audit_log')->where('id', $mid->id)->update(['row_hash' => '00']);
 
         $admin = $this->admin();
@@ -140,7 +141,7 @@ class AuditVerifyDailyTest extends TestCase
         for ($i = 0; $i < 3; $i++) {
             Audit::log("test.{$i}", 'admission', (string) $i);
         }
-        $mid = \App\Models\AuditLog::orderBy('id')->get()[1];
+        $mid = AuditLog::orderBy('id')->get()[1];
         DB::table('audit_log')->where('id', $mid->id)->update(['row_hash' => '00']);
 
         $this->artisan('audit:verify-daily')->assertExitCode(1);

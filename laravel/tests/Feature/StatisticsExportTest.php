@@ -2,31 +2,31 @@
 
 namespace Tests\Feature;
 
-use App\Support\Totp;
-
 use App\Models\Admission;
 use App\Models\Patient;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use OpenSpout\Reader\XLSX\Reader as XlsxReader;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
 /** Phase 3 — §3.4 + §3.8: Statistics XLSX/PDF exports + the "export == index" KPI-grid contract. */
-#[\PHPUnit\Framework\Attributes\Group('pdf')]
+#[Group('pdf')]
 class StatisticsExportTest extends TestCase
 {
     use RefreshDatabase;
 
     private function admin(): User
     {
-        return User::create(['username' => 'se_admin_' . substr(md5(uniqid('', true)), 0, 6),
+        return User::create(['username' => 'se_admin_'.substr(md5(uniqid('', true)), 0, 6),
             'name' => 'SE Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }
 
     private function nonAdmin(): User
     {
-        return User::create(['username' => 'se_cons_' . substr(md5(uniqid('', true)), 0, 6),
+        return User::create(['username' => 'se_cons_'.substr(md5(uniqid('', true)), 0, 6),
             'name' => 'SE Cons', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }
 
@@ -88,15 +88,20 @@ class StatisticsExportTest extends TestCase
         $res->assertOk();
         $path = $res->getFile()->getPathname();
 
-        $reader = new XlsxReader();
+        $reader = new XlsxReader;
         $reader->open($path);
         $header = null;
         $firstData = null;
         foreach ($reader->getSheetIterator() as $sheet) {
             foreach ($sheet->getRowIterator() as $i => $row) {
                 $cells = $row->toArray();
-                if ($i === 1) { $header = $cells; }
-                if ($i === 2) { $firstData = $cells; break; }
+                if ($i === 1) {
+                    $header = $cells;
+                }
+                if ($i === 2) {
+                    $firstData = $cells;
+                    break;
+                }
             }
             break; // sheet 1 only
         }

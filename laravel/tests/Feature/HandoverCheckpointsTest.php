@@ -4,11 +4,13 @@ namespace Tests\Feature;
 
 use App\Models\Admission;
 use App\Models\Handover;
+use App\Models\HandoverRevision;
 use App\Models\Notification;
 use App\Models\Patient;
 use App\Models\User;
 use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class HandoverCheckpointsTest extends TestCase
@@ -19,7 +21,7 @@ class HandoverCheckpointsTest extends TestCase
     private function adminAndAdmission(): array
     {
         $admin = User::create([
-            'username' => 'ho_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'ho_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'HO Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
@@ -35,7 +37,7 @@ class HandoverCheckpointsTest extends TestCase
     public function test_handover_checkpoints_and_notification_resolved_at_round_trip(): void
     {
         $u = User::create([
-            'username' => 'ho_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'ho_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'HO User', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
@@ -68,7 +70,7 @@ class HandoverCheckpointsTest extends TestCase
         $h = Handover::where('admission_id', $admission->id)->first();
         $this->assertTrue($h->checkpoints['vte_completed']);
         $this->assertSame('full', $h->checkpoints['code_status']);
-        $rev = \App\Models\HandoverRevision::where('admission_id', $admission->id)->latest('id')->first();
+        $rev = HandoverRevision::where('admission_id', $admission->id)->latest('id')->first();
         $this->assertTrue($rev->checkpoints['high_risk']);   // snapshotted in history
     }
 
@@ -100,7 +102,7 @@ class HandoverCheckpointsTest extends TestCase
 
     public function test_notifications_table_has_an_indexed_admission_id_column(): void
     {
-        $this->assertTrue(\Illuminate\Support\Facades\Schema::hasColumn('notifications', 'admission_id'));
+        $this->assertTrue(Schema::hasColumn('notifications', 'admission_id'));
 
         [$u] = $this->adminAndAdmission();
         $n = Notification::create([

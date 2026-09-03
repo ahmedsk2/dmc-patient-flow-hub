@@ -2,6 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\ImportController;
+use App\Models\Admission;
+use App\Models\AuditLog;
+use App\Models\Consultation;
+use App\Models\Patient;
+use App\Models\Setting;
+use App\Models\Specialty;
+use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -39,7 +48,7 @@ class LegacyImportTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        DB::statement('CREATE DATABASE IF NOT EXISTS `' . self::LEGACY_DB . '` CHARACTER SET utf8mb4');
+        DB::statement('CREATE DATABASE IF NOT EXISTS `'.self::LEGACY_DB.'` CHARACTER SET utf8mb4');
         config(['database.connections.legacy.database' => self::LEGACY_DB]);
         DB::purge('legacy');
         $this->createLegacySchema();
@@ -49,9 +58,9 @@ class LegacyImportTest extends TestCase
     {
         Schema::disableForeignKeyConstraints();
         foreach (['handover_signatures', 'handover_revisions', 'handovers', 'notifications',
-                  'admission_diagnoses', 'admissions', 'consultation_followups', 'consultations',
-                  'patients', 'icd10', 'specialties', 'consultation_reasons', 'tb_diagnoses',
-                  'countries', 'settings'] as $t) {
+            'admission_diagnoses', 'admissions', 'consultation_followups', 'consultations',
+            'patients', 'icd10', 'specialties', 'consultation_reasons', 'tb_diagnoses',
+            'countries', 'settings'] as $t) {
             DB::table($t)->truncate();
         }
         DB::table('users')->whereNotNull('legacy_id')->delete();
@@ -64,15 +73,35 @@ class LegacyImportTest extends TestCase
     {
         $schema = Schema::connection('legacy');
         foreach (['picupatients', 'members', 'consultations', 'speciality', 'other_specialities',
-                  'icd10', 'consultation_reason', 'tb_list', 'countries', 'settings'] as $t) {
+            'icd10', 'consultation_reason', 'tb_list', 'countries', 'settings'] as $t) {
             $schema->dropIfExists($t);
         }
-        $schema->create('speciality', function ($t) { $t->integer('id'); $t->text('specilaity')->nullable(); });
-        $schema->create('other_specialities', function ($t) { $t->integer('id'); $t->text('specilaity')->nullable(); });
-        $schema->create('icd10', function ($t) { $t->increments('autoid'); $t->string('id', 32); $t->text('name')->nullable(); });
-        $schema->create('consultation_reason', function ($t) { $t->integer('id'); $t->text('consultation_reason')->nullable(); });
-        $schema->create('tb_list', function ($t) { $t->increments('id'); $t->text('dx_id')->nullable(); });
-        $schema->create('countries', function ($t) { $t->integer('id')->nullable(); $t->string('code', 8)->nullable(); $t->string('name'); });
+        $schema->create('speciality', function ($t) {
+            $t->integer('id');
+            $t->text('specilaity')->nullable();
+        });
+        $schema->create('other_specialities', function ($t) {
+            $t->integer('id');
+            $t->text('specilaity')->nullable();
+        });
+        $schema->create('icd10', function ($t) {
+            $t->increments('autoid');
+            $t->string('id', 32);
+            $t->text('name')->nullable();
+        });
+        $schema->create('consultation_reason', function ($t) {
+            $t->integer('id');
+            $t->text('consultation_reason')->nullable();
+        });
+        $schema->create('tb_list', function ($t) {
+            $t->increments('id');
+            $t->text('dx_id')->nullable();
+        });
+        $schema->create('countries', function ($t) {
+            $t->integer('id')->nullable();
+            $t->string('code', 8)->nullable();
+            $t->string('name');
+        });
         $schema->create('settings', function ($t) {
             $t->integer('id');
             foreach (['min_hospitalist', 'max_hospitalist', 'min_subs', 'max_subs', 'short_los', 'long_los'] as $c) {
@@ -196,7 +225,7 @@ class LegacyImportTest extends TestCase
 
         // newassign=1 + assigned_on => assigned_at = assigned_on 00:00 (cutover-day New badge survives)
         $row = DB::table('admissions')->where('legacy_id', 2)->first();
-        $this->assertSame(now()->toDateString() . ' 00:00:00', $row->assigned_at);
+        $this->assertSame(now()->toDateString().' 00:00:00', $row->assigned_at);
         $this->assertSame(now()->toDateString(), $row->assigned_on);
         $this->assertSame(1, (int) $row->is_new_assignment);
 
@@ -216,17 +245,17 @@ class LegacyImportTest extends TestCase
         $L = DB::connection('legacy');
         $L->table('members')->insert([
             ['member_id' => 10, 'member_name' => 'alpha', 'full_name' => 'Alpha',
-             'member_email' => 'Shared@Example.test', 'member_password' => '$2y$04$abcdefghijklmnopqrstuv',
-             'position' => 3, 'active' => 1],
+                'member_email' => 'Shared@Example.test', 'member_password' => '$2y$04$abcdefghijklmnopqrstuv',
+                'position' => 3, 'active' => 1],
             // case-only duplicate
             ['member_id' => 11, 'member_name' => 'beta', 'full_name' => 'Beta',
-             'member_email' => 'shared@example.test', 'member_password' => '$2y$04$abcdefghijklmnopqrstuv',
-             'position' => 3, 'active' => 1],
+                'member_email' => 'shared@example.test', 'member_password' => '$2y$04$abcdefghijklmnopqrstuv',
+                'position' => 3, 'active' => 1],
             // accent-only duplicate — utf8mb4_unicode_ci treats 'á' == 'a', so the DB index would
             // reject this too; the importer's ASCII-fold dedup must catch it (a plain lower/trim wouldn't)
             ['member_id' => 12, 'member_name' => 'gamma', 'full_name' => 'Gamma',
-             'member_email' => 'sháred@example.test', 'member_password' => '$2y$04$abcdefghijklmnopqrstuv',
-             'position' => 3, 'active' => 1],
+                'member_email' => 'sháred@example.test', 'member_password' => '$2y$04$abcdefghijklmnopqrstuv',
+                'position' => 3, 'active' => 1],
         ]);
 
         $this->artisan('legacy:import')->assertSuccessful();
@@ -301,7 +330,7 @@ class LegacyImportTest extends TestCase
 
         $this->assertSame($first, $second, 're-running the import must not duplicate rows');
         $this->assertSame('Saudi Arabia', DB::table('patients')->where('mrn', '10001')->value('nationality'));
-        $this->assertSame(now()->toDateString() . ' 00:00:00',
+        $this->assertSame(now()->toDateString().' 00:00:00',
             DB::table('admissions')->where('legacy_id', 2)->value('assigned_at'));
     }
 
@@ -331,20 +360,20 @@ class LegacyImportTest extends TestCase
      */
     private function seedNewSystemConsultation(): array
     {
-        $mk = fn (array $extra) => \App\Models\User::create(array_merge([
-            'username' => 'w0_' . substr(md5(uniqid('', true)), 0, 10),
+        $mk = fn (array $extra) => User::create(array_merge([
+            'username' => 'w0_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'W0 User', 'password' => 'secret12345',
-            'role' => \App\Models\User::ROLE_CONSULTANT, 'active' => 1,
-            'mfa_secret' => \App\Support\Totp::secret(), 'mfa_enrolled_at' => now(),
+            'role' => User::ROLE_CONSULTANT, 'active' => 1,
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
 
         $previouslyImported = $mk(['legacy_id' => 7]);      // will be deleted + re-inserted by the import
         $appCreated = $mk([]);                               // no legacy_id -> the import never touches it
 
-        \App\Models\Patient::create(['mrn' => '99999', 'name' => 'Decoy Pt']);   // shifts the id the real patient gets
-        $patient = \App\Models\Patient::create(['mrn' => '10001', 'name' => 'Pt One']);
+        Patient::create(['mrn' => '99999', 'name' => 'Decoy Pt']);   // shifts the id the real patient gets
+        $patient = Patient::create(['mrn' => '10001', 'name' => 'Pt One']);
 
-        $c = \App\Models\Consultation::create([
+        $c = Consultation::create([
             'mrn' => '10001', 'patient_id' => $patient->id, 'patient_name' => 'New System Cx',
             'consultation_date' => now()->toDateString(), 'indication' => [],
             'to_service' => 'Hospitalist', 'consultant_id' => $previouslyImported->id,
@@ -359,7 +388,7 @@ class LegacyImportTest extends TestCase
         $this->seedLegacy();
         $this->seedLegacyConsultation();
         [$cxId, $appUserId] = $this->seedNewSystemConsultation();
-        \App\Models\Setting::current()->update(['consultations_source_of_truth' => true]);
+        Setting::current()->update(['consultations_source_of_truth' => true]);
 
         $this->artisan('legacy:import')
             ->expectsOutputToContain('consultations preserved')
@@ -401,7 +430,7 @@ class LegacyImportTest extends TestCase
     {
         $this->seedLegacy();
         [$cxId] = $this->seedNewSystemConsultation();
-        \App\Models\Setting::current()->update(['consultations_source_of_truth' => true]);
+        Setting::current()->update(['consultations_source_of_truth' => true]);
 
         $followupId = DB::table('consultation_followups')->insertGetId([
             'consultation_id' => $cxId, 'followup_date' => now()->toDateString(), 'note' => 'ticked pre-cutover',
@@ -429,7 +458,7 @@ class LegacyImportTest extends TestCase
         $this->seedLegacy();                                                   // legacy speciality id 1 = Hospitalist
         DB::connection('legacy')->table('other_specialities')->insert([['id' => 1, 'specilaity' => 'Dietary']]);
 
-        $mkSpecialty = fn (string $name) => \App\Models\Specialty::create(
+        $mkSpecialty = fn (string $name) => Specialty::create(
             ['name' => $name, 'is_subspecialty' => true, 'is_external' => false]
         );
         $mkSpecialty('Extra Clinic');                     // id 1 pre-import — shifts the ids below
@@ -437,13 +466,13 @@ class LegacyImportTest extends TestCase
         $ghost = $mkSpecialty('Ghost Clinic');            // admin-created; no legacy counterpart at all
 
         [$cxId] = $this->seedNewSystemConsultation();
-        $orphan = \App\Models\Consultation::create([
+        $orphan = Consultation::create([
             'mrn' => '10001', 'patient_name' => 'Ghost Owned Cx',
             'consultation_date' => now()->toDateString(), 'indication' => [], 'to_service' => 'Ghost Clinic',
         ]);
         DB::table('consultations')->where('id', $cxId)->update(['owning_specialty_id' => $hospitalist->id]);
         DB::table('consultations')->where('id', $orphan->id)->update(['owning_specialty_id' => $ghost->id]);
-        \App\Models\Setting::current()->update(['consultations_source_of_truth' => true]);
+        Setting::current()->update(['consultations_source_of_truth' => true]);
 
         $this->artisan('legacy:import')->assertSuccessful();
 
@@ -495,16 +524,16 @@ class LegacyImportTest extends TestCase
             'name' => 'Dietary', 'is_subspecialty' => true, 'is_external' => true,
             'created_at' => now(), 'updated_at' => now(),
         ]);
-        $signer = \App\Models\User::create([
+        $signer = User::create([
             'username' => 'w1a_signer', 'name' => 'W1a Signer', 'email' => 'w1a.signer@test.local',
-            'password' => 'secret12345', 'role' => \App\Models\User::ROLE_CONSULTANT, 'active' => 1,
+            'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
             'legacy_id' => 4242,                          // a LEGACY user — its id WILL be re-seeded
         ]);
-        $patient = \App\Models\Patient::create(['mrn' => '77001122', 'name' => 'Relink Pt']);
-        $legacyAdm = \App\Models\Admission::create([
+        $patient = Patient::create(['mrn' => '77001122', 'name' => 'Relink Pt']);
+        $legacyAdm = Admission::create([
             'patient_id' => $patient->id, 'admit_date' => '2024-03-01', 'legacy_id' => 990001,
         ]);
-        $appAdm = \App\Models\Admission::create([
+        $appAdm = Admission::create([
             'patient_id' => $patient->id, 'admit_date' => '2024-03-02',   // no legacy_id — cannot survive
         ]);
         // A legacy-derived admission whose episode is GONE from the new dump (990002 is deliberately
@@ -512,27 +541,27 @@ class LegacyImportTest extends TestCase
         // partial/filtered dumps happen, so this is the realistic hazard: the legacy_id is present,
         // resolves to nothing, and a "keep the current id" fallback would leave the consult attached
         // to whatever stay now holds that id — A DIFFERENT PATIENT'S ADMISSION.
-        $ghostAdm = \App\Models\Admission::create([
+        $ghostAdm = Admission::create([
             'patient_id' => $patient->id, 'admit_date' => '2024-03-03', 'legacy_id' => 990002,
         ]);
 
-        $withLegacyAdm = \App\Models\Consultation::create([
+        $withLegacyAdm = Consultation::create([
             'mrn' => '77001122', 'patient_id' => $patient->id, 'patient_name' => 'Relink Pt',
             'indication' => [], 'to_service' => 'Dietary', 'owning_specialty_id' => $extId,
             'admission_id' => $legacyAdm->id, 'signed_off_by' => $signer->id,
-            'signoff_date' => '2024-03-05', 'status' => \App\Models\Consultation::STATUS_SIGNED_OFF,
+            'signoff_date' => '2024-03-05', 'status' => Consultation::STATUS_SIGNED_OFF,
         ]);
-        $withAppAdm = \App\Models\Consultation::create([
+        $withAppAdm = Consultation::create([
             'mrn' => '77001122', 'patient_id' => $patient->id, 'patient_name' => 'Relink Pt',
             'indication' => [], 'to_service' => 'Dietary', 'owning_specialty_id' => $extId,
-            'admission_id' => $appAdm->id, 'status' => \App\Models\Consultation::STATUS_ONGOING,
+            'admission_id' => $appAdm->id, 'status' => Consultation::STATUS_ONGOING,
         ]);
-        $withGhostAdm = \App\Models\Consultation::create([
+        $withGhostAdm = Consultation::create([
             'mrn' => '77001122', 'patient_id' => $patient->id, 'patient_name' => 'Relink Pt',
             'indication' => [], 'to_service' => 'Dietary', 'owning_specialty_id' => $extId,
-            'admission_id' => $ghostAdm->id, 'status' => \App\Models\Consultation::STATUS_ONGOING,
+            'admission_id' => $ghostAdm->id, 'status' => Consultation::STATUS_ONGOING,
         ]);
-        \App\Models\Setting::current()->update(['consultations_source_of_truth' => true]);
+        Setting::current()->update(['consultations_source_of_truth' => true]);
 
         $this->artisan('legacy:import')->assertExitCode(0);
 
@@ -585,7 +614,7 @@ class LegacyImportTest extends TestCase
         $this->seedLegacy();                                  // legacy member_id 7 gets re-imported
         [$cxId, $appUserId] = $this->seedNewSystemConsultation();
         $legacyAuthorId = (int) DB::table('users')->where('legacy_id', 7)->value('id');
-        \App\Models\Setting::current()->update(['consultations_source_of_truth' => true]);
+        Setting::current()->update(['consultations_source_of_truth' => true]);
 
         $byLegacyAuthor = DB::table('consultation_followups')->insertGetId([
             'consultation_id' => $cxId, 'followup_date' => '2024-01-01',
@@ -659,7 +688,7 @@ class LegacyImportTest extends TestCase
     {
         $this->seedLegacy();
         [$cxId] = $this->seedNewSystemConsultation();
-        \App\Models\Setting::current()->update(['consultations_source_of_truth' => true]);
+        Setting::current()->update(['consultations_source_of_truth' => true]);
 
         $this->artisan('legacy:import', ['--wipe-consultations' => true])
             ->expectsOutputToContain('Refusing to wipe consultations')
@@ -687,8 +716,8 @@ class LegacyImportTest extends TestCase
         //     legacy dump, so rebuilding `patients` destroys the row it points at. Post-cutover this
         //     is the normal case (the app creates patients itself), and it must be reported, never
         //     silently reported as a successful re-link.
-        $appOnlyPatient = \App\Models\Patient::create(['mrn' => '77777', 'name' => 'App Only Pt']);
-        $appCx = \App\Models\Consultation::create([
+        $appOnlyPatient = Patient::create(['mrn' => '77777', 'name' => 'App Only Pt']);
+        $appCx = Consultation::create([
             'mrn' => '77777', 'patient_id' => $appOnlyPatient->id, 'patient_name' => 'App Only Cx',
             'consultation_date' => now()->toDateString(), 'indication' => [],
             'to_service' => 'Hospitalist', 'entered_by' => $appUserId,
@@ -702,7 +731,7 @@ class LegacyImportTest extends TestCase
         DB::table('consultations')->where('id', $cxId)->update(['consultant_id' => 999999]);
         Schema::enableForeignKeyConstraints();
 
-        \App\Models\Setting::current()->update(['consultations_source_of_truth' => true]);
+        Setting::current()->update(['consultations_source_of_truth' => true]);
 
         $this->artisan('legacy:import')
             ->expectsOutputToContain('lost their patient_id')
@@ -720,7 +749,7 @@ class LegacyImportTest extends TestCase
     public function test_import_carries_through_every_app_owned_settings_column(): void
     {
         $this->seedLegacy();
-        \App\Models\Setting::current()->update([
+        Setting::current()->update([
             'consultations_source_of_truth' => true,
             'app_timezone' => 'Asia/Riyadh',
             'mail_host' => 'smtp.example.test',
@@ -748,7 +777,7 @@ class LegacyImportTest extends TestCase
     {
         $this->seedLegacy();
         $this->seedNewSystemConsultation();
-        \App\Models\Setting::current()->update(['consultations_source_of_truth' => true]);
+        Setting::current()->update(['consultations_source_of_truth' => true]);
 
         $this->artisan('legacy:import')->assertSuccessful();
 
@@ -788,18 +817,18 @@ class LegacyImportTest extends TestCase
 
     private function parse(string $csv): array
     {
-        $m = new \ReflectionMethod(\App\Http\Controllers\ImportController::class, 'parse');
+        $m = new \ReflectionMethod(ImportController::class, 'parse');
         $m->setAccessible(true);
 
-        return $m->invoke(app(\App\Http\Controllers\ImportController::class), $csv);
+        return $m->invoke(app(ImportController::class), $csv);
     }
 
-    private function importAdmin(): \App\Models\User
+    private function importAdmin(): User
     {
-        return \App\Models\User::create([
-            'username' => 'imp_' . substr(md5(uniqid('', true)), 0, 8),
-            'name' => 'Import Admin', 'role' => \App\Models\User::ROLE_ADMIN, 'active' => 1, 'password' => 'secret12345',
-            'mfa_secret' => \App\Support\Totp::secret(), 'mfa_enrolled_at' => now(),
+        return User::create([
+            'username' => 'imp_'.substr(md5(uniqid('', true)), 0, 8),
+            'name' => 'Import Admin', 'role' => User::ROLE_ADMIN, 'active' => 1, 'password' => 'secret12345',
+            'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);
     }
 
@@ -892,14 +921,14 @@ class LegacyImportTest extends TestCase
         $admin = $this->importAdmin();
         // 2 valid + 1 invalid (date inversion)
         $csv = "50750,P1,40,M,Saudi Arabia,2024-01-01,2024-01-05,Alive,Ward\n"
-            . "50751,P2,41,F,Saudi Arabia,2024-02-01,2024-02-03,Alive,Ward\n"
-            . "50752,P3,42,M,Saudi Arabia,2024-03-10,2024-03-01,Alive,Ward";
+            ."50751,P2,41,F,Saudi Arabia,2024-02-01,2024-02-03,Alive,Ward\n"
+            .'50752,P3,42,M,Saudi Arabia,2024-03-10,2024-03-01,Alive,Ward';
 
         $this->actingAs($admin)->post('/import/preview', ['rows' => $csv])
             ->assertInertia(fn ($page) => $page->where('preview.valid', 2)->where('preview.invalid', 1));
 
         $this->actingAs($admin)->post('/import', ['rows' => $csv])->assertRedirect();
-        $audit = \App\Models\AuditLog::where('action', 'import.bulk')->latest('id')->first();
+        $audit = AuditLog::where('action', 'import.bulk')->latest('id')->first();
         $this->assertSame(2, (int) ($audit->details['imported'] ?? 0));
     }
 

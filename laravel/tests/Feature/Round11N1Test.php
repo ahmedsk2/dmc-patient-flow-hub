@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Admission;
 use App\Models\Icd10;
 use App\Models\Patient;
+use App\Models\Setting;
+use App\Models\Specialty;
 use App\Models\TbDiagnosis;
 use App\Models\User;
 use App\Services\ShuffleService;
@@ -34,7 +36,7 @@ class Round11N1Test extends TestCase
     private function user(int $role = User::ROLE_CONSULTANT, array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'n1_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'n1_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'N1 User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
@@ -122,7 +124,7 @@ class Round11N1Test extends TestCase
         TbDiagnosis::create(['icd10_code' => 'A15.0']);
 
         // settings: min 0, max 5 for both tiers so the load tie-break decides placement
-        \App\Models\Setting::current()->update([
+        Setting::current()->update([
             'min_hospitalist' => 0, 'max_hospitalist' => 5, 'min_subs' => 0, 'max_subs' => 5,
         ]);
 
@@ -241,7 +243,7 @@ class Round11N1Test extends TestCase
         // validation rejects an inactive target BEFORE the same-day-handover gate, so no note needed
         $c = $this->consultant('Curr');
         $a = $this->admission(['consultant_id' => $c->id]);
-        $spec = \App\Models\Specialty::create(['name' => 'Cardio N1', 'is_external' => false]);
+        $spec = Specialty::create(['name' => 'Cardio N1', 'is_external' => false]);
         $inactive = $this->user(User::ROLE_CONSULTANT, ['active' => 0]);
 
         $this->actingAs($this->admin())->from('/patients')

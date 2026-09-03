@@ -28,7 +28,7 @@ class RegistrySortTest extends TestCase
     {
         parent::setUp();
         $this->admin = User::create([
-            'username' => 'rs_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'rs_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'RS Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);

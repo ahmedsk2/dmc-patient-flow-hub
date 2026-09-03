@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ConsultationRequest;
+use App\Http\Requests\ConsultationSignoffRequest;
 use App\Models\Admission;
 use App\Models\Consultation;
 use App\Models\ConsultationReason;
@@ -15,6 +17,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -55,7 +58,7 @@ class ConsultationsController extends Controller
         // SPC-TM-011 (Wave 1): the free-text term (patient name/MRN) rides a POST body
         // (/consultations/search). A legacy GET-with-term redirects term-less, keeping status/scope.
         if ($request->isMethod('get') && trim((string) $request->query('search', '')) !== '') {
-            return redirect()->route('consultations.index', \Illuminate\Support\Arr::except($request->query(), ['search']));
+            return redirect()->route('consultations.index', Arr::except($request->query(), ['search']));
         }
 
         $filters = $request->only('search', 'status', 'scope', 'consultant_id');
@@ -87,8 +90,7 @@ class ConsultationsController extends Controller
         $filtered = fn () => $scoped()
             ->when($mine, fn ($q) => $q->where('consultant_id', Auth::id()))
             ->when($consultantId, fn ($q, $id) => $q->where('consultant_id', $id))
-            ->when($filters['search'] ?? null, fn ($q, $s) => $q->where(fn ($w) =>
-                $w->where('patient_name', 'like', "%{$s}%")->orWhere('mrn', 'like', "%{$s}%")));
+            ->when($filters['search'] ?? null, fn ($q, $s) => $q->where(fn ($w) => $w->where('patient_name', 'like', "%{$s}%")->orWhere('mrn', 'like', "%{$s}%")));
 
         // resolved ONCE for the whole page: every row's can_modify is this user's verdict
         $viewer = Auth::user();
@@ -289,7 +291,7 @@ class ConsultationsController extends Controller
         ]);
     }
 
-    public function store(\App\Http\Requests\ConsultationRequest $request): RedirectResponse
+    public function store(ConsultationRequest $request): RedirectResponse
     {
         // Observer gate lives in ConsultationRequest::authorize() (403 before validation)
         $data = $request->validated();
@@ -388,7 +390,7 @@ class ConsultationsController extends Controller
      * consultant) and simply moved into ConsultationSignoffRequest::authorize() so the 403 fires
      * before validation. Coordinators are not in that predicate and stay refused by design.
      */
-    public function signoff(\App\Http\Requests\ConsultationSignoffRequest $request, Consultation $consultation): RedirectResponse
+    public function signoff(ConsultationSignoffRequest $request, Consultation $consultation): RedirectResponse
     {
         if ($consultation->signoff_date) {
             return back()->with('flash', ['type' => 'error', 'message' => 'Already signed off.']);
@@ -549,7 +551,7 @@ class ConsultationsController extends Controller
     }
 
     /** Edit a consultation (receiving consultant / manager / admin). */
-    public function update(\App\Http\Requests\ConsultationRequest $request, Consultation $consultation): RedirectResponse
+    public function update(ConsultationRequest $request, Consultation $consultation): RedirectResponse
     {
         // edit is open to any clinical role (J1-10 legacy parity); gate lives in ConsultationRequest::authorize()
         $data = $request->validated();
@@ -709,7 +711,7 @@ class ConsultationsController extends Controller
      * Notification rows are never deleted — they are a retained clinical-audit trail, cleared only
      * by read-all (see HandoverController::readAll).
      *
-     * @param string $event 'created' | 'reassigned'
+     * @param  string  $event  'created' | 'reassigned'
      */
     private function notifyAssignedConsultant(Consultation $c, string $event): void
     {

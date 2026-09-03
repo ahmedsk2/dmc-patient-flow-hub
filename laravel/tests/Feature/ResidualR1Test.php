@@ -5,10 +5,12 @@ namespace Tests\Feature;
 use App\Models\Admission;
 use App\Models\AuditLog;
 use App\Models\Consultation;
+use App\Models\Country;
 use App\Models\Patient;
 use App\Models\User;
 use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -26,7 +28,7 @@ class ResidualR1Test extends TestCase
     private function user(int $role, array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'r1_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'r1_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'R1 User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
@@ -175,8 +177,8 @@ class ResidualR1Test extends TestCase
             'discharge_date' => now()->subDays(5)->toDateString(), 'current_location' => 'Ward',
             'outcome' => 'Alive', 'transfer_type' => 'discharge from ward']);
 
-        \App\Models\Country::firstOrCreate(['name' => 'Saudi Arabia'], ['code' => 'SA']);
-        \Illuminate\Support\Facades\DB::table('icd10')->insert(['code' => 'J18.9', 'name' => 'Pneumonia']);   // Phase 4 — Item 5: code must exist
+        Country::firstOrCreate(['name' => 'Saudi Arabia'], ['code' => 'SA']);
+        DB::table('icd10')->insert(['code' => 'J18.9', 'name' => 'Pneumonia']);   // Phase 4 — Item 5: code must exist
         $this->actingAs($this->admin())->post('/admissions', [
             'mrn' => '55667799', 'name' => 'Readmit Test', 'age' => 50, 'gender' => 'Male',
             'nationality' => 'Saudi Arabia', 'bed' => 'W-1', 'diagnoses' => ['J18.9'],   // B1 Fill-All

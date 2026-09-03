@@ -2,20 +2,20 @@
 
 namespace Tests\Feature;
 
-use App\Support\Totp;
-
 use App\Models\Admission;
 use App\Models\Patient;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
 /**
  * Security-critical authorization checks. RefreshDatabase migrates the isolated test database
  * (sqlite :memory: per phpunit.xml) — never touches the live dev/prod data.
  */
-#[\PHPUnit\Framework\Attributes\Group('pdf')]
+#[Group('pdf')]
 class AuthorizationTest extends TestCase
 {
     use RefreshDatabase;
@@ -23,7 +23,7 @@ class AuthorizationTest extends TestCase
     private function user(int $role, array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'test_' . $role . '_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'test_'.$role.'_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Test User', 'password' => 'secret12345', 'role' => $role, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
     }
@@ -116,7 +116,7 @@ class AuthorizationTest extends TestCase
     }
 
     /** Observers are read-only globally — a stray can_manage=1 must NOT grant manage rights (J1-9). */
-    public function test_observer_canManageAdmission_returns_false_regardless_of_can_manage(): void
+    public function test_observer_can_manage_admission_returns_false_regardless_of_can_manage(): void
     {
         $observer = $this->user(User::ROLE_OBSERVER, ['can_manage' => true]);
         $admission = $this->admission(['consultant_id' => $observer->id]);
@@ -125,7 +125,7 @@ class AuthorizationTest extends TestCase
     }
 
     /** The primary consultant of an admission may manage it without admin or can_manage. */
-    public function test_primary_consultant_canManageAdmission_returns_true(): void
+    public function test_primary_consultant_can_manage_admission_returns_true(): void
     {
         $consultant = $this->user(User::ROLE_CONSULTANT, ['can_manage' => false]);
         $admission = $this->admission(['consultant_id' => $consultant->id]);
@@ -144,7 +144,7 @@ class AuthorizationTest extends TestCase
     }
 
     /** Admin and the can_manage capability each grant manage rights regardless of ownership. */
-    public function test_admin_and_can_manage_each_grant_canManageAdmission(): void
+    public function test_admin_and_can_manage_each_grant_can_manage_admission(): void
     {
         $owner = $this->user(User::ROLE_CONSULTANT);
         $admission = $this->admission(['consultant_id' => $owner->id]);

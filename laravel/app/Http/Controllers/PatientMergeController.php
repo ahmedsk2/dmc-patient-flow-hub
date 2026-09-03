@@ -7,6 +7,7 @@ use App\Models\Admission;
 use App\Models\Consultation;
 use App\Models\Patient;
 use App\Support\Audit;
+use App\Support\DashboardCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -53,7 +54,7 @@ class PatientMergeController extends Controller
         $normalized = DB::table('patients as p1')
             ->join('patients as p2', function ($j) {
                 $j->on(DB::raw('CAST(p1.mrn AS UNSIGNED)'), '=', DB::raw('CAST(p2.mrn AS UNSIGNED)'))
-                  ->whereColumn('p1.id', '<', 'p2.id');
+                    ->whereColumn('p1.id', '<', 'p2.id');
             })
             ->whereNull('p1.deleted_at')->whereNull('p2.deleted_at')
             ->whereRaw('CAST(p1.mrn AS UNSIGNED) > 0')
@@ -66,7 +67,7 @@ class PatientMergeController extends Controller
         $nomrn = DB::table('patients as ph')
             ->join('patients as real', function ($j) {
                 $j->on(DB::raw('LOWER(ph.name)'), '=', DB::raw('LOWER(real.name)'))
-                  ->whereColumn('ph.id', '<>', 'real.id');
+                    ->whereColumn('ph.id', '<>', 'real.id');
             })
             ->whereNull('ph.deleted_at')->whereNull('real.deleted_at')
             ->where('ph.mrn', 'like', 'NOMRN-%')
@@ -77,7 +78,7 @@ class PatientMergeController extends Controller
 
         // de-dup the union on the unordered id-pair (a pair can match both heuristics)
         return $normalized->concat($nomrn)
-            ->unique(fn ($d) => min($d->id1, $d->id2) . '-' . max($d->id1, $d->id2))
+            ->unique(fn ($d) => min($d->id1, $d->id2).'-'.max($d->id1, $d->id2))
             ->values()
             ->map(fn ($d) => (array) $d)
             ->all();
@@ -178,7 +179,7 @@ class PatientMergeController extends Controller
             $source->delete();
         });
 
-        \App\Support\DashboardCache::bust();   // a merged patient changes per-consultant / census aggregates
+        DashboardCache::bust();   // a merged patient changes per-consultant / census aggregates
 
         return redirect()->route('patient-merge.index')->with('flash', [
             'type' => 'success',

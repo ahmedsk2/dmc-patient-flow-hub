@@ -22,7 +22,7 @@ class ShuffleServiceTest extends TestCase
     private function consultant(string $name, int $specialty = 1, bool $onService = true): User
     {
         return User::create([
-            'username' => 'sh_' . substr(md5($name . uniqid('', true)), 0, 8),
+            'username' => 'sh_'.substr(md5($name.uniqid('', true)), 0, 8),
             'name' => $name, 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT,
             'active' => 1, 'on_service' => $onService ? 1 : 0, 'specialty_id' => $specialty,
         ]);

@@ -58,7 +58,7 @@ class TrustedDevice extends Model
             'expires_at' => now()->addHours($hours),
         ]);
 
-        return $selector . ':' . $validator;
+        return $selector.':'.$validator;
     }
 
     /**

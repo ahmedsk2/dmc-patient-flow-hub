@@ -34,13 +34,17 @@ class DataQualityController extends Controller
         $longLos = (int) (Setting::current()->long_los ?? 11);
         $multiplier = max(1, (int) (Setting::current()->dq_los_multiplier ?? 2));
         $threshold = $longLos * $multiplier;
+        // "Today" is bound from the app clock (config('app.timezone')), never MySQL's CURDATE(): the DB
+        // host runs UTC, so CURDATE() is still yesterday between 00:00 and 03:00 local and would
+        // misdate LOS and flag a same-day admission as "future" (I18N-02).
+        $today = now()->toDateString();
 
         // Q1: active non-long-term episodes with LOS > long_los × multiplier
         $overLos = DB::table('admissions as a')
             ->join('patients as p', 'p.id', '=', 'a.patient_id')
             ->whereNull('a.discharge_date')->where('a.is_longterm', 0)->whereNull('a.deleted_at')
-            ->whereRaw('DATEDIFF(CURDATE(), a.admit_date) > ?', [$threshold])
-            ->selectRaw('a.id, p.mrn, p.name, DATEDIFF(CURDATE(), a.admit_date) los, a.admit_date')
+            ->whereRaw('DATEDIFF(?, a.admit_date) > ?', [$today, $threshold])
+            ->selectRaw('a.id, p.mrn, p.name, DATEDIFF(?, a.admit_date) los, a.admit_date', [$today])
             ->orderByDesc('los')->limit(50)->get();
 
         // Q2: active episodes with zero diagnoses
@@ -58,7 +62,7 @@ class DataQualityController extends Controller
             ->whereNull('a.deleted_at')
             ->where(fn ($w) => $w
                 ->whereRaw('a.discharge_date IS NOT NULL AND a.discharge_date < a.admit_date')
-                ->orWhereRaw('a.admit_date > CURDATE()'))
+                ->orWhereRaw('a.admit_date > ?', [$today]))
             ->selectRaw('a.id, p.mrn, p.name, a.admit_date, a.discharge_date')
             ->limit(50)->get();
 

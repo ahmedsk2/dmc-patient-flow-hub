@@ -42,7 +42,7 @@ class TrustedDeviceTest extends TestCase
         $secret = Totp::secret();
         $plain = $recovery ?: ['AAAA-BBBB'];
         $user = User::create([
-            'username' => 'td_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'td_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Trusted User', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
             'mfa_secret' => $secret,
             'mfa_recovery_codes' => array_map(fn ($c) => Hash::make($c), $plain),
@@ -91,7 +91,7 @@ class TrustedDeviceTest extends TestCase
             'expires_at' => now()->addHours(24),
         ], $overrides));
 
-        return [$device, $selector . ':' . $validator];
+        return [$device, $selector.':'.$validator];
     }
 
     private function login(User $user, string $password = 'secret12345')
@@ -102,7 +102,7 @@ class TrustedDeviceTest extends TestCase
     private function adminUser(): User
     {
         return User::create([
-            'username' => 'tdadm_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'tdadm_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'TD Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
             'email_verified_at' => now(), 'pass_exp_date' => now()->toDateString(),
@@ -307,7 +307,7 @@ class TrustedDeviceTest extends TestCase
         [$user] = $this->enrolledUser();
         $this->deviceFor($user);
 
-        $bogus = bin2hex(random_bytes(16)) . ':' . bin2hex(random_bytes(32));
+        $bogus = bin2hex(random_bytes(16)).':'.bin2hex(random_bytes(32));
         $this->withTrust($bogus)->post('/login', ['username' => $user->username, 'password' => 'secret12345'])
             ->assertRedirect(route('mfa.challenge'));
         $this->assertGuest();
@@ -319,7 +319,7 @@ class TrustedDeviceTest extends TestCase
         [, $raw] = $this->deviceFor($user);
         [$selector] = explode(':', $raw, 2);
 
-        $tampered = $selector . ':' . bin2hex(random_bytes(32));
+        $tampered = $selector.':'.bin2hex(random_bytes(32));
         $this->withTrust($tampered)->post('/login', ['username' => $user->username, 'password' => 'secret12345'])
             ->assertRedirect(route('mfa.challenge'));
         $this->assertGuest();
@@ -443,7 +443,7 @@ class TrustedDeviceTest extends TestCase
         $this->seedSession($user->id, 'td_stolen_session');
 
         $admin = User::create([
-            'username' => 'tdadmin_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'tdadmin_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'TD Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
             'email_verified_at' => now(), 'pass_exp_date' => now()->toDateString(),
@@ -597,7 +597,7 @@ class TrustedDeviceTest extends TestCase
 
         $this->assertNotNull($a1->fresh()->revoked_at);
         $this->assertNotNull($a2->fresh()->revoked_at);
-        $this->assertNull($bobDevice->fresh()->revoked_at, "revoke-all is scoped to the caller");
+        $this->assertNull($bobDevice->fresh()->revoked_at, 'revoke-all is scoped to the caller');
     }
 
     public function test_trusted_device_routes_require_authentication(): void
@@ -698,7 +698,7 @@ class TrustedDeviceTest extends TestCase
     public function test_an_admin_can_save_the_trusted_device_window(): void
     {
         $admin = User::create([
-            'username' => 'tdset_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'tdset_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'TD Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
             'email_verified_at' => now(), 'pass_exp_date' => now()->toDateString(),

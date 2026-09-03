@@ -83,7 +83,7 @@ class ConsultationDashboardController extends Controller
             'perConsultant' => $this->perConsultantLoad($user, $specialtyId),
             // Day-granular figures deserve a day-granular, zone-explicit stamp: "as of 14:30" on a
             // page whose every number counts whole days is ambiguous about WHICH day it means.
-            'generatedAt' => now()->format('j M Y, H:i') . ' ' . config('app.timezone'),
+            'generatedAt' => now()->format('j M Y, H:i').' '.config('app.timezone'),
         ]);
     }
 
@@ -441,7 +441,7 @@ class ConsultationDashboardController extends Controller
         $expr = $this->volumeDateExpr();
         $counts = $this->baseQuery($user, $specialtyId)
             ->where($this->volumeDateFilter($from, $to))
-            ->selectRaw($this->keyExpr($expr, 'month') . ' k, COUNT(*) c')
+            ->selectRaw($this->keyExpr($expr, 'month').' k, COUNT(*) c')
             ->groupBy('k')->pluck('c', 'k')->all();
 
         $buckets = $this->buckets($from, $to, 'month');

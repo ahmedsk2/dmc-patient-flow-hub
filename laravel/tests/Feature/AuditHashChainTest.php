@@ -21,7 +21,7 @@ class AuditHashChainTest extends TestCase
     private function actor(): User
     {
         return User::create([
-            'username' => 'hc_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'hc_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Hash Actor', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
         ]);
     }

@@ -23,7 +23,7 @@ class DashboardValueTest extends TestCase
     private function admin(): User
     {
         return User::create([
-            'username' => 'dv_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'dv_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'DV Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);

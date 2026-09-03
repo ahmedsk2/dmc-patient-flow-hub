@@ -1,4 +1,5 @@
 <?php
+
 /**
  * One-off favicon.ico generator (run: php scripts/make-favicon.php).
  * Rasterizes a simplified EHC flame-star (5 petals + medallion, brand blue->teal) at 16/32/48 px
@@ -31,6 +32,7 @@ foreach ($sizes as $size) {
                 $mt ** 3 * $p0[1] + 3 * $mt ** 2 * $t * $p1[1] + 3 * $mt * $t ** 2 * $p2[1] + $t ** 3 * $p3[1],
             ];
         }
+
         return $pts;
     };
     $petal = array_merge(
@@ -38,7 +40,7 @@ foreach ($sizes as $size) {
         $bezier([50, 7], [64, 22], [60, 40], [50, 50])
     );
 
-    $petalColor = imagecolorallocate($im, 0x1f, 0x86, 0xbf);   // mid of the brand gradient
+    $petalColor = imagecolorallocate($im, 0x1F, 0x86, 0xBF);   // mid of the brand gradient
     for ($k = 0; $k < 5; $k++) {
         $a = deg2rad(72 * $k);
         $poly = [];
@@ -54,11 +56,11 @@ foreach ($sizes as $size) {
 
     // central medallion: light disc + ring + dot
     $d = (int) round(21 * $unit);
-    imagefilledellipse($im, (int) $cx, (int) $cy, $d, $d, imagecolorallocate($im, 0x2f, 0x97, 0xc4));
+    imagefilledellipse($im, (int) $cx, (int) $cy, $d, $d, imagecolorallocate($im, 0x2F, 0x97, 0xC4));
     $d2 = (int) round(18 * $unit);
-    imagefilledellipse($im, (int) $cx, (int) $cy, $d2, $d2, imagecolorallocate($im, 0xea, 0xf4, 0xf4));
+    imagefilledellipse($im, (int) $cx, (int) $cy, $d2, $d2, imagecolorallocate($im, 0xEA, 0xF4, 0xF4));
     $d3 = (int) round(7 * $unit);
-    imagefilledellipse($im, (int) $cx, (int) $cy, $d3, $d3, imagecolorallocate($im, 0x7f, 0xa8, 0xbd));
+    imagefilledellipse($im, (int) $cx, (int) $cy, $d3, $d3, imagecolorallocate($im, 0x7F, 0xA8, 0xBD));
 
     // downscale to the target size
     $out = imagecreatetruecolor($size, $size);
@@ -84,5 +86,5 @@ foreach ($pngs as $size => $png) {
     $body .= $png;
     $offset += strlen($png);
 }
-file_put_contents(__DIR__ . '/../public/favicon.ico', $ico . $body);
-echo 'favicon.ico written (' . strlen($ico . $body) . " bytes, sizes: " . implode('/', array_keys($pngs)) . ")\n";
+file_put_contents(__DIR__.'/../public/favicon.ico', $ico.$body);
+echo 'favicon.ico written ('.strlen($ico.$body).' bytes, sizes: '.implode('/', array_keys($pngs)).")\n";

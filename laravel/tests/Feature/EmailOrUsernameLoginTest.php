@@ -18,7 +18,7 @@ class EmailOrUsernameLoginTest extends TestCase
     private function mfaUser(): User
     {
         return User::create([
-            'username' => 'eu_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'eu_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'Email Or Username User',
             'email' => 'eu.user@example.test',
             'password' => 'secret12345',

@@ -4,12 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\AuditFilterRequest;
 use App\Models\AuditLog;
+use Inertia\Inertia;
+use Inertia\Response;
 use OpenSpout\Common\Entity\Row;
 use OpenSpout\Writer\XLSX\Writer as XlsxWriter;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
-use Inertia\Inertia;
-use Inertia\Response;
 
 /**
  * Phase 2 — Item 1: admin-only audit-log viewer. Paginated + filterable (actor, action,
@@ -76,7 +76,7 @@ class AuditController extends Controller
                     return $q->whereIn('action', self::PHI_READ_ACTIONS);
                 }
 
-                return $q->where('action', 'like', $cat . '.%');
+                return $q->where('action', 'like', $cat.'.%');
             });
     }
 
@@ -110,7 +110,7 @@ class AuditController extends Controller
     /** Legacy export filename convention — Audit-Export-DD-MM-YYYY (RegistryController parity). */
     private function exportFilename(string $ext): string
     {
-        return 'Audit-Export-' . now()->format('d-m-Y') . '.' . $ext;
+        return 'Audit-Export-'.now()->format('d-m-Y').'.'.$ext;
     }
 
     public function export(AuditFilterRequest $request): StreamedResponse
@@ -124,8 +124,8 @@ class AuditController extends Controller
 
     public function exportXlsx(AuditFilterRequest $request): BinaryFileResponse
     {
-        $tmp = tempnam(sys_get_temp_dir(), 'aud') . '.xlsx';
-        $writer = new XlsxWriter();
+        $tmp = tempnam(sys_get_temp_dir(), 'aud').'.xlsx';
+        $writer = new XlsxWriter;
         $writer->openToFile($tmp);
         $this->writeExport($request, fn (array $row) => $writer->addRow(Row::fromValues(
             array_map(fn ($v) => $v ?? '', $row))));
@@ -140,7 +140,7 @@ class AuditController extends Controller
      */
     private static function csvSafe(mixed $v): mixed
     {
-        return preg_match('/^[=+\-@]/', (string) ($v ?? '')) ? "'" . $v : $v;
+        return preg_match('/^[=+\-@]/', (string) ($v ?? '')) ? "'".$v : $v;
     }
 
     /**

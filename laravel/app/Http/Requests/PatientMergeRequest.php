@@ -65,7 +65,7 @@ class PatientMergeRequest extends FormRequest
             if ($sourceOpen && $targetOpen) {
                 $v->errors()->add('source_id',
                     'Both patients have an open admission — merging would leave two simultaneously-open episodes. '
-                    . 'Discharge or transfer one of them first.');
+                    .'Discharge or transfer one of them first.');
             }
         });
     }

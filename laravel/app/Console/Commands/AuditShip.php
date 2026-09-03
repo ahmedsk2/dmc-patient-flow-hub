@@ -53,7 +53,7 @@ class AuditShip extends Command
 
         $ndjson = $rows
             ->map(fn (AuditLog $row) => json_encode($row->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES))
-            ->implode("\n") . "\n";
+            ->implode("\n")."\n";
 
         $now = now();
         $key = sprintf(

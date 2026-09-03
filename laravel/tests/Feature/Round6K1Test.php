@@ -33,7 +33,7 @@ class Round6K1Test extends TestCase
     private function user(int $role = User::ROLE_CONSULTANT, array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'k1_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'k1_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'K1 User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));

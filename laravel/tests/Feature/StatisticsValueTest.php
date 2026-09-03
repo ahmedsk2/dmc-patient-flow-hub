@@ -34,7 +34,7 @@ class StatisticsValueTest extends TestCase
     private function admin(): User
     {
         return User::create([
-            'username' => 'sv_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'sv_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'SV Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ]);

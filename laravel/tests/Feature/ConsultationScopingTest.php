@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\ConsultationsController;
 use App\Models\Consultation;
 use App\Models\ConsultationReason;
 use App\Models\Specialty;
@@ -26,7 +27,7 @@ class ConsultationScopingTest extends TestCase
     private function user(int $role = User::ROLE_CONSULTANT, array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'w1s_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'w1s_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'W1 Scope User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
@@ -244,14 +245,14 @@ class ConsultationScopingTest extends TestCase
      * registrar and resident. They can file into any book. A consultant belonging to a DIFFERENT
      * specialty is still refused, and that refusal is the product rule, not a regression.
      */
-    public function test_a_NAMED_external_specialty_owns_its_ledger_and_coordinators_can_file_into_it(): void
+    public function test_a_name_d_external_specialty_owns_its_ledger_and_coordinators_can_file_into_it(): void
     {
         [$cardio] = $this->specialties();
         $external = Specialty::create(['name' => 'Coronary Care Outreach', 'is_subspecialty' => false, 'is_external' => true]);
 
         $this->assertSame(
             $external->id,
-            \App\Http\Controllers\ConsultationsController::resolveOwningSpecialtyId('Coronary Care Outreach'),
+            ConsultationsController::resolveOwningSpecialtyId('Coronary Care Outreach'),
             'a consulted service owns its book whether or not a transfer there would leave the system'
         );
 

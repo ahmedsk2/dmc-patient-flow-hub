@@ -2,24 +2,24 @@
 
 namespace Tests\Feature;
 
-use App\Support\Totp;
-
 use App\Models\Admission;
 use App\Models\Patient;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
 /** Phase 3 — §3.7: report year clamp/validation + registry filter validation + empty-state props. */
-#[\PHPUnit\Framework\Attributes\Group('pdf')]
+#[Group('pdf')]
 class ParamValidationTest extends TestCase
 {
     use RefreshDatabase;
 
     private function admin(): User
     {
-        return User::create(['username' => 'pv_admin_' . substr(md5(uniqid('', true)), 0, 6),
+        return User::create(['username' => 'pv_admin_'.substr(md5(uniqid('', true)), 0, 6),
             'name' => 'PV Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }
 

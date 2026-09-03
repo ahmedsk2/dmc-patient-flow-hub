@@ -3,6 +3,7 @@
 namespace Tests;
 
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\DB;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -23,7 +24,7 @@ abstract class TestCase extends BaseTestCase
         // LOS / delay / boarding / readmission math) match Carbon::today()/now(). Without this, a
         // DB server tz trailing the app tz makes date-boundary tests flake just after midnight
         // (e.g. a 7-day delay reads as 6). Test-process only — never touches production.
-        \Illuminate\Support\Facades\DB::statement("SET time_zone = '" . now()->format('P') . "'");
+        DB::statement("SET time_zone = '".now()->format('P')."'");
         // Tests assert backend behaviour; don't require a built Vite manifest to render pages.
         $this->withoutVite();
     }

@@ -23,7 +23,9 @@ use Inertia\Response;
 class EmailVerificationController extends Controller
 {
     private const CODE_TTL_MINUTES = 10;
+
     private const MAX_VERIFY_ATTEMPTS = 5;
+
     private const RESEND_COOLDOWN_SECONDS = 60;
 
     public function show(Request $request): Response
@@ -102,6 +104,6 @@ class EmailVerificationController extends Controller
         [$local, $domain] = explode('@', $email, 2);
         $visible = mb_substr($local, 0, 1);
 
-        return $visible . str_repeat('*', max(mb_strlen($local) - 1, 1)) . '@' . $domain;
+        return $visible.str_repeat('*', max(mb_strlen($local) - 1, 1)).'@'.$domain;
     }
 }

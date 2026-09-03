@@ -2,32 +2,33 @@
 
 namespace Tests\Feature;
 
-use App\Support\Totp;
-
+use App\Http\Controllers\ReportsController;
 use App\Jobs\GenerateMonthlyReport;
 use App\Mail\MonthlyReportMail;
 use App\Models\ReportRecipient;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Testing\AssertableInertia;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
 /** Phase 3 — §3.3: scheduled monthly-report email (job dispatch, recipient CRUD, control panel). */
-#[\PHPUnit\Framework\Attributes\Group('pdf')]
+#[Group('pdf')]
 class MonthlyReportMailTest extends TestCase
 {
     use RefreshDatabase;
 
     private function admin(): User
     {
-        return User::create(['username' => 'mr_admin_' . substr(md5(uniqid('', true)), 0, 6),
+        return User::create(['username' => 'mr_admin_'.substr(md5(uniqid('', true)), 0, 6),
             'name' => 'MR Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }
 
     private function nonAdmin(): User
     {
-        return User::create(['username' => 'mr_cons_' . substr(md5(uniqid('', true)), 0, 6),
+        return User::create(['username' => 'mr_cons_'.substr(md5(uniqid('', true)), 0, 6),
             'name' => 'MR Cons', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }
 
@@ -38,7 +39,7 @@ class MonthlyReportMailTest extends TestCase
         ReportRecipient::create(['email' => 'b@dmc-im.com', 'active' => true]);
         ReportRecipient::create(['email' => 'c@dmc-im.com', 'active' => false]);
 
-        (new GenerateMonthlyReport(2024, 6))->handle(app(\App\Http\Controllers\ReportsController::class));
+        (new GenerateMonthlyReport(2024, 6))->handle(app(ReportsController::class));
 
         Mail::assertQueued(MonthlyReportMail::class, 2);
         Mail::assertQueued(MonthlyReportMail::class, fn ($m) => $m->hasTo('a@dmc-im.com'));
@@ -48,7 +49,7 @@ class MonthlyReportMailTest extends TestCase
     public function test_job_dispatches_no_mail_when_no_recipients(): void
     {
         Mail::fake();
-        (new GenerateMonthlyReport(2024, 6))->handle(app(\App\Http\Controllers\ReportsController::class));
+        (new GenerateMonthlyReport(2024, 6))->handle(app(ReportsController::class));
         Mail::assertNothingQueued();
     }
 

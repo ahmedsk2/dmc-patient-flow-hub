@@ -6,6 +6,7 @@ use App\Models\Admission;
 use App\Models\AuditLog;
 use App\Models\Consultation;
 use App\Models\Patient;
+use App\Models\Setting;
 use App\Models\User;
 use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -29,7 +30,7 @@ class PatientMergeTest extends TestCase
     private function user(int $role, array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'pm_' . $role . '_' . substr(md5(uniqid('', true)), 0, 8),
+            'username' => 'pm_'.$role.'_'.substr(md5(uniqid('', true)), 0, 8),
             'name' => 'PM User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),
         ], $extra));
@@ -338,7 +339,7 @@ class PatientMergeTest extends TestCase
 
     public function test_readmission_detected_across_merged_history(): void
     {
-        $window = (int) (\App\Models\Setting::current()->readmission_window_days ?? 3);
+        $window = (int) (Setting::current()->readmission_window_days ?? 3);
 
         $source = $this->patient(['mrn' => '5564001']);
         $target = $this->patient(['mrn' => '5564002']);

@@ -32,7 +32,7 @@ class AppServiceProvider extends ServiceProvider
                 $identity = (string) $request->session()->get('mfa.pending.id', '');
             }
 
-            return Limit::perMinute(5)->by($identity . '|' . $request->ip());
+            return Limit::perMinute(5)->by($identity.'|'.$request->ip());
         });
 
         // 2026-07-11 auth-hardening — registration step endpoints (guest, multi-step, no stable
@@ -42,7 +42,7 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('register', function (Request $request) {
             $session = $request->hasSession() ? $request->session()->getId() : '';
 
-            return Limit::perMinute(10)->by($session . '|' . $request->ip());
+            return Limit::perMinute(10)->by($session.'|'.$request->ip());
         });
 
         // The email-code SEND step is the ONLY registration endpoint that dispatches mail to an
@@ -55,8 +55,8 @@ class AppServiceProvider extends ServiceProvider
         // victims per hour per IP, which forces a botnet rather than a one-liner.
         RateLimiter::for('register-email', function (Request $request) {
             return [
-                Limit::perMinute(10)->by('reg-email:' . $request->ip()),
-                Limit::perHour(60)->by('reg-email:' . $request->ip()),
+                Limit::perMinute(10)->by('reg-email:'.$request->ip()),
+                Limit::perHour(60)->by('reg-email:'.$request->ip()),
             ];
         });
 
@@ -64,14 +64,14 @@ class AppServiceProvider extends ServiceProvider
         // step-up password/TOTP is rate-bounded without one NAT'd hospital locking users out of each
         // other. Paired with an in-session attempt cap in StepUpController (mirrors the MFA challenge).
         RateLimiter::for('stepup', function (Request $request) {
-            return Limit::perMinute(5)->by('stepup:' . ($request->user()?->id ?? $request->ip()));
+            return Limit::perMinute(5)->by('stepup:'.($request->user()?->id ?? $request->ip()));
         });
 
         // Existing-user email-verify gate (authenticated) — keyed by the confirmed user id + IP.
         RateLimiter::for('email-verify', function (Request $request) {
             $id = $request->user()?->id ?? ($request->hasSession() ? $request->session()->getId() : '');
 
-            return Limit::perMinute(10)->by($id . '|' . $request->ip());
+            return Limit::perMinute(10)->by($id.'|'.$request->ip());
         });
     }
 }

@@ -33,7 +33,7 @@ class PrivacyNoticeTest extends TestCase
     public function test_a_signed_in_user_is_not_bounced_away_from_the_notice(): void
     {
         $user = User::create([
-            'username' => 'pn_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'pn_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'Privacy Reader', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1,
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(), 'email_verified_at' => now(),
         ]);

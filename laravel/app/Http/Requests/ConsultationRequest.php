@@ -2,7 +2,12 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Controllers\ConsultationsController;
+use App\Models\Patient;
+use App\Models\Specialty;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 /**
  * Consultation payload — one rule set for BOTH create and edit (they were duplicated verbatim).
@@ -44,7 +49,7 @@ class ConsultationRequest extends FormRequest
             'indication.*' => ['integer'],
             // legacy: free text becomes REQUIRED when the 'Other' indication (reason id 0) is selected
             'other_indication' => [
-                \Illuminate\Validation\Rule::requiredIf(fn () => in_array(0, array_map('intval', (array) $this->input('indication', [])), true)),
+                Rule::requiredIf(fn () => in_array(0, array_map('intval', (array) $this->input('indication', [])), true)),
                 'nullable', 'string', 'max:255',
             ],
             // Wave 2b — patient lookup. The create form resolves the patient through
@@ -58,9 +63,9 @@ class ConsultationRequest extends FormRequest
             // trashed pick would validate here and then resolve to NULL in the controller, filing the
             // very silent orphan this guard exists to prevent.
             'patient_id' => ['nullable', 'integer',
-                \Illuminate\Validation\Rule::exists('patients', 'id')->whereNull('deleted_at')],
+                Rule::exists('patients', 'id')->whereNull('deleted_at')],
             'admission_id' => ['nullable', 'integer',
-                \Illuminate\Validation\Rule::exists('admissions', 'id')->whereNull('deleted_at')],
+                Rule::exists('admissions', 'id')->whereNull('deleted_at')],
             'unmatched_mrn_ack' => ['nullable', 'boolean'],
         ];
 
@@ -81,9 +86,9 @@ class ConsultationRequest extends FormRequest
      * EDIT is deliberately exempt: 1,283 imported rows carry MRNs that match nothing and must stay
      * save-able for an unrelated edit (the same reasoning as consultationDateRules()).
      */
-    public function withValidator(\Illuminate\Validation\Validator $validator): void
+    public function withValidator(Validator $validator): void
     {
-        $validator->after(function (\Illuminate\Validation\Validator $v) {
+        $validator->after(function (Validator $v) {
             if ($this->route('consultation') !== null) {
                 return;                                  // update — legacy rows stay editable
             }
@@ -97,7 +102,7 @@ class ConsultationRequest extends FormRequest
                     return;                              // unknown / trashed pick — already refused
                 }
                 // the exists rule above guarantees a live row, so find() cannot be NULL here
-                $picked = \App\Models\Patient::find((int) $this->input('patient_id'));
+                $picked = Patient::find((int) $this->input('patient_id'));
                 if ($picked !== null && trim((string) $picked->mrn) !== $mrn) {
                     $v->errors()->add('mrn', "MRN {$mrn} is not the MRN of the patient you picked ({$picked->mrn}). Correct the MRN, or pick the patient this MRN belongs to.");
                 }
@@ -107,7 +112,7 @@ class ConsultationRequest extends FormRequest
             if ($this->boolean('unmatched_mrn_ack')) {
                 return;                                  // acknowledged: file it unlinked
             }
-            if (\App\Models\Patient::where('mrn', $mrn)->exists()) {
+            if (Patient::where('mrn', $mrn)->exists()) {
                 return;                                  // the typed MRN does resolve
             }
             $v->errors()->add('mrn', "No patient record matches MRN {$mrn}. Pick the patient from the lookup, or tick 'Record anyway' to file this consultation without linking a patient record.");
@@ -150,7 +155,7 @@ class ConsultationRequest extends FormRequest
         }
 
         return [function (string $attribute, mixed $value, \Closure $fail) use ($user) {
-            $targetId = \App\Http\Controllers\ConsultationsController::resolveOwningSpecialtyId((string) $value);
+            $targetId = ConsultationsController::resolveOwningSpecialtyId((string) $value);
             if ($targetId === null) {
                 return;   // external / free-text service — unowned
             }
@@ -193,7 +198,7 @@ class ConsultationRequest extends FormRequest
             return false;
         }
 
-        return \App\Models\Specialty::where('is_external', false)->pluck('name')
+        return Specialty::where('is_external', false)->pluck('name')
             ->contains(fn ($name) => mb_strtolower(trim($name)) === $wanted);
     }
 }

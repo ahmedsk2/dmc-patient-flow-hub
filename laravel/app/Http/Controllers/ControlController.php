@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Middleware\RequireStepUp;
 use App\Models\Admission;
 use App\Models\ConsultationReason;
 use App\Models\ReportRecipient;
@@ -263,7 +264,7 @@ class ControlController extends Controller
     {
         $verifiedAt = session('stepup.verified_at');
 
-        return ($verifiedAt && (now()->getTimestamp() - (int) $verifiedAt) <= \App\Http\Middleware\RequireStepUp::WINDOW_SECONDS)
+        return ($verifiedAt && (now()->getTimestamp() - (int) $verifiedAt) <= RequireStepUp::WINDOW_SECONDS)
             ? ['step_up' => true] : [];
     }
 
@@ -293,7 +294,7 @@ class ControlController extends Controller
         // guard is inline rather than route middleware. A fresh step-up (< 5 min) lets it proceed.
         if ((int) $data['role'] === User::ROLE_ADMIN && (int) $user->role !== User::ROLE_ADMIN) {
             $verifiedAt = session('stepup.verified_at');
-            if (! $verifiedAt || (now()->getTimestamp() - (int) $verifiedAt) > \App\Http\Middleware\RequireStepUp::WINDOW_SECONDS) {
+            if (! $verifiedAt || (now()->getTimestamp() - (int) $verifiedAt) > RequireStepUp::WINDOW_SECONDS) {
                 session(['stepup.intended' => route('control.index'), 'stepup.intended_method' => 'GET']);
 
                 return redirect()->route('stepup.show')->with('flash', [

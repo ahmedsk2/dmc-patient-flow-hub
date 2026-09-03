@@ -40,7 +40,7 @@ trait MetricQueries
     {
         return DB::table($table)->whereBetween($col, [$f, $t])->whereRaw($where)
             ->when(in_array($table, ['admissions', 'consultations'], true), fn ($q) => $q->whereNull('deleted_at'))
-            ->selectRaw($this->keyExpr($col, $interval) . ' k, COUNT(*) c')->groupBy('k')->pluck('c', 'k')->all();
+            ->selectRaw($this->keyExpr($col, $interval).' k, COUNT(*) c')->groupBy('k')->pluck('c', 'k')->all();
     }
 
     /** Ordered [{key,label}] buckets spanning [from,to] at the chosen interval (day capped ~370). */
@@ -49,13 +49,22 @@ trait MetricQueries
         $out = [];
         if ($interval === 'day') {
             $c = $from->copy()->startOfDay();
-            while ($c->lte($to) && count($out) <= 370) { $out[] = ['key' => $c->toDateString(), 'label' => $c->format('d M')]; $c->addDay(); }
+            while ($c->lte($to) && count($out) <= 370) {
+                $out[] = ['key' => $c->toDateString(), 'label' => $c->format('d M')];
+                $c->addDay();
+            }
         } elseif ($interval === 'quarter') {
             $c = $from->copy()->firstOfQuarter();
-            while ($c->lte($to)) { $out[] = ['key' => $c->year . '-Q' . $c->quarter, 'label' => 'Q' . $c->quarter . ' ' . $c->year]; $c->addQuarter(); }
+            while ($c->lte($to)) {
+                $out[] = ['key' => $c->year.'-Q'.$c->quarter, 'label' => 'Q'.$c->quarter.' '.$c->year];
+                $c->addQuarter();
+            }
         } else {
             $c = $from->copy()->startOfMonth();
-            while ($c->lte($to)) { $out[] = ['key' => $c->format('Y-m'), 'label' => $c->format('M y')]; $c->addMonth(); }
+            while ($c->lte($to)) {
+                $out[] = ['key' => $c->format('Y-m'), 'label' => $c->format('M y')];
+                $c->addMonth();
+            }
         }
 
         return $out;

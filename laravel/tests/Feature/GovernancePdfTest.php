@@ -2,30 +2,30 @@
 
 namespace Tests\Feature;
 
-use App\Support\Totp;
-
 use App\Models\Admission;
 use App\Models\Patient;
 use App\Models\User;
+use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
 /** Phase 3 — §3.2: governance / M&M pack PDF (auth, validation, de-identified line lists). */
-#[\PHPUnit\Framework\Attributes\Group('pdf')]
+#[Group('pdf')]
 class GovernancePdfTest extends TestCase
 {
     use RefreshDatabase;
 
     private function admin(): User
     {
-        return User::create(['username' => 'gv_admin_' . substr(md5(uniqid('', true)), 0, 6),
+        return User::create(['username' => 'gv_admin_'.substr(md5(uniqid('', true)), 0, 6),
             'name' => 'GV Admin', 'password' => 'secret12345', 'role' => User::ROLE_ADMIN, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }
 
     private function nonAdmin(): User
     {
-        return User::create(['username' => 'gv_cons_' . substr(md5(uniqid('', true)), 0, 6),
+        return User::create(['username' => 'gv_cons_'.substr(md5(uniqid('', true)), 0, 6),
             'name' => 'GV Cons', 'password' => 'secret12345', 'role' => User::ROLE_CONSULTANT, 'active' => 1, 'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
     }
 

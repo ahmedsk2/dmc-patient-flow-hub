@@ -30,7 +30,7 @@ class ConsultationDashboardTurnaroundTest extends TestCase
     private function user(int $role = User::ROLE_CONSULTANT, array $extra = []): User
     {
         return User::create(array_merge([
-            'username' => 'cdt_' . substr(md5(uniqid('', true)), 0, 10),
+            'username' => 'cdt_'.substr(md5(uniqid('', true)), 0, 10),
             'name' => 'CDT User', 'password' => 'secret12345', 'role' => $role, 'active' => 1,
             'email_verified_at' => now(),
             'mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now(),

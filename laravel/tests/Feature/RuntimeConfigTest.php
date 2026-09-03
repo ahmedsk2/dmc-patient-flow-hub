@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Setting;
+use App\Providers\RuntimeConfigServiceProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -30,7 +31,7 @@ class RuntimeConfigTest extends TestCase
             'mail_password' => 'pw', 'app_timezone' => 'Asia/Riyadh',
         ]);
 
-        (new \App\Providers\RuntimeConfigServiceProvider($this->app))->boot();
+        (new RuntimeConfigServiceProvider($this->app))->boot();
 
         $this->assertSame('db-host', config('mail.mailers.smtp.host'));
         $this->assertSame(2525, config('mail.mailers.smtp.port'));
@@ -44,7 +45,7 @@ class RuntimeConfigTest extends TestCase
     public function test_boot_is_crash_proof_when_settings_row_is_empty(): void
     {
         config(['mail.mailers.smtp.host' => 'env-host']);
-        (new \App\Providers\RuntimeConfigServiceProvider($this->app))->boot();
+        (new RuntimeConfigServiceProvider($this->app))->boot();
         $this->assertSame('env-host', config('mail.mailers.smtp.host'));
     }
 }

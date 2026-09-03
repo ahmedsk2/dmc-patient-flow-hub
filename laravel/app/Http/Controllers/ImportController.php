@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Patient;
+use App\Models\User;
 use App\Support\Audit;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -111,7 +112,7 @@ class ImportController extends Controller
         Audit::log('import.bulk', 'admission', null, ['imported' => $n, 'skipped' => $skipped]);
 
         return redirect()->route('import.index')->with('flash', ['type' => $n > 0 ? 'success' : 'error',
-            'message' => "Imported {$n} admission(s)" . ($skipped ? ", skipped {$skipped} invalid." : '.')]);
+            'message' => "Imported {$n} admission(s)".($skipped ? ", skipped {$skipped} invalid." : '.')]);
     }
 
     /** @return array<int,array{line:int,ok:bool,error:?string,warning:?string,mrn:?string,name:?string,...}> */
@@ -129,9 +130,13 @@ class ImportController extends Controller
             ->map(fn ($m) => (string) $m)->flip()->all();
         $out = [];
         foreach ($lines as $i => $line) {
-            if (trim($line) === '') { continue; }
+            if (trim($line) === '') {
+                continue;
+            }
             $c = str_getcsv($line);
-            if ($i === 0 && strtolower(trim($c[0] ?? '')) === 'mrn') { continue; } // header
+            if ($i === 0 && strtolower(trim($c[0] ?? '')) === 'mrn') {
+                continue;
+            } // header
 
             $mrn = preg_replace('/\D/', '', trim($c[0] ?? ''));
             $name = trim($c[1] ?? '') ?: null;
@@ -173,25 +178,33 @@ class ImportController extends Controller
                 }
             }
             if ($mrn === '' || mb_strlen($mrn) > 11) {
-                $row['ok'] = false; $row['error'] = 'MRN must be 1–11 digits';
+                $row['ok'] = false;
+                $row['error'] = 'MRN must be 1–11 digits';
             } elseif (! $row['admit_date']) {
-                $row['ok'] = false; $row['error'] = 'Missing/invalid admit date';
+                $row['ok'] = false;
+                $row['error'] = 'Missing/invalid admit date';
             } elseif ($row['transfer_type'] !== null && ! in_array($row['transfer_type'], self::TRANSFER_TYPES, true)) {
-                $row['ok'] = false; $row['error'] = 'TransferType must be one of: ' . implode(' / ', self::TRANSFER_TYPES);
+                $row['ok'] = false;
+                $row['error'] = 'TransferType must be one of: '.implode(' / ', self::TRANSFER_TYPES);
             } elseif ($row['transfer_type'] !== null && ! $row['discharge_date']) {
-                $row['ok'] = false; $row['error'] = 'TransferType requires a discharge date';
+                $row['ok'] = false;
+                $row['error'] = 'TransferType requires a discharge date';
             } elseif ($row['discharge_date'] && $row['discharge_date'] < $row['admit_date']) {
                 // Phase 4 — Item 7: REJECT impossible date ordering (mirrors the CHECK constraints +
                 // the live-action invariants). A newly-imported row has no excuse for it.
-                $row['ok'] = false; $row['error'] = 'Discharge date before admit date';
+                $row['ok'] = false;
+                $row['error'] = 'Discharge date before admit date';
             } elseif ($row['medical_discharge_date'] && $row['medical_discharge_date'] < $row['admit_date']) {
-                $row['ok'] = false; $row['error'] = 'Clinical discharge date before admit date';
+                $row['ok'] = false;
+                $row['error'] = 'Clinical discharge date before admit date';
             } elseif ($row['discharge_date'] && $row['medical_discharge_date'] && $row['discharge_date'] < $row['medical_discharge_date']) {
-                $row['ok'] = false; $row['error'] = 'Discharge date before clinical discharge date';
+                $row['ok'] = false;
+                $row['error'] = 'Discharge date before clinical discharge date';
             } elseif (! $row['discharge_date'] && isset($openMrns[$mrn])) {
                 // active row (no discharge) for an MRN that already has an open episode (in the DB
                 // or an earlier active row this run) — the patient would appear on the board twice
-                $row['ok'] = false; $row['error'] = 'MRN already has an active (open) admission';
+                $row['ok'] = false;
+                $row['error'] = 'MRN already has an active (open) admission';
             }
 
             // Phase 4 — Item 7: outcome/destination + delay-reason consistency WARNINGS (not
@@ -200,13 +213,13 @@ class ImportController extends Controller
                 // Dead => Mortuary forced at commit; warn if a different destination was submitted
                 if (strcasecmp((string) $row['outcome'], 'Dead') === 0
                     && $row['discharged_to'] !== null && strcasecmp((string) $row['discharged_to'], 'Mortuary') !== 0) {
-                    $row['warning'] = ($row['warning'] ? $row['warning'] . '; ' : '')
-                        . 'Dead outcome forces Mortuary destination; submitted DischargedTo overridden';
+                    $row['warning'] = ($row['warning'] ? $row['warning'].'; ' : '')
+                        .'Dead outcome forces Mortuary destination; submitted DischargedTo overridden';
                 }
                 // phase-1 state (clinical discharge set, no physical discharge) with no delay reason
                 if (! $row['discharge_date'] && $row['medical_discharge_date'] && ! $row['delay_reason']) {
-                    $row['warning'] = ($row['warning'] ? $row['warning'] . '; ' : '')
-                        . 'Medically discharged without delay reason — imported with NULL delay_reason';
+                    $row['warning'] = ($row['warning'] ? $row['warning'].'; ' : '')
+                        .'Medically discharged without delay reason — imported with NULL delay_reason';
                 }
             }
 
@@ -225,7 +238,7 @@ class ImportController extends Controller
         foreach ($out as &$row) {
             $badCodes = array_values(array_filter($row['diagnoses'], fn ($c) => ! isset($validCodes[$c])));
             if ($badCodes) {
-                $row['warning'] = ($row['warning'] ? $row['warning'] . '; ' : '') . 'Unknown ICD-10: ' . implode(', ', $badCodes);
+                $row['warning'] = ($row['warning'] ? $row['warning'].'; ' : '').'Unknown ICD-10: '.implode(', ', $badCodes);
             }
         }
         unset($row);
@@ -240,12 +253,14 @@ class ImportController extends Controller
     private function consultantLookup(): array
     {
         $map = [];
-        \App\Models\User::where('role', \App\Models\User::ROLE_CONSULTANT)
+        User::where('role', User::ROLE_CONSULTANT)
             ->get(['id', 'full_name', 'name', 'username'])
             ->each(function ($u) use (&$map) {
                 foreach ([$u->full_name, $u->name, $u->username] as $key) {
                     $key = mb_strtolower(trim((string) $key));
-                    if ($key !== '' && ! isset($map[$key])) { $map[$key] = $u->id; }
+                    if ($key !== '' && ! isset($map[$key])) {
+                        $map[$key] = $u->id;
+                    }
                 }
             });
 
@@ -255,13 +270,20 @@ class ImportController extends Controller
     private function date($v): ?string
     {
         $v = trim((string) $v);
-        if ($v === '') { return null; }
-        try { return Carbon::parse($v)->toDateString(); } catch (\Throwable $e) { return null; }
+        if ($v === '') {
+            return null;
+        }
+        try {
+            return Carbon::parse($v)->toDateString();
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     private function gender($v): ?string
     {
         $v = strtolower(trim((string) $v));
+
         return match (true) {
             in_array($v, ['m', 'male'], true) => 'Male',
             in_array($v, ['f', 'female'], true) => 'Female',

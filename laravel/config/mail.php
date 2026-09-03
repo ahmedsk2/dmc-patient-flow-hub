@@ -45,7 +45,10 @@ return [
             'port' => env('MAIL_PORT', 2525),
             'username' => env('MAIL_USERNAME'),
             'password' => env('MAIL_PASSWORD'),
-            'timeout' => null,
+            // Bounded on purpose: QUEUE_CONNECTION=sync means every OTP / reset / report send is a
+            // synchronous call to the relay from inside the web request. Laravel's default (null →
+            // no limit) would let a relay brownout pin PHP-FPM workers indefinitely (RES-01).
+            'timeout' => (int) env('MAIL_TIMEOUT', 10),
             'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
         ],
 
