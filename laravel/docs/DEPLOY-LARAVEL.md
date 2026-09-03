@@ -99,8 +99,9 @@ Pick **one**:
 
 - [ ] `php artisan config:cache && php artisan route:cache && php artisan view:cache`
 - [ ] File permissions: web user needs write only to `storage/` and `bootstrap/cache/`
-- [ ] **Backups:** schedule a daily `mysqldump` of the app DB + retention; verify a restore once.
-      (No backup process shipped with the legacy system â€” this must be stood up.)
+- [ ] **Backups:** install the nightly encrypted off-box backup + `backup:verify` alerting + monthly
+      restore drill per [`BACKUP-AND-RESTORE.md`](BACKUP-AND-RESTORE.md); run the first drill and
+      record it there. (No backup process shipped with the legacy system â€” this must be stood up.)
 - [ ] Log rotation for `storage/logs/`
 - [ ] Confirm `/login` is reachable over HTTPS and plain-HTTP redirects to HTTPS
 
