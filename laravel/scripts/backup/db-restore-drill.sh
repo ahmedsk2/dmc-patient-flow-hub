@@ -38,7 +38,9 @@ done
 die() { echo "FAIL: $*" >&2; exit 1; }
 say() { echo "[$(date -u +%H:%M:%S)] $*"; }
 
-[[ $EUID -eq 0 ]] || die "run as root (reads $ENV_FILE and the key file)"
+# Root is only needed to read the root-owned env/key files and talk to docker. DMC_DRILL_SKIP_ROOT_CHECK=1
+# exists for running the drill against a local MySQL in a sandbox (see docs §9) — never set it on production.
+[[ $EUID -eq 0 || "${DMC_DRILL_SKIP_ROOT_CHECK:-0}" == "1" ]] || die "run as root (reads $ENV_FILE and the key file)"
 [[ -r "$ENV_FILE" ]] || die "$ENV_FILE not found"
 [[ -x "$(command -v python3)" ]] || die "python3 not found"
 [[ -f "$BACKUP_PY" ]] || die "db-backup.py not found next to this script ($BACKUP_PY)"

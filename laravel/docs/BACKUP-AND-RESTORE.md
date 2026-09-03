@@ -320,3 +320,10 @@ Add one row per drill (monthly) and per real restore. This table *is* the eviden
   (fresh / stale / missing / storage error / malformed / unconfigured / dedupe / auto-resolve /
   scheduled) against a faked HTTP transport.
 - `npx vitest run resources/js/__tests__/notifText.backupStale.test.js` — the bell wording.
+- **Sandbox run of the real scripts** (how this was verified before it ever touched production): point
+  `S3_ENDPOINT` at a local S3 stand-in that verifies SigV4 signatures, `DB_NAME` at a local MySQL,
+  substitute `mysqldump_cmd()` / a `docker` shim on `PATH` for the container hop, and run
+  `db-backup.py --dry-run`, a full run, `--restore-check`, then `db-restore-drill.sh --check-only` and
+  the full drill with `DMC_DRILL_SKIP_ROOT_CHECK=1 DMC_BACKUP_ENV=… DMC_BACKUP_PY=…`. That override
+  only skips the "must be root" guard (root is needed on production solely to read the root-owned
+  env/key files and to reach docker) — never set it on the real host.
