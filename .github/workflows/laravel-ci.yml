@@ -132,7 +132,11 @@ jobs:
         with:
           php-version: '8.3'   # production image is PHP 8.3 (Nixpacks, composer.json "php": "^8.3") — test the shipped runtime
           extensions: mbstring, pdo_mysql, gd, zip, intl, bcmath
-          coverage: pcov       # coverage floor on pass 1 (TST-02); pcov is the low-overhead driver
+          # No PHP coverage driver yet. A `--coverage --min=` floor (TST-02) was tried on 2026-09-03
+          # with pcov enabled: PHPUnit ran green but Collision's coverage table never rendered in
+          # the job log and the floor could not trip, so it was removed rather than left as a gate
+          # that proves nothing. The enforced coverage floor today is the Vitest one (frontend job).
+          coverage: none
 
       - name: Install Composer dependencies
         run: composer install --no-interaction --prefer-dist
@@ -161,10 +165,8 @@ jobs:
             sleep 1
           done
 
-      - name: Test suite — pass 1 (exclude pdf group) + coverage floor
-        # `--min` is the line-coverage floor (TST-02). Set from the measured baseline of the first
-        # run on this runtime; raise it as coverage grows, never lower it to make a build pass.
-        run: php artisan test --exclude-group pdf --coverage --min=1
+      - name: Test suite — pass 1 (exclude pdf group)
+        run: php artisan test --exclude-group pdf
 
       - name: Test suite — pass 2 (pdf group, isolated process)
         # dompdf's native font-compression state accumulates across tests and segfaults PHP
