@@ -1,24 +1,36 @@
-name: CI
+name: Laravel CI
 
 # CI for the Laravel re-platform (`laravel/`). The monorepo root also holds the legacy PHP
-# app, which has its own separate pipeline at .github/workflows/ci.yml — do not merge them.
+# app, which has its own separate pipeline at .github/workflows/ci.yml ("Legacy CI") — do not
+# merge them. What each job gates, and how to change a gate, is documented in laravel/docs/CI.md.
 #
-# Two independent jobs:
-#  - frontend : npm ci, Vitest, production build, the allow-list + contrast style gates, and a
-#               build-reproducibility check (public/build is committed and must be exactly what
-#               `npm run build` regenerates from source).
+# Five independent jobs:
+#  - frontend : npm ci, the vitest-axe accessibility gate, Vitest, production build, the allow-list +
+#               contrast style gates, and a build-reproducibility check (public/build is committed and
+#               must be exactly what `npm run build` regenerates from source).
 #  - backend  : Composer install against a real MySQL 8 service (phpunit.xml runs RefreshDatabase
 #               against MySQL so the actual SQL dialect — DATEDIFF/DATE_FORMAT/JSON — is exercised),
-#               then the project's established two-pass PHPUnit run (the `pdf` group is isolated in
-#               its own process — dompdf's native font-compression state segfaults PHP if run in the
-#               same long-lived process as the rest of the suite).
+#               a BLOCKING composer audit (high/critical advisories fail unless listed, with a reason
+#               and review date, in laravel/.composer-audit-ignore.json), then the project's
+#               established two-pass PHPUnit run (the `pdf` group is isolated in its own process —
+#               dompdf's native font-compression state segfaults PHP if run in the same long-lived
+#               process as the rest of the suite).
+#  - secrets  : gitleaks over the pushed commits / PR commits, with laravel/.gitleaks.toml.
+#  - sast     : Semgrep (p/php, p/owasp-top-ten, p/javascript) over app/, routes/ and resources/js;
+#               ERROR-severity findings fail the job, the SARIF goes to the Security tab.
 #
-# Neither job hard-codes a test count or snapshot value — the gates themselves are the assertion.
+# Neither test job hard-codes a test count or snapshot value — the gates themselves are the assertion.
+#
+# Every `uses:` is pinned to a full commit SHA (the tag it was resolved from is the trailing
+# comment) and the Semgrep image to a digest, so a re-tagged upstream release cannot change what
+# runs here. Bump by resolving the new tag with
+#   gh api repos/<owner>/<repo>/git/ref/tags/<tag>   (dereference annotated tags via git/tags/<sha>)
+# and updating both the SHA and the comment.
 
-# Least privilege: these jobs only checkout + test + build (they publish nothing), so the
-# auto-provisioned GITHUB_TOKEN needs read-only contents — not the repo-default (often read-write)
-# scope. Untrusted dependency install scripts (npm ci / composer install) run here, so a poisoned
-# dep or action cannot use the token to push to the repo.
+# Least privilege: the workflow-level token is read-only. Untrusted dependency install scripts
+# (npm ci / composer install) and third-party scanners run here, so a poisoned dep or action cannot
+# use the token to push to the repo. Jobs that need more (the SAST job uploads SARIF to code
+# scanning; the secret-scan job lists PR commits) widen it for themselves only, below.
 permissions:
   contents: read
 
@@ -36,16 +48,16 @@ concurrency:
 
 jobs:
   frontend:
-    name: Frontend (Vitest, build, style gates)
+    name: Frontend (Vitest, axe, build, style gates)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
       run:
         working-directory: laravel
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
           cache: npm
@@ -58,6 +70,12 @@ jobs:
       # carries one low esbuild advisory — bump it, then consider tightening the level).
       - name: Dependency advisories (npm, production)
         run: npm audit --omit=dev --audit-level=moderate
+
+      # axe-core (via vitest-axe) over the three consultation-ledger pages mounted with
+      # representative props. Any violation fails. It is also part of the full Vitest run below;
+      # it runs on its own first so an accessibility regression is named as such in the run list.
+      - name: Accessibility gate (vitest-axe)
+        run: npx vitest run resources/js/__tests__/a11y.axe.spec.js
 
       - name: Unit tests (Vitest)
         run: npx vitest run
@@ -84,7 +102,7 @@ jobs:
           fi
 
   backend:
-    name: Backend (PHPUnit, MySQL)
+    name: Backend (PHPUnit, MySQL, composer audit)
     runs-on: ubuntu-latest
     timeout-minutes: 25
     defaults:
@@ -107,9 +125,9 @@ jobs:
           --health-timeout=5s
           --health-retries=5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: shivammathur/setup-php@v2
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2.37.2
         with:
           php-version: '8.4'
           extensions: mbstring, pdo_mysql, gd, zip, intl, bcmath
@@ -118,9 +136,17 @@ jobs:
       - name: Install Composer dependencies
         run: composer install --no-interaction --prefer-dist
 
-      # Advisory only for now (|| true) — tighten to blocking once a clean baseline run is confirmed.
-      - name: Dependency advisories (composer)
-        run: composer audit --no-interaction || true
+      # BLOCKING. `composer audit` itself exits non-zero for ANY advisory (medium/low included), so
+      # its exit code is captured, not acted on; scripts/composer-audit-gate.php is the arbiter:
+      # high/critical (or severity-less) advisories fail unless listed — with a reason and a review
+      # date — in .composer-audit-ignore.json. A missing/invalid report is a failure, never a pass.
+      - name: Dependency advisories (composer) — high/critical block
+        run: |
+          set +e
+          composer audit --no-interaction --format=json --locked > composer-audit.json
+          echo "composer audit exit code: $? (non-zero whenever any advisory exists — the gate below decides)"
+          set -e
+          php scripts/composer-audit-gate.php composer-audit.json .composer-audit-ignore.json
 
       - name: Prepare environment file
         run: cp .env.example .env
@@ -142,3 +168,70 @@ jobs:
         # ("Premature end of PHP process" inside gzcompress) if run in the same long pass as the
         # rest of the suite — a fresh process per pass avoids crossing that threshold.
         run: php artisan test --group pdf
+
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # the action lists a PR's commits through the API to know what to scan; read is enough —
+      # PR commenting (which would need write) is switched off below.
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # the action scans the commit RANGE of the push / the PR's commits, so it needs history,
+          # not just the checked-out tree
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # extends the default ruleset; its ONLY allow-list is the AWS-published SigV4 test vectors
+          # used by laravel/tests/Unit/S3SigV4Test.php (matched by exact string AND path)
+          GITLEAKS_CONFIG: laravel/.gitleaks.toml
+          GITLEAKS_ENABLE_COMMENTS: 'false'
+          # GITLEAKS_LICENSE is not set: the repo belongs to a personal account, where the action
+          # needs no licence. It becomes required the day this moves under a GitHub organisation.
+
+  sast:
+    name: SAST (Semgrep, ERROR severity blocks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # upload-sarif → the repository's Security tab (code scanning; available on a public repo).
+      security-events: write
+    container:
+      # digest of the `1.175.0` / `latest` tag on Docker Hub as of 2026-09-03 — a re-pushed tag
+      # cannot change what runs here. Bump by reading the new tag's digest from
+      # https://hub.docker.com/v2/repositories/semgrep/semgrep/tags/<version>
+      image: semgrep/semgrep@sha256:b94b53d02fd4a022f9eac4e2af1380f5c3c4c21400e79d3336bdff1d1db5e796 # 1.175.0
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # `--severity ERROR` restricts the run to ERROR-level rules; `--error` turns any finding into
+      # exit 1. WARNING/INFO rules are not run — to surface them, drop --severity and gate on the
+      # JSON separately (see laravel/docs/CI.md). Front-end test files are excluded: the gate is on
+      # application code, and jsdom test fixtures legitimately build DOM from strings.
+      - name: Semgrep (p/php, p/owasp-top-ten, p/javascript)
+        run: |
+          semgrep scan \
+            --config p/php --config p/owasp-top-ten --config p/javascript \
+            --severity ERROR --error \
+            --exclude '__tests__' --exclude '*.test.js' --exclude '*.spec.js' \
+            --sarif-output semgrep.sarif \
+            --metrics=off \
+            laravel/app laravel/routes laravel/resources/js
+
+      # The gate result is the semgrep step above; this only publishes the findings. It runs even
+      # when the scan failed (that is when it matters most) and cannot itself fail the job — e.g.
+      # a fork PR's read-only token cannot upload, and that must not mask the scan's own verdict.
+      - name: Upload SARIF to code scanning
+        if: always() && hashFiles('semgrep.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep

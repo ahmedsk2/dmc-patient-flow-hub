@@ -1,0 +1,36 @@
+# gitleaks configuration for the Laravel CI secret-scan job (.github/workflows/laravel-ci.yml).
+#
+# Extends the built-in ruleset unchanged — no rule is disabled or weakened. The single allow-list
+# below covers ONE thing: the AWS-published SigV4 test vectors that tests/Unit/S3SigV4Test.php
+# uses to prove the hand-rolled S3 signature against the documented example ("Examples of the
+# Complete Version 4 Signing Process": access key AKIAIOSFODNN7EXAMPLE, its example secret, the
+# empty-payload SHA-256 and the documented expected signature). They are public documentation
+# values, not credentials — but they LOOK like credentials, and a future rule change must not be
+# able to turn that test into a red build.
+#
+# Scope is deliberately narrow: condition = "AND" means a finding is only ignored when BOTH the
+# file path matches (the test, or this file) AND the line carries one of the four published
+# vectors. A real secret committed anywhere else — including elsewhere in that test — still fails.
+#
+# Adding an entry here needs the same bar: a published, non-secret value, matched by exact string,
+# in a named path. Never allow-list a directory, never disable a rule. See docs/CI.md.
+
+title = "DMC patient-flow hub — gitleaks"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "AWS SigV4 published test vectors (documentation example credentials) used by tests/Unit/S3SigV4Test.php"
+condition = "AND"
+paths = [
+    '''(^|/)tests/Unit/S3SigV4Test\.php$''',
+    '''(^|/)\.gitleaks\.toml$''',
+]
+regexTarget = "line"
+regexes = [
+    '''AKIAIOSFODNN7EXAMPLE''',
+    '''wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY''',
+    '''e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855''',
+    '''f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41''',
+]

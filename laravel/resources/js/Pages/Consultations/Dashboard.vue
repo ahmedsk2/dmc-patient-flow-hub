@@ -173,7 +173,7 @@ const loadMax = computed(() => Math.max(1, ...(props.perConsultant || []).map((r
                 <ChartFigure title="Ageing of open consultations"
                              caption="Open consultations grouped by how long they have been open, measured from the request time or, for historical rows, the consultation date."
                              :columns="['Age', 'Open consults']" :rows="ageingRows">
-                    <apexchart v-if="hasAgeing" type="bar" height="260" :options="ageingOptions" :series="ageingSeries" aria-label="Bar chart: open consultations by age" />
+                    <apexchart v-if="hasAgeing" role="img" type="bar" height="260" :options="ageingOptions" :series="ageingSeries" aria-label="Bar chart: open consultations by age" />
                     <p v-else class="grid h-[260px] place-items-center text-sm text-ink-400">No open consultations.</p>
                 </ChartFigure>
                 <!-- VISIBLE, not just the chart's sr-only caption: this is the honesty statement that a
@@ -191,7 +191,7 @@ const loadMax = computed(() => Math.max(1, ...(props.perConsultant || []).map((r
                 <ChartFigure title="Consultation volume"
                              caption="Consultations received per month over the last six months."
                              :columns="['Month', 'Consultations']" :rows="trendRows">
-                    <apexchart v-if="hasTrend" type="bar" height="260" :options="trendOptions" :series="trendSeries" aria-label="Bar chart: consultations per month over the last six months" />
+                    <apexchart v-if="hasTrend" role="img" type="bar" height="260" :options="trendOptions" :series="trendSeries" aria-label="Bar chart: consultations per month over the last six months" />
                     <p v-else class="grid h-[260px] place-items-center text-sm text-ink-400">No data for this period.</p>
                 </ChartFigure>
             </div>
