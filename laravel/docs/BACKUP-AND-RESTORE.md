@@ -307,6 +307,7 @@ Add one row per drill (monthly) and per real restore. This table *is* the eviden
 | Date (UTC) | Run by | Object | download s | restore s | total s | patients / admissions / users / consultations | Result / notes |
 |---|---|---|---|---|---|---|---|
 | 2026-09-03 03:07 | Claude Code (on the owner's instruction) | db-backups/dmc_demo/2026/09/dmc_demo-2026-09-03T030653Z.sql.gz.enc | 1 | 6 | 8 | 17435 / 37662 / 331 / 0 | DRILL OK — first production drill; scratch DB counts matched the live DB (COMPARE_LIVE=1); RTO for a 20 MB dump ≈ 8 s plus operator time |
+| 2026-09-03 18:08 | Claude Code (on the owner's instruction) | db-backups/dmc_demo/2026/09/dmc_demo-2026-09-03T165232Z.sql.gz.enc (the pre-deploy dump for `a4dd4bd`, taken by running the nightly script by hand) | 1 | 6 | 7 | 17435 / 37662 / 331 / 0 | DRILL OK — counts matched live except `audit_log` 421 vs 423 (two rows written since the dump, as expected). `audit:verify` was not run against the scratch DB because the drill drops it on exit; add a keep-scratch option before claiming that check |
 
 ---
 

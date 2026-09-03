@@ -268,8 +268,8 @@ Each flow names its controller; per-endpoint database effects are in DATABASE-AN
   Cloudflare ranges** (an unproxied DNS record or a direct curl gets nothing).
 - **Headers and cookie:** nonce CSP enforced + static header set (§5); the session cookie is
   `__Host-`-prefixed (Secure, HttpOnly, host-only; `scripts/smoke.sh` checks it); `SESSION_ENCRYPT=true`,
-  `APP_DEBUG=false`. `LOG_LEVEL=warning` is set in Coolify only as a **build-time** variable, so the
-  runtime level is Laravel's default `debug` until the owner re-adds it as a runtime variable.
+  `APP_DEBUG=false`, `LOG_LEVEL=warning` (present in Coolify as both a build-time and, since
+  2026-09-03 18:13 UTC, a runtime variable — only the runtime one reaches the container).
 - **Encryption at rest:** the four narrative columns (`handovers.body`, `handover_revisions.body`,
   `consultations.response_note`, `consultation_followups.note`) via `App\Casts\EncryptedNarrative`
   (AES-256-CBC + HMAC under `APP_KEY`; tolerant of legacy plaintext on read, logging it). Also
