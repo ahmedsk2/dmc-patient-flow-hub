@@ -139,7 +139,9 @@ in one leaves the other open [PLACEHOLDER — joiner/leaver procedure covering b
 Unless a row says otherwise these are **Laravel (C2/C6)** artifacts. The legacy daily system's own
 logs and exports on SiteGround (**US**) are outside every rule below and have never been inventoried
 [VERIFY — legacy log and export inventory]. Note also that exports and printed sheets exist in
-**both** systems, and only the Laravel registry export leaves an audit row.
+**both** systems: since 2026-09-03 **every** Laravel export and report PDF leaves an audit row and
+carries a `SECRET-`/`CONFIDENTIAL-` filename prefix (CONFIRMED-FACTS C12/C13), while the legacy
+daily system's exports leave no trace and carry no label at all.
 
 | Data | Trigger | Retention | Today | Mechanism | Destruction method |
 |---|---|---|---|---|---|
@@ -147,8 +149,9 @@ logs and exports on SiteGround (**US**) are outside every rule below and have ne
 | Container stdout/stderr logs (Docker json-file) | — | Docker default is unbounded [VERIFY `max-size`/`max-file` on the live daemon] | — | GAP — set a log-driver rotation in Coolify/daemon config | Docker rotation |
 | CSP violation reports | — | They are only log lines (no table, no file of their own) → follow the application log | Log-only by design (`CspReportController`) | — | With the log |
 | `security.failed_logins`, `audit.integrity_failure` notifications | — | See §2.2 non-patient notifications | — | — | — |
-| Registry exports (CSV/XLSX) on staff devices | Download | **Proposed: delete within thirty days or on task completion, whichever is first; never retained on personal devices** [PLACEHOLDER] | No rule; server keeps no copy | Policy + training; the `registry.export*` audit row is the register of what exists | Secure delete on the device; empty recycle bin; check cloud-sync folders |
-| Audit-log exports, statistics exports | Download | As above (these are not audited — the user records the export manually [GAP]) | No rule | Policy | As above |
+| Registry exports (CSV/XLSX) on staff devices — **Laravel** | Download | **Proposed: delete within thirty days or on task completion, whichever is first; never retained on personal devices** [PLACEHOLDER] | No rule; server keeps no copy | Policy + training; the `registry.export*` audit row is the register of what exists, and the file name carries a `SECRET-` prefix | Secure delete on the device; empty recycle bin; check cloud-sync folders |
+| Audit-log exports, statistics exports, report PDFs — **Laravel** | Download | As above [PLACEHOLDER] | No rule; server keeps no copy | Policy + training; **audited since 2026-09-03** (`audit.export.*`, `statistics.export.*`, `report.pdf.*` — C12), so the audit log is the register here too; `SECRET-`/`CONFIDENTIAL-` filename prefix and a classification footer on every PDF (C13) | As above |
+| Exports and printed output from the **legacy daily system** | Download / printing | As above [PLACEHOLDER] | No rule, **no audit row and no classification label** — nothing records that an export happened **GAP** | Policy only, until cutover retires this system | As above; there is no register to reconcile against |
 | Monthly report PDF (aggregate) | Sent on the first of the month at 06:00 | At recipients' mailboxes per the hospital e-mail retention policy [VERIFY]; plus whatever **SiteGround** retains in the `dmc-im.com` mailbox and its logs, in the **United States** [VERIFY relay retention] | Template confirmed aggregate-only — no MRN, no name (CONFIRMED-FACTS C6) | Mail policy | Mailbox deletion; provider-side deletion per §5.4 |
 | Queued job payloads (`jobs` table) carrying the PDF | Job completion | `.env.example` sets `QUEUE_CONNECTION=sync`, so the job runs inline and nothing persists in `jobs` [VERIFY live value]; if a real queue driver is enabled, payloads persist until success and failures land in `failed_jobs` | — | `queue:prune-failed` if a queue driver is enabled | SQL delete |
 | Printed handover / service sheets | Printing | **End of shift or when superseded, whichever is first** [PLACEHOLDER — clinical rule] | No rule | Ward procedure | Cross-cut shredding in a confidential-waste bin |
@@ -197,7 +200,7 @@ action (CONFIRMED-FACTS A5).
 | 10 | Nightly sweeps: expired sessions (file driver), `pending_registrations`, `trusted_devices` (after ninety days), `auth:clear-resets` | GAP | [PLACEHOLDER] | [PLACEHOLDER] |
 | 11 | Set `LOG_CHANNEL=daily`, `LOG_DAILY_DAYS` per the agreed period; Docker log rotation | [VERIFY live values] | [PLACEHOLDER] | [PLACEHOLDER] |
 | 12 | Departure checklist + quarterly access review, **covering both systems' account sets** | GAP | [PLACEHOLDER — HR / System owner] | [PLACEHOLDER] |
-| 13 | Staff rule for exports and printed sheets; add classification labels to exports | GAP | [PLACEHOLDER] | [PLACEHOLDER] |
+| 13 | Staff rule for exports and printed sheets; add classification labels to exports | **Labels done on the Laravel side 2026-09-03** (filename prefixes + PDF/print footers, C13); the **staff handling rule** and the legacy system's unlabelled exports remain GAP | [PLACEHOLDER] | [PLACEHOLDER] |
 | 14 | Inventory the legacy schema, logs and exports on SiteGround so this schedule can be applied to C1/C5 at all | GAP | [PLACEHOLDER — processor] | [PLACEHOLDER] |
 
 ---
@@ -266,8 +269,10 @@ Confidential and retained for the audit-log period.
    and keep the audit rows (which then reference an MRN that no longer resolves to a person — the
    DPO should confirm whether that residual identifier must also be hashed [VERIFY]).
 4. **Backups are not a retention copy.** They exist to recover; they expire on their own short
-   schedule regardless of the clinical period. The live database and the WORM audit archive are
-   the copies that carry the retention obligation.
+   schedule regardless of the clinical period. The copies that carry the retention obligation are
+   the **live clinical databases — today that means the legacy daily database (C1) as the operative
+   record and the Laravel parallel copy (C2), and after cutover only the latter** — together with
+   the WORM audit archive.
 5. **Audit rows outlive the records they describe** (six/seven years from the action, not from
    the episode). This is deliberate: accountability for *who accessed* a record has its own purpose
    and period [VERIFY any sector rule for access-log retention in health-care].
@@ -296,3 +301,4 @@ annually. Next review: [PLACEHOLDER].
 |---|---|---|---|
 | 2026-09-03 | 0.1 | Initial draft | [PLACEHOLDER] |
 | 2026-09-03 | 0.1 | Reworked to the confirmed framing: two-system principle and controller/processor split (§1.5–1.6); new §2.0 copy inventory C1–C7; legacy daily database and SiteGround-held backups added as rows in §2.1 and §2.3; automated encrypted backups corrected from "being built" to live with the ninety-day figure kept as a legal placeholder; §2.2/§2.4/§2.6 scoped to the Laravel copy; dual account sets in §2.5; legal holds, destruction methods and checklist items 9a–9c/14 extended to the legacy copy and the processor contract; §6.8 on the parallel period | [PLACEHOLDER] |
+| 2026-09-03 | 0.1 | Reconciled §2.6 and checklist item 13 with CONFIRMED-FACTS C12/C13 as re-verified: every Laravel export and report PDF is audited and carries a `SECRET-`/`CONFIDENTIAL-` filename prefix and classification footer, while legacy exports remain unaudited and unlabelled (new row); §6.4 now names which live database carries the retention obligation | [PLACEHOLDER] |
