@@ -11,7 +11,8 @@ class HandoverRevision extends Model
     const UPDATED_AT = null;
 
     protected $guarded = ['id'];
-    protected $casts = ['created_at' => 'datetime', 'checkpoints' => 'array'];
+    // DATA-06: `body` encrypted at rest, same as Handover::$casts — see docs/ENCRYPTION-AT-REST.md.
+    protected $casts = ['created_at' => 'datetime', 'checkpoints' => 'array', 'body' => 'encrypted'];
 
     public function admission(): BelongsTo { return $this->belongsTo(Admission::class); }
     public function author(): BelongsTo { return $this->belongsTo(User::class, 'author_id'); }

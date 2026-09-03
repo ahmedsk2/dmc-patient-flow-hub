@@ -13,6 +13,8 @@ use App\Models\Specialty;
 use App\Models\User;
 use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
@@ -71,6 +73,16 @@ class HandoverTest extends TestCase
         $this->assertSame(1, HandoverRevision::where('admission_id', $a->id)->count());
         $this->assertSame($owner->id, (int) HandoverRevision::where('admission_id', $a->id)->first()->author_id);
         $this->assertTrue(AuditLog::where('action', 'handover.update')->where('entity_id', (string) $a->id)->exists());
+
+        // DATA-06: the narrative is ciphertext AT REST (raw column read bypasses the `encrypted`
+        // cast) while the model/API path above still reads plaintext. Both the current row and
+        // the append-only revision. See tests/Feature/ClinicalNarrativeEncryptionTest.php.
+        $rawBody = DB::table('handovers')->where('id', $h->id)->value('body');
+        $rawRevision = DB::table('handover_revisions')->where('admission_id', $a->id)->value('body');
+        $this->assertNotSame('Day 2: weaning O2.', $rawBody, 'handovers.body is stored in plaintext');
+        $this->assertNotSame('Day 2: weaning O2.', $rawRevision, 'handover_revisions.body is stored in plaintext');
+        $this->assertSame('Day 2: weaning O2.', Crypt::decryptString($rawBody));
+        $this->assertSame('Day 2: weaning O2.', Crypt::decryptString($rawRevision));
     }
 
     public function test_second_save_updates_current_text_and_appends_revision(): void

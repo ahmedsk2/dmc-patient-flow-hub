@@ -25,6 +25,11 @@ class ConsultationFollowup extends Model
         return [
             'followup_date' => 'date',
             'created_at' => 'datetime',
+            // DATA-06: the daily note is ciphertext at rest (AES-256-CBC under APP_KEY), plaintext
+            // through the model. The handover sheet's latest-follow-up join reads this column RAW
+            // (ConsultationsController::handover) and decrypts it explicitly — keep the two in step.
+            // See docs/ENCRYPTION-AT-REST.md.
+            'note' => 'encrypted',
         ];
     }
 

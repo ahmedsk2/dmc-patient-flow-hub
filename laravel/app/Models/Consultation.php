@@ -45,6 +45,11 @@ class Consultation extends Model
             'requested_at' => 'datetime',
             'signed_off_at' => 'datetime',
             'response_followup_needed' => 'boolean',
+            // DATA-06: the sign-off narrative is ciphertext at rest (AES-256-CBC under APP_KEY),
+            // plaintext through the model. Never filtered/sorted/exported by value. A raw read
+            // (DB::table) bypasses this cast and must Crypt::decryptString() itself.
+            // See docs/ENCRYPTION-AT-REST.md.
+            'response_note' => 'encrypted',
         ];
     }
 

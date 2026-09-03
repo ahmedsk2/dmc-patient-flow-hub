@@ -10,7 +10,11 @@ use Illuminate\Support\Carbon;
 class Handover extends Model
 {
     protected $guarded = ['id'];
-    protected $casts = ['checkpoints' => 'array'];
+    // DATA-06: `body` is free-text clinical narrative — ciphertext at rest (AES-256-CBC under
+    // APP_KEY, like users.mfa_secret), plaintext through the model. It is never filtered or
+    // sorted by value, so nothing queries it. Any raw read (DB::table / joins) bypasses this cast
+    // and must Crypt::decryptString() itself. See docs/ENCRYPTION-AT-REST.md.
+    protected $casts = ['checkpoints' => 'array', 'body' => 'encrypted'];
 
     public function admission(): BelongsTo { return $this->belongsTo(Admission::class); }
     public function updatedBy(): BelongsTo { return $this->belongsTo(User::class, 'updated_by'); }

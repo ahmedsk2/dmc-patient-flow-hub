@@ -8,6 +8,8 @@ use App\Models\Specialty;
 use App\Models\User;
 use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
@@ -250,6 +252,13 @@ class ConsultationLedgerW2aTest extends TestCase
         $this->assertSame('Continue beta blocker, repeat echo in 6 weeks.', $c->response_note);
         $this->assertTrue(AuditLog::where('action', 'consultation.signoff')
             ->where('entity_id', (string) $c->id)->exists());
+
+        // DATA-06: the narrative is ciphertext AT REST (raw column read bypasses the `encrypted`
+        // cast) while the model read above still yields plaintext. See
+        // tests/Feature/ClinicalNarrativeEncryptionTest.php.
+        $raw = DB::table('consultations')->where('id', $c->id)->value('response_note');
+        $this->assertNotSame('Continue beta blocker, repeat echo in 6 weeks.', $raw, 'response_note is stored in plaintext');
+        $this->assertSame('Continue beta blocker, repeat echo in 6 weeks.', Crypt::decryptString($raw));
     }
 
     public function test_signoff_requires_a_disposition(): void

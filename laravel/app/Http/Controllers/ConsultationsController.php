@@ -16,6 +16,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -257,7 +258,10 @@ class ConsultationsController extends Controller
                 'open_days' => self::openDays($c),
                 'last_followup' => $f ? [
                     'date' => $fDate,
-                    'note' => $f->note,
+                    // DATA-06: consultation_followups.note is ciphertext at rest. This join is a
+                    // RAW DB::table read (kept raw so it stays ONE query, not one per row), so the
+                    // model's `encrypted` cast does not run here — decrypt explicitly, NULL-safe.
+                    'note' => $f->note === null ? null : Crypt::decryptString($f->note),
                     'author' => $f->author_full_name ?: ($f->author_name ?? '—'),
                     'is_today' => $fDate === $today,
                 ] : null,
