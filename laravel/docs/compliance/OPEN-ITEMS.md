@@ -8,57 +8,54 @@
 > - **Legal / framework markers** now have proposed, source-cited answers in
 >   [`PROPOSED-CITATIONS.md`](PROPOSED-CITATIONS.md) (all `[PROPOSED]`, for counsel to verify).
 > - **Auditor evidence map** in [`EVIDENCE-PACK.md`](EVIDENCE-PACK.md).
-> - **Rescanned 2026-09-03 (later the same day):** `ROPA.md`, `DATA-RETENTION.md` and `DPIA.md` were
->   reworked to the confirmed **processor / legacy-daily** framing (DMC as controller, the operator
->   company as primary processor, the legacy `dmc-im.com` app as the daily system and the Laravel app
->   as a parallel copy). **Their three sections below are regenerated against the current files**, so
->   their line numbers are live; the other six sections remain the original scan and their line
->   numbers still predate the confirmed-inputs callout added to every draft (roughly a two-line
->   shift). The net marker count rose because the rework states more open questions than it closes:
->   nothing was removed to make a number look better.
+> - **Fully rescanned 2026-09-03 (later the same day).** Three drafts — `ROPA.md`,
+>   `DATA-RETENTION.md`, `DPIA.md` — were reworked to the confirmed **processor / legacy-daily**
+>   framing (DMC as controller, the operator company as primary processor, the legacy `dmc-im.com`
+>   app as the daily system and the Laravel app as a parallel copy), and `DATA-CLASSIFICATION.md`
+>   was aligned with the shipped export controls. **All nine sections below are now regenerated
+>   against the current files, so every line number is live.** The previous edition's numbers
+>   predated the confirmed-inputs callout added to each draft and had drifted by roughly two lines.
+> - The scan rule is unchanged and was validated by reproducing the original 529-row catalogue
+>   byte-for-byte from the file versions it was generated against.
 >
-> The six untouched sections below are the **original, unmodified** line-by-line list — use this as
-> the master checklist; a marker is closed when its value is filled in the draft AND recorded in
-> `CONFIRMED-FACTS.md` or confirmed by counsel via `PROPOSED-CITATIONS.md`. Remaining truly-open work:
-> the bracketed **[NAME]/[DATE]/contact placeholders** the hospital still owes, and the legal
-> **DECISION** rows reserved for counsel/DPO/clinical governance.
+> Use this as the master checklist; a marker is closed when its value is filled in the draft AND
+> recorded in `CONFIRMED-FACTS.md` or confirmed by counsel via `PROPOSED-CITATIONS.md`. The counts
+> move in both directions: the fact-fill closed markers in six drafts (for example
+> `DATA-CLASSIFICATION.md` 56 → 41), while the three reworked drafts state more open questions than
+> they closed. Remaining truly-open work: the bracketed **[NAME]/[DATE]/contact placeholders** the
+> hospital still owes, and the legal **DECISION** rows reserved for counsel/DPO/clinical governance.
 
-Every bracketed marker below must be resolved by the hospital's legal / data-protection officer and clinical governance before these documents are finalised. Generated 2026-09-03; ROPA / DATA-RETENTION / DPIA sections regenerated 2026-09-03 after the processor-framing rework; regenerate after edits.
+Every bracketed marker below must be resolved by the hospital's legal / data-protection officer and clinical governance before these documents are finalised. Generated 2026-09-03; **all nine sections regenerated 2026-09-03** after the processor-framing rework and the export-controls alignment; regenerate after edits.
 
-**Marker meanings:** `[VERIFY …]` = confirm a fact or the exact legal article/period against the source. `[NEEDS LEGAL CONFIRMATION]` = a lawyer must decide (usually a retention period). `[PLACEHOLDER]` = fill in a name / contact / entity. `[SET THIS]` / `[DATE]` = a concrete value or date. Arabic markers (`[تحقّق…]` etc.) mirror the English ones in the Arabic privacy notice. Those five kinds are what this catalogue counts; `[PROPOSED]` tags (counsel-facing citations) are tracked in `PROPOSED-CITATIONS.md` instead, and `[COMPANY LEGAL NAME]` is a `[PLACEHOLDER]` in prose form — both are deliberately outside the counts below.
+**Marker meanings:** `[VERIFY …]` = confirm a fact or the exact legal article/period against the source. `[NEEDS LEGAL CONFIRMATION]` = a lawyer must decide (usually a retention period). `[PLACEHOLDER]` = fill in a name / contact / entity. `[SET THIS]` / `[DATE]` = a concrete value or date. Arabic markers (`[تحقّق…]`, `[يتطلب تأكيداً قانونياً]`, `[يُستكمل]`) mirror the English ones in the Arabic privacy notice.
+
+**What the counts include.** A marker counts when the bracket *opens* with one of those keywords — the convention this catalogue has used from the start. Deliberately outside the counts: `[PROPOSED …]` / `[مقترح]` tags, which are counsel-facing citations tracked in [`PROPOSED-CITATIONS.md`](PROPOSED-CITATIONS.md); and **30 suffix-form markers** where the keyword sits at the end rather than the start (`[DPO NAME]`, `[COMPANY LEGAL NAME]`, `[NAME — PLACEHOLDER]`, `[EFFECTIVE DATE — on approval]`, `[SDAIA COMPLAINT CHANNEL — PLACEHOLDER]`, `[… — يُستكمل]` and similar). Those 30 are **real open items the hospital still owes** — mostly names, contacts and effective dates introduced by the fact-fill — and are listed here rather than silently dropped: DATA-CLASSIFICATION 3, DPA-AND-TRANSFERS 4, DPO 6, INCIDENT-RESPONSE 5, PRIVACY-NOTICE.ar 6, PRIVACY-NOTICE.en 6. Counting them would make this edition incomparable with the original scan, so the convention is left alone [PLACEHOLDER — decide at the next regeneration whether to fold the 30 suffix-form markers into the counts].
 
 
 ## Summary
 
-| File | Open items | Δ since the original scan |
-|---|---:|---|
-| DATA-CLASSIFICATION.md | 56 | — |
-| DATA-RETENTION.md | 96 | +21 (rework) |
-| DPA-AND-TRANSFERS.md | 51 | — |
-| DPIA.md | 125 | +29 (rework) |
-| DPO.md | 22 | — |
-| INCIDENT-RESPONSE.md | 72 | — |
-| PRIVACY-NOTICE.ar.md | 24 | — |
-| PRIVACY-NOTICE.en.md | 24 | — |
-| ROPA.md | 134 | +25 (rework) |
-| **Total** | **604** | **+75** |
+| File | Open items | Original scan | Δ | Why |
+|---|---:|---:|---:|---|
+| DATA-CLASSIFICATION.md | 41 | 56 | −15 | fact-fill closed markers; export controls now shipped |
+| DATA-RETENTION.md | 96 | 75 | +21 | two-system rework: legacy copy, cutover and processor items |
+| DPA-AND-TRANSFERS.md | 47 | 51 | −4 | processors named (Oracle, Cloudflare, SiteGround) |
+| DPIA.md | 125 | 96 | +29 | risk register re-based on the live picture (R13–R15) |
+| DPO.md | 21 | 22 | −1 | fact-fill |
+| INCIDENT-RESPONSE.md | 69 | 72 | −3 | fact-fill |
+| PRIVACY-NOTICE.ar.md | 21 | 24 | −3 | fact-fill |
+| PRIVACY-NOTICE.en.md | 21 | 24 | −3 | fact-fill |
+| ROPA.md | 134 | 109 | +25 | per-activity rework + new activity A10 |
+| **Total** | **575** | **529** | **+46** | plus 30 suffix-form markers outside the convention (see above) |
 
-## `DATA-CLASSIFICATION.md` — 56 items
+## `DATA-CLASSIFICATION.md` — 41 items
 
 | Line | Marker | Context |
 |---:|---|---|
-| 5 | [PLACEHOLDER — Information-security lead] | > Version 0.1 · 2026-09-03 · Scheme owner: [PLACEHOLDER — Information-security lead], with the DPO. |
 | 27 | [VERIFY control refs] | control identifiers by the security lead [VERIFY control refs]. |
 | 34 | [VERIFY] | **Secret** \| All **patient-identifiable health data** (identity + any clinical fact), and **secrets that unloc… |
 | 34 | [VERIFY — whether the NDMO/NCA mapping places sensitive personal data at Secret or Confidential; this draft proposes Secret.] | **Secret** \| All **patient-identifiable health data** (identity + any clinical fact), and **secrets that unloc… |
-| 84 | [VERIFY queue driver] | `cache`, `jobs` \| transient; the queued monthly-report job carries the PDF bytes (Confidential while aggregate… |
-| 96 | [VERIFY] | **MySQL data volume** (Docker) \| OCI block/boot volume on the instance \| **Secret** \| Everything \| At-rest enc… |
-| 97 | [PLACEHOLDER — in-Kingdom bucket] | **Automated backups** *(being built)* \| [PLACEHOLDER — in-Kingdom bucket] \| **Secret** \| Everything \| Encrypte… |
-| 99 | [VERIFY inventory of local copies] | **Legacy database dumps** (`dmc_prod` exports used for `legacy:import`; the historical `Demo.sql` referenced i… |
-| 104 | [VERIFY sample] | **Monthly report PDF** \| E-mailed to `report_recipients` via the US relay; queued in `jobs` \| **Confidential**… |
+| 97 | [NEEDS LEGAL CONFIRMATION] | **Automated backups** *(live)* \| OCI Object Storage `dmc-db-backups` (me-riyadh-1, in-Kingdom) + encrypted cop… |
 | 105 | [PLACEHOLDER — clinical rule] | **Printed handover / service sheets** \| Paper on the ward \| **Secret** \| Patient names, MRNs, narrative, code … |
-| 110 | [VERIFY] | **Source code** \| GitHub (private) + host checkout \| **Confidential** \| Application logic, security controls, … |
-| 112 | [VERIFY cache headers] | **Browser** \| Staff devices \| Page props are **Secret** while rendered \| Rendered PHI \| Idle timeout thirty mi… |
 | 112 | [PLACEHOLDER] | **Browser** \| Staff devices \| Page props are **Secret** while rendered \| Rendered PHI \| Idle timeout thirty mi… |
 | 121 | [VERIFY] | "DCC ref." cells are for the security lead to fill with the exact control identifiers [VERIFY]. |
 | 127 | [VERIFY] | Labelling \| Every export file name, e-mail subject, printed sheet and document carries **SECRET — Patient data… |
@@ -73,8 +70,8 @@ Every bracketed marker below must be resolved by the hospital's legal / data-pro
 | 134 | [VERIFY] | Logging of access \| All writes and PHI reads/exports audited with actor + IP; audit rows immutable and shipped… |
 | 135 | [VERIFY] | Disposal \| Database rows: per DATA-RETENTION.md; files: cryptographic erasure (delete + key destruction) or se… |
 | 136 | [VERIFY] | Incidents \| Any suspected exposure is at least SEV2 \| INCIDENT-RESPONSE.md §2 \| [VERIFY] |
-| 142 | [VERIFY term] | Labelling \| **CONFIDENTIAL** (EN) / **خاص** or **مقيد** per the hospital's convention (AR) [VERIFY term] \| Not… |
-| 142 | [VERIFY] | Labelling \| **CONFIDENTIAL** (EN) / **خاص** or **مقيد** per the hospital's convention (AR) [VERIFY term] \| Not… |
+| 142 | [VERIFY term] | Labelling \| **CONFIDENTIAL** (EN) / **خاص** or **مقيد** per the hospital's convention (AR) [VERIFY term] \| **A… |
+| 142 | [VERIFY] | Labelling \| **CONFIDENTIAL** (EN) / **خاص** or **مقيد** per the hospital's convention (AR) [VERIFY term] \| **A… |
 | 143 | [VERIFY] | Access \| Hospital staff with a role-based need; MFA for system access \| Roles; admin-only for audit/config/sta… |
 | 144 | [VERIFY] | Storage \| Access-controlled; encryption at rest recommended; in-Kingdom preferred \| Same host as Secret data (… |
 | 145 | [VERIFY] | Transit \| TLS; hospital e-mail acceptable internally; staff personal data may leave the Kingdom only under a d… |
@@ -84,25 +81,17 @@ Every bracketed marker below must be resolved by the hospital's legal / data-pro
 | 148 | [VERIFY] | Disposal \| Standard deletion; log rotation; paper recycling after shredding \| `daily` log channel, `LOG_DAILY_… |
 | 159 | [VERIFY] | separate accreditation would be required [VERIFY]. |
 | 167 | [PLACEHOLDER] | Data owner — clinical (Head of IM) [PLACEHOLDER] \| Confirms the classification of clinical data; sets the prin… |
-| 168 | [PLACEHOLDER] | Data owner — staff data (HR / System owner) [PLACEHOLDER] \| Confirms classification of account data; departure… |
-| 169 | [PLACEHOLDER] | Information-security lead [PLACEHOLDER] \| Maintains this scheme; maps DCC control refs; verifies technical han… |
-| 170 | [PLACEHOLDER] | DPO [PLACEHOLDER] \| Approves any external sharing; owns breach decisions |
-| 177 | [PLACEHOLDER — engineering to add headers/footers] | - **Labelling:** exports and printed sheets should carry the level in both languages; until automated, users a… |
-| 188 | [PLACEHOLDER] | PHI not encrypted at rest inside MySQL \| [PLACEHOLDER] \| [PLACEHOLDER] \| DPIA action 2 |
-| 188 | [PLACEHOLDER] | PHI not encrypted at rest inside MySQL \| [PLACEHOLDER] \| [PLACEHOLDER] \| DPIA action 2 |
-| 189 | [PLACEHOLDER] | No automated encrypted backup; manual dumps unencrypted on the host \| [PLACEHOLDER] \| [PLACEHOLDER] \| DPIA act… |
-| 189 | [PLACEHOLDER] | No automated encrypted backup; manual dumps unencrypted on the host \| [PLACEHOLDER] \| [PLACEHOLDER] \| DPIA act… |
-| 190 | [PLACEHOLDER] | Exports unlabeled; statistics and audit-log exports unaudited \| [PLACEHOLDER] \| [PLACEHOLDER] \| DPIA action 8 |
-| 190 | [PLACEHOLDER] | Exports unlabeled; statistics and audit-log exports unaudited \| [PLACEHOLDER] \| [PLACEHOLDER] \| DPIA action 8 |
-| 191 | [PLACEHOLDER — governance] | `log_record_opens` default OFF \| [PLACEHOLDER — governance] \| [PLACEHOLDER] \| DPIA R6 |
-| 191 | [PLACEHOLDER] | `log_record_opens` default OFF \| [PLACEHOLDER — governance] \| [PLACEHOLDER] \| DPIA R6 |
-| 192 | [PLACEHOLDER — legal] | Cloudflare edge decryption legal status \| [PLACEHOLDER — legal] \| [PLACEHOLDER] \| DPIA R5 |
-| 192 | [PLACEHOLDER] | Cloudflare edge decryption legal status \| [PLACEHOLDER — legal] \| [PLACEHOLDER] \| DPIA R5 |
-| 193 | [PLACEHOLDER — clinical] | Paper handling rule for printed sheets \| [PLACEHOLDER — clinical] \| [PLACEHOLDER] \| — |
-| 193 | [PLACEHOLDER] | Paper handling rule for printed sheets \| [PLACEHOLDER — clinical] \| [PLACEHOLDER] \| — |
-| 194 | [PLACEHOLDER] | Legacy PHI dump copies not inventoried \| [PLACEHOLDER] \| [PLACEHOLDER] \| DATA-RETENTION.md |
-| 194 | [PLACEHOLDER] | Legacy PHI dump copies not inventoried \| [PLACEHOLDER] \| [PLACEHOLDER] \| DATA-RETENTION.md |
-| 202 | [PLACEHOLDER] | 2026-09-03 \| 0.1 \| Initial draft \| [PLACEHOLDER] |
+| 177 | [PLACEHOLDER — interim instruction to staff] | - **Labelling:** exports and printed sheets should carry the level in both languages. **Automated in the Larav… |
+| 188 | [DATE] | Structured PHI relies on OCI volume encryption, not app-level column encryption \| operator company \| before go… |
+| 189 | [DATE] | Loose plaintext dumps on the workstation and OCI host (automated encrypted off-box backup is now **live**) \| o… |
+| 190 | [DATE] | ~~Exports unlabeled; statistics, audit-log and report exports unaudited~~ — **closed for the Laravel app 2026-… |
+| 191 | [DATE] | `log_record_opens` default OFF (verified 2026-09-03) \| DMC clinical governance \| [DATE] \| DPIA R6 |
+| 192 | [DATE] | Cloudflare edge decryption legal status (Free plan; Regional Services unavailable) \| legal / DPO \| [DATE] \| DP… |
+| 193 | [DATE] | Paper handling rule for printed sheets \| DMC clinical (Head of IM) \| [DATE] \| — |
+| 194 | [DATE] | Legacy PHI dump copies (now inventoried — DATA-CLASSIFICATION §3): encrypt or destroy on a schedule \| operator… |
+| 195 | [DATE] | **GitHub repo public until go-live** (owner-accepted, time-boxed) \| owner \| before go-live [DATE] \| EVIDENCE-P… |
+| 196 | [DATE] | **Live legacy system on dmc-im.com is the original un-hardened build over real PHI (US host)** \| owner \| befor… |
+| 204 | [PLACEHOLDER] | 2026-09-03 \| 0.1 \| Initial draft \| [PLACEHOLDER] |
 
 ## `DATA-RETENTION.md` — 96 items
 
@@ -205,61 +194,57 @@ Every bracketed marker below must be resolved by the hospital's legal / data-pro
 | 303 | [PLACEHOLDER] | 2026-09-03 \| 0.1 \| Reworked to the confirmed framing: two-system principle and controller/processor split (§1.… |
 | 304 | [PLACEHOLDER] | 2026-09-03 \| 0.1 \| Reconciled §2.6 and checklist item 13 with CONFIRMED-FACTS C12/C13 as re-verified: every La… |
 
-## `DPA-AND-TRANSFERS.md` — 51 items
+## `DPA-AND-TRANSFERS.md` — 47 items
 
 | Line | Marker | Context |
 |---:|---|---|
 | 8 | [VERIFY ARTICLE] | > Square-bracketed markers are open items; `[VERIFY ARTICLE]` / `[VERIFY]` mean the obligation is |
 | 8 | [VERIFY] | > Square-bracketed markers are open items; `[VERIFY ARTICLE]` / `[VERIFY]` mean the obligation is |
-| 18 | [VERIFY] | P1 \| **Oracle Cloud Infrastructure (OCI)** \| Oracle [ENTITY — PLACEHOLDER]; HQ United States \| Compute, block … |
-| 18 | [VERIFY current documents] | P1 \| **Oracle Cloud Infrastructure (OCI)** \| Oracle [ENTITY — PLACEHOLDER]; HQ United States \| Compute, block … |
-| 19 | [VERIFY current version and whether the plan tier allows negotiation] | P2 \| **Cloudflare** \| Cloudflare, Inc.; HQ United States \| DNS, reverse proxy / WAF, TLS termination at the ed… |
-| 20 | [VERIFY] | P3 \| **Transactional SMTP relay** \| [PROVIDER NAME / ENTITY — PLACEHOLDER]; hosted in the United States \| Outb… |
-| 20 | [VERIFY] | P3 \| **Transactional SMTP relay** \| [PROVIDER NAME / ENTITY — PLACEHOLDER]; hosted in the United States \| Outb… |
-| 20 | [VERIFY] | P3 \| **Transactional SMTP relay** \| [PROVIDER NAME / ENTITY — PLACEHOLDER]; hosted in the United States \| Outb… |
-| 21 | [VERIFY] | P4 \| **GitHub** \| GitHub, Inc. (Microsoft); HQ United States \| Source-code hosting, CI (GitHub Actions) \| Sour… |
-| 29 | [VERIFY ARTICLE] | every row must be tied to its provision by counsel [VERIFY ARTICLE]. |
-| 38 | [VERIFY period] | C6 \| **Security** measures appropriate to sensitive data; **breach notification** to the controller without un… |
-| 47 | [VERIFY ARTICLE / VERIFY the current text of the regulations] | [VERIFY ARTICLE / VERIFY the current text of the regulations]: |
-| 55 | [VERIFY] | specific situations (e.g. protecting a person's vital interests) [VERIFY]. |
-| 59 | [VERIFY when a TRA is mandatory] | continuous or large-scale) [VERIFY when a TRA is mandatory], kept on file and reviewed. |
-| 88 | [VERIFY] | D11 \| **Cross-border transfer mechanism** — SCCs / approved clauses under the Data Transfer Regulations [VERIF… |
-| 102 | [VERIFY] | Location \| Riyadh region (in-Kingdom). Confirm the tenancy's **home region** and that **no cross-region replic… |
-| 103 | [VERIFY what is enabled on this tenancy and who holds the keys] | Encryption \| In transit: TLS 1.2+. At rest: platform-level volume encryption is a feature of the provider [VER… |
-| 103 | [PLACEHOLDER] | Encryption \| In transit: TLS 1.2+. At rest: platform-level volume encryption is a feature of the provider [VER… |
-| 104 | [VERIFY current titles and that they cover the PDPL] | What to sign \| Oracle cloud services agreement / ordering document + Oracle's data-processing terms for cloud … |
-| 105 | [VERIFY] | Transfer analysis \| Processing is in-Kingdom, so no transfer for storage/processing. **Residual question:** Or… |
-| 105 | [NEEDS LEGAL CONFIRMATION] | Transfer analysis \| Processing is in-Kingdom, so no transfer for storage/processing. **Residual question:** Or… |
-| 121 | [VERIFY against Cloudflare's DPA and logging documentation for the plan in use] | Duration of processing at the edge \| Momentary (in memory for the life of the request). No storage of payloads… |
-| 123 | [VERIFY Cloudflare's transparency and government-request commitments] | Destination and law \| Cloudflare's edge nearest the user — observed in-Kingdom, but selection is automatic and… |
-| 124 | [VERIFY current version; whether it is negotiable at the plan tier; whether it contains clauses acceptable under the Saudi Data Transfer Regulations or must be supplemented with authority-approved standard contractual clauses] | Existing contractual safeguards \| Cloudflare's standard terms and Data Processing Addendum (self-serve plans) … |
-| 125 | [VERIFY] | Existing technical safeguards \| TLS 1.2+ end-to-end; origin firewall admits Cloudflare ranges only [VERIFY]; P… |
-| 127 | [VERIFY with Cloudflare] | Mitigation options \| **A. Regional Services (Data Localization Suite).** Cloudflare's feature that pins TLS te… |
-| 127 | [VERIFY] | Mitigation options \| **A. Regional Services (Data Localization Suite).** Cloudflare's feature that pins TLS te… |
-| 127 | [VERIFY availability] | Mitigation options \| **A. Regional Services (Data Localization Suite).** Cloudflare's feature that pins TLS te… |
-| 127 | [NEEDS LEGAL CONFIRMATION] | Mitigation options \| **A. Regional Services (Data Localization Suite).** Cloudflare's feature that pins TLS te… |
-| 132 | [DATE — 12 months from approval] | Review date \| [DATE — 12 months from approval] |
-| 134 | [VERIFY] | **What to sign:** Cloudflare DPA (plan-appropriate) [VERIFY]; if option A, the Enterprise / DLS order |
-| 136 | [VERIFY] | [VERIFY]. **Owner:** DPO + IT lead. **Status:** OPEN — decision pending. |
-| 142 | [VERIFY by inspecting a current monthly PDF and the mail templates before signing this off] | What it carries \| Email-verification and MFA-enrolment codes, password-reset links, username reminders, MFA-re… |
-| 143 | [VERIFY templates] | Personal data \| Staff name and email address, time-limited codes and signed links (credential material in tran… |
-| 145 | [VERIFY] | Risks \| Provider log retention of message bodies (OTP codes / reset links) [VERIFY]; provider breach; lawful a… |
-| 146 | [VERIFY] | Options \| **1. Move to an in-Kingdom relay** (hospital mail system or a Saudi-hosted provider): removes the tr… |
-| 156 | [VERIFY] | Personal data \| Developer identities in commits and accounts. **Must never hold patient data.** Action items: … |
-| 156 | [VERIFY] | Personal data \| Developer identities in commits and accounts. **Must never hold patient data.** Action items: … |
-| 156 | [VERIFY] | Personal data \| Developer identities in commits and accounts. **Must never hold patient data.** Action items: … |
-| 159 | [VERIFY] | What to sign \| GitHub terms + DPA as applicable [VERIFY]; internal policy: no data files in the repository. |
-| 167 | [VERIFY ARTICLE] | A1 \| Legal review of §2–§3 wording; cite provisions for every `[VERIFY ARTICLE]`. \| Legal \| [DATE] \| OPEN |
-| 167 | [DATE] | A1 \| Legal review of §2–§3 wording; cite provisions for every `[VERIFY ARTICLE]`. \| Legal \| [DATE] \| OPEN |
-| 168 | [DATE] | A2 \| Collect and file signed agreements / DPAs for P1–P4; complete §4 grid. \| IT lead + Legal \| [DATE] \| OPEN |
-| 169 | [DATE] | A3 \| OCI: confirm home region, no cross-region copies, key management, support-access statement. \| IT lead \| [… |
-| 170 | [DATE] | A4 \| Cloudflare: ask the account team whether a Saudi-Arabia region is available for Regional Services; price … |
-| 171 | [DATE] | A5 \| SMTP: decide in-Kingdom relay vs. safeguards; rotate credentials in Control → System if moving. \| IT lead… |
-| 172 | [DATE] | A6 \| GitHub: history check for data/secrets; enable protections; record result. \| Dev lead \| [DATE] \| OPEN |
-| 173 | [DATE] | A7 \| Update privacy notice §7 (both languages + `resources/lang`) once A4–A5 are decided. \| DPO + Dev \| [DATE]… |
-| 174 | [VERIFY] | A8 \| Add the hub to the hospital-wide record of processing; register / update with the competent authority [VE… |
-| 174 | [DATE] | A8 \| Add the hub to the hospital-wide record of processing; register / update with the competent authority [VE… |
-| 175 | [DATE] | A9 \| Confirm sector-specific health-data localisation requirements (§3 overlay). \| Legal \| [DATE] \| OPEN |
+| 18 | [VERIFY] | **P0** \| **[COMPANY LEGAL NAME] — the developer / operator** (PRIMARY processor) \| [COMPANY LEGAL NAME, Commer… |
+| 21 | [VERIFY] | P3 \| **Transactional SMTP relay** \| **SiteGround** — the `dmc-im.com` mailbox (`mail.dmc-im.com`, on Google Cl… |
+| 22 | [VERIFY] | P4 \| **GitHub** \| GitHub, Inc. (Microsoft); HQ United States \| Source-code hosting, CI (GitHub Actions) \| Sour… |
+| 40 | [VERIFY ARTICLE] | every row must be tied to its provision by counsel [VERIFY ARTICLE]. |
+| 49 | [VERIFY period] | C6 \| **Security** measures appropriate to sensitive data; **breach notification** to the controller without un… |
+| 58 | [VERIFY ARTICLE / VERIFY the current text of the regulations] | [VERIFY ARTICLE / VERIFY the current text of the regulations]: |
+| 66 | [VERIFY] | specific situations (e.g. protecting a person's vital interests) [VERIFY]. |
+| 70 | [VERIFY when a TRA is mandatory] | continuous or large-scale) [VERIFY when a TRA is mandatory], kept on file and reviewed. |
+| 99 | [VERIFY] | D11 \| **Cross-border transfer mechanism** — SCCs / approved clauses under the Data Transfer Regulations [VERIF… |
+| 113 | [VERIFY] | Location \| Riyadh region (in-Kingdom). Confirm the tenancy's **home region** and that **no cross-region replic… |
+| 114 | [VERIFY what is enabled on this tenancy and who holds the keys] | Encryption \| In transit: TLS 1.2+. At rest: platform-level volume encryption is a feature of the provider [VER… |
+| 114 | [PLACEHOLDER] | Encryption \| In transit: TLS 1.2+. At rest: platform-level volume encryption is a feature of the provider [VER… |
+| 115 | [VERIFY current titles and that they cover the PDPL] | What to sign \| Oracle cloud services agreement / ordering document + Oracle's data-processing terms for cloud … |
+| 116 | [VERIFY] | Transfer analysis \| Processing is in-Kingdom, so no transfer for storage/processing. **Residual question:** Or… |
+| 116 | [NEEDS LEGAL CONFIRMATION] | Transfer analysis \| Processing is in-Kingdom, so no transfer for storage/processing. **Residual question:** Or… |
+| 132 | [VERIFY against Cloudflare's DPA and logging documentation for the plan in use] | Duration of processing at the edge \| Momentary (in memory for the life of the request). No storage of payloads… |
+| 134 | [VERIFY Cloudflare's transparency and government-request commitments] | Destination and law \| Cloudflare's edge nearest the user — observed in-Kingdom, but selection is automatic and… |
+| 135 | [VERIFY current version; whether it is negotiable at the plan tier; whether it contains clauses acceptable under the Saudi Data Transfer Regulations or must be supplemented with authority-approved standard contractual clauses] | Existing contractual safeguards \| Cloudflare's standard terms and Data Processing Addendum (self-serve plans) … |
+| 136 | [VERIFY] | Existing technical safeguards \| TLS 1.2+ end-to-end; origin firewall admits Cloudflare ranges only [VERIFY]; P… |
+| 138 | [VERIFY with Cloudflare] | Mitigation options \| **A. Regional Services (Data Localization Suite).** Cloudflare's feature that pins TLS te… |
+| 138 | [VERIFY] | Mitigation options \| **A. Regional Services (Data Localization Suite).** Cloudflare's feature that pins TLS te… |
+| 138 | [VERIFY availability] | Mitigation options \| **A. Regional Services (Data Localization Suite).** Cloudflare's feature that pins TLS te… |
+| 138 | [NEEDS LEGAL CONFIRMATION] | Mitigation options \| **A. Regional Services (Data Localization Suite).** Cloudflare's feature that pins TLS te… |
+| 143 | [DATE — 12 months from approval] | Review date \| [DATE — 12 months from approval] |
+| 145 | [VERIFY] | **What to sign:** Cloudflare DPA (plan-appropriate) [VERIFY]; if option A, the Enterprise / DLS order |
+| 147 | [VERIFY] | [VERIFY]. **Owner:** DPO + IT lead. **Status:** OPEN — decision pending. |
+| 153 | [VERIFY by inspecting a current monthly PDF and the mail templates before signing this off] | What it carries \| Email-verification and MFA-enrolment codes, password-reset links, username reminders, MFA-re… |
+| 154 | [VERIFY templates] | Personal data \| Staff name and email address, time-limited codes and signed links (credential material in tran… |
+| 156 | [VERIFY] | Risks \| Provider log retention of message bodies (OTP codes / reset links) [VERIFY]; provider breach; lawful a… |
+| 157 | [VERIFY] | Options \| **1. Move to an in-Kingdom relay** (hospital mail system or a Saudi-hosted provider): removes the tr… |
+| 167 | [VERIFY] | Personal data \| Developer identities in commits and accounts. **Must never hold patient data.** Action items: … |
+| 167 | [VERIFY] | Personal data \| Developer identities in commits and accounts. **Must never hold patient data.** Action items: … |
+| 167 | [VERIFY] | Personal data \| Developer identities in commits and accounts. **Must never hold patient data.** Action items: … |
+| 170 | [VERIFY] | What to sign \| GitHub terms + DPA as applicable [VERIFY]; internal policy: no data files in the repository. |
+| 178 | [VERIFY ARTICLE] | A1 \| Legal review of §2–§3 wording; cite provisions for every `[VERIFY ARTICLE]`. \| Legal \| [DATE] \| OPEN |
+| 178 | [DATE] | A1 \| Legal review of §2–§3 wording; cite provisions for every `[VERIFY ARTICLE]`. \| Legal \| [DATE] \| OPEN |
+| 179 | [DATE] | A2 \| Collect and file signed agreements / DPAs for P1–P4; complete §4 grid. \| IT lead + Legal \| [DATE] \| OPEN |
+| 180 | [DATE] | A3 \| OCI: confirm home region, no cross-region copies, key management, support-access statement. \| IT lead \| [… |
+| 181 | [DATE] | A4 \| Cloudflare: ask the account team whether a Saudi-Arabia region is available for Regional Services; price … |
+| 182 | [DATE] | A5 \| SMTP: decide in-Kingdom relay vs. safeguards; rotate credentials in Control → System if moving. \| IT lead… |
+| 183 | [DATE] | A6 \| GitHub: history check for data/secrets; enable protections; record result. \| Dev lead \| [DATE] \| OPEN |
+| 184 | [DATE] | A7 \| Update privacy notice §7 (both languages + `resources/lang`) once A4–A5 are decided. \| DPO + Dev \| [DATE]… |
+| 185 | [VERIFY] | A8 \| Add the hub to the hospital-wide record of processing; register / update with the competent authority [VE… |
+| 185 | [DATE] | A8 \| Add the hub to the hospital-wide record of processing; register / update with the competent authority [VE… |
+| 186 | [DATE] | A9 \| Confirm sector-specific health-data localisation requirements (§3 overlay). \| Legal \| [DATE] \| OPEN |
 
 ## `DPIA.md` — 125 items
 
@@ -391,111 +376,107 @@ Every bracketed marker below must be resolved by the hospital's legal / data-pro
 | 489 | [VERIFY any mandated review frequency] | incident (INCIDENT-RESPONSE.md); and at least annually [VERIFY any mandated review frequency]. |
 | 490 | [PLACEHOLDER] | Next review: [PLACEHOLDER]. |
 
-## `DPO.md` — 22 items
+## `DPO.md` — 21 items
 
 | Line | Marker | Context |
 |---:|---|---|
-| 7 | [VERIFY ARTICLE] | > marker is an open item: `[VERIFY ARTICLE]` means the obligation is described in words and the |
-| 9 | [PLACEHOLDER] | > and cited by legal counsel; `[PLACEHOLDER]` means a fact only the hospital can supply. |
-| 20 | [VERIFY ARTICLE] | involves processing **sensitive** personal data [VERIFY ARTICLE]. Health data is sensitive personal data |
-| 22 | [NEEDS LEGAL CONFIRMATION] | assume it is in scope unless counsel concludes otherwise [NEEDS LEGAL CONFIRMATION]. |
-| 36 | [VERIFY ARTICLE] | Basis of appointment \| Internal designation (employee) **or** external service contract [CHOOSE]. \| Either is … |
-| 37 | [VERIFY whether the regulations or SDAIA guidance prescribe minimum qualifications or training] | Qualifications \| Working knowledge of the PDPL, its Implementing Regulations and the Data Transfer Regulations… |
-| 46 | [VERIFY ARTICLE for each row] | [VERIFY ARTICLE for each row]. |
-| 54 | [VERIFY ARTICLE — when a DPIA is mandatory] | R5 \| **Data-protection impact assessment** where the regulations require one for high-risk processing (sensiti… |
-| 55 | [VERIFY PERIOD] | R6 \| **Data-subject requests** — receive, verify, coordinate and answer within the period the regulations set.… |
-| 56 | [VERIFY ARTICLE — notification period and thresholds] | R7 \| **Breach management** — assess, contain, document, and notify the competent authority and (where required… |
-| 60 | [VERIFY — National Data Governance Platform registration requirement] | R11 \| **Point of contact** for the competent authority and for data subjects; keep the hospital's registration… |
-| 66 | [VERIFY ARTICLE] | the competent authority** [VERIFY ARTICLE]. For the hub: |
-| 74 | [VERIFY] | Competent authority (SDAIA) [VERIFY] \| Controller registration + DPO details, updated on any change. |
-| 80 | [VERIFY ARTICLE] | [VERIFY ARTICLE]. |
-| 86 | [NEEDS LEGAL CONFIRMATION] | reviewed for conflict [NEEDS LEGAL CONFIRMATION]. |
-| 98 | [NEEDS LEGAL CONFIRMATION] | Confirm audit-log retention (6 y in-app, 7 y immutable archive) and backup retention (90 d) still match policy… |
-| 111 | [VERIFY ARTICLE] | Regulations [VERIFY ARTICLE], [HOSPITAL LEGAL NAME] (Commercial Registration / Licence No. |
-| 112 | [PLACEHOLDER] | [PLACEHOLDER]), as controller, hereby designates: |
-| 118 | [DATE] | Effective: [DATE] |
-| 128 | [VERIFY] | subjects and communicate them to the competent authority [VERIFY]. |
-| 148 | [DATE] | Registered: Controller + DPO details filed on the competent authority's platform on [DATE] [VERIFY] |
-| 148 | [VERIFY] | Registered: Controller + DPO details filed on the competent authority's platform on [DATE] [VERIFY] |
+| 9 | [VERIFY ARTICLE] | > marker is an open item: `[VERIFY ARTICLE]` means the obligation is described in words and the |
+| 11 | [PLACEHOLDER] | > and cited by legal counsel; `[PLACEHOLDER]` means a fact only the hospital can supply. |
+| 22 | [VERIFY ARTICLE] | involves processing **sensitive** personal data [VERIFY ARTICLE]. Health data is sensitive personal data |
+| 24 | [NEEDS LEGAL CONFIRMATION] | assume it is in scope unless counsel concludes otherwise [NEEDS LEGAL CONFIRMATION]. |
+| 38 | [VERIFY ARTICLE] | Basis of appointment \| Internal designation (employee) **or** external service contract [CHOOSE]. \| Either is … |
+| 39 | [VERIFY whether the regulations or SDAIA guidance prescribe minimum qualifications or training] | Qualifications \| Working knowledge of the PDPL, its Implementing Regulations and the Data Transfer Regulations… |
+| 48 | [VERIFY ARTICLE for each row] | [VERIFY ARTICLE for each row]. |
+| 56 | [VERIFY ARTICLE — when a DPIA is mandatory] | R5 \| **Data-protection impact assessment** where the regulations require one for high-risk processing (sensiti… |
+| 57 | [VERIFY PERIOD] | R6 \| **Data-subject requests** — receive, verify, coordinate and answer within the period the regulations set.… |
+| 58 | [VERIFY ARTICLE — notification period and thresholds] | R7 \| **Breach management** — assess, contain, document, and notify the competent authority and (where required… |
+| 68 | [VERIFY ARTICLE] | the competent authority** [VERIFY ARTICLE]. For the hub: |
+| 76 | [VERIFY] | Competent authority (SDAIA) [VERIFY] \| Controller registration + DPO details, updated on any change. |
+| 82 | [VERIFY ARTICLE] | [VERIFY ARTICLE]. |
+| 88 | [NEEDS LEGAL CONFIRMATION] | reviewed for conflict [NEEDS LEGAL CONFIRMATION]. |
+| 100 | [NEEDS LEGAL CONFIRMATION] | Confirm audit-log retention (6 y in-app, 7 y immutable archive) and backup retention (90 d) still match policy… |
+| 113 | [VERIFY ARTICLE] | Regulations [VERIFY ARTICLE], Dammam Medical Complex, Eastern Health Cluster (Saudi Health Holding Company) (C… |
+| 114 | [PLACEHOLDER] | [PLACEHOLDER]), as controller, hereby designates: |
+| 120 | [DATE] | Effective: [DATE] |
+| 130 | [VERIFY] | subjects and communicate them to the competent authority [VERIFY]. |
+| 150 | [DATE] | Registered: Controller + DPO details filed on the competent authority's platform on [DATE] [VERIFY] |
+| 150 | [VERIFY] | Registered: Controller + DPO details filed on the competent authority's platform on [DATE] [VERIFY] |
 
-## `INCIDENT-RESPONSE.md` — 72 items
+## `INCIDENT-RESPONSE.md` — 69 items
 
 | Line | Marker | Context |
 |---:|---|---|
-| 6 | [PLACEHOLDER — Information-security lead] | > Runbook owner: [PLACEHOLDER — Information-security lead]. Exercise this at least twice a year (§12). |
-| 15 | [VERIFY — definition in the law / Implementing Regulations] | - A **personal-data breach** is an incident that leads, or may lead, to accidental or unlawful destruction, lo… |
-| 38 | [PLACEHOLDER] | **Incident lead** \| [PLACEHOLDER] / [PLACEHOLDER] \| [PLACEHOLDER] \| Declares severity, owns decisions, keeps t… |
-| 38 | [PLACEHOLDER] | **Incident lead** \| [PLACEHOLDER] / [PLACEHOLDER] \| [PLACEHOLDER] \| Declares severity, owns decisions, keeps t… |
-| 38 | [PLACEHOLDER] | **Incident lead** \| [PLACEHOLDER] / [PLACEHOLDER] \| [PLACEHOLDER] \| Declares severity, owns decisions, keeps t… |
-| 39 | [PLACEHOLDER] | **Technical lead** \| [PLACEHOLDER] / [PLACEHOLDER] \| [PLACEHOLDER] \| Executes containment and recovery (§7, §1… |
-| 39 | [PLACEHOLDER] | **Technical lead** \| [PLACEHOLDER] / [PLACEHOLDER] \| [PLACEHOLDER] \| Executes containment and recovery (§7, §1… |
-| 39 | [PLACEHOLDER] | **Technical lead** \| [PLACEHOLDER] / [PLACEHOLDER] \| [PLACEHOLDER] \| Executes containment and recovery (§7, §1… |
-| 40 | [PLACEHOLDER] | **Communications** \| [PLACEHOLDER] \| [PLACEHOLDER] \| Internal updates, staff notices, patient notices, media (… |
-| 40 | [PLACEHOLDER] | **Communications** \| [PLACEHOLDER] \| [PLACEHOLDER] \| Internal updates, staff notices, patient notices, media (… |
-| 41 | [PLACEHOLDER] | **DPO / legal** \| [PLACEHOLDER] \| [PLACEHOLDER] \| Breach determination, regulator and data-subject notificatio… |
-| 41 | [PLACEHOLDER] | **DPO / legal** \| [PLACEHOLDER] \| [PLACEHOLDER] \| Breach determination, regulator and data-subject notificatio… |
-| 42 | [PLACEHOLDER — Head of IM] | **Clinical owner** \| [PLACEHOLDER — Head of IM] \| [PLACEHOLDER] \| Clinical-safety decisions (paper fallback, r… |
-| 42 | [PLACEHOLDER] | **Clinical owner** \| [PLACEHOLDER — Head of IM] \| [PLACEHOLDER] \| Clinical-safety decisions (paper fallback, r… |
-| 43 | [PLACEHOLDER] | **Executive sponsor** \| [PLACEHOLDER] \| [PLACEHOLDER] \| Approves external notifications and major service deci… |
-| 43 | [PLACEHOLDER] | **Executive sponsor** \| [PLACEHOLDER] \| [PLACEHOLDER] \| Approves external notifications and major service deci… |
-| 62 | [VERIFY plan features] | Cloudflare dashboard \| Traffic spikes, WAF events, origin errors \| Cloudflare zone analytics / security events… |
-| 63 | [VERIFY enabled] | OCI console \| Instance health, volume state, unexpected API activity \| OCI Monitoring / Audit service [VERIFY … |
-| 64 | [PLACEHOLDER — reporting channel] | People \| Staff reporting odd behaviour, a lost device, a mis-sent e-mail \| [PLACEHOLDER — reporting channel] \|… |
-| 72 | [VERIFY whether a DSN is configured in production] | Error tracking (Sentry) \| Optional per DEPLOY-LARAVEL.md §2; [VERIFY whether a DSN is configured in production… |
-| 79 | [PLACEHOLDER — phone/chat] | 1. Whoever notices: report to the technical lead **immediately** by [PLACEHOLDER — phone/chat]. Do not investi… |
-| 82 | [VERIFY the exact trigger] | 4. If **any** personal data may have been exposed, altered or lost: inform the DPO now, not after containment.… |
-| 106 | [PLACEHOLDER — e.g. a shared document outside the OCI tenancy] | Keep it in a place that survives the incident: [PLACEHOLDER — e.g. a shared document outside the OCI tenancy].… |
-| 116 | [VERIFY `SESSION_DRIVER` in the live `.env`] | Production uses the **file** session driver [VERIFY `SESSION_DRIVER` in the live `.env`]: |
-| 135 | [VERIFY — confirm `active` is re-checked per request, otherwise also run §7.1] | 1. Control → Users → open the user → untick **Active** → Save (`PUT /control/users/{id}`, audited as `user.upd… |
-| 145 | [VERIFY the rule set] | - **Confirm the origin still only accepts Cloudflare**: the OCI security list / NSG must allow HTTPS only from… |
-| 153 | [PLACEHOLDER — engineering script] | `APP_KEY` \| App `.env` / Coolify env \| Generate a new key **only** with a re-encryption plan: decrypt `users.m… |
-| 177 | [VERIFY log availability] | 2. Note: **statistics exports and the audit-log export are not audited** — check web-server / Cloudflare acces… |
-| 199 | [VERIFY plan retention] | **Cloudflare** \| Export security events / analytics for the window [VERIFY plan retention]; note any rule chan… |
-| 200 | [VERIFY enabled] | **OCI Audit** \| Export the tenancy audit events for the window (console / API changes, key creation) [VERIFY e… |
-| 201 | [VERIFY availability] | **E-mail** \| Preserve the relay provider's send logs for the window [VERIFY availability]; preserve affected m… |
-| 212 | [VERIFY throughout] | ### 9.1 Who must be told, and when [VERIFY throughout] |
-| 216 | [VERIFY ARTICLE in the Implementing Regulations, the exact wording of the trigger ("becoming aware" vs "confirming"), whether the period runs in calendar hours, whether phased/partial notification is allowed, and the required content] | **Competent authority — SDAIA** (Saudi Data & AI Authority, the personal-data regulator) \| A personal-data bre… |
-| 216 | [PLACEHOLDER — URL / reference number procedure] | **Competent authority — SDAIA** (Saudi Data & AI Authority, the personal-data regulator) \| A personal-data bre… |
-| 217 | [VERIFY the harm threshold and any exceptions] | **Affected data subjects** (patients, staff) \| Where the breach may cause harm to the data subject or their in… |
-| 217 | [VERIFY exact wording and whether a fixed period applies] | **Affected data subjects** (patients, staff) \| Where the breach may cause harm to the data subject or their in… |
-| 217 | [PLACEHOLDER] | **Affected data subjects** (patients, staff) \| Where the breach may cause harm to the data subject or their in… |
-| 218 | [VERIFY applicability, thresholds and channels — e.g. MoH incident reporting, CHI/NPHIES obligations, accreditation body requirements] | **Ministry of Health** and/or the **Council of Health Insurance** and any health-sector regulator or accredito… |
-| 218 | [VERIFY] | **Ministry of Health** and/or the **Council of Health Insurance** and any health-sector regulator or accredito… |
-| 218 | [PLACEHOLDER] | **Ministry of Health** and/or the **Council of Health Insurance** and any health-sector regulator or accredito… |
-| 219 | [VERIFY scope and reporting duty] | **National Cybersecurity Authority (NCA)** or sector CERT \| Cybersecurity incidents where the hospital is with… |
-| 219 | [VERIFY] | **National Cybersecurity Authority (NCA)** or sector CERT \| Cybersecurity incidents where the hospital is with… |
-| 219 | [PLACEHOLDER] | **National Cybersecurity Authority (NCA)** or sector CERT \| Cybersecurity incidents where the hospital is with… |
-| 220 | [PLACEHOLDER] | **Processors** (OCI, Cloudflare, SMTP relay, GitHub) \| When their service is involved or their cooperation is … |
-| 221 | [VERIFY] | **Cyber-insurance / legal counsel** \| Per policy [VERIFY] \| Per policy \| [PLACEHOLDER] \| Executive sponsor |
-| 221 | [PLACEHOLDER] | **Cyber-insurance / legal counsel** \| Per policy [VERIFY] \| Per policy \| [PLACEHOLDER] \| Executive sponsor |
-| 250 | [PLACEHOLDER] | Use the authority's own form where one exists [PLACEHOLDER]; this template ensures the content is ready. Headi… |
-| 257 | [PLACEHOLDER legal name, registration, address] | Controller: [PLACEHOLDER legal name, registration, address] |
-| 258 | [PLACEHOLDER name, e-mail, phone] | DPO: [PLACEHOLDER name, e-mail, phone] |
-| 299 | [PLACEHOLDER — DPO contact, hours, language options] | للتواصل / How to contact us: [PLACEHOLDER — DPO contact, hours, language options] |
-| 302 | [PLACEHOLDER] | Clinical sensitivity: where diagnoses, TB status, resuscitation status or a death outcome were exposed, the cl… |
-| 310 | [PLACEHOLDER] | Media / public \| Only with executive sponsor + legal approval \| Communications \| Holding statement [PLACEHOLDE… |
-| 320 | [PLACEHOLDER — clinical owner to define] | - The unit's paper census / whiteboard procedure [PLACEHOLDER — clinical owner to define]; the printed handove… |
-| 395 | [PLACEHOLDER] | 1 \| \| \| [PLACEHOLDER] \| [PLACEHOLDER] \| \| Open \| |
-| 395 | [PLACEHOLDER] | 1 \| \| \| [PLACEHOLDER] \| [PLACEHOLDER] \| \| Open \| |
-| 397 | [PLACEHOLDER — meeting] | Rules: every action has one owner and one date; "verified" means someone other than the owner checked it works… |
-| 405 | [PLACEHOLDER — Q4 2026] | [PLACEHOLDER — Q4 2026] \| **PHI exfiltration by a compromised admin**: a burst of `login.failed` then `login.s… |
-| 406 | [PLACEHOLDER — Q1 2027] | [PLACEHOLDER — Q1 2027] \| **Ransomware / host loss**: the instance is encrypted; latest manual dump is nine da… |
-| 407 | [PLACEHOLDER — Q2 2027] | [PLACEHOLDER — Q2 2027] \| **Audit-chain break at 02:30**: `audit.integrity_failure` fires; cause unknown \| Tec… |
-| 408 | [PLACEHOLDER — Q3 2027] | [PLACEHOLDER — Q3 2027] \| **Auth bypass report**: a staff member reports seeing another consultant's inbox \| F… |
-| 420 | [PLACEHOLDER] | Incident lead \| [PLACEHOLDER] \| \| \| |
-| 421 | [PLACEHOLDER] | Technical lead \| [PLACEHOLDER] \| \| \| |
-| 422 | [PLACEHOLDER] | DPO / legal \| [PLACEHOLDER] \| \| \| |
-| 423 | [PLACEHOLDER] | Communications \| [PLACEHOLDER] \| \| \| |
-| 424 | [PLACEHOLDER] | Clinical owner \| [PLACEHOLDER] \| \| \| |
-| 425 | [PLACEHOLDER] | Executive sponsor \| [PLACEHOLDER] \| \| \| |
-| 426 | [PLACEHOLDER — tenancy, support tier] | OCI support \| [PLACEHOLDER — tenancy, support tier] \| \| \| |
-| 427 | [PLACEHOLDER — plan, account] | Cloudflare support \| [PLACEHOLDER — plan, account] \| \| \| |
-| 428 | [PLACEHOLDER] | SMTP relay support \| [PLACEHOLDER] \| \| \| |
-| 429 | [PLACEHOLDER] | Competent authority (SDAIA) breach portal \| [PLACEHOLDER] \| \| \| |
-| 430 | [PLACEHOLDER] | Sector regulator(s) \| [PLACEHOLDER] \| \| \| |
-| 458 | [PLACEHOLDER] | 2026-09-03 \| 0.1 \| Initial draft \| [PLACEHOLDER] |
+| 8 | [PLACEHOLDER — Information-security lead] | > Runbook owner: [PLACEHOLDER — Information-security lead]. Exercise this at least twice a year (§12). |
+| 17 | [VERIFY — definition in the law / Implementing Regulations] | - A **personal-data breach** is an incident that leads, or may lead, to accidental or unlawful destruction, lo… |
+| 40 | [PLACEHOLDER] | **Incident lead** \| [PLACEHOLDER] / [PLACEHOLDER] \| [PLACEHOLDER] \| Declares severity, owns decisions, keeps t… |
+| 40 | [PLACEHOLDER] | **Incident lead** \| [PLACEHOLDER] / [PLACEHOLDER] \| [PLACEHOLDER] \| Declares severity, owns decisions, keeps t… |
+| 40 | [PLACEHOLDER] | **Incident lead** \| [PLACEHOLDER] / [PLACEHOLDER] \| [PLACEHOLDER] \| Declares severity, owns decisions, keeps t… |
+| 41 | [PLACEHOLDER] | **Technical lead** \| [PLACEHOLDER] / [PLACEHOLDER] \| [PLACEHOLDER] \| Executes containment and recovery (§7, §1… |
+| 41 | [PLACEHOLDER] | **Technical lead** \| [PLACEHOLDER] / [PLACEHOLDER] \| [PLACEHOLDER] \| Executes containment and recovery (§7, §1… |
+| 41 | [PLACEHOLDER] | **Technical lead** \| [PLACEHOLDER] / [PLACEHOLDER] \| [PLACEHOLDER] \| Executes containment and recovery (§7, §1… |
+| 42 | [PLACEHOLDER] | **Communications** \| [PLACEHOLDER] \| [PLACEHOLDER] \| Internal updates, staff notices, patient notices, media (… |
+| 42 | [PLACEHOLDER] | **Communications** \| [PLACEHOLDER] \| [PLACEHOLDER] \| Internal updates, staff notices, patient notices, media (… |
+| 43 | [PLACEHOLDER] | **DPO / legal** \| [PLACEHOLDER] \| [PLACEHOLDER] \| Breach determination, regulator and data-subject notificatio… |
+| 43 | [PLACEHOLDER] | **DPO / legal** \| [PLACEHOLDER] \| [PLACEHOLDER] \| Breach determination, regulator and data-subject notificatio… |
+| 44 | [PLACEHOLDER — Head of IM] | **Clinical owner** \| [PLACEHOLDER — Head of IM] \| [PLACEHOLDER] \| Clinical-safety decisions (paper fallback, r… |
+| 44 | [PLACEHOLDER] | **Clinical owner** \| [PLACEHOLDER — Head of IM] \| [PLACEHOLDER] \| Clinical-safety decisions (paper fallback, r… |
+| 45 | [PLACEHOLDER] | **Executive sponsor** \| [PLACEHOLDER] \| [PLACEHOLDER] \| Approves external notifications and major service deci… |
+| 45 | [PLACEHOLDER] | **Executive sponsor** \| [PLACEHOLDER] \| [PLACEHOLDER] \| Approves external notifications and major service deci… |
+| 64 | [VERIFY plan features] | Cloudflare dashboard \| Traffic spikes, WAF events, origin errors \| Cloudflare zone analytics / security events… |
+| 65 | [VERIFY enabled] | OCI console \| Instance health, volume state, unexpected API activity \| OCI Monitoring / Audit service [VERIFY … |
+| 66 | [PLACEHOLDER — reporting channel] | People \| Staff reporting odd behaviour, a lost device, a mis-sent e-mail \| [PLACEHOLDER — reporting channel] \|… |
+| 74 | [VERIFY whether a DSN is configured in production] | Error tracking (Sentry) \| Optional per DEPLOY-LARAVEL.md §2; [VERIFY whether a DSN is configured in production… |
+| 81 | [PLACEHOLDER — phone/chat] | 1. Whoever notices: report to the technical lead **immediately** by [PLACEHOLDER — phone/chat]. Do not investi… |
+| 84 | [VERIFY the exact trigger] | 4. If **any** personal data may have been exposed, altered or lost: inform the DPO now, not after containment.… |
+| 108 | [PLACEHOLDER — e.g. a shared document outside the OCI tenancy] | Keep it in a place that survives the incident: [PLACEHOLDER — e.g. a shared document outside the OCI tenancy].… |
+| 118 | [VERIFY `SESSION_DRIVER` in the live `.env`] | Production uses the **file** session driver [VERIFY `SESSION_DRIVER` in the live `.env`]: |
+| 137 | [VERIFY — confirm `active` is re-checked per request, otherwise also run §7.1] | 1. Control → Users → open the user → untick **Active** → Save (`PUT /control/users/{id}`, audited as `user.upd… |
+| 147 | [VERIFY the rule set] | - **Confirm the origin still only accepts Cloudflare**: the OCI security list / NSG must allow HTTPS only from… |
+| 155 | [PLACEHOLDER — engineering script] | `APP_KEY` \| App `.env` / Coolify env \| Generate a new key **only** with a re-encryption plan: decrypt `users.m… |
+| 179 | [VERIFY log availability] | 2. Note: **statistics exports and the audit-log export are not audited** — check web-server / Cloudflare acces… |
+| 201 | [VERIFY plan retention] | **Cloudflare** \| Export security events / analytics for the window [VERIFY plan retention]; note any rule chan… |
+| 202 | [VERIFY enabled] | **OCI Audit** \| Export the tenancy audit events for the window (console / API changes, key creation) [VERIFY e… |
+| 203 | [VERIFY availability] | **E-mail** \| Preserve the relay provider's send logs for the window [VERIFY availability]; preserve affected m… |
+| 214 | [VERIFY throughout] | ### 9.1 Who must be told, and when [VERIFY throughout] |
+| 218 | [PLACEHOLDER — URL / reference number procedure] | **Competent authority — SDAIA** (Saudi Data & AI Authority, the personal-data regulator) \| A personal-data bre… |
+| 219 | [PLACEHOLDER] | **Affected data subjects** (patients, staff) \| Where the breach may cause harm to the data subject or conflict… |
+| 220 | [VERIFY applicability, thresholds and channels — e.g. MoH incident reporting, CHI/NPHIES obligations, accreditation body requirements] | **Ministry of Health** and/or the **Council of Health Insurance** and any health-sector regulator or accredito… |
+| 220 | [VERIFY] | **Ministry of Health** and/or the **Council of Health Insurance** and any health-sector regulator or accredito… |
+| 220 | [PLACEHOLDER] | **Ministry of Health** and/or the **Council of Health Insurance** and any health-sector regulator or accredito… |
+| 221 | [VERIFY scope and reporting duty] | **National Cybersecurity Authority (NCA)** or sector CERT \| Cybersecurity incidents where the hospital is with… |
+| 221 | [VERIFY] | **National Cybersecurity Authority (NCA)** or sector CERT \| Cybersecurity incidents where the hospital is with… |
+| 221 | [PLACEHOLDER] | **National Cybersecurity Authority (NCA)** or sector CERT \| Cybersecurity incidents where the hospital is with… |
+| 222 | [PLACEHOLDER] | **Processors** (OCI, Cloudflare, SMTP relay, GitHub) \| When their service is involved or their cooperation is … |
+| 223 | [VERIFY] | **Cyber-insurance / legal counsel** \| Per policy [VERIFY] \| Per policy \| [PLACEHOLDER] \| Executive sponsor |
+| 223 | [PLACEHOLDER] | **Cyber-insurance / legal counsel** \| Per policy [VERIFY] \| Per policy \| [PLACEHOLDER] \| Executive sponsor |
+| 252 | [PLACEHOLDER] | Use the authority's own form where one exists [PLACEHOLDER]; this template ensures the content is ready. Headi… |
+| 259 | [PLACEHOLDER legal name, registration, address] | Controller: [PLACEHOLDER legal name, registration, address] |
+| 260 | [PLACEHOLDER name, e-mail, phone] | DPO: [PLACEHOLDER name, e-mail, phone] |
+| 301 | [PLACEHOLDER — DPO contact, hours, language options] | للتواصل / How to contact us: [PLACEHOLDER — DPO contact, hours, language options] |
+| 304 | [PLACEHOLDER] | Clinical sensitivity: where diagnoses, TB status, resuscitation status or a death outcome were exposed, the cl… |
+| 312 | [PLACEHOLDER] | Media / public \| Only with executive sponsor + legal approval \| Communications \| Holding statement [PLACEHOLDE… |
+| 322 | [PLACEHOLDER — clinical owner to define] | - The unit's paper census / whiteboard procedure [PLACEHOLDER — clinical owner to define]; the printed handove… |
+| 397 | [PLACEHOLDER] | 1 \| \| \| [PLACEHOLDER] \| [PLACEHOLDER] \| \| Open \| |
+| 397 | [PLACEHOLDER] | 1 \| \| \| [PLACEHOLDER] \| [PLACEHOLDER] \| \| Open \| |
+| 399 | [PLACEHOLDER — meeting] | Rules: every action has one owner and one date; "verified" means someone other than the owner checked it works… |
+| 407 | [PLACEHOLDER — Q4 2026] | [PLACEHOLDER — Q4 2026] \| **PHI exfiltration by a compromised admin**: a burst of `login.failed` then `login.s… |
+| 408 | [PLACEHOLDER — Q1 2027] | [PLACEHOLDER — Q1 2027] \| **Ransomware / host loss**: the instance is encrypted; latest manual dump is nine da… |
+| 409 | [PLACEHOLDER — Q2 2027] | [PLACEHOLDER — Q2 2027] \| **Audit-chain break at 02:30**: `audit.integrity_failure` fires; cause unknown \| Tec… |
+| 410 | [PLACEHOLDER — Q3 2027] | [PLACEHOLDER — Q3 2027] \| **Auth bypass report**: a staff member reports seeing another consultant's inbox \| F… |
+| 422 | [PLACEHOLDER] | Incident lead \| [PLACEHOLDER] \| \| \| |
+| 423 | [PLACEHOLDER] | Technical lead \| [PLACEHOLDER] \| \| \| |
+| 424 | [PLACEHOLDER] | DPO / legal \| [PLACEHOLDER] \| \| \| |
+| 425 | [PLACEHOLDER] | Communications \| [PLACEHOLDER] \| \| \| |
+| 426 | [PLACEHOLDER] | Clinical owner \| [PLACEHOLDER] \| \| \| |
+| 427 | [PLACEHOLDER] | Executive sponsor \| [PLACEHOLDER] \| \| \| |
+| 428 | [PLACEHOLDER — tenancy, support tier] | OCI support \| [PLACEHOLDER — tenancy, support tier] \| \| \| |
+| 429 | [PLACEHOLDER — plan, account] | Cloudflare support \| [PLACEHOLDER — plan, account] \| \| \| |
+| 430 | [PLACEHOLDER] | SMTP relay support \| [PLACEHOLDER] \| \| \| |
+| 431 | [PLACEHOLDER] | Competent authority (SDAIA) breach portal \| [PLACEHOLDER] \| \| \| |
+| 432 | [PLACEHOLDER] | Sector regulator(s) \| [PLACEHOLDER] \| \| \| |
+| 460 | [PLACEHOLDER] | 2026-09-03 \| 0.1 \| Initial draft \| [PLACEHOLDER] |
 
-## `PRIVACY-NOTICE.ar.md` — 24 items
+## `PRIVACY-NOTICE.ar.md` — 21 items
 
 | Line | Marker | Context |
 |---:|---|---|
@@ -503,10 +484,8 @@ Every bracketed marker below must be resolved by the hospital's legal / data-pro
 | 14 | [تحقّق …] | > العلامات الموضوعة بين قوسين مربعين — `[تحقّق من رقم المادة]`، `[تحقّق …]`، `[يتطلب تأكيداً قانونياً]`، `[… —… |
 | 14 | [يتطلب تأكيداً قانونياً] | > العلامات الموضوعة بين قوسين مربعين — `[تحقّق من رقم المادة]`، `[تحقّق …]`، `[يتطلب تأكيداً قانونياً]`، `[… —… |
 | 26 | [تحقّق من المرجع — المرسوم الملكي رقم م/19 لعام 1443هـ وتعديلاته] | لا يسجّل المرضى الدخول إلى المنصة ولا يستخدمونها مباشرة. وقد كُتب هذا الإشعار لك لأن بياناتك تُعالج فيها، ولأن… |
-| 62 | [تحقّق من رقم المادة] | **الأساس النظامي:** يجيز النظام معالجة البيانات الصحية دون الحاجة إلى موافقتك متى كانت المعالجة تُجرى من جهة ت… |
-| 62 | [تحقّق من رقم المادة] | **الأساس النظامي:** يجيز النظام معالجة البيانات الصحية دون الحاجة إلى موافقتك متى كانت المعالجة تُجرى من جهة ت… |
-| 62 | [يتطلب تأكيداً قانونياً] | **الأساس النظامي:** يجيز النظام معالجة البيانات الصحية دون الحاجة إلى موافقتك متى كانت المعالجة تُجرى من جهة ت… |
-| 62 | [يتطلب تأكيداً قانونياً] | **الأساس النظامي:** يجيز النظام معالجة البيانات الصحية دون الحاجة إلى موافقتك متى كانت المعالجة تُجرى من جهة ت… |
+| 62 | [يتطلب تأكيداً قانونياً] | **الأساس النظامي:** يجيز نظام حماية البيانات الشخصية معالجة البيانات الصحية دون موافقة منفصلة في حالات محدودة … |
+| 62 | [يتطلب تأكيداً قانونياً] | **الأساس النظامي:** يجيز نظام حماية البيانات الشخصية معالجة البيانات الصحية دون موافقة منفصلة في حالات محدودة … |
 | 69 | [يتطلب تأكيداً قانونياً] | - الجهات العامة — كوزارة الصحة أو جهة تنظيمية أو المحكمة — وذلك فقط حين يوجب النظام الإفصاح أو يجيزه [يتطلب تأ… |
 | 80 | [يتطلب تأكيداً قانونياً — التوطين التعاقدي] | كلاودفلير (Cloudflare) \| يقع أمام الموقع لصدّ الهجمات وتوفير الاتصال الآمن (TLS)، ويرى حركة البيانات لحظياً عن… |
 | 84 | [تحقّق من رقم المادة] | **نقل البيانات خارج المملكة:** لا ننقل بيانات المرضى خارج المملكة لتخزينها أو معالجتها. ومقدّم الخدمة الوحيد خ… |
@@ -517,14 +496,13 @@ Every bracketed marker below must be resolved by the hospital's legal / data-pro
 | 113 | [تحقّق من رقم المادة] | يمنحك النظام حقوقاً على بياناتك الشخصية. ومع مراعاة الشروط والاستثناءات الواردة فيه [تحقّق من رقم المادة]، يحق… |
 | 118 | [يتطلب تأكيداً قانونياً] | - طلب إتلاف بياناتك متى انتفت الحاجة إليها للغرض الذي جُمعت من أجله — مع ملاحظة أن السجلات السريرية يجب عادةً … |
 | 119 | [يتطلب تأكيداً قانونياً] | - سحب الموافقة متى كانت الموافقة هي الأساس النظامي (ولا ينطبق ذلك على الغرض السريري الأساسي الموضح أعلاه) [يتط… |
-| 122 | [تحقّق من المدة] | **كيفية ممارسة حقوقك:** تتولى إدارة السجلات الطبية / إدارة المعلومات الصحية في المستشفى معالجة الطلبات، فهي ال… |
 | 122 | [تحقّق] | **كيفية ممارسة حقوقك:** تتولى إدارة السجلات الطبية / إدارة المعلومات الصحية في المستشفى معالجة الطلبات، فهي ال… |
 | 122 | [يتطلب تأكيداً قانونياً] | **كيفية ممارسة حقوقك:** تتولى إدارة السجلات الطبية / إدارة المعلومات الصحية في المستشفى معالجة الطلبات، فهي ال… |
 | 126 | [تحقّق — تأكيد الجهة المختصة الحالية وقناة الشكاوى] | إذا لم تكن راضياً عن طريقة تعاملنا مع بياناتك أو طلبك، فيرجى التواصل أولاً مع مسؤول حماية البيانات لدينا (بيان… |
 | 144 | [تحقّق من رقم المادة] | 1 \| التحقق من مرجع النظام ومن كل إشارة `[تحقّق من رقم المادة]` (أساس معالجة البيانات الحساسة لجهات تقديم الخدم… |
 | 150 | [يُستكمل] | 7 \| استكمال كل `[يُستكمل]`: الاسم القانوني لجهة التحكم وعنوانها وترخيصها، وبيانات مسؤول حماية البيانات، وبيانا… |
 
-## `PRIVACY-NOTICE.en.md` — 24 items
+## `PRIVACY-NOTICE.en.md` — 21 items
 
 | Line | Marker | Context |
 |---:|---|---|
@@ -532,10 +510,8 @@ Every bracketed marker below must be resolved by the hospital's legal / data-pro
 | 14 | [VERIFY …] | > Square-bracketed markers — `[VERIFY ARTICLE]`, `[VERIFY …]`, `[NEEDS LEGAL CONFIRMATION]`, `[… — PLACEHOLDER… |
 | 14 | [NEEDS LEGAL CONFIRMATION] | > Square-bracketed markers — `[VERIFY ARTICLE]`, `[VERIFY …]`, `[NEEDS LEGAL CONFIRMATION]`, `[… — PLACEHOLDER… |
 | 24 | [VERIFY CITATION — Royal Decree M/19 of 1443H, as amended] | Patients do not log in to the hub and do not use it directly. This notice is written for you because informati… |
-| 60 | [VERIFY ARTICLE] | **Legal basis.** Under the PDPL, health data may be processed without your consent where the processing is car… |
-| 60 | [VERIFY ARTICLE] | **Legal basis.** Under the PDPL, health data may be processed without your consent where the processing is car… |
-| 60 | [NEEDS LEGAL CONFIRMATION] | **Legal basis.** Under the PDPL, health data may be processed without your consent where the processing is car… |
-| 60 | [NEEDS LEGAL CONFIRMATION] | **Legal basis.** Under the PDPL, health data may be processed without your consent where the processing is car… |
+| 60 | [NEEDS LEGAL CONFIRMATION] | **Legal basis.** The PDPL allows health data to be processed without separate consent only in limited situatio… |
+| 60 | [NEEDS LEGAL CONFIRMATION] | **Legal basis.** The PDPL allows health data to be processed without separate consent only in limited situatio… |
 | 67 | [NEEDS LEGAL CONFIRMATION] | - Public authorities — such as the Ministry of Health, a regulator or a court — only where the law requires or… |
 | 78 | [NEEDS LEGAL CONFIRMATION — contractual localisation] | Cloudflare \| Sits in front of the website to block attacks and to provide the secure (TLS) connection. It sees… |
 | 82 | [VERIFY ARTICLE] | **Transfers outside the Kingdom.** We do not transfer your patient data outside the Kingdom to store or proces… |
@@ -546,7 +522,6 @@ Every bracketed marker below must be resolved by the hospital's legal / data-pro
 | 111 | [VERIFY ARTICLE] | The PDPL gives you rights over your personal data. Subject to the conditions and exceptions in the law [VERIFY… |
 | 116 | [NEEDS LEGAL CONFIRMATION] | - ask for your data to be destroyed when it is no longer needed for the purpose it was collected for — noting … |
 | 117 | [NEEDS LEGAL CONFIRMATION] | - withdraw consent where consent is the legal basis (this does not apply to the core clinical purpose describe… |
-| 120 | [VERIFY PERIOD] | **How to exercise them.** Requests are handled by the hospital’s Medical Records / Health Information Manageme… |
 | 120 | [VERIFY] | **How to exercise them.** Requests are handled by the hospital’s Medical Records / Health Information Manageme… |
 | 120 | [NEEDS LEGAL CONFIRMATION] | **How to exercise them.** Requests are handled by the hospital’s Medical Records / Health Information Manageme… |
 | 124 | [VERIFY — confirm the current competent authority and its complaint channel] | If you are unhappy with how we handle your data or your request, please contact our Data Protection Officer fi… |
