@@ -226,7 +226,12 @@ class BackupVerify extends Command
         // A fresh heartbeat with failures is the dangerous case: the shipper is alive, so an
         // age-only check would call it healthy while binary logs quietly never reach the bucket.
         if ($failedCount > 0) {
-            $names = implode(', ', array_map('strval', array_slice($failed, 0, 5)));
+            // Defensive: our shipper writes plain names, but a nested value must not turn the
+            // warning into an ErrorException that aborts the command after the dump check.
+            $names = implode(', ', array_map(
+                fn ($v) => is_scalar($v) ? (string) $v : (json_encode($v) ?: '?'),
+                array_slice($failed, 0, 5),
+            ));
 
             return [
                 'reason' => 'binlog_failed',

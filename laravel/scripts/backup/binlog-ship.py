@@ -775,6 +775,9 @@ def ship_one(cfg, client, state, name, size, now, workdir):
             if verdict is False:
                 raise BackupError(f"refusing to overwrite {key}: an object is already there and its "
                                   f"ETag {existing} does not match this file's MD5 — investigate before retrying")
+            if verdict is None:
+                sys.stderr.write(f"note: {key} already exists but its ETag is not MD5-shaped, so the "
+                                 "overwrite guard cannot compare content; overwriting with this run's file\n")
         elif status != 404:
             sys.stderr.write(f"note: HEAD {key} returned HTTP {status}; continuing to the upload\n")
 

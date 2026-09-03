@@ -485,7 +485,7 @@ Expected: `… OK shipped=2 files=binlog.000002,binlog.000003 bytes=… active=b
 
 ```cron
 # DMC hourly encrypted off-box MySQL binary-log shipping — point-in-time recovery.
-# docs/BACKUP-AND-RESTORE.md §10. Host time (UTC on this box). Minute 20 keeps it clear of the
+# docs/BACKUP-AND-RESTORE.md §10. Host time (UTC on this box). Minute 40 keeps it clear of the
 # 02:15 nightly dump and of the :00 audit shipping.
 40 * * * * root /usr/bin/python3 /opt/dmc/backup/binlog-ship.py >>/var/log/dmc-binlog-ship.cron.log 2>&1
 ```
@@ -495,8 +495,11 @@ sudo chmod 644 /etc/cron.d/dmc-binlog-ship
 ```
 
 The script takes its own exclusive lock (separate from the nightly backup's), so a long run can
-never overlap the next hour. Every container call runs under a timeout, so a wedged docker daemon
-ends the run instead of holding the lock. Exit codes: `0` success, `1` failure (one clear
+never overlap the next hour. The MySQL calls and every child wait run under a timeout, so a wedged
+docker daemon usually ends the run instead of holding the lock; the one unbounded step is the
+streaming read of a binlog out of the container (a `cat` that hangs producing no bytes would hold
+the lock), which is mitigated rather than prevented: each later hourly run exits 1 on the held lock,
+and `backup:verify` raises the stale-heartbeat alert within its window. Exit codes: `0` success, `1` failure (one clear
 `FAIL step=…` line on stderr and in the log), `2` configuration error.
 
 **Disk sizing for `/var/backups/dmc`.** The shipper encrypts one binary log at a time into a work
@@ -630,7 +633,8 @@ for OBJ in \
   db-backups/dmc_demo/binlogs/2026/09/binlog.000002-2026-09-03T034007Z.gz.enc \
   db-backups/dmc_demo/binlogs/2026/09/binlog.000003-2026-09-03T044007Z.gz.enc \
   db-backups/dmc_demo/binlogs/2026/09/binlog.000004-2026-09-03T054007Z.gz.enc ; do
-  N=$(basename "$OBJ" .gz.enc); N=${N%-*}          # binlog.000002
+  # strip exactly the "-YYYY-MM-DDTHHMMSSZ" ship stamp: `${N%-*}` would only remove "-03T034007Z"
+  N=$(basename "$OBJ" .gz.enc); N=${N%-????-??-??T??????Z}     # binlog.000002
   python3 /opt/dmc/backup/db-backup.py --download "$OBJ" "$W/$N.gz.enc"
   openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass "file:$KEYFILE" -in "$W/$N.gz.enc" \
     | gunzip -c > "$W/$N"
