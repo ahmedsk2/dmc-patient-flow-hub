@@ -19,12 +19,13 @@ name: Legacy CI
 # legacy behaviour, but it DOES fall outside every other entry above, so it was waking this job and
 # producing a misleading red run (observed 2026-07-18). Note the list is filename-exact — a NEW
 # top-level file (say a root CHANGELOG.md) would still trip it until added here.
+#
+# 2026-09-03 (owner decision): the legacy app is retired for product work and its E2E job has been
+# red on every automatic run since 2026-07-08 (the five login checks fail against the stale root
+# snapshot). The pipeline is now MANUAL-ONLY — run it from the Actions tab (workflow_dispatch) when
+# you deliberately touch the legacy files or the `renovation` branch. It is not a required check.
 on:
-  push:
-    branches: [ main, master, renovation ]
-    paths-ignore: [ 'laravel/**', '.github/workflows/laravel-ci.yml', 'docs/**', '**.md', '.gitignore' ]
-  pull_request:
-    paths-ignore: [ 'laravel/**', '.github/workflows/laravel-ci.yml', 'docs/**', '**.md', '.gitignore' ]
+  workflow_dispatch:
 
 jobs:
   lint-and-test:

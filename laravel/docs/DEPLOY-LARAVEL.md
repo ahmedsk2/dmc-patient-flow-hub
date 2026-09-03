@@ -181,10 +181,26 @@ Restoring the pre-deploy dump is the only operation that returns the data to a k
 
 | Drill | Where | Last done | Measured time |
 |---|---|---|---|
-| App-only rollback via Coolify **Rollback**, then `smoke.sh` | production (safe — no data change) | ☐ not yet | — |
-| Restore a current-size dump into a **scratch** database, then `audit:verify` against it | scratch DB, never `dmc_demo` | ☐ not yet | — |
+| App-only rollback via Coolify **Rollback**, then `smoke.sh` | production (safe — no data change) | ☑ 2026-09-03 18:10 UTC (Claude Code, owner-approved) | **50 s** from queued to `finished` for the swap to the previous image `3fbbd73` (no build); smoke 14/14 against that commit's manifest; roll-forward to `main` HEAD by a normal deploy: **121 s** (build + swap), smoke 15/15, audit chain intact, `/health` ok. Total rehearsal ≈ 4 min including checks. Side effect observed: the previous image predates the `__Host-` cookie, so users were signed out for the duration and signed back in on roll-forward (sessions live in the database). |
+| Restore a current-size dump into a **scratch** database, then `audit:verify` against it | scratch DB, never `dmc_demo` | ☑ 2026-09-03 03:07 and 18:08 UTC (`db-restore-drill.sh`, `COMPARE_LIVE=1`) | **7–8 s** end to end for a 20 MB dump (download 1 s, restore 6 s); counts matched live. `audit:verify` against the scratch DB is still ☐ — the drill drops the scratch database on exit; add a keep-scratch option first. |
 
 Fill the table in after each drill. Do the restore drill on a scratch database — the restore path in §4.2 is exercised for real only during an incident.
+
+**Rollback by API (what the 2026-09-03 rehearsal used).** The v4.1.2 REST API has no rollback endpoint; the UI's Rollback button calls Coolify's own deployment helper with `rollback: true`, which starts the already-built image tagged with that commit and skips the build. Run it inside the `coolify` container from a file (inline `--execute` PHP breaks on ssh + docker quoting):
+
+```php
+<?php // /tmp/rb.php inside the coolify container; then: docker exec coolify php /tmp/rb.php
+require "/var/www/html/vendor/autoload.php";
+$app = require "/var/www/html/bootstrap/app.php";
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$application = App\Models\Application::where("uuid", "v5d8vrnp418stpcwnup3yhta")->firstOrFail();
+$uuid = (string) new Visus\Cuid2\Cuid2(7);
+queue_application_deployment(application: $application, deployment_uuid: $uuid,
+    commit: "<previous full sha>", force_rebuild: false, is_api: true, rollback: true);
+echo $uuid, "\n";   // poll GET /api/v1/deployments/<uuid> until "finished"
+```
+
+`docker images | grep v5d8vrnp418stpcwnup3yhta` lists the SHAs still available (Coolify keeps roughly the last eight). Remove the file afterwards with `docker exec -u root coolify rm /tmp/rb.php`.
 
 ---
 
