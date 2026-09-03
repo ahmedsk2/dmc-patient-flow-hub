@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Casts\EncryptedNarrative;
+use AppCastsncryptedNarrative;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -14,7 +16,7 @@ class Handover extends Model
     // APP_KEY, like users.mfa_secret), plaintext through the model. It is never filtered or
     // sorted by value, so nothing queries it. Any raw read (DB::table / joins) bypasses this cast
     // and must Crypt::decryptString() itself. See docs/ENCRYPTION-AT-REST.md.
-    protected $casts = ['checkpoints' => 'array', 'body' => 'encrypted'];
+    protected $casts = ['checkpoints' => 'array', 'body' => EncryptedNarrative::class];
 
     public function admission(): BelongsTo { return $this->belongsTo(Admission::class); }
     public function updatedBy(): BelongsTo { return $this->belongsTo(User::class, 'updated_by'); }

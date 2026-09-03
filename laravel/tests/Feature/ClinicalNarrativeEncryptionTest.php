@@ -336,13 +336,25 @@ class ClinicalNarrativeEncryptionTest extends TestCase
         $this->assertSame(600, $encrypted);
     }
 
-    public function test_a_plaintext_row_is_unreadable_through_the_model_until_migrated(): void
+    public function test_a_legacy_plaintext_row_is_served_as_is_and_encrypted_on_its_next_save(): void
     {
-        // documents the hard dependency: deploy MUST run the migration — a stray plaintext row is a
-        // DecryptException, never silently served as if it were ciphertext
+        // Deploy-window safety (App\Casts\EncryptedNarrative): the previous container may write a
+        // plaintext row after the migration has passed it, or a pre-encryption dump may be restored.
+        // One stray row must never take the whole handover sheet down — it is served as-is, and the
+        // next save through the model brings it up to ciphertext.
         $seed = $this->seedPlaintext();
-        $this->expectException(DecryptException::class);
-        Handover::find(array_key_first($seed['handovers']))->body;
+        $id = array_key_first($seed['handovers']);
+        $plain = $seed['handovers'][$id];
+
+        $h = Handover::find($id);
+        $this->assertSame($plain, $h->body, 'legacy plaintext must be served, not thrown on');
+
+        $h->body = $h->body;
+        $h->save();
+
+        $raw = $this->raw('handovers', $id, 'body');
+        $this->assertNotSame($plain, $raw, 'still plaintext at rest after a save through the model');
+        $this->assertSame($plain, Crypt::decryptString($raw));
     }
 
     /** Raw bytes of every seeded narrative + the cast-written one, for byte-equality across runs. */

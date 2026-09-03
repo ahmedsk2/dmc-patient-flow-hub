@@ -206,3 +206,16 @@ it that way, and take the pre-migrate backup as usual.
 - **Migration:** encrypts in 500-row chunks with one short transaction each; at current volumes
   it completes in seconds and holds no long locks. It is safe to run during the normal deploy
   window.
+
+## 8. Why the cast tolerates plaintext on read
+
+The four columns use `App\Casts\EncryptedNarrative`, not Laravel's stock `encrypted` cast. Writes are
+identical (`Crypt::encryptString`); the difference is the read path. The stock cast throws
+`DecryptException` on any value that is not ciphertext, so one unmigrated row — a write from the
+previous container during the deploy window, a raw insert, a restored pre-encryption dump — would
+turn into a 500 on the handover sheet for every patient. The tolerant cast serves such a value as-is,
+writes one `warning` log line naming table / id / column, and encrypts it on the row's next save.
+
+Operator consequence: a **wrong `APP_KEY`** no longer errors — narratives render as base64 ciphertext
+and the log fills with `EncryptedNarrative:` warnings. Treat that log line as the alarm (§3). A clean
+production log after a deploy means every row is ciphertext under the current key.

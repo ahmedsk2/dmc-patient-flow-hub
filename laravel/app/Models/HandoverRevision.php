@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Casts\EncryptedNarrative;
+use AppCastsncryptedNarrative;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -12,7 +14,7 @@ class HandoverRevision extends Model
 
     protected $guarded = ['id'];
     // DATA-06: `body` encrypted at rest, same as Handover::$casts — see docs/ENCRYPTION-AT-REST.md.
-    protected $casts = ['created_at' => 'datetime', 'checkpoints' => 'array', 'body' => 'encrypted'];
+    protected $casts = ['created_at' => 'datetime', 'checkpoints' => 'array', 'body' => EncryptedNarrative::class];
 
     public function admission(): BelongsTo { return $this->belongsTo(Admission::class); }
     public function author(): BelongsTo { return $this->belongsTo(User::class, 'author_id'); }

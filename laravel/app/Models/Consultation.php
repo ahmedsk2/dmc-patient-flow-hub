@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Casts\EncryptedNarrative;
+use AppCastsncryptedNarrative;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -49,7 +51,7 @@ class Consultation extends Model
             // plaintext through the model. Never filtered/sorted/exported by value. A raw read
             // (DB::table) bypasses this cast and must Crypt::decryptString() itself.
             // See docs/ENCRYPTION-AT-REST.md.
-            'response_note' => 'encrypted',
+            'response_note' => EncryptedNarrative::class,
         ];
     }
 

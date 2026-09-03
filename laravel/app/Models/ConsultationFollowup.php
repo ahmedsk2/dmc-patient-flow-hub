@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Casts\EncryptedNarrative;
+use AppCastsncryptedNarrative;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -29,7 +31,7 @@ class ConsultationFollowup extends Model
             // through the model. The handover sheet's latest-follow-up join reads this column RAW
             // (ConsultationsController::handover) and decrypts it explicitly — keep the two in step.
             // See docs/ENCRYPTION-AT-REST.md.
-            'note' => 'encrypted',
+            'note' => EncryptedNarrative::class,
         ];
     }
 
