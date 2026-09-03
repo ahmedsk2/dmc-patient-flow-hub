@@ -18,4 +18,18 @@ return [
     */
     'csp_mode' => env('CSP_MODE', 'enforce'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Vulnerability-disclosure contact (RFC 9116)
+    |--------------------------------------------------------------------------
+    |
+    | 2026-09 prod-readiness (OPS-12): the `Contact:` URI served at /.well-known/security.txt
+    | (SecurityTxtController). Must be a URI — `mailto:`, `https:` or `tel:` — never a bare
+    | address. The default is a PLACEHOLDER on the app's own domain: set SECURITY_CONTACT to the
+    | hospital's monitored security inbox before go-live, and keep SECURITY.md (repo root +
+    | laravel/) in step with it.
+    |
+    */
+    'contact' => env('SECURITY_CONTACT', 'mailto:security@dmc-im.com'),
+
 ];
