@@ -30,6 +30,6 @@ return [
     | laravel/) in step with it.
     |
     */
-    'contact' => env('SECURITY_CONTACT', 'mailto:security@dmc-im.com'),
+    'contact' => env('SECURITY_CONTACT', 'mailto:info@dmc-im.com'),
 
 ];
