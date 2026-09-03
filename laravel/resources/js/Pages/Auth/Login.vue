@@ -83,7 +83,10 @@ const flash = computed(() => usePage().props.flash);
                         <Link href="/forgot-username" class="font-semibold text-ink-500 hover:text-ink-700">Forgot username?</Link>
                     </div>
                 </div>
-                <p class="mt-6 text-center text-xs text-ink-400">DMC Internal Medicine · secured access</p>
+                <p class="mt-6 text-center text-xs text-ink-400">
+                    DMC Internal Medicine · secured access ·
+                    <Link href="/privacy" class="font-semibold text-ink-500 hover:text-ink-700">Privacy · <span lang="ar" dir="rtl">الخصوصية</span></Link>
+                </p>
             </div>
         </div>
     </div>

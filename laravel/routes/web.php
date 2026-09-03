@@ -14,6 +14,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DataQualityController;
 use App\Http\Controllers\HandoverController;
 use App\Http\Controllers\ImportController;
+use App\Http\Controllers\LegalController;
 use App\Http\Controllers\MfaController;
 use App\Http\Controllers\OrphanDiagnosesController;
 use App\Http\Controllers\PatientActionController;
@@ -78,6 +79,11 @@ Route::middleware('guest')->group(function () {
 // bootstrap/app.php; throttled hard since it is an open write endpoint (log-only, no storage).
 Route::post('/csp-report', [\App\Http\Controllers\CspReportController::class, 'store'])
     ->middleware('throttle:30,1')->name('csp.report');
+
+// Public PDPL privacy notice (EN + AR). Deliberately outside BOTH the guest and auth groups: a
+// patient, a visitor and a signed-in staff member must all reach it (the guest middleware would
+// bounce staff to the dashboard). Carries no PHI; the text lives in resources/lang/{en,ar}/privacy.php.
+Route::get('/privacy', [LegalController::class, 'privacy'])->name('legal.privacy');
 
 // MFA login challenge — reached after password but BEFORE the session is authenticated
 // (identity held in the session, not the auth guard).
