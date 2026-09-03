@@ -89,6 +89,16 @@ class SecurityHeadersTest extends TestCase
         $this->assertNull($response->headers->get('Strict-Transport-Security'), 'test requests are http, never secure()');
     }
 
+    public function test_hsts_over_https_is_one_year_with_subdomains_and_preload(): void
+    {
+        // An absolute https URL makes the test request secure() — the branch that emits HSTS.
+        $response = $this->actingAs($this->admin())->get('https://localhost/');
+
+        $response->assertOk();
+        // 2026-09 prod-readiness: `preload` added — the exact value the HSTS preload list requires.
+        $response->assertHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+    }
+
     public function test_report_mode_sends_report_only_header_and_omits_the_enforcing_one(): void
     {
         config(['security.csp_mode' => 'report']);
