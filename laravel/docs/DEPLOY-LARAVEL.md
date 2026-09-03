@@ -230,6 +230,14 @@ Nothing inside the container runs the Laravel scheduler. It is driven by a **hos
 
 Because the script looks the container up **by label**, it survives every redeploy. It does **not** survive the application being deleted and recreated in Coolify (new uuid) — update the script if that ever happens. If the scheduler is ever moved to a Coolify *Scheduled Task*, remove this cron so tasks do not run twice.
 
+**All host root crons** (these run on the host, outside every container — nothing in Coolify shows them):
+
+| File / entry | When | What | Runbook |
+|---|---|---|---|
+| `* * * * * /usr/local/bin/dmc-schedule.sh` | every minute | drives the Laravel scheduler (the table below) | §6 |
+| `/etc/cron.d/dmc-db-backup` | 02:15 daily | `db-backup.py` — nightly encrypted off-box `mysqldump` | BACKUP-AND-RESTORE.md §2.5 |
+| `/etc/cron.d/dmc-binlog-ship` | minute 20 of every hour | `binlog-ship.py` — encrypted off-box MySQL binary logs; this is what makes point-in-time recovery possible and takes the RPO from 24 h to ≤ 1 h. **Not installed yet** — the operator installs it. | BACKUP-AND-RESTORE.md §10.2 |
+
 **Deploy-on-green (prepared, opt-in).** Deploys are operator-triggered today (Auto Deploy is off on purpose). `scripts/deploy-on-green.sh` is a host-side alternative that deploys `main` only when the Laravel CI run for that exact commit is green and the commit is not already the live image, then runs the smoke test and reports a red smoke as the rollback trigger. To enable: place a Coolify API token in a root-only file (`/root/.coolify-deploy-token`, mode 600 — never in the repo), copy the script to `/usr/local/bin/`, and add a root cron such as `*/5 * * * * /usr/local/bin/deploy-on-green.sh`. Because `main` only accepts green pull requests, "green" here is redundant protection, not the only gate. The nightly database backup is scheduled separately in `/etc/cron.d/dmc-db-backup` (see BACKUP-AND-RESTORE.md §2.5).
 
 Scheduled (`routes/console.php`):
