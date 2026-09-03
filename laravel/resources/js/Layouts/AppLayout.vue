@@ -479,6 +479,7 @@ onUnmounted(() => {
                 <div class="rounded-2xl bg-white/5 p-4 text-center">
                     <p class="text-[11px] text-navy-300">Eastern Health Cluster</p>
                     <p lang="ar" dir="rtl" class="text-[11px] font-semibold text-brand-300">تجمع الشرقية الصحي</p>
+                    <Link href="/privacy" class="mt-2 inline-block text-[11px] text-navy-400 transition hover:text-white">Privacy · <span lang="ar" dir="rtl">الخصوصية</span></Link>
                 </div>
             </div>
         </aside>
