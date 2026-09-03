@@ -257,6 +257,45 @@ class RegistrationFlowTest extends TestCase
         $this->assertNull(User::where('username', 'nopending')->first());
     }
 
+    // ---- username rule (2026-09 prod-readiness: parity with Control → Users) ----------------------
+    // Registration accepted any 240-char string as a username while the admin edit path enforced
+    // alpha_dash + max:64 — so a crafted Markdown/URL username could reach the synchronous
+    // username-reminder mail verbatim. Both paths now apply the same rule.
+
+    public function test_store_rejects_usernames_that_are_not_alpha_dash_or_exceed_64_chars(): void
+    {
+        $rejected = [
+            'dr*maryam',                        // *
+            '[click](https://evil.example)',    // [ — a Markdown link
+            'dr maryam',                        // space
+            str_repeat('a', 200),               // 200 chars (was allowed up to 240)
+        ];
+
+        foreach ($rejected as $username) {
+            // Inertia-style store(): a validation failure is a 302 back with the errors flashed to
+            // the session (bootstrap/app.php renders JSON exceptions only under api/*), never a
+            // 422 body — same shape the role/email rejections above are pinned with.
+            $this->from('/register')->post('/register', [
+                'username' => $username, 'full_name' => 'Bad Name', 'email' => 'bad@example.test',
+                'role' => 3, 'password' => 'Password123', 'password_confirmation' => 'Password123',
+            ])->assertStatus(302)->assertRedirect('/register')->assertSessionHasErrors('username');
+        }
+
+        $this->assertSame(0, User::whereIn('username', $rejected)->count(), 'no account may be created from a rejected username');
+    }
+
+    public function test_store_accepts_a_username_with_underscore_hyphen_and_digits(): void
+    {
+        $this->completeEmailAndMfa('maryam@example.test');
+
+        $this->post('/register', [
+            'username' => 'dr_maryam-2', 'full_name' => 'Maryam', 'email' => 'maryam@example.test',
+            'role' => 3, 'password' => 'Password123', 'password_confirmation' => 'Password123',
+        ])->assertRedirect(route('login'))->assertSessionHasNoErrors();
+
+        $this->assertNotNull(User::where('username', 'dr_maryam-2')->first());
+    }
+
     // ---- email-bomb hardening (2026-07-11 adversarial-review follow-up) ---------------------------
     // Switching the target address mid-flow must NOT reset the resend cooldown or the per-row send
     // cap — otherwise the endpoint is a relay for mailing unlimited codes to arbitrary victims.

@@ -70,7 +70,10 @@ class SecurityHeaders
         $response->headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
 
         if ($request->secure()) {
-            $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+            // 2026-09 prod-readiness: `preload` is the exact form the browser HSTS preload list
+            // requires (one year, subdomains, preload). Note it is a one-way door once the domain
+            // is SUBMITTED to the list — every subdomain must serve HTTPS forever after.
+            $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
         }
 
         if ($request->user()) {
