@@ -1,6 +1,6 @@
 # PRODUCTION READINESS — CLOSE-OUT RE-SCORE — DMC Internal Medicine patient-flow hub (laravel/)
 
-**Verdict: NEEDS FIXES (70/100) · emphasis view 76/100 · Critical 0 · High 12 · Medium 17 · Low 5**
+**Verdict: NEEDS FIXES (71/100) · emphasis view 78/100 · Critical 0 · High 10 · Medium 17 · Low 5**
 
 Run 3 of 2026-09-03: a **full fresh audit** of all 16 applicable categories (`--fresh`, 16 sonnet auditors, nothing carried over) against `main` after the engineering close-out (PR #10/#11 deployed as `a4dd4bd`), then **re-audits of five categories** (05, 11, 13, 15 and 08) after the same-evening follow-through PRs #13–#18 merged. Prior: evening re-score 2026-09-03T18:15:53 — NEEDS FIXES (62/100, emphasis 72; Critical 0 · High 14 · Medium 24 · Low 4). Scored mechanically by the same scorer as the earlier runs (category-file weights; zero-scorable categories excluded).
 
@@ -8,10 +8,10 @@ Run 3 of 2026-09-03: a **full fresh audit** of all 16 applicable categories (`--
 
 | Category | Weight | Evening | Now | Δ | Crit / High / Med / Low now |
 |---|--:|--:|--:|--:|:--:|
-| Security & App Hardening | 10 | 94 | 94 | +0 | 0 / 1 / 0 / 0 |
+| Security & App Hardening | 10 | 94 | 100 | +6 | 0 / 0 / 0 / 0 |
+| CI/CD & Release Engineering | 9 | 74 | 82 | +8 | 0 / 2 / 0 / 0 |
 | Data, Backups, DR & Correctness | 9 | 73 | 81 | +8 | 0 / 1 / 3 / 0 |
 | Config, Secrets & Environments | 9 | 76 | 76 | +0 | 0 / 1 / 1 / 1 |
-| CI/CD & Release Engineering | 9 | 74 | 73 | -1 | 0 / 3 / 0 / 0 |
 | Resilience & Fault Tolerance | 9 | 32 | 52 | +20 | 0 / 1 / 2 / 3 |
 | Reliability, SLOs & Error Budgets | 9 | 0 | 0 | +0 | 0 / 0 / 1 / 0 |
 | Testing & Code Quality | 8 | 73 | 100 | +27 | 0 / 0 / 0 / 0 |
@@ -52,7 +52,7 @@ auditor changed is variance, not progress or regression.
   exist yet. The mechanical score is honest but meaningless as a trend until SLIs are defined
   (owner decision).
 
-**Genuine movement since the evening (+8 overall to 70, +4 emphasis to 76; High 14 → 12, Medium 24 → 17, Critical 0 throughout).**
+**Genuine movement since the evening (+8 overall to 70 before waivers, 71 with the two dated waivers; emphasis 76 → 78; High 14 → 12 → 10 waived; Medium 24 → 17; Critical 0 throughout).** The same approval round also set the Coolify stop grace period explicitly to 30 s (RES-12 — verified in Coolify's source that its default was already 30 s, so the drain existed; it is now deliberate) and deployed `main` (`a855973`) so the binlog-heartbeat alert is live in `backup:verify`.
 Testing 73 → 100 (ESLint gate, PHP coverage floor from Clover at 83 % against 86.1 % measured,
 Vitest thresholds), Resilience 32 → 52 (single-flight dashboard cache with re-read after
 lock-wait, per-recipient mail isolation, readable fetch errors in the modals, SMTP timeout),
@@ -80,8 +80,11 @@ object decrypts and parses (25,900 events), hourly cron and logrotate in place. 
 fail → pass (Data 73 → 81); DATA-02 (an off-region copy) stays open and is an OCI-side decision.
 
 **Remaining Highs, sorted by who can close them.**
-- *Owner decision only:* SEC-11 / CICD-11 (a second reviewer on `main` — with one maintainer this is
-  a waiver candidate; CODEOWNERS now names the owner), OPS-02 / OPS-03 (on-call rotation and a
+- *Risk-accepted by the owner on 2026-09-03 (dated waiver in `laravel/.prod-ready/waivers.yml`, expires
+  2026-12-03):* SEC-11 / CICD-11 — a second reviewer on `main` cannot exist with one maintainer;
+  compensating controls listed in the waiver and in EVIDENCE-PACK G17. With the waiver applied the
+  score is 71/100 (emphasis 78), Security 100, CI/CD 82, 10 Highs remaining.
+- *Owner decision only:* OPS-02 / OPS-03 (on-call rotation and a
   paging channel for the audit-chain, backup and brute-force alerts), CICD-08 (automatic
   smoke-gated rollback; the owner chose to keep deploys manual — the drain step, RES-12, is a
   separate two-setting change that does not require auto-deploy and is still open), DATA-02
@@ -98,19 +101,19 @@ long-term registry query really is unbounded by construction even though it is s
 
 ---
 
-PRODUCTION READINESS — DMC Internal Medicine patient-flow hub (laravel/)          Verdict: 🟡 NEEDS FIXES (70/100)
+PRODUCTION READINESS — DMC Internal Medicine patient-flow hub (laravel/)          Verdict: 🟡 NEEDS FIXES (71/100)
 Stack: Laravel 13 · PHP 8.3 · Inertia + Vue 3 · MySQL 8.4 · Coolify/Nixpacks on 1× OCI (me-riyadh-1) · Cloudflare Free · GitHub Actions
-Run:   fresh · 15 categories audited · 3 N/A · 2026-09-03T22:33:46   |   Emphasis view (security · privacy/compliance · data · config · observability): 76/100   |   PARTIAL — see notes
+Run:   fresh · 15 categories audited · 3 N/A · 2026-09-03T22:54:08   |   Emphasis view (security · privacy/compliance · data · config · observability): 78/100   |   PARTIAL — see notes
 
 ## Scorecard
 | Category | W | Score | ● | Crit | High | Med | Low | Pass | N/A | Intake |
 |---|--:|--:|:-:|--:|--:|--:|--:|--:|--:|--:|
-| Security & App Hardening | 10 | 94 | 🟡 | 0 | 1 | 0 | 0 | 11 | 0 | 0 |
+| Security & App Hardening | 10 | 100 | 🟢 | 0 | 0 | 0 | 0 | 11 | 0 | 0 |
 | Reliability, SLOs & Error Budgets | 9 | 0 | 🟡 | 0 | 0 | 1 | 0 | 0 | 2 | 5 |
 | Resilience & Fault Tolerance | 9 | 52 | 🟡 | 0 | 1 | 2 | 3 | 4 | 1 | 2 |
-| CI/CD & Release Engineering | 9 | 73 | 🟡 | 0 | 3 | 0 | 0 | 7 | 1 | 1 |
 | Config, Secrets & Environments | 9 | 76 | 🟡 | 0 | 1 | 1 | 1 | 5 | 2 | 2 |
 | Data, Backups, DR & Correctness | 9 | 81 | 🟡 | 0 | 1 | 3 | 0 | 9 | 1 | 0 |
+| CI/CD & Release Engineering | 9 | 82 | 🟡 | 0 | 2 | 0 | 0 | 7 | 1 | 1 |
 | Observability | 8 | 62 | 🟡 | 0 | 2 | 1 | 0 | 3 | 5 | 0 |
 | Testing & Code Quality | 8 | 100 | 🟢 | 0 | 0 | 0 | 0 | 9 | 2 | 0 |
 | Operational Readiness & Incidents | 7 | 76 | 🟡 | 0 | 2 | 0 | 0 | 7 | 2 | 1 |
@@ -137,12 +140,6 @@ MALFORMED (excluded): test2.json: Expecting value: line 1 column 1 (char 0)
    Fix:    Add a lightweight metrics exporter (e.g. promphp/prometheus_client_php behind a token-gated /metrics route, or the OTel PHP SDK exporting to a collector) with an HTTP-duration histogram middleware (bucketed, not an average), a request counter labeled by route and status (templated, not raw path), and a saturation gauge for the DB connection pool and PHP-FPM worker pool; wire the scrape/export target into the host monitoring stack.
    Auto-fixable: no
 
-🟠 HIGH · [SEC-11] Multi-party authorization & tamper-evident audit on the control plane            confidence: high   (Security & App Hardening)
-   Where:  GitHub branch protection on main (verified via gh api repos/ahmedsk2/dmc-patient-flow-hub/branches/main/protection): required_status_checks (4 jobs) + enforce_admins=true present, but no required_pull_request_reviews block and no repo rulesets exist -- no mandated second-approver count. Deploys are also triggered by the same single operator via Coolify (docs/DEPLOY-LARAVEL.md).
-   Why:    A single compromised or rogue actor (the repo owner GitHub credentials, or a phished/stolen session) can author, merge and deploy arbitrary code straight to a live system holding real PHI with no human second reviewer -- only automated checks (tests/SAST/secrets) stand between a bad merge and production.
-   Fix:    When a second trusted person is available, enable Require a pull request before merging with 1 or more required approving reviews on the main branch protection rule (self-approval does not satisfy this in GitHub). Until then, document this as a deliberate, reviewed risk-acceptance (owner-operated single-person project) in the compliance evidence pack, and consider a partial compensating control such as a scheduled external/second-party code review of high-risk changes (auth, schema, clinical logic).
-   Auto-fixable: no
-
 🟠 HIGH · [CICD-05] Supply-chain provenance: SBOM, signed attestations, pinned actions/images            confidence: high   (CI/CD & Release Engineering)
    Where:  .github/workflows/laravel-ci.yml (every third-party uses: is pinned to a full commit SHA, e.g. lines 61, 63, 139, 216, 238, 262, and the Semgrep image is pinned by digest at line 238, this half is done well; but a fresh grep of both laravel-ci.yml and ci.yml for syft, cyclonedx, cdxgen, spdx, cosign, sigstore, attest-build-provenance and slsa returned zero matches, no SBOM step and no signing or attestation step exists anywhere, unchanged since the last audit)
    Why:    No SBOM is generated per release and no signed provenance or attestation exists, so if a dependency or an upstream action were ever compromised there is no artifact record to detect it against, and no way to answer a PDPL or compliance or incident-response question about exactly what code and dependencies were in a given production release beyond composer.lock and package-lock.json diffing by hand.
@@ -153,12 +150,6 @@ MALFORMED (excluded): test2.json: Expecting value: line 1 column 1 (char 0)
    Where:  laravel/docs/DEPLOY-LARAVEL.md:98-113 (section 3.3: smoke.sh, audit:verify and the scheduler check are all documented as run manually by a human operator after the swap, step 4 is literally a human check by an admin with MFA, not invoked automatically by the deploy); laravel/scripts/deploy-on-green.sh line 70 area (re-read in full: even in this opt-in script, a failed smoke test only logs that the operator should roll back per section 4.1 and exits 2, it never calls the Coolify rollback API itself); the script header states it is NOT installed by default and the operator decides whether to enable it, unchanged since the last audit; Coolify Auto Deploy remains off by owner decision
    Why:    No automated gate exists anywhere in the pipeline that both runs the smoke test and rolls back a bad release; recovery depends entirely on a human noticing a problem, correctly reading the rollback-trigger criteria, and manually running the Coolify UI or API rollback, in a single-environment system holding real PHI a broken release could stay live for however long the deploying operator is unavailable or distracted. This is materially mitigated, not eliminated, by a mandatory detailed RELEASE-CHECKLIST.md, a comprehensive scripts/smoke.sh, and a rollback that has now been rehearsed and measured TWICE (50s app-only swap, plus a second restore drill), which is why this stays graded High rather than the category-default Critical for a true no-smoke or no-rollback scenario.
    Fix:    Wire an automatic post-deploy gate: extend scripts/deploy-on-green.sh final smoke-check branch (or a Coolify post-deploy webhook) so a failing scripts/smoke.sh actually calls the rollback API for the previous SHA instead of only logging, then install it once the operator decides to move off fully manual operator-triggered deploys.
-   Auto-fixable: no
-
-🟠 HIGH · [CICD-11] Privileged release/control-plane actions require multi-party authorization            confidence: high   (CI/CD & Release Engineering)
-   Where:  .github/CODEOWNERS now exists (added PR 14, commit a1a64b6, 2026-09-03) but names only the single maintainer for every path, so it cannot provide a second reviewer; gh api repos/ahmedsk2/dmc-patient-flow-hub/branches/main/protection (re-checked live) still has no required_pull_request_reviews block at all, so CODEOWNERS is not even wired as an enforced gate; gh api repos/ahmedsk2/dmc-patient-flow-hub/environments (re-checked live) still returns 0 environments, no deployment protection rule or required reviewers for the prod deploy trigger; laravel/docs/CI.md:19 still states outright that reviews are not required because it is a single maintainer project
-   Why:    A single actor, including a hijacked or mistaken automated coding session, can author code, merge it to main once CI is green, and separately trigger a production Coolify deploy carrying real PHI, all with no second human required to catch a mistake or a malicious change, including a change to the CI/CD pipeline definition itself. The new CODEOWNERS file documents accountability (who owns what) but does not add a second-party check, since it names only the same single maintainer and branch protection does not require CODEOWNERS review anyway.
-   Fix:    This remains a known, documented trade-off of a genuinely one-person team, not an oversight, so treat the fix as risk-reduction rather than a hard gate: when a second maintainer exists, require their review via required_pull_request_reviews plus a non-self CODEOWNERS entry on the workflows and migration or auth-critical paths; consider a GitHub Environment with a short required wait-timer on the prod deployment trigger (self-review still possible but adds a deliberate pause plus an audit entry); keep using the existing Second person aware field in RELEASE-CHECKLIST.md line 9 as the lightweight compensating control in place today.
    Auto-fixable: no
 
 🟠 HIGH · [RES-12] Correct graceful shutdown / disposability            confidence: high   (Resilience & Fault Tolerance)
@@ -464,4 +455,5 @@ MALFORMED (excluded): test2.json: Expecting value: line 1 column 1 (char 0)
 ❓ [I18N-06] Has the Privacy notice RTL rendering (and any future RTL surface) been verified with an actual rendered screenshot and with pseudo-localized/expanded text, beyond the computed dir/lang assertions in Legal/__tests__/Privacy.spec.js?  (i18n, l10n & Text)
 
 ## Waived (risk-accepted)
-None — no .prod-ready/waivers.yml.
+- [SEC-11] Multi-party authorization & tamper-evident audit on the control plane (Security & App Hardening) — original severity high; owner @ahmedsk2, approved 2026-09-03, expires 2026-12-03 (HANDOFF.md item 5 (remaining Highs)). Reason: Single-maintainer repository: the owner is the only engineer, so a required second reviewer on `main` would block every merge rather than add assurance. Compensating controls in force: four required, admin-enforced CI checks (PHPUnit, Vitest + axe, gitleaks, Semgrep, Pint, ESLint, coverage floors), SHA-pinned actions, CODEOWNERS naming the accountable maintainer, hash-chained audit log on the application side, operator-triggered deploys with a pre-deploy dump and a rehearsed 50-second rollback. Accepted by the owner on 2026-09-03; to be revisited when a second engineer joins or at the next readiness review, whichever is first.
+- [CICD-11] Privileged release/control-plane actions require multi-party authorization (CI/CD & Release Engineering) — original severity high; owner @ahmedsk2, approved 2026-09-03, expires 2026-12-03 (HANDOFF.md item 5 (remaining Highs)). Reason: Same fact as SEC-11: no second human exists to authorise a privileged release, so multi-party authorisation is not achievable today. Compensating controls as above, plus GitHub branch protection rejecting direct pushes (including the owner's own), no force-push, no delete, and Coolify Auto Deploy off (every production deploy is a deliberate, dumped-first operator action). Accepted by the owner on 2026-09-03; revisit when a second engineer joins.

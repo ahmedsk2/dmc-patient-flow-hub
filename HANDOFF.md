@@ -120,10 +120,17 @@
    code (14 corrections), #17 ten ADRs under `laravel/docs/adr/`, #18 the parked item 2(c) — RoPA /
    retention / DPIA reworked to the processor-and-legacy-daily framing, C12/C13 reconciled, OPEN-ITEMS
    regenerated (575 live markers, 30 keyword-final placeholders documented in its banner).
-   **Not yet deployed to production: everything merged after `a4dd4bd`/`9f81bb9`** — the h1 fix, the
-   binlog heartbeat check in `backup:verify`, and the docs; a deploy needs the owner's word.
+   **Deployed as `a855973` at 19:53 UTC (owner-approved, dumped first):** the h1 fix, the binlog
+   heartbeat check (`backup:verify` now prints "Point-in-time recovery: fresh"), and the docs;
+   smoke green, audit chain intact. Same approval round: the Coolify **stop grace period set
+   explicitly to 30 s** (RES-12 — Coolify's default was already 30 s, verified in its source; the
+   PHP-FPM `process_control_timeout` idea is inapplicable because no stop signal reaches FPM under
+   the Nixpacks PID-1 shell; DEPLOY-LARAVEL §10), and the **single-maintainer review gap recorded as
+   a dated waiver** (`laravel/.prod-ready/waivers.yml`, SEC-11 + CICD-11, expires 2026-12-03,
+   EVIDENCE-PACK G17).
    **Run-3 score (full fresh audit of all 16 categories + five re-audits after the merges):
-   NEEDS FIXES 70/100, emphasis 76, 0 Critical / 12 High / 17 Medium / 5 Low** —
+   NEEDS FIXES 71/100 with the SEC-11/CICD-11 waivers applied (70 without), emphasis 78,
+   0 Critical / 10 High / 17 Medium / 5 Low** —
    [`evidence/prod-ready-2026-09-03-closeout.md`](laravel/docs/compliance/evidence/prod-ready-2026-09-03-closeout.md).
    Remaining Highs, all owner/infra: SEC-11 + CICD-11 (a second reviewer — waiver candidate with one
    maintainer), OPS-02/03 (on-call + paging), CICD-08 (auto rollback; deploys stay manual by

@@ -1,0 +1,28 @@
+# Risk-acceptance trail for the production-readiness engine (shared/waivers.md format).
+# Every waiver expires; an expired waiver reverts the finding to its real severity.
+# Change-controlled like code: edits go through a pull request on `main`.
+waivers:
+  - id: SEC-11
+    reason: >-
+      Single-maintainer repository: the owner is the only engineer, so a required second reviewer
+      on `main` would block every merge rather than add assurance. Compensating controls in force:
+      four required, admin-enforced CI checks (PHPUnit, Vitest + axe, gitleaks, Semgrep, Pint, ESLint,
+      coverage floors), SHA-pinned actions, CODEOWNERS naming the accountable maintainer, hash-chained
+      audit log on the application side, operator-triggered deploys with a pre-deploy dump and a
+      rehearsed 50-second rollback. Accepted by the owner on 2026-09-03; to be revisited when a second
+      engineer joins or at the next readiness review, whichever is first.
+    owner: "@ahmedsk2"
+    approved: 2026-09-03
+    expires: 2026-12-03
+    ticket: "HANDOFF.md item 5 (remaining Highs)"
+  - id: CICD-11
+    reason: >-
+      Same fact as SEC-11: no second human exists to authorise a privileged release, so multi-party
+      authorisation is not achievable today. Compensating controls as above, plus GitHub branch
+      protection rejecting direct pushes (including the owner's own), no force-push, no delete, and
+      Coolify Auto Deploy off (every production deploy is a deliberate, dumped-first operator action).
+      Accepted by the owner on 2026-09-03; revisit when a second engineer joins.
+    owner: "@ahmedsk2"
+    approved: 2026-09-03
+    expires: 2026-12-03
+    ticket: "HANDOFF.md item 5 (remaining Highs)"
