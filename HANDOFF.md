@@ -1,7 +1,7 @@
 # HANDOFF — current state, and what remains
 
 > Single ground-truth orientation for the next review session. Read this first (with `CLAUDE.md`).
-> Last updated 2026-09-03 (after the `CLAUDE.md` rewrite); CI green.
+> Last updated 2026-09-03 (after the compliance fact-fill and the prod-ready re-score); CI green.
 
 ## The product
 
@@ -56,17 +56,37 @@
 1. ~~**Rewrite `CLAUDE.md`** to describe the **Laravel product as it is**~~ — **DONE 2026-09-03.**
    `CLAUDE.md` now maps the Laravel product; the legacy mental model lives in git history at
    `31f0bfb` and on the `renovation` branch.
-2. **Fill the compliance placeholders.** 529 `[VERIFY]` / `[PLACEHOLDER]` / `[NEEDS LEGAL]` markers
-   across the nine drafts, catalogued by file and line in
-   [`laravel/docs/compliance/OPEN-ITEMS.md`](laravel/docs/compliance/OPEN-ITEMS.md). These need the
-   owner and the hospital's legal / DPO to supply entity names, retention periods, processor details,
-   and legal citations — work through them **interactively with the owner**.
-3. **External audit / certification readiness.** Assemble the evidence pack and close gaps for the
-   frameworks the hospital pursues: **PDPL / SDAIA** registration, **NCA ECC / DCC**, and if sought
-   **ISO 27001 / SOC 2 / CBAHI**. Map each control to its evidence in this repo/infra.
+2. **Compliance placeholders — PARTLY DONE 2026-09-03.** The cross-cutting facts were confirmed
+   with the owner and applied to all nine drafts (record:
+   [`CONFIRMED-FACTS.md`](laravel/docs/compliance/CONFIRMED-FACTS.md)); every legal marker has a
+   sourced, proposed citation in [`PROPOSED-CITATIONS.md`](laravel/docs/compliance/PROPOSED-CITATIONS.md)
+   for counsel to verify. **Parked by the owner (resume when ready):** (a) the `[NAME]` / `[DATE]` /
+   contact placeholders still owed — operator company legal name + CR, DPO, Head of IM, HIM office
+   contacts, SDAIA complaint channel; (b) the counsel/DPO **DECISION** rows — registering entity,
+   medical-record retention period (MoH Annex 5), classification tier, Cloudflare edge decryption;
+   (c) the deeper per-activity rework of ROPA / DATA-RETENTION / DPIA to the processor-and-legacy-daily
+   framing (each carries a confirmed-inputs callout; internal tables still read as if the hospital
+   operates the Laravel app). Master checklist: [`OPEN-ITEMS.md`](laravel/docs/compliance/OPEN-ITEMS.md).
+3. **Evidence pack — DRAFTED 2026-09-03.** [`EVIDENCE-PACK.md`](laravel/docs/compliance/EVIDENCE-PACK.md)
+   maps 20 PDPL obligations + NCA domains to evidence, with gap register G1–G16 and dated evidence
+   under `laravel/docs/compliance/evidence/`. Extend to ISO 27001 / SOC 2 / CBAHI only if pursued.
 4. **Owner-side ops:** APP_KEY escrow (done), SSH IP allowlist (deferred by owner), keep GitHub
-   Actions billing enabled.
-5. Optionally re-run the `/prod-ready` skill to re-score after the above.
+   Actions billing enabled, **make the repo private before go-live** (public by owner decision for
+   free CI during development), sign the **controller–processor contract** (none exists), appoint
+   the **DPO**, decide on the **legacy daily site** (original un-hardened build live on SiteGround
+   US — graded F; hardened `renovation` build never deployed there; owner plans cutover instead).
+5. ~~Optionally re-run `/prod-ready`~~ — **DONE 2026-09-03: BLOCKED 58/100** (emphasis 70; was
+   27/37). Report + ranked fixes:
+   [`evidence/prod-ready-2026-09-03.md`](laravel/docs/compliance/evidence/prod-ready-2026-09-03.md).
+   **Next engineering work = its Top fixes:** (1) required status checks on `main` + deploy only on
+   green; (2) `SESSION_DRIVER=database` + `CACHE_STORE=database` (fixes the no-op session revocation
+   SEC-04, single-container coupling PERF-07, and the redeploy-logout gotcha); (3) SMTP `timeout` in
+   `config/mail.php`; (4) pin the MySQL session time zone (raw `CURDATE()` UTC-day bug in Dashboard /
+   DataQuality / Registry controllers); (5) CI runtime parity PHP 8.3 / MySQL 8.4 + Pint gate +
+   coverage floor; (6) name incident roles / DPO / contract; (7) `for`/`id` labels on
+   `Auth/Login.vue` and `Admissions/Create.vue`. Also pending authorization: fix the three runbooks
+   that still say CI is billing-blocked (`DEPLOY-LARAVEL.md` §0/§11, `CI.md` preamble,
+   `RELEASE-CHECKLIST.md` §1) and root `README.md` ("22 tests").
 
 ## Doc map
 
