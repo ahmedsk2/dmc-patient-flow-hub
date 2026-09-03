@@ -111,8 +111,9 @@ Production deployment is a separate, ordered runbook: [`docs/DEPLOY-LARAVEL.md`]
 
 ## Tests and gates
 
-All of these run in CI (`.github/workflows/laravel-ci.yml` at the repository root; two jobs,
-**frontend** and **backend**) and should be green before a merge.
+All of these run in CI (`.github/workflows/laravel-ci.yml` at the repository root; four jobs —
+**frontend**, **backend**, **secret scan**, **SAST**) and are required status checks on `main`:
+open a pull request and merge on green; direct pushes to `main` are rejected.
 
 **PHPUnit** runs against a real MySQL database — `dmc_test`, per `phpunit.xml` — so the actual SQL
 dialect is exercised (`RefreshDatabase` migrates it). Create it once with

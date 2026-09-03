@@ -42,8 +42,10 @@ deploy is a production change.
   SQL dumps are git-ignored and must stay that way.
 - **Confirm before** anything destructive or outward-facing: deploys, data reloads, deletions, emails,
   DNS or firewall changes, anything that touches production data.
-- **Branch model:** `main` is the single Laravel dev branch and **direct-to-main is the consented
-  workflow**. `renovation` is the deployable legacy lineage. CI must be green before a deploy.
+- **Branch model (changed 2026-09-03):** `main` is the single Laravel dev branch and is **protected —
+  pull requests only**, with the four Laravel CI jobs as required status checks enforced for admins.
+  Work on a branch, `gh pr create`, merge on green; direct pushes are rejected. `renovation` is the
+  deployable legacy lineage. Deploys are operator-triggered in Coolify (Auto Deploy is off).
 - **Deploy only via the Coolify procedure** in `laravel/docs/DEPLOY-LARAVEL.md` and session memory.
   Back up the database before any deploy that carries a migration.
 - **Token economy (owner's standing priority):** pin `haiku`/`sonnet` on every subagent; no
@@ -345,8 +347,10 @@ four jobs, all under a read-only token and SHA-pinned actions:
 
 CI was **green on 2026-09-03** (checked via `gh run list`). It only runs while **GitHub Actions
 billing is enabled**; when billing lapses, jobs are created with zero steps and prove nothing, so
-the same gates must be run locally per RELEASE-CHECKLIST.md. Required status checks on `main` are
-not yet configured (CI.md preamble). The legacy `ci.yml` is a separate pipeline; never merge them.
+the same gates must be run locally per RELEASE-CHECKLIST.md. Since 2026-09-03 the four jobs are
+**required status checks on `main`, enforced for admins**, and the workflow runs on every push and
+PR (no path filter), plus a blocking Pint gate and Vitest coverage thresholds. The legacy `ci.yml` is
+a separate pipeline; never merge them.
 
 **Baselines (2026-09-03):** PHPUnit ~926 tests (+56 in the `pdf` group), Vitest 717.
 
