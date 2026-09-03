@@ -1,0 +1,61 @@
+{
+    "$comment": "Advisories `scripts/composer-audit-gate.php` may pass over. ONLY for advisories verified unreachable in THIS app; every entry needs package, id (CVE / PKSA / GHSA), reason, reviewed_at, and should carry a review_by date — once review_by passes the entry stops suppressing anything. See docs/CI.md. Prefer upgrading the package over adding a line here.",
+    "ignore": [
+        {
+            "package": "guzzlehttp/guzzle",
+            "id": "CVE-2026-69246",
+            "severity_at_review": "high",
+            "reason": "Noncanonical host can bypass host-based checks. The application's only outbound HTTP call is the backup upload to a fixed, configured S3 endpoint (app/Support/S3SigV4.php) — no host-based allow/deny check is performed on a user-influenced URL, so a noncanonical host cannot reach any decision this advisory affects. Remove this entry when guzzlehttp/guzzle is upgraded to >= 7.15.2.",
+            "reviewed_at": "2026-09-03",
+            "review_by": "2026-12-03"
+        },
+        {
+            "package": "dompdf/dompdf",
+            "id": "CVE-2026-59943",
+            "severity_at_review": "medium",
+            "reason": "SVG file-existence leak. PDFs are rendered from application-authored Blade templates only (no user-supplied markup or images); config/dompdf.php sets enable_remote=false and chroot to the app base path. Remove when dompdf/dompdf >= 3.1.6.",
+            "reviewed_at": "2026-09-03",
+            "review_by": "2026-12-03"
+        },
+        {
+            "package": "dompdf/dompdf",
+            "id": "CVE-2026-59942",
+            "severity_at_review": "medium",
+            "reason": "DoS via oversized image dimensions. No user-supplied images reach dompdf (application-authored templates only; enable_remote=false). Remove when dompdf/dompdf >= 3.1.6.",
+            "reviewed_at": "2026-09-03",
+            "review_by": "2026-12-03"
+        },
+        {
+            "package": "dompdf/dompdf",
+            "id": "CVE-2026-59941",
+            "severity_at_review": "medium",
+            "reason": "Resource consumption from declared BMP dimensions. No user-supplied images reach dompdf (application-authored templates only; enable_remote=false). Remove when dompdf/dompdf >= 3.1.6.",
+            "reviewed_at": "2026-09-03",
+            "review_by": "2026-12-03"
+        },
+        {
+            "package": "dompdf/dompdf",
+            "id": "CVE-2026-56722",
+            "severity_at_review": "medium",
+            "reason": "Local file read through SVG image path validation. No user-supplied SVG or markup reaches dompdf; chroot is set to the app base path and enable_remote=false. Remove when dompdf/dompdf >= 3.1.6.",
+            "reviewed_at": "2026-09-03",
+            "review_by": "2026-12-03"
+        },
+        {
+            "package": "dompdf/dompdf",
+            "id": "CVE-2026-55555",
+            "severity_at_review": "low",
+            "reason": "File-existence oracle via @font-face stylesheet declarations. Stylesheets are application-authored; no user markup or CSS reaches dompdf. Remove when dompdf/dompdf >= 3.1.6.",
+            "reviewed_at": "2026-09-03",
+            "review_by": "2026-12-03"
+        },
+        {
+            "package": "dompdf/dompdf",
+            "id": "CVE-2026-55554",
+            "severity_at_review": "low",
+            "reason": "Chroot validation bypass. Requires attacker-controlled paths in the rendered document; templates are application-authored and enable_remote=false. Remove when dompdf/dompdf >= 3.1.6.",
+            "reviewed_at": "2026-09-03",
+            "review_by": "2026-12-03"
+        }
+    ]
+}
