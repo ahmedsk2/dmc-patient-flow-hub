@@ -45,12 +45,15 @@ export default defineConfig({
         //   ActivityPanel.vue read 100% under v3 although no spec ever loads them (every spec
         //   vi.mock()s both); v5 reports them at 8% and 20%. They are the two genuinely untested
         //   components, and the obvious place to raise these floors from.
+        //   2026-09-22 later — RAISED. Real specs for both (IcdTypeahead 15 tests, ActivityPanel 13;
+        //   writing them surfaced and fixed a stale-lookup race in IcdTypeahead): 785 tests, lines
+        //   74.8 · statements 68.8 · branches 64.1 · functions 50.0 → floors 72 / 66 / 62 / 48.
         coverage: {
             provider: 'v8',
             include: ['resources/js/**/*.{js,vue}'],
             exclude: ['resources/js/**/__tests__/**', 'resources/js/**/*.{spec,test}.js'],
             reporter: ['text-summary'],
-            thresholds: { lines: 71, statements: 65, branches: 60, functions: 46 },
+            thresholds: { lines: 72, statements: 66, branches: 62, functions: 48 },
         },
     },
     resolve: {

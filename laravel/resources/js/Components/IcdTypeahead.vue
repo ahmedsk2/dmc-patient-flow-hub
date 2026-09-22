@@ -18,16 +18,35 @@ const results = ref([]);
 const hi = ref(-1);
 let timer = null;
 
+// Lookups race, and a stale answer here is a clinical hazard, not a cosmetic one: an earlier, slower
+// lookup would overwrite newer results, and an answer arriving after a pick would reopen the list
+// under a clinician's reflexive second Enter — adding a diagnosis nobody chose. Every keystroke,
+// pick, clear and loss of focus bumps `generation`; a lookup applies its answer only if nothing has happened
+// since it was sent. (IcdTypeahead.spec.js "stale answers are never shown" pins each case.)
+let generation = 0;
+
 watch(query, (q) => {
     clearTimeout(timer);
-    if (q.trim().length < 2) { results.value = []; hi.value = -1; return; }
+    const mine = ++generation;
+    const term = q.trim();
+    if (term.length < 2) { results.value = []; hi.value = -1; return; }
     timer = setTimeout(async () => {
-        results.value = await (await fetch(`/api/icd10?q=${encodeURIComponent(q.trim())}`, { headers: { Accept: 'application/json' } })).json();
+        let rows = [];
+        try {
+            const res = await fetch(`/api/icd10?q=${encodeURIComponent(term)}`, { headers: { Accept: 'application/json' } });
+            // a 419 (expired session) or 500 carries an error body, not a list of diagnoses
+            if (res.ok) rows = await res.json();
+        } catch (e) {
+            console.warn('[icd10] lookup failed', e);   // offline, aborted: show nothing rather than throw
+        }
+        if (mine !== generation) return;
+        results.value = Array.isArray(rows) ? rows : [];
         hi.value = results.value.length ? 0 : -1;
     }, 250);
 });
 
-const close = () => { results.value = []; hi.value = -1; };
+// Closing also cancels a lookup that has not been sent yet and orphans one already in flight.
+const close = () => { clearTimeout(timer); generation++; results.value = []; hi.value = -1; };
 const choose = (d) => { emit('select', d); query.value = ''; close(); };
 const onKeydown = (e) => {
     if (!results.value.length) return;

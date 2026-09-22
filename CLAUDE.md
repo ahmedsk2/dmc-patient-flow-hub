@@ -296,7 +296,13 @@ Each flow names its controller; per-endpoint database effects are in DATABASE-AN
   local encrypted copy 2 days, bucket 90 days (**placeholder pending legal**); `backup:verify` alerts
   admins in-app when either heartbeat is stale (the binlog half needs the container deployed from
   `151a220` or later); restore drills logged in `docs/BACKUP-AND-RESTORE.md` §8, the replay
-  procedure in §10 (rehearse it on a throwaway container, never against `dmc_demo`).
+  procedure in §10.5. **PITR is rehearsed** (2026-09-22, `scripts/backup/pitr-rehearsal.sh` on a
+  throwaway server, never against `dmc_demo`: 50 s, exact `audit_log` match, chain intact). Two
+  traps it found, now in the runbook: the stock `mysql:8` image has **no `mysqlbinlog`** — replay
+  with the tools image `dmc/mysql-pitr:<version>` built from `scripts/backup/pitr-tools.Dockerfile`
+  (rebuild on any MySQL version change); and **`artisan --env=…` cannot retarget the app container's
+  database** (its `DB_*` are process env vars, which a `.env` file never overrides) — check a
+  restored copy with a one-off container from the app image.
 - **Audit:** tamper-evident chain, nightly verification, hourly off-box shipping (§5). Retention
   window is a setting; pruning is manual.
 - **Repository hygiene:** git history purged of the three historically leaked secrets; GitHub secret
@@ -371,9 +377,10 @@ PR (no path filter), plus a blocking Pint gate and Vitest coverage thresholds. T
 a separate pipeline; never merge them.
 
 **Baselines (2026-09-03, after PR #11):** PHPUnit 936 tests (+75 in the `pdf` group), PHP
-statement coverage 86.1 % (floor 83), Vitest 757 on vitest 5 (floors lines 71, statements 65,
-branches 60, functions 46 — re-baselined 2026-09-22 because vitest 5's AST-aware coverage counts
-different units than vitest 3; see the history in `vitest.config.js`), ESLint zero warnings, Pint clean.
+statement coverage 86.1 % (floor 83), Vitest 785 on vitest 5 (floors lines 72, statements 66,
+branches 62, functions 48 — re-baselined 2026-09-22 because vitest 5's AST-aware coverage counts
+different units than vitest 3, then raised the same day; see the history in `vitest.config.js`),
+ESLint zero warnings, Pint clean.
 
 **Run locally from `laravel/`:**
 
@@ -460,7 +467,8 @@ CBAHI. State on 2026-09-03:
   time-zone finding is an accepted, documented risk). The single-maintainer review gap (SEC-11 /
   CICD-11) is a **dated waiver** in `laravel/.prod-ready/waivers.yml` — the only committed file under
   `.prod-ready/`; renew or retire it by 2026-12-03. Every remaining High is an owner or
-  infrastructure decision: the ranked list lives in HANDOFF.md item 5. Production is at `a855973`.
+  infrastructure decision: the ranked list lives in HANDOFF.md item 5. Production: see HANDOFF.md
+  (the latest deploy is recorded there with its date and SHA).
 - **Evidence pack:** [`EVIDENCE-PACK.md`](laravel/docs/compliance/EVIDENCE-PACK.md) maps the PDPL
   obligations and NCA domains to evidence, with the gap register G1–G16 (G1, G2 and G14 closed).
 
