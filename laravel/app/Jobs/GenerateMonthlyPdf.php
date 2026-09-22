@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Http\Controllers\ReportsController;
 use App\Models\Notification;
+use App\Support\RenderBudget;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -26,6 +27,10 @@ class GenerateMonthlyPdf implements ShouldQueue
 
     public function handle(ReportsController $reports): void
     {
+        // QUEUE_CONNECTION=sync: this runs inline in the admin's web request, so it needs the same
+        // render budget as the direct PDF routes (a no-op under a real, CLI queue worker).
+        app(RenderBudget::class)->apply();
+
         $pdf = Pdf::loadView('reports.monthly-pdf', $reports->gatherBooklet($this->year))->setPaper('a4', 'landscape');
 
         $filename = "monthly-{$this->year}-{$this->userId}.pdf";

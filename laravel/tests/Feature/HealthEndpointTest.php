@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
@@ -14,6 +15,12 @@ use Tests\TestCase;
  * `scheduler:heartbeat` writes every minute (this project has already suffered a silently-dead
  * scheduler; a stale beacon is how a monitor now notices). Laravel's stock `/up` (static, Coolify
  * uses it) is left untouched. Unauthenticated, session-less, throttled, PHI-free, secret-free.
+ *
+ * R2 adds a `clock` check: PHP's UTC now vs. the DB's UTC_TIMESTAMP(), degraded past 120s of skew.
+ * The clock-skew tests fake the skew with Carbon::setTestNow() rather than the DB's clock (there is
+ * no local knob for "what time does 127.0.0.1:3306 think it is" in a feature test) — moving PHP's
+ * idea of "now" away from the real wall clock has the identical effect on the computed skew, since
+ * HealthController compares PHP's now() against the DB's OWN clock, not against a fixed value.
  */
 class HealthEndpointTest extends TestCase
 {
@@ -40,6 +47,55 @@ class HealthEndpointTest extends TestCase
 
         $this->assertNotNull($response->json('checks.scheduler.last_run_at'));
         $this->assertNotSame('', (string) $response->json('app.version'), 'version is a non-empty string ("unknown" when APP_VERSION is unset)');
+    }
+
+    public function test_clock_skew_against_the_real_db_clock_is_reported_and_within_tolerance(): void
+    {
+        Artisan::call('scheduler:heartbeat');
+
+        $response = $this->getJson('/health');
+
+        $response->assertOk()->assertJsonPath('checks.clock.degraded', false);
+        $skew = $response->json('checks.clock.skew_seconds');
+        // a whole-number float round-trips through JSON as a bare integer (0, not 0.0) — assert
+        // numeric, not float, so an exact-zero skew (test DB and PHP on the same machine) still passes
+        $this->assertIsNumeric($skew);
+        // real skew here is milliseconds, nowhere near the 120s threshold below
+        $this->assertLessThan(120, abs((float) $skew));
+    }
+
+    public function test_a_faked_clock_skew_past_120_seconds_returns_503_degraded(): void
+    {
+        Artisan::call('scheduler:heartbeat');
+
+        // PHP's clock frozen 10 real minutes ahead of the (unfaked, real) DB clock — HealthController
+        // computes skew_seconds = db_utc_now - php_now, so this must come back strongly negative.
+        Carbon::setTestNow(Carbon::now()->addMinutes(10));
+        try {
+            $response = $this->getJson('/health');
+        } finally {
+            Carbon::setTestNow();
+        }
+
+        $response->assertStatus(503)
+            ->assertJsonPath('status', 'degraded')
+            ->assertJsonPath('checks.db', true)
+            ->assertJsonPath('checks.clock.degraded', true);
+        $this->assertLessThan(-120, $response->json('checks.clock.skew_seconds'));
+    }
+
+    public function test_a_faked_clock_skew_under_120_seconds_stays_ok(): void
+    {
+        Artisan::call('scheduler:heartbeat');
+
+        Carbon::setTestNow(Carbon::now()->addSeconds(30));
+        try {
+            $response = $this->getJson('/health');
+        } finally {
+            Carbon::setTestNow();
+        }
+
+        $response->assertOk()->assertJsonPath('checks.clock.degraded', false);
     }
 
     public function test_version_comes_from_config_app_version(): void
@@ -146,8 +202,9 @@ class HealthEndpointTest extends TestCase
         $body = (string) $response->getContent();
 
         $this->assertSame(['status', 'checks', 'app'], array_keys($response->json()));
-        $this->assertSame(['db', 'storage_writable', 'scheduler'], array_keys($response->json('checks')));
+        $this->assertSame(['db', 'storage_writable', 'scheduler', 'clock'], array_keys($response->json('checks')));
         $this->assertSame(['last_run_at', 'stale'], array_keys($response->json('checks.scheduler')));
+        $this->assertSame(['skew_seconds', 'degraded'], array_keys($response->json('checks.clock')));
         $this->assertSame(['version', 'timezone'], array_keys($response->json('app')));
 
         $this->assertStringNotContainsString((string) config('app.key'), $body);
@@ -158,5 +215,24 @@ class HealthEndpointTest extends TestCase
     public function test_stock_up_endpoint_is_untouched(): void
     {
         $this->get('/up')->assertOk();
+    }
+
+    /**
+     * /health sits outside the `web` group, so none of SecurityHeaders (CSP, X-Frame-Options,
+     * HSTS...) reaches it — that is by design (session-less, see routes/public.php). It still needs
+     * its own two: a monitoring probe must not be cached, and nosniff is free on a JSON body.
+     */
+    public function test_response_carries_its_own_sensible_headers(): void
+    {
+        Artisan::call('scheduler:heartbeat');
+
+        $response = $this->get('/health');
+
+        // Symfony's ResponseHeaderBag computes Cache-Control rather than echoing the literal string
+        // set on it: a directive set with neither public/private/s-maxage present gets ", private"
+        // appended automatically (conservative-by-default) — so "no-store" (set below) is correctly
+        // reported back as "no-store, private", matching what authenticated `web` pages already send.
+        $response->assertHeader('Cache-Control', 'no-store, private');
+        $response->assertHeader('X-Content-Type-Options', 'nosniff');
     }
 }

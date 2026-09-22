@@ -1,7 +1,7 @@
 # CLAUDE.md — DMC Internal Medicine Patient-Flow Hub (Laravel)
 
 > **Read [`HANDOFF.md`](HANDOFF.md) first every session.** It is the ground truth for what is live and
-> what remains. This file is the standing map of the product: stack, architecture, data, flows,
+> what remains; [`REMAINING-WORK.md`](REMAINING-WORK.md) is the tick-list of everything still open, by who acts. This file is the standing map of the product: stack, architecture, data, flows,
 > operations and guardrails. Last rewritten 2026-09-03 (`main` at `31f0bfb` + this commit).
 >
 > **The go-forward product is the Laravel application under [`laravel/`](laravel/)** — this is what all
@@ -86,11 +86,11 @@ composer-audit gate in CI passes.
    │  ├─ Http/Requests/       FormRequests for the riskier writes (admission, consultation, merge, exports)
    │  ├─ Models/              20 Eloquent models (§6)
    │  ├─ Casts/               EncryptedNarrative (§9)
-   │  ├─ Console/Commands/    audit:{ship,verify,verify-daily,prune}, backup:verify, dq:notify,
-   │  │                       legacy:import, scheduler:heartbeat
+   │  ├─ Console/Commands/    audit:{ship,verify,verify-daily,prune}, auth:prune-expired, backup:verify,
+   │  │                       dq:notify, legacy:import, records:retention-report (read-only), scheduler:heartbeat
    │  ├─ Jobs/ Mail/          GenerateMonthlyReport / GenerateMonthlyPdf; registration, reminder, report mails
    │  ├─ Services/            ShuffleService (auto-assignment)
-   │  ├─ Support/             Audit, AuditDiff, DashboardCache, ReportSvg, S3SigV4, Totp
+   │  ├─ Support/             ArabicShaper, Audit, AuditDiff, DashboardCache, RenderBudget, ReportSvg, S3SigV4, Totp
    │  └─ Providers/           AppServiceProvider, RuntimeConfigServiceProvider (§5)
    ├─ routes/                 web.php (all app routes) · public.php (session-less probes) · console.php (schedule)
    ├─ database/migrations/    47 migrations — the authoritative schema
@@ -98,7 +98,8 @@ composer-audit gate in CI passes.
    ├─ tests/Feature (105 files) · tests/Unit (2)
    ├─ scripts/                smoke.sh, contrast.mjs, check-source-allowlist.mjs, coverage-gate.php, clock-guard.php,
    │                          sbom.php, composer-audit-gate.php, deploy-on-green.sh (opt-in, off),
-   │                          backup/{db-backup.py, binlog-ship.py, db-restore-drill.sh, test_*.py}
+   │                          backup/{db-backup.py, binlog-ship.py, db-restore-drill.sh, pitr-rehearsal.sh,
+   │                                  pitr-tools.Dockerfile, test_*.py}
    ├─ docs/                   runbooks + behaviour docs (§13) · docs/compliance/ (PDPL paper trail)
    └─ .prod-ready/            local audit workspace — git-ignored except waivers.yml (the committed risk-acceptance record)
 ```
@@ -128,7 +129,16 @@ hides case mistakes that Linux CI catches; the Inertia config is published to po
 - `stepup` (fresh password re-check, `throttle:stepup`) on: reverse discharge, delete admission,
   Control → System save and test email, delete user, patient merge.
 - Session-less machine routes in `routes/public.php`: `/up` (Coolify liveness), `/health` (DB +
-  storage + scheduler heartbeat; `200 ok` / `503 degraded`, no PHI), `/.well-known/security.txt`.
+  storage + scheduler heartbeat + DB-vs-app clock skew; `200 ok` / `503 degraded`, no PHI),
+  `/.well-known/security.txt`.
+- **Rate limits on patient data (since 2026-09-22):** named limiters in `AppServiceProvider`, keyed per
+  user — `phi` (240/min) on every PHI page, JSON poll and admin read, `phi-export` (20/min) on exports
+  and report generation; a branded `errors/429` page. Clinical **writes** are deliberately unthrottled.
+  A new PHI-returning route gets `throttle:phi` (or `phi-export`) — `PhiThrottleTest` is the pattern.
+- **Database time limits:** `DB_CONNECT_TIMEOUT` (5 s) and a web-only per-SELECT cap
+  `DB_WEB_MAX_EXECUTION_MS` (60 s, never under the CLI). Anything that renders a report booklet inside a
+  web request calls `App\Support\RenderBudget::apply()` (120 s) — including queued jobs, because with
+  `QUEUE_CONNECTION=sync` they run inside the request.
 
 **Inertia** shares `auth.user` (id, name, role, `is_admin`, `mfa_enrolled`, `email_verified`, the four
 `can.*` flags), the idle/absolute timeout minutes and `flash` on every page
@@ -141,8 +151,8 @@ password is stored encrypted and is write-only in the UI. `.env` values are the 
 
 **Scheduler.** Nothing in the container runs it. A host root cron runs `php artisan schedule:run`
 every minute via `docker exec` on the container found **by label**. Scheduled: `scheduler:heartbeat`
-every minute, `audit:ship` hourly, `audit:verify-daily` 02:30, `backup:verify` 06:30, `dq:notify`
-07:00, the monthly report on the 1st at 06:00.
+every minute, `audit:ship` hourly, `audit:verify-daily` 02:30, `auth:prune-expired` 03:15,
+`backup:verify` 06:30, `dq:notify` 07:00, the monthly report on the 1st at 06:00.
 
 **Audit trail.** `App\Support\Audit::log()` writes an `audit_log` row `{actor, action, entity,
 details JSON, ip}` for every write and for PHI reads: exports, report PDFs and registry searches
@@ -376,8 +386,8 @@ the same gates must be run locally per RELEASE-CHECKLIST.md. Since 2026-09-03 th
 PR (no path filter), plus a blocking Pint gate and Vitest coverage thresholds. The legacy `ci.yml` is
 a separate pipeline; never merge them.
 
-**Baselines (2026-09-03, after PR #11):** PHPUnit 936 tests (+75 in the `pdf` group), PHP
-statement coverage 86.1 % (floor 83), Vitest 785 on vitest 5 (floors lines 72, statements 66,
+**Baselines (2026-09-22, after the engineering batch):** PHPUnit 1004 tests (+91 in the `pdf` group), PHP
+statement coverage 86.1 % at the last CI measurement (floor 83), Vitest 792 on vitest 5 (floors lines 72, statements 66,
 branches 62, functions 48 — re-baselined 2026-09-22 because vitest 5's AST-aware coverage counts
 different units than vitest 3, then raised the same day; see the history in `vitest.config.js`),
 ESLint zero warnings, Pint clean.
@@ -478,7 +488,7 @@ CBAHI. State on 2026-09-03:
 
 | Area | Files |
 |---|---|
-| Ground truth / what remains | `HANDOFF.md` |
+| Ground truth / what remains | `HANDOFF.md` (narrative) · `REMAINING-WORK.md` (the tick-list, by who acts) |
 | Product overview, local setup | `laravel/README.md`, `laravel/SECURITY.md` |
 | Deploy / ops | `laravel/docs/{DEPLOY-LARAVEL, BACKUP-AND-RESTORE, ENCRYPTION-AT-REST, CI, RELEASE-CHECKLIST}.md` |
 | Behaviour / metrics | `laravel/docs/{DATABASE-AND-BEHAVIOR, DASHBOARD-AND-STATISTICS-METRICS, HANDOVER-COMPLIANCE, RECONCILIATION, UAT-TEST-PLAN}.md` |

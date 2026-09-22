@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 @php
+    use App\Support\ArabicShaper;
     use App\Support\ReportSvg;
     $img = fn (string $f) => public_path('images/' . $f);
     $trendLabels = array_column($trend, 'label');
@@ -12,6 +13,9 @@
         ['label' => 'Deaths',     'color' => '#ef3e5b',                    'data' => array_column($trend, 'deaths')],
         ['label' => 'Readmits',   'color' => ReportSvg::SERIES_COLORS[3], 'data' => array_column($trend, 'readmits')],
     ];
+    // I18N-06: pre-shape every free-text/name field this template prints — see ArabicShaper's docblock.
+    $classificationFoot = ArabicShaper::shape('SECRET — Patient data / سري — بيانات مرضى');
+    $orgHeader = ArabicShaper::shape('Eastern Health Cluster · تجمع الشرقية الصحي');
 @endphp
 <style>
     @page { margin: 18pt 22pt; }
@@ -47,13 +51,13 @@
 </head>
 <body>
 
-<div class="classification-foot">SECRET — Patient data / سري — بيانات مرضى</div>
+<div class="classification-foot">{{ $classificationFoot }}</div>
 
 {{-- ============== PAGE 1 — SAFETY KPIs + TREND ============== --}}
 <div class="page">
     <img class="banner" src="{{ $img('reportheader1.png') }}" alt="">
     <div class="head">
-        <div class="org">Eastern Health Cluster · تجمع الشرقية الصحي<br>Generated {{ $generatedAt }}</div>
+        <div class="org">{{ $orgHeader }}<br>Generated {{ $generatedAt }}</div>
         <h1>Morbidity & Mortality Pack — {{ $title }}</h1>
         <div class="sub">{{ $from }} to {{ $to }} · de-identified governance review</div>
     </div>
@@ -76,7 +80,7 @@
 {{-- ============== PAGE 2 — DEATH LINE LIST (DE-IDENTIFIED) ============== --}}
 <div class="page">
     <div class="head">
-        <div class="org">Eastern Health Cluster · تجمع الشرقية الصحي<br>Generated {{ $generatedAt }}</div>
+        <div class="org">{{ $orgHeader }}<br>Generated {{ $generatedAt }}</div>
         <h1>Mortality Line List — {{ $title }}</h1>
         <div class="sub">Every death discharged in the period</div>
     </div>
@@ -92,8 +96,8 @@
                     <td class="r">{{ $d['age'] ?? '—' }}</td>
                     <td class="r">{{ $d['los'] ?? '—' }}</td>
                     <td>{{ $d['location'] ?? '—' }}</td>
-                    <td>{{ \Illuminate\Support\Str::limit($d['dx'], 44) }}</td>
-                    <td>{{ $d['consultant'] }}</td>
+                    <td>{{ ArabicShaper::shape(\Illuminate\Support\Str::limit($d['dx'], 44)) }}</td>
+                    <td>{{ ArabicShaper::shape($d['consultant']) }}</td>
                 </tr>
             @empty
                 <tr><td colspan="6" class="empty">No deaths recorded in this period.</td></tr>
@@ -106,7 +110,7 @@
 {{-- ============== PAGE 3 — READMISSION LINE LIST (DE-IDENTIFIED) ============== --}}
 <div class="page-last">
     <div class="head">
-        <div class="org">Eastern Health Cluster · تجمع الشرقية الصحي<br>Generated {{ $generatedAt }}</div>
+        <div class="org">{{ $orgHeader }}<br>Generated {{ $generatedAt }}</div>
         <h1>Readmission Line List — {{ $title }}</h1>
         <div class="sub">Every ≤{{ $readmitWindow }}-day readmission admitted in the period</div>
     </div>
@@ -122,7 +126,7 @@
                     <td class="r">{{ $r['age'] ?? '—' }}</td>
                     <td>{{ $r['admit_date'] }}</td>
                     <td class="r">{{ $r['gap_days'] }}</td>
-                    <td>{{ $r['consultant'] }}</td>
+                    <td>{{ ArabicShaper::shape($r['consultant']) }}</td>
                 </tr>
             @empty
                 <tr><td colspan="5" class="empty">No readmissions recorded in this period.</td></tr>

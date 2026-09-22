@@ -42,7 +42,12 @@ class SecurityHeadersTest extends TestCase
         $response->assertHeader('X-Frame-Options', 'DENY');
         $response->assertHeader('X-Content-Type-Options', 'nosniff');
         $response->assertHeader('Referrer-Policy', 'same-origin');
-        $response->assertHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+        $response->assertHeader('Permissions-Policy',
+            'camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), '
+            .'bluetooth=(), hid=(), browsing-topics=()');
+        // SPC-WEB-002
+        $response->assertHeader('Cross-Origin-Opener-Policy', 'same-origin');
+        $response->assertHeader('Cross-Origin-Resource-Policy', 'same-origin');
 
         $this->assertStringContainsString(
             'no-store',
@@ -156,5 +161,28 @@ class SecurityHeadersTest extends TestCase
         $response = $this->call('POST', '/csp-report', [], [], [], ['CONTENT_TYPE' => 'application/csp-report'], 'not json at all {{{');
 
         $response->assertNoContent();
+    }
+
+    /**
+     * SPC-WEB-002: a file download (CSV/PDF/XLSX export) goes through the same `web` group as any
+     * other authenticated response, so it must still carry the full header set — and, specifically,
+     * the new Cross-Origin-Resource-Policy must not have broken the download itself: CORP governs
+     * whether another ORIGIN can read the response as a sub-resource, not whether this browser can
+     * save the file it just requested same-origin, so the export's own Content-Type/Content-
+     * Disposition must be untouched alongside the added header.
+     */
+    public function test_file_download_keeps_the_full_header_set_and_its_own_content_headers(): void
+    {
+        $response = $this->actingAs($this->admin())->get('/registry/export');
+
+        $response->assertOk();
+        $response->assertHeader('X-Content-Type-Options', 'nosniff');
+        $response->assertHeader('Cross-Origin-Opener-Policy', 'same-origin');
+        $response->assertHeader('Cross-Origin-Resource-Policy', 'same-origin');
+        $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
+
+        // the export's own headers survive untouched alongside the new ones
+        $this->assertStringContainsString('text/csv', (string) $response->headers->get('Content-Type'));
+        $this->assertStringContainsString('attachment', (string) $response->headers->get('Content-Disposition'));
     }
 }

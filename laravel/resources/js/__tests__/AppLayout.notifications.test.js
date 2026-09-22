@@ -48,7 +48,7 @@ describe('AppLayout notifications', () => {
     });
 
     it('toggleBell fetches notifications and does not POST read-all', async () => {
-        global.fetch.mockResolvedValueOnce({ json: async () => ({ notifications: [{ id: 1 }], actionable: [], unread: 3 }) });  // /api/notifications
+        global.fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ notifications: [{ id: 1 }], actionable: [], unread: 3 }) });  // /api/notifications
         const w = mountLayout();
         await w.vm.toggleBell();
 
@@ -57,11 +57,56 @@ describe('AppLayout notifications', () => {
         expect(w.vm.notifications).toEqual([{ id: 1 }]);
     });
 
+    // RES-01: the fetch is bounded so a stalled network can't leave the bell "Loading…" forever.
+    it('toggleBell sends an AbortSignal with the request', async () => {
+        global.fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ notifications: [], actionable: [], unread: 0 }) });
+        const w = mountLayout();
+        await w.vm.toggleBell();
+
+        expect(global.fetch.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
+    });
+
+    // A real AbortSignal.timeout() rejects with a TimeoutError DOMException, not a TypeError — it
+    // must be handled exactly like any other failed refresh (TST-10): no throw, list left as-is.
+    it('a timed-out toggleBell fetch keeps whatever is already shown and does not throw', async () => {
+        global.fetch.mockRejectedValueOnce(new DOMException('The operation timed out.', 'TimeoutError'));
+        const w = mountLayout();
+        await expect(w.vm.toggleBell()).resolves.toBeUndefined();
+
+        expect(w.vm.notifications).toEqual([]);
+        expect(w.vm.bellLoading).toBe(false);
+    });
+
+    // PERF-08: /api/notifications sits behind the per-user patient-data throttle. A 429 (or 419/500)
+    // answers with an error body; read as a list it used to empty the dropdown and, on Clear, zero
+    // the badge. A non-OK answer must count as a failed refresh: what is shown stays shown.
+    it('a throttled (429) refresh keeps the current list and the badge', async () => {
+        const throttled = { ok: false, status: 429, json: async () => ({ message: 'Too Many Attempts.' }) };
+        global.fetch
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ notifications: [{ id: 7 }], actionable: [{ id: 8 }], unread: 2 }) })  // open
+            .mockResolvedValueOnce({ ok: true, json: async () => ({}) })                                                              // POST /notifications/read-all
+            .mockResolvedValueOnce(throttled);                                                                                       // refetch after clear
+        const w = mountLayout();
+        await w.vm.toggleBell();
+        await w.vm.clearNotifications();
+
+        expect(w.vm.notifications).toEqual([{ id: 7 }]);
+        expect(w.vm.actionable).toEqual([{ id: 8 }]);
+        expect(w.vm.unread).toBe(3);   // the shared prop still stands — not zeroed by the 429 body
+        expect(w.vm.clearing).toBe(false);
+
+        await w.vm.toggleBell();                        // close
+        global.fetch.mockResolvedValueOnce(throttled);
+        await w.vm.toggleBell();                        // reopen, throttled again
+        expect(w.vm.notifications).toEqual([{ id: 7 }]);
+        expect(w.vm.bellLoading).toBe(false);
+    });
+
     // TD-T7: opening the bell used to auto-mark everything read (`unread > 0` → POST read-all),
     // which — now that the feed only ever shows unread items — would empty it the instant it was
     // opened. Clearing is now an explicit action (see the "Clear" tests below).
     it('does NOT auto-clear when the bell is opened', async () => {
-        global.fetch.mockResolvedValueOnce({ json: async () => ({ notifications: [{ id: 1 }], actionable: [], unread: 3 }) });
+        global.fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ notifications: [{ id: 1 }], actionable: [], unread: 3 }) });
         const w = mountLayout();
         await w.vm.toggleBell();
 
@@ -72,7 +117,7 @@ describe('AppLayout notifications', () => {
     });
 
     it('closing the bell (second toggle) does not fetch again', async () => {
-        global.fetch.mockResolvedValue({ json: async () => ({ notifications: [], unread: 0 }) });
+        global.fetch.mockResolvedValue({ ok: true, json: async () => ({ notifications: [], unread: 0 }) });
         const w = mountLayout();
         await w.vm.toggleBell();      // open → 1 fetch
         await w.vm.toggleBell();      // close → no fetch
@@ -86,8 +131,7 @@ describe('AppLayout notifications', () => {
     it('renders an actionable handover.incomplete reminder ONCE (pinned), not duplicated in the feed', async () => {
         const item = { id: 1, type: 'handover.incomplete', payload: { admission_id: 42, patient_name: 'Jane Doe', mrn: '12345', from_name: 'Smith' }, read_at: null, resolved_at: null, created_at: new Date().toISOString() };
         global.fetch
-            .mockResolvedValueOnce({
-                json: async () => ({
+            .mockResolvedValueOnce({ ok: true, json: async () => ({
                     notifications: [item],   // the all-types feed includes it too
                     actionable: [item],      // …and it's pinned
                     unread: 1,
@@ -119,7 +163,7 @@ describe('AppLayout notifications', () => {
     it('caps the panel height and scrolls both groups inside one container', async () => {
         const actionableItem = { id: 1, type: 'handover.incomplete', payload: { admission_id: 42 }, read_at: null, resolved_at: null, created_at: new Date().toISOString() };
         const ordinary = [2, 3, 4].map((id) => ({ id, type: 'handover.transfer', payload: { from_name: 'Dr X' }, read_at: null, created_at: new Date().toISOString() }));
-        global.fetch.mockResolvedValueOnce({ json: async () => ({ notifications: ordinary, actionable: [actionableItem], unread: 4 }) });  // /api/notifications
+        global.fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ notifications: ordinary, actionable: [actionableItem], unread: 4 }) });  // /api/notifications
         const w = mountLayout();
         await w.vm.toggleBell();
         await w.vm.$nextTick();
@@ -145,7 +189,7 @@ describe('AppLayout notifications', () => {
     it('Clear empties the feed but leaves the pinned alarms', async () => {
         const actionableItem = { id: 2, type: 'handover.incomplete', payload: { admission_id: 7 }, read_at: null, resolved_at: null, created_at: new Date().toISOString() };
         const ordinary = { id: 1, type: 'handover.transfer', payload: { from_name: 'Dr X' }, read_at: null, created_at: new Date().toISOString() };
-        global.fetch.mockResolvedValueOnce({ json: async () => ({ notifications: [ordinary], actionable: [actionableItem], unread: 2 }) }); // open
+        global.fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ notifications: [ordinary], actionable: [actionableItem], unread: 2 }) }); // open
         const w = mountLayout();
         await w.vm.toggleBell();
         await w.vm.$nextTick();
@@ -153,7 +197,7 @@ describe('AppLayout notifications', () => {
 
         global.fetch
             .mockResolvedValueOnce({ ok: true, json: async () => ({}) })                                                              // POST /notifications/read-all
-            .mockResolvedValueOnce({ json: async () => ({ notifications: [], actionable: [actionableItem], unread: 1 }) });            // refetch /api/notifications
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ notifications: [], actionable: [actionableItem], unread: 1 }) });            // refetch /api/notifications
         await w.vm.clearNotifications();
         await w.vm.$nextTick();
 
@@ -171,18 +215,37 @@ describe('AppLayout notifications', () => {
     // must actually go to 0 — Clear isn't supposed to freeze a stale nonzero count either.
     it('Clear zeroes the badge when the refetch reports no remaining unread', async () => {
         const ordinary = { id: 1, type: 'handover.transfer', payload: { from_name: 'Dr X' }, read_at: null, created_at: new Date().toISOString() };
-        global.fetch.mockResolvedValueOnce({ json: async () => ({ notifications: [ordinary], actionable: [], unread: 1 }) }); // open
+        global.fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ notifications: [ordinary], actionable: [], unread: 1 }) }); // open
         const w = mountLayout();
         await w.vm.toggleBell();
         await w.vm.$nextTick();
 
         global.fetch
             .mockResolvedValueOnce({ ok: true, json: async () => ({}) })                                          // POST /notifications/read-all
-            .mockResolvedValueOnce({ json: async () => ({ notifications: [], actionable: [], unread: 0 }) });      // refetch /api/notifications
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ notifications: [], actionable: [], unread: 0 }) });      // refetch /api/notifications
         await w.vm.clearNotifications();
         await w.vm.$nextTick();
 
         expect(w.vm.unread).toBe(0);
+    });
+
+    // RES-01: both clearNotifications fetches (the read-all POST and the refetch) carry a bounded
+    // AbortSignal, and a timeout on either is handled exactly like the existing failure path
+    // (TST-10: nothing thrown, the next bell open re-fetches).
+    it('clearNotifications sends an AbortSignal with both requests, and a timeout does not throw', async () => {
+        const ordinary = { id: 1, type: 'handover.transfer', payload: { from_name: 'Dr X' }, read_at: null, created_at: new Date().toISOString() };
+        global.fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ notifications: [ordinary], actionable: [], unread: 1 }) }); // open
+        const w = mountLayout();
+        await w.vm.toggleBell();
+
+        global.fetch.mockRejectedValueOnce(new DOMException('The operation timed out.', 'TimeoutError'));
+        await expect(w.vm.clearNotifications()).resolves.toBeUndefined();
+
+        // the read-all POST (the second call overall) carried a signal even though it timed out
+        expect(global.fetch.mock.calls[1][1]?.signal).toBeInstanceOf(AbortSignal);
+        // a timed-out read-all leaves the feed exactly as it was before Clear was pressed
+        expect(w.vm.feedNotifications).toHaveLength(1);
+        expect(w.vm.clearing).toBe(false);
     });
 });
 

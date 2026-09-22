@@ -28,14 +28,14 @@ through a read-only mount (never copied into a container), and are shredded afte
 
 ## 1. RPO / RTO — what this actually gives you (plain English)
 
-- **RPO (how much you can lose) — it depends on whether the hourly binlog shipper is installed:**
-  - **≤ 1 hour, once `binlog-ship.py` is running from cron (§10).** Every change MySQL records in
-    its binary log is copied off the host at minute 40 of every hour, so at worst you lose the
-    changes made since the last hourly ship. This is the state to be in.
-  - **≤ 24 hours from the nightly dump alone** — which is what you have *until* an operator installs
-    the hourly cron line in §10.2, and what you fall back to for anything the binary log does not
-    cover (see §10.6). In the worst case — the host dies at 02:14 with no binlog shipping —
-    everything entered since the previous night's 02:15 backup is gone.
+- **RPO (how much you can lose) — depends on whether the hourly binlog shipper is running:**
+  - **≤ 1 hour — the current production state.** `binlog-ship.py` has run from cron since
+    2026-09-03 (§10) and every change MySQL records in its binary log is copied off the host at
+    minute 40 of every hour, so at worst you lose the changes made since the last hourly ship.
+  - **≤ 24 hours from the nightly dump alone** — the fallback for anything the binary log does not
+    cover (§10.6), and what a *newly built* host has until an operator repeats the install in §10.2
+    (§5.1 is that exact scenario). In the worst case — the host dies at 02:14 with no binlog
+    shipping reaching it — everything entered since the previous night's 02:15 backup is gone.
 
   Two backups, two jobs: the nightly dump is the **base**, the shipped binary logs are the
   **increment**. Neither is useful for point-in-time recovery without the other.
@@ -72,6 +72,14 @@ python3 --version && openssl version && docker --version      # all three must e
 `binlog-ship.py` loads `db-backup.py` from the same directory (it reuses its SigV4 client, config
 loader and encryption commands), so the two files must stay **side by side**. Its own cron and first
 run are in §10.2.
+
+> **Reinstall after merging this change.** `db-backup.py`'s `mysqldump` command now carries
+> `--source-data=2` (§10.5, §10.6) — the host copy at `/opt/dmc/backup/db-backup.py` is a plain file
+> copy, not a symlink or a checkout, so it does **not** pick this up on its own. An operator must
+> `sudo cp laravel/scripts/backup/db-backup.py /opt/dmc/backup/` (same `chmod 750` / `chown root:root`
+> as below) after this merge reaches `main`, or every dump keeps being taken the old way — harmless
+> (the dump itself is unaffected), but a replay against one of those dumps still needs the
+> `--start-datetime` fallback in §10.5 step 3.
 
 Rotate the logs these jobs write — they grow forever otherwise, and a full `/var` stops both the
 backup and the shipper. They contain object names, byte counts and hashes only: **no PHI**, no
@@ -294,15 +302,169 @@ worse than an extra hour of downtime.
    dmc_demo` + `USE dmc_demo` and recreates every table (`DROP TABLE IF EXISTS` first). On a brand-new
    host: start a MySQL 8 container with the same `MYSQL_ROOT_PASSWORD`/`MYSQL_DATABASE=dmc_demo` and
    the app's DB user, then run the same pipe.
-6. **Reconcile:** `php artisan migrate` (should say *Nothing to migrate* unless the backup predates a
-   deploy — then it applies the missing migrations), `php artisan audit:verify` (the hash chain must
-   be intact up to the backup moment), spot-check today's census on the dashboard against the ward.
+6. **Reconcile:**
+   - `php artisan migrate` (should say *Nothing to migrate* unless the backup predates a deploy —
+     then it applies the missing migrations).
+   - `php artisan audit:verify` — the hash chain must be intact up to the restore point. (As an
+     aside: every row `audit:verify` has ever walked against `dmc_demo` has been hashed —
+     `2026_06_14_000004_add_hash_chain_to_audit_log` added `prev_hash`/`row_hash` well before
+     production existed, `App\Support\Audit::log()` is the table's only writer and has populated
+     both columns since that migration landed, and `legacy:import` never touches `audit_log` — so
+     there should be **no** pre-chain row to find. `audit:verify`'s own `$unhashed` counter is the
+     live check: it warns "N pre-chain row(s) without a hash" only if that count is non-zero. It has
+     read zero on every drill and rehearsal logged in §8. If a restore ever shows a non-zero count,
+     that is new information worth investigating — **never backfill or otherwise write to
+     `row_hash`/`prev_hash` to make the warning go away**; the column being NULL on a genuinely
+     pre-chain row is the honest state, not a defect.)
+   - **Audit archive reconciliation — do this BEFORE any new write can reach `audit_log`,** because
+     the restored table's own row ids can collide with ids the write-once archive already holds for
+     rows the restore lost (below):
+     1. `php artisan audit:ship --status` — read-only; prints
+        `audit_shipped_through_id=<mark> max_audit_log_id=<local max> pending=<n>` without shipping
+        anything or touching the mark. If `<mark>` is **greater than** `<local max>`, the restore
+        lost rows that had *already* been shipped off-box before the incident — expected whenever the
+        restore point is older than the last successful `audit:ship` run, and not itself a problem;
+        the archive is authoritative for those rows, as it is meant to be.
+     2. Find the archive's own newest shipped id without downloading anything: `AuditShip::handle()`
+        names every object `audit/<Y>/<m>/<d>/<firstId>-<lastId>-<runTimestamp>.ndjson`, so the id
+        range is in the **key name** — list the bucket's `audit/` prefix (OCI console, or any
+        S3-compatible `list-objects` call against the `AUDIT_S3_*` endpoint) for the most recent
+        date, and read `<lastId>` off the newest key. (The NDJSON bodies carry patient identifiers in
+        `details` for some actions — Secret per `DATA-CLASSIFICATION.md` — so there is no need to
+        open one for this check, only to list keys.)
+     3. **If the archive's newest id is greater than the restored table's local max id**, new local
+        writes must not be allowed to reuse those ids — the table's own `AUTO_INCREMENT` counter came
+        back from the dump set to whatever it was *at dump time*, which is behind what was really
+        issued before the incident. Move it past the archive's true newest id, once, before
+        unfreezing the app:
+        ```sql
+        ALTER TABLE audit_log AUTO_INCREMENT = <archive's newest id + 1>;
+        ```
+        This touches only the counter — it inserts, edits and deletes no row, so it does not disturb
+        the hash chain. Then set the bookmark to match, so `audit:ship` does not waste a run
+        re-checking a gap that can never be filled locally again — key the `UPDATE` off "first row by
+        id", the same way `App\Models\Setting::current()` identifies the singleton row (its own code
+        comment explains why: `id` is guarded, so the row is never assumed to be `id = 1`):
+        ```sql
+        UPDATE settings SET audit_shipped_through_id = <archive's newest id> ORDER BY id LIMIT 1;
+        ```
+        Check `ROW_COUNT()` afterwards — it must be `1`. A `WHERE id = 1` shortcut here would silently
+        match zero rows if the settings row's id is ever not `1`, leaving the bookmark stale with no
+        error while the `AUTO_INCREMENT` bump above still took effect, which is worse than doing
+        neither. (There is no `artisan` command for this write — it is a deliberate, logged, one-time
+        DBA action on the bookmark column, not on any audit row.) Skip both statements if the archive's
+        newest id was **not** greater than the local max — nothing to reconcile, `audit:ship` resumes
+        normally.
+     4. **Record the lost window** (which ids/dates exist in the archive but no longer locally) in the
+        incident record, same spirit as step 8 below for clinical data — the archive still has those
+        rows for audit purposes even though `dmc_demo` does not.
+   - Spot-check today's census on the dashboard against the ward.
 7. **Reconnect and unfreeze:** restore the app's `.env` (`APP_KEY` **must** be the one in use when
    the backup was taken — otherwise MFA secrets will not decrypt and every user is locked out of
    MFA; see the MFA reset procedure in the auth runbook), `php artisan up` / start the container.
 8. **Tell people** what window of data was lost (from the backup's `created_at` to the incident) —
    clinicians will need to re-enter admissions/discharges/consultations from that window.
 9. Run `php artisan backup:verify` and a fresh `db-backup.py` so the next night starts clean.
+
+### 5.1 Whole-server loss (RES-09) — **UNREHEARSED**
+
+> **Status.** Unlike the drills in §8 (restore drill, rollback rehearsal, PITR rehearsal), **this
+> exact scenario — the whole OCI instance gone, not just the database — has never been rehearsed.**
+> Everything below is assembled from what is already true elsewhere in this repo (§9 of
+> [`DEPLOY-LARAVEL.md`](DEPLOY-LARAVEL.md) is the "recreate production" procedure this reuses) plus
+> this doc's own restore/PITR steps; treat the RTO as **unmeasured** until someone actually runs it,
+> ideally against a throwaway OCI instance the way the PITR rehearsal uses a throwaway container.
+
+Scenario: the OCI instance itself is gone — destroyed, unrecoverable, or the tenancy is
+inaccessible — not merely "the database container crashed" (that is §5 above) or "the app deploy is
+bad" (`DEPLOY-LARAVEL.md` §4). Everything on that host's local disk is gone: the MySQL data volume,
+`/opt/dmc/backup/`, `/root/.dmc-backup.env` and `/root/.dmc-backup.key`, host crons, Coolify itself.
+**What survives, because it was deliberately placed off that host:** the encrypted dumps and binlogs
+in OCI Object Storage bucket `dmc-db-backups` (in-Kingdom, a separate OCI resource from the compute
+instance), the audit archive bucket `dmc-audit-log`, the GitHub repository, and whatever the owner
+holds outside the host (below).
+
+1. **Stand up a replacement host.** A new OCI Ubuntu compute instance in `me-riyadh-1` (the app's
+   region — Saudi PDPL/SDAIA data residency, `CLAUDE.md` §1), Docker + Coolify v4 installed fresh
+   (`DEPLOY-LARAVEL.md` §9 step 1). Firewall 80/443 to **Cloudflare's published ranges only** — never
+   `0.0.0.0/0` — and SSH key-only (§0's topology note: the origin talks to nothing else).
+2. **Recreate the Coolify application.** Source = the GitHub repo, branch `main`, Nixpacks, base
+   directory `laravel/` (`DEPLOY-LARAVEL.md` §9 step 2). This is a **new** Coolify application with a
+   **new** uuid — every runbook line that names `v5d8vrnp418stpcwnup3yhta` (host-lookup-by-label in
+   `dmc-schedule.sh`, the rollback script, the API examples) needs the new uuid substituted in. As
+   soon as the container exists, **freeze it** (`php artisan down` inside it, same as §5 step 1) and
+   leave it frozen through step 9 below — unlike §5, this procedure installs the host scheduler cron
+   (step 7) *before* the audit reconciliation it must not race, and maintenance mode is what keeps
+   `audit:ship` from running in between (Laravel's scheduler skips every command that is not
+   `evenInMaintenanceMode()` while frozen, so the hourly `audit:ship` — not one of those — simply
+   does not fire until `php artisan up` in step 9). **The freeze does not survive a container swap:**
+   the file driver keeps its flag in the container's own `storage/framework`, and every redeploy —
+   including the one step 3's environment variables need — starts a fresh container, unfrozen (ADR
+   0002). Re-run `php artisan down` after **every** redeploy or restart in steps 3–8, and before step 7
+   installs the crons confirm it holds:
+   `docker exec <app container> test -f storage/framework/down && echo frozen`.
+3. **Environment variables** (`DEPLOY-LARAVEL.md` §5 and §9 step 3), the load-bearing one being
+   **`APP_KEY` from the owner's escrow copy — never `php artisan key:generate` on a server meant to
+   hold real data.** A regenerated key makes every encrypted narrative column, `users.mfa_secret` and
+   `settings.mail_password` in the restored database permanently unreadable (§1, §9 of
+   `ENCRYPTION-AT-REST.md`). The rest of `DB_*` / `AUDIT_S3_*` / `SESSION_ENCRYPT` etc. as documented
+   there; the backup bucket's own `S3_ACCESS_KEY`/`S3_SECRET` (below) are separate from `AUDIT_S3_*`.
+4. **MySQL 8.4 container** on the new host, same shape as today's (§0's topology: `mysql:8`, utf8mb4,
+   InnoDB, a dedicated `dmc_demo` app user — never root — `DEPLOY-LARAVEL.md` §9 step 1).
+5. **Restore the data — base dump, then replay as far as the archive allows.** This is §5 above (the
+   latest dump the bucket holds) followed by §10.5 (every binlog shipped after that dump, replayed up
+   to the moment the old host was lost) **into `dmc_demo` directly** — there is no old database to
+   protect from a stray write any more, so skip the `dmc_restore_drill` detour and the
+   `--rewrite-db` flag (§10.5's third bullet under step 3: only drop `--rewrite-db` when replaying
+   onto a real `dmc_demo`, which this is). Needs the backup key from escrow (next step) to decrypt
+   anything.
+6. **Reinstall the backup/shipping scripts and their secrets.** `/opt/dmc/backup/*.py` and
+   `*.sh` are just files in this repo — §2.1 and §10.2 install them fresh. `/root/.dmc-backup.env`
+   is rebuilt from the private ops note (bucket name, region, endpoint, the backup `S3_ACCESS_KEY` /
+   `S3_SECRET` — **these must be held somewhere other than the lost host**, e.g. the owner's password
+   vault alongside the backup key). `/root/.dmc-backup.key` is **only** recoverable from the escrowed
+   copy §2.2 says to make at creation — there is no other copy anywhere, by design; without it every
+   existing off-box backup is permanently unreadable ciphertext.
+7. **Host crons**, all of them (`DEPLOY-LARAVEL.md` §6's table): `/usr/local/bin/dmc-schedule.sh`
+   (Laravel scheduler — update the container label it greps for to the new Coolify uuid),
+   `/etc/cron.d/dmc-db-backup` (§2.5), `/etc/cron.d/dmc-binlog-ship` (§10.2), and
+   `/etc/logrotate.d/dmc-backup` (§2). None of these come back on their own — Coolify does not manage
+   host crontab. `dmc-schedule.sh` starts firing every minute as soon as it is installed — the app
+   is still frozen from step 2, which is what stops the hourly `audit:ship` inside it from running
+   against a bookmark that has not been reconciled yet (step 9).
+8. **The binlog shipper starts a fresh chain on this host, by design.** `binlog-ship.py`'s state file
+   (`/var/backups/dmc/binlog-shipped.json`) is gone with the old host, and the restored MySQL
+   instance's `@@server_uuid` is new (a fresh data directory), so §10.7's identity check has nothing
+   to compare against — the first run on the new host simply starts shipping from whatever binary log
+   MySQL opens after the restore, with no error. That is correct: the old host's archived binlogs are
+   still in the bucket and were already used in step 5's replay; the new chain only needs to cover
+   *from here forward*. Do not attempt to make the new server's binlog numbering continue the old
+   one's — it cannot, and §10.7's guard exists precisely to stop that being tried by mistake.
+9. **Audit reconciliation** — before anything else writes to `audit_log`, follow §5's step 6 (the
+   full procedure, including the archive comparison and the `AUTO_INCREMENT` guard) exactly as if
+   this were the plain §5 restore in step 5 above, because it is one. Only then, `php artisan up` to
+   lift the freeze from step 2 — until this line the app has been frozen the whole time, including
+   while the crons in step 7 were live, precisely so the hourly `audit:ship` could not run against
+   the stale bookmark first.
+10. **DNS.** Repoint the Cloudflare A/AAAA record for `dmc-new.towardpcc.com` at the new host's IP,
+    **keeping it proxied** (orange-cloud) — an unproxied record gets no answer at all, because the
+    origin firewall (step 1) only admits Cloudflare's ranges.
+11. **Verify**, in this order: `scripts/smoke.sh` against the public hostname, `/health`, `php artisan
+    audit:verify` on the restored `dmc_demo`, then the human check in `DEPLOY-LARAVEL.md` §3.3.
+12. **Tell people which window was lost** — same as §5 step 8, but the window is now bounded by
+    whatever the last binlog shipped before the host died, not by the nightly dump alone (that is the
+    entire point of having binlog shipping at ≤ 1 h RPO instead of the 24 h dump-only figure).
+
+**What only the owner holds, and this procedure cannot proceed without:** the escrowed
+`/root/.dmc-backup.key` copy (§2.2 — no other copy exists anywhere by design), `APP_KEY` (escrowed
+per `HANDOFF.md` — regenerating it is not a recovery option, it is a second, permanent data-loss
+event on top of the first), OCI tenancy/console access to create the replacement instance and read
+the two buckets' credentials, Cloudflare account access to repoint DNS, and GitHub access to the
+private ops note carrying the Coolify API token and the exact `S3_ACCESS_KEY`/`S3_SECRET` pairs
+(these are placeholders in §2.3's example env file, deliberately never committed). **This list is
+itself a gap**: nothing in this repo currently proves those credentials are recoverable *without* the
+lost host — verifying that (and rehearsing the whole section) is the follow-up this runbook update
+does not close.
 
 ---
 
@@ -318,6 +480,17 @@ Every off-box object is patient data. The lifecycle period must be agreed with t
 records-retention / privacy officer (PDPL + MOH health-record retention rules apply); until that is
 minuted, treat 90 days as a placeholder, not a decision. Bucket versioning, if enabled, also needs a
 retention decision.
+
+**Measured bucket volume (2026-09-22, `db-backup.py`/`binlog-ship.py`'s own log lines on the
+host — hourly rotation has been running since 2026-09-04, §10.2).** Nightly dumps run about
+**2.3 MB each**; hourly binlog shipping produces 24 objects/day totalling about **4.8 MB/day**
+(≈ 200 KB per hour of ordinary clinical activity). At the 90-day placeholder above, that is
+roughly **90 dumps ≈ 210 MB** plus **~2,160 binlog objects ≈ 430 MB** — well under a gigabyte, so
+sizing is not the reason to reconsider the retention period. This replaces the earlier "measure
+after the first week" placeholder; re-measure if activity volume changes materially (a much busier
+unit, or a schema change that inflates row size). **The lifecycle rule itself is still an
+OCI-console task for the owner, and 90 days is still a placeholder pending the records-retention
+decision** — this section only answers "how big", not "how long".
 
 ---
 
@@ -393,9 +566,11 @@ Add one row per drill (monthly) and per real restore. This table *is* the eviden
 
 ## 10. Point-in-time recovery (binlogs)
 
-> **Status.** The script and its tests are in the repository and unit-tested. **Nothing in this
-> section has been installed or run on the production host.** Until an operator does §10.2, the RPO
-> is still the nightly 24 hours (§1) and there is no off-box binary log.
+> **Status.** **Installed and running in production** — `/etc/cron.d/dmc-binlog-ship` went live
+> 2026-09-03 19:21 UTC (PR #19), and the point-in-time recovery it enables has itself been rehearsed
+> end to end on a throwaway server (§8, 2026-09-22). RPO for anything the binary log covers is ≤ 1 h
+> (§1). The procedure below (§10.2 on) is the install steps as run, kept as the reference for a
+> reinstall — see §5.1 for the one scenario that needs them followed again from scratch.
 
 ### 10.1 What is already true on the server, and what the gap was
 
@@ -629,13 +804,33 @@ the drill does (§4), and note the dump's moment from its heartbeat:
 ```bash
 sudo /opt/dmc/backup/db-restore-drill.sh          # → dmc_restore_drill, prints counts and timings
 sudo /usr/bin/python3 /opt/dmc/backup/db-backup.py --print-latest | jq -r .created_at
-#   e.g. 2026-09-03T02:15:07Z   ← this is <dump time> below
+#   e.g. 2026-09-03T02:15:07Z   ← this is <dump time> below, the --start-datetime FALLBACK
 ```
 
 > The drill **drops** `dmc_restore_drill` when it exits. For a real recovery, restore it the same way
 > but keep it: run the drill's own pipeline by hand (§4's description) or re-create the scratch DB
 > and pipe the decrypted dump into `mysql --database=dmc_restore_drill` with the same
 > `` sed 's/`dmc_demo`/`dmc_restore_drill`/g' `` rewrite. Nothing about the base restore changes.
+
+**Read the dump's exact binlog coordinate, if it has one.** Dumps taken with `--source-data=2`
+(every dump since this shipped, once an operator has reinstalled the host copy — §2.1) carry the
+exact binlog file and position as a *commented* line near the top: `-- CHANGE REPLICATION SOURCE TO
+SOURCE_LOG_FILE='binlog.000002', SOURCE_LOG_POS=1256;`. It is never executed — `mysqldump` writes it
+purely for a human or a script to read. Find it the same way the dump itself was read: decrypt and
+gunzip **in a pipe**, never to a file:
+
+```bash
+sudo /usr/bin/python3 /opt/dmc/backup/db-backup.py --download "<object>" "$W/base.sql.gz.enc"
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass "file:$KEYFILE" -in "$W/base.sql.gz.enc" \
+  | gunzip -c | head -n 40 | grep 'CHANGE REPLICATION SOURCE TO'
+shred -u "$W/base.sql.gz.enc"
+#   -- CHANGE REPLICATION SOURCE TO SOURCE_LOG_FILE='binlog.000002', SOURCE_LOG_POS=1256;
+```
+
+If that prints a line, use `SOURCE_LOG_FILE`/`SOURCE_LOG_POS` as `--start-position` in step 3 below —
+exact, no boundary caveat. **If it prints nothing, the dump predates `--source-data=2`** (or the host
+copy has not been reinstalled yet): fall back to `--start-datetime="<dump time>"` from the heartbeat
+above, with the boundary caveat step 3 still documents for that path.
 
 **Step 2 — fetch and decrypt the binary logs that cover the window.** You need every archived binlog
 whose contents span *<dump time>* → *<the mistake>*, **in ascending sequence order**, including the
@@ -685,6 +880,19 @@ client. So the decrypted files are read in place and never copied into a contain
 PITR_IMG=dmc/mysql-pitr:8.4.10
 docker run --rm --entrypoint mysqlbinlog "$PITR_IMG" --version   # must be the server's version (mysqld --version)
 
+# Preferred, when the dump carried --source-data=2 (see the extraction in step 1 above):
+# --start-position applies to the FIRST file named below (SOURCE_LOG_FILE) — list files from
+# there forward, in ascending order, exactly like the --start-datetime form.
+docker run --rm --network none -v "$W":/pitr:ro --entrypoint mysqlbinlog "$PITR_IMG" \
+    --rewrite-db="dmc_demo->dmc_restore_drill" \
+    --database=dmc_restore_drill \
+    --start-position=1256 \
+    --stop-datetime="2026-09-03 13:59:00" \
+    /pitr/binlog.000002 /pitr/binlog.000003 /pitr/binlog.000004 \
+  | docker exec -i "$MYSQL_CONTAINER" sh -c \
+      'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot --database=dmc_restore_drill'
+
+# Fallback, for a dump taken before --source-data=2 (no coordinate to read in step 1):
 docker run --rm --network none -v "$W":/pitr:ro --entrypoint mysqlbinlog "$PITR_IMG" \
     --rewrite-db="dmc_demo->dmc_restore_drill" \
     --database=dmc_restore_drill \
@@ -694,6 +902,12 @@ docker run --rm --network none -v "$W":/pitr:ro --entrypoint mysqlbinlog "$PITR_
   | docker exec -i "$MYSQL_CONTAINER" sh -c \
       'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot --database=dmc_restore_drill'
 ```
+
+Run **one** of the two, not both — `--start-position` and `--start-datetime` are alternatives, and
+mixing them is meaningless (`mysqlbinlog` applies whichever is more restrictive per file). The
+2026-09-22 rehearsal (`scripts/backup/pitr-rehearsal.sh`, §8) used the `--start-datetime` form
+because its dumps predated this change; re-run it once a `--source-data=2` dump exists to exercise
+the `--start-position` path for real, and record that as its own row in §8.
 
 It prints `WARNING: The option --database has been used. It may filter parts of transactions, but
 will include the GTIDs in any case` once per file. That is expected and harmless here: `gtid_mode` is
@@ -725,13 +939,14 @@ Five things about that command are load-bearing:
   `--stop-datetime` is exclusive of the moment you name, so pick the second *before* the mistake.
   `binlog-ship.py --restore-check <object>` prints each archived file's `covers=` window, which is
   the quickest way to confirm you have the right files before you start.
-- **The dump does not record its exact binlog coordinate** (`db-backup.py` does not pass
-  `--source-data`), so `--start-datetime` = the dump's `created_at` is the anchor. It is
-  second-precision and `--single-transaction` means the snapshot is taken at the dump's *start*, so
-  expect a handful of events at the boundary to be re-applied; with `ROW` format those either
-  produce identical rows or fail loudly on a duplicate key rather than silently duplicating data.
-  If a boundary error stops the replay, note the position it reports and resume with
-  `--start-position`. (Recording the coordinate properly is the follow-up noted in §10.6.)
+- **Two ways to anchor the start, depending on the dump.** A dump taken with `--source-data=2`
+  records its exact binlog file+position (step 1 above) — use `--start-position` and there is no
+  boundary ambiguity. A dump taken before that (or before the host copy is reinstalled, §2.1) has
+  only `created_at`, second-precision, and `--single-transaction` means the snapshot is taken at the
+  dump's *start* — so with `--start-datetime` expect a handful of events at the boundary to be
+  re-applied; with `ROW` format those either produce identical rows or fail loudly on a duplicate key
+  rather than silently duplicating data. If a boundary error stops a `--start-datetime` replay, note
+  the position `mysqlbinlog` reports and resume with `--start-position` from there.
 
 **Step 4 — verify before you promote anything.**
 
@@ -794,7 +1009,11 @@ sources — do not promote it; go back to step 3 with a different window.
 **Step 5 — decide, then clean up.** Promotion is a separate, deliberate act: it is the §5 FULL
 restore with the recovered scratch database as the source instead of a dump (freeze the app, back up
 what is there now, `RENAME`/reload into `dmc_demo`, `php artisan migrate`, `audit:verify`, unfreeze,
-and tell people exactly which window was rolled back). Whatever you decide:
+and tell people exactly which window was rolled back). **Run §5 step 6's audit archive
+reconciliation** (the `audit:ship --status` check, the archive key-name comparison, and the
+`AUTO_INCREMENT`/bookmark fix if the archive's newest id is ahead of what was promoted) **before**
+unfreezing the app — a replay that stopped short of "now" is exactly the case where the local table
+and the archive can disagree about which ids are already spoken for. Whatever you decide:
 
 ```bash
 # the decrypted binary logs are patient data — shred them, do not just unlink them. Step 3 read them
@@ -827,15 +1046,16 @@ after any change to MySQL's version, the backup scripts or this procedure.
   truncate. That is exactly why `--stop-datetime` exists — and why step 4 is not optional.
 - **`APP_KEY` is still the root of trust** (§1): replayed rows include encrypted narratives and MFA
   secrets, which are unreadable without the key that was in use when they were written.
-- **Follow-up worth doing (not done here):** add `--source-data=2` to `db-backup.py`'s `mysqldump`
-  so every dump records the exact binlog file and position it corresponds to. That turns step 3's
-  `--start-datetime` guess into an exact `--start-position` and removes the boundary caveat.
+- **The dump now records its exact binlog coordinate.** `db-backup.py`'s `mysqldump` call carries
+  `--source-data=2` (added in this change), so every dump taken from now on turns step 3's
+  `--start-datetime` guess into an exact `--start-position` and removes the boundary caveat below —
+  see step 3. Dumps taken **before** this shipped, and the host copy at `/opt/dmc/backup/db-backup.py`
+  until an operator reinstalls it (§2.1), still need the `--start-datetime` fallback.
 - **Retention.** These objects are patient data under the same 90-day placeholder as §6 and need the
-  same records-retention decision. **Do not size the bucket from today's 348 MB file**: that one
-  accumulated over a long period with no rotation. Once the hourly `FLUSH` is in place each archived
-  file holds roughly one hour of changes and will be far smaller, and there will be ~24 objects a day
-  instead of one. Measure the real daily volume after the first week and set the lifecycle rule from
-  that, not from a guess.
+  same records-retention decision. **The measured bucket volume is in §6** (updated 2026-09-22, once
+  hourly rotation had real data to measure from) — do not size the bucket from an old, unrotated
+  binlog file that accumulated over a long period; each hourly-rotated file holds roughly one hour of
+  changes.
 
 ### 10.7 Failure modes
 

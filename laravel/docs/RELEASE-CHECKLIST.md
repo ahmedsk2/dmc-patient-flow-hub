@@ -10,7 +10,7 @@
 |---|---|---|---|---|
 | v | | | | |
 
-| Migrations in this release? | Any data-fix / backfill migration (DB rollback = restore)? | Env-var changes (rebuild or restart)? | Pre-deploy dump filename |
+| Migrations in this release? | Any data-fix / backfill migration (DB rollback = restore)? | Env-var changes (rebuild or restart)? | Pre-deploy dump object key |
 |---|---|---|---|
 | ☐ no ☐ yes: | ☐ no ☐ yes: | ☐ none ☐ restart ☐ rebuild: | |
 
@@ -39,9 +39,9 @@ Run from `laravel/` on the exact commit you will deploy.
 
 ## 3. Backup (§2) — mandatory when there are migrations, expected always
 
-- [ ] Pre-deploy dump taken **now** (not this morning): `dmc_demo_pre-deploy_<timestamp>.sql.gz`; `gzip -t` passed; size is plausible (compare with the previous one).
+- [ ] Pre-deploy dump taken **now** (not this morning) with `sudo /usr/bin/python3 /opt/dmc/backup/db-backup.py` (DEPLOY-LARAVEL.md §2 — encrypted, straight to the bucket, no local file): its log line reads `OK object=…`; record that object key in the header table; `bytes=` is plausible (compare with the previous one in `/var/log/dmc-backup.log`).
 - [ ] Copied **off the host** per `BACKUP-AND-RESTORE.md`.
-- [ ] Filename written into the header table.
+- [ ] Object key written into the header table.
 
 ## 4. Announce start
 
@@ -56,19 +56,19 @@ Run from `laravel/` on the exact commit you will deploy.
 
 ## 6. Smoke (§3.3)
 
-- [ ] `BASE_URL=https://dmc-new.towardpcc.com bash laravel/scripts/smoke.sh` at the deployed commit → **0 FAIL** (WARN only for `/health` / `security.txt` if not yet shipped). Paste the summary line: ______
+- [ ] `BASE_URL=https://dmc-new.towardpcc.com bash laravel/scripts/smoke.sh` at the deployed commit → **0 FAIL**. `/health` and `security.txt` have been live since 2026-09-03, so a 404 on either is a real FAIL. Paste the summary line: ______
 - [ ] Admin login with MFA works; dashboard census plausible; Consultations list, handover sheet and physician dashboard open; a PDF downloads. No test patients created.
 
 ## 7. Verify the audit chain and the scheduler
 
 - [ ] `sudo docker exec $(sudo docker ps -q -f "label=coolify.name=v5d8vrnp418stpcwnup3yhta") php artisan audit:verify` → chain intact (exit 0).
-- [ ] `/health` reports `"status":"ok"` (once shipped) — or `sudo /usr/local/bin/dmc-schedule.sh` exits 0 by hand (§6).
+- [ ] `/health` reports `"status":"ok"` (db, storage, scheduler heartbeat and clock skew all healthy); if the scheduler is the stale part, `sudo /usr/local/bin/dmc-schedule.sh` exits 0 by hand (DEPLOY-LARAVEL.md §6).
 - [ ] Control → Settings: `consultations_source_of_truth` still **ON** (§7).
 
 ## 8. Announce done and log it
 
 - [ ] Clinical owner told: *"Release v… live at HH:MM, smoke passed, sign in again if you were logged in."*
-- [ ] Deploy log entry (date, tag/SHA, deployer, deployment uuid, dump filename, smoke summary, anything odd) added to the ops record.
+- [ ] Deploy log entry (date, tag/SHA, deployer, deployment uuid, dump object key, smoke summary, anything odd) added to the ops record.
 - [ ] Next morning: confirm `audit:verify-daily` (02:30) and `dq:notify` (07:00) ran without alerts; skim `storage/logs` (or the shipped copy) for new errors.
 
 ## 9. Rollback triggers — decide in minutes, not hours (§4)

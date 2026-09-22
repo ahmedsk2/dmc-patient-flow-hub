@@ -11,6 +11,7 @@ use App\Models\Admission;
 use App\Models\Setting;
 use App\Models\User;
 use App\Support\Audit;
+use App\Support\RenderBudget;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -64,20 +65,12 @@ class ReportsController extends Controller
 
     /**
      * §3.6 stopgap: bound a synchronous booklet render so a slow report cannot hold a web worker open
-     * indefinitely.
-     *
-     * Deliberately a NO-OP on the CLI. PHP's CLI SAPI defaults max_execution_time to 0 (unlimited), and
-     * the limit is per-PROCESS, not per-call — so setting it here caps everything that runs afterwards in
-     * the same process. In PHPUnit that means one Reports test silently puts the whole remaining suite on
-     * a 120-second budget and the run dies mid-way with "Premature end of PHP process"; in a queue worker
-     * it would cap a legitimately long render (GenerateMonthlyPdf).
+     * indefinitely — and is not cut short by the tighter web SELECT cap. The rules (including why it
+     * is a no-op on the CLI) live in App\Support\RenderBudget, shared with GenerateMonthlyPdf.
      */
     private function boundSyncRender(): void
     {
-        if (PHP_SAPI === 'cli') {
-            return;
-        }
-        @ini_set('max_execution_time', '120');
+        app(RenderBudget::class)->apply();
     }
 
     public function pdf(ReportYearRequest $request): SymfonyResponse
@@ -451,7 +444,7 @@ class ReportsController extends Controller
         }
 
         $this->boundSyncRender();
-        $pdf = Pdf::loadView('reports.monthly-pdf', $this->gatherBooklet($year))->setPaper('a4', 'landscape');
+        $pdf = $this->renderMonthlyBooklet($year);
 
         // prod-ready G1: break-glass row for the synchronous monthly-booklet export (aggregate
         // figures only). The ?async=1 path is a dispatch, not an export — it returns no file, so it
@@ -462,15 +455,38 @@ class ReportsController extends Controller
         return $pdf->download("CONFIDENTIAL-dmc-monthly-report-{$year}.pdf");
     }
 
+    /** Shared with GenerateMonthlyPdf's job body and downloadGenerated()'s on-demand fallback. */
+    private function renderMonthlyBooklet(int $year): \Barryvdh\DomPDF\PDF
+    {
+        return Pdf::loadView('reports.monthly-pdf', $this->gatherBooklet($year))->setPaper('a4', 'landscape');
+    }
+
     /**
      * Phase 3 — §3.6: stream a queued-generated booklet PDF stored under storage/app/reports and
      * delete it after send. Admin-only (route group). The file lives on the private `local` disk —
      * no PHI is ever exposed through the public disk.
+     *
+     * PERF-07: that disk is the container's local filesystem, which Coolify recreates empty on
+     * every deploy (§10 "no staging / every deploy is a production change") — a notification's
+     * download link issued before a deploy would otherwise 404 forever with no recovery but asking
+     * the admin to re-run the report. `key` is entirely reconstructible (monthly-{year}-{userId}.pdf,
+     * GenerateMonthlyPdf's own filename — no PHI, §5), so when the file is missing but the key still
+     * matches that exact shape, regenerate the SAME booklet from the SAME inputs and store it back
+     * before serving, making the link self-healing instead of a dead end. A key that doesn't match
+     * the known shape still 404s — this never becomes an arbitrary "render me a year" trigger.
      */
     public function downloadGenerated(string $key): SymfonyResponse
     {
         $path = "reports/{$key}";
-        abort_unless(Storage::disk('local')->exists($path), 404);
+
+        if (! Storage::disk('local')->exists($path)) {
+            if (! preg_match('/^monthly-(\d{4})-\d+\.pdf$/', $key, $m)) {
+                abort(404);
+            }
+            $this->boundSyncRender();
+            Storage::disk('local')->put($path, $this->renderMonthlyBooklet((int) $m[1])->output());
+        }
+
         $abs = Storage::disk('local')->path($path);
 
         // prod-ready G1: break-glass row for the queued-generated booklet download — the storage

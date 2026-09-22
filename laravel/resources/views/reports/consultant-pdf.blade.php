@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 @php
+    use App\Support\ArabicShaper;
     use App\Support\ReportSvg;
     $img = fn (string $f) => public_path('images/' . $f);
     $n = $physician['numbers'];
@@ -17,6 +18,10 @@
     // discharge-destination donut + discharged-to donut (zip labels with data)
     $destSlices = array_combine($physician['destinations']['labels'], $physician['destinations']['data']);
     $toSlices = array_combine($physician['dischargedTo']['labels'], $physician['dischargedTo']['data']);
+    // I18N-06: pre-shape every free-text/name field this template prints — see ArabicShaper's docblock.
+    $classificationFoot = ArabicShaper::shape('CONFIDENTIAL — Internal use / خاص — للاستخدام الداخلي');
+    $orgHeader = ArabicShaper::shape('Eastern Health Cluster · تجمع الشرقية الصحي');
+    $physicianName = ArabicShaper::shape($physician['name']);
 @endphp
 <style>
     @page { margin: 18pt 22pt; }
@@ -50,14 +55,14 @@
 </head>
 <body>
 
-<div class="classification-foot">CONFIDENTIAL — Internal use / خاص — للاستخدام الداخلي</div>
+<div class="classification-foot">{{ $classificationFoot }}</div>
 
 {{-- ============== PAGE 1 — KPI CARDS + MONTHLY TREND ============== --}}
 <div class="page">
     <img class="banner" src="{{ $img('reportheader1.png') }}" alt="">
     <div class="head">
-        <div class="org">Eastern Health Cluster · تجمع الشرقية الصحي<br>Generated {{ $generatedAt }}</div>
-        <h1>Consultant Scorecard — {{ $physician['name'] }}</h1>
+        <div class="org">{{ $orgHeader }}<br>Generated {{ $generatedAt }}</div>
+        <h1>Consultant Scorecard — {{ $physicianName }}</h1>
         <div class="sub">{{ $from }} to {{ $to }}</div>
     </div>
 
@@ -85,8 +90,8 @@
 {{-- ============== PAGE 2 — DESTINATION DONUTS + TOP DIAGNOSES ============== --}}
 <div class="page-last">
     <div class="head">
-        <div class="org">Eastern Health Cluster · تجمع الشرقية الصحي<br>Generated {{ $generatedAt }}</div>
-        <h1>Consultant Scorecard — {{ $physician['name'] }}</h1>
+        <div class="org">{{ $orgHeader }}<br>Generated {{ $generatedAt }}</div>
+        <h1>Consultant Scorecard — {{ $physicianName }}</h1>
         <div class="sub">Destinations & diagnoses · {{ $from }} to {{ $to }}</div>
     </div>
 
@@ -104,7 +109,7 @@
                     <table class="data">
                         <tbody>
                             @forelse ($physician['topDx'] as $d)
-                                <tr><td>{{ \Illuminate\Support\Str::limit($d['label'], 36) }}</td><td class="r">{{ $d['value'] }}</td></tr>
+                                <tr><td>{{ ArabicShaper::shape(\Illuminate\Support\Str::limit($d['label'], 36)) }}</td><td class="r">{{ $d['value'] }}</td></tr>
                             @empty
                                 <tr><td colspan="2">No diagnoses in range.</td></tr>
                             @endforelse

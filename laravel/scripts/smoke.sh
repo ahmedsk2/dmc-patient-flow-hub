@@ -8,8 +8,8 @@
 #   BASE_URL=https://dmc-new.towardpcc.com bash laravel/scripts/smoke.sh
 #
 # Each check prints PASS / WARN / FAIL (or SKIP). Exit status is 1 if ANY check FAILed, else 0.
-# WARN never fails the run — it marks things expected to be absent until a parallel workstream
-# ships them (/health, /.well-known/security.txt) or a proxy-layer nuisance worth knowing about.
+# WARN never fails the run — it marks a proxy-layer nuisance or a soft gap worth knowing about.
+# /health and /.well-known/security.txt have been live since 2026-09-03, so a 404 on either now FAILs.
 #
 # Environment:
 #   BASE_URL        origin to test                       (default: the production host)
@@ -111,12 +111,12 @@ else
     fail "/up → $CODE (expected 200)"
 fi
 
-# ── 2. Health (db, storage, scheduler heartbeat) — WARN while not yet deployed ────────────────
+# ── 2. Health (db, storage, scheduler heartbeat, clock skew) ──────────────────────────────────
 fetch health /health
 if [ "$CURL_RC" -ne 0 ]; then
     fail "/health — $(curl_error health)"
 elif [ "$CODE" = "404" ]; then
-    warn "/health → 404 (endpoint not deployed yet — expected until the health-endpoint workstream ships)"
+    fail "/health → 404 (the endpoint has shipped since 2026-09-03 — a 404 means a wrong image or route)"
 elif [ "$CODE" = "200" ]; then
     if grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' "$TMP/health.body"; then
         pass "/health → 200, status ok"
@@ -249,7 +249,7 @@ elif [ "$CODE" = "200" ]; then
         warn "/.well-known/security.txt → 200 but has no Contact: line (RFC 9116 requires Contact + Expires)"
     fi
 elif [ "$CODE" = "404" ]; then
-    warn "/.well-known/security.txt → 404 (not shipped yet)"
+    fail "/.well-known/security.txt → 404 (shipped since 2026-09-03 — a 404 means a wrong image or route)"
 else
     fail "/.well-known/security.txt → $CODE"
 fi

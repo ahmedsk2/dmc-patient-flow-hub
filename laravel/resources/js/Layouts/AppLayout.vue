@@ -17,6 +17,12 @@ import { notifText, feedTarget } from '@/Layouts/notifText.js';
 // block below) — declared up top so both `logout()` and the mount hook can reach it.
 const SESSION_START_KEY = 'dmc-session-started-at';
 
+// RES-01: bound the bell's notification fetches so a stalled network (or a hung worker behind the
+// per-request MAX_EXECUTION_TIME cap) can't leave the panel spinning forever. An abort surfaces as a
+// rejected promise, which the existing catch blocks around each fetch already treat like any other
+// failed request (TST-10: keep whatever is already shown, log and move on, never throw).
+const FETCH_TIMEOUT_MS = 10000;
+
 // Wave 1 (EHC UI): signing out also forgets the command palette's recent-patient ids (module
 // memory) — shared clinical workstations must never carry one user's recents into the next
 // session. Used by BOTH the header sign-out button (= the nav "Lock" affordance) and the
@@ -289,16 +295,25 @@ const unreadOverride = ref(null);
 const unread = computed(() => unreadOverride.value ?? (page.props.unreadNotifications || 0));
 watch(() => page.props.unreadNotifications, () => (unreadOverride.value = null));   // a real server refresh always wins
 
+// A non-OK answer (a 429 from the per-user patient-data throttle, a 419, a 500) carries an error
+// body, not a notification list — reading it as one would empty the list and zero the badge. Treat
+// it as a failed refresh instead, so what is already shown survives.
+const fetchNotifications = async () => {
+    const res = await fetch('/api/notifications', { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    if (!res.ok) throw new Error(`notifications refresh failed: HTTP ${res.status}`);
+    return res.json();
+};
 const toggleBell = async () => {
     bellOpen.value = !bellOpen.value;
     if (!bellOpen.value) return;
     bellLoading.value = true;
     try {
-        const d = await (await fetch('/api/notifications', { headers: { Accept: 'application/json' } })).json();
+        const d = await fetchNotifications();
         notifications.value = d.notifications || [];
         actionable.value = d.actionable || [];
     } catch (e) {
-        // TST-10: a failed refresh keeps whatever list is already shown; nothing else to do here
+        // TST-10: a failed refresh (incl. a timeout) keeps whatever list is already shown; nothing
+        // else to do here
         console.warn('notifications refresh failed', e);
     } finally {
         bellLoading.value = false;
@@ -311,13 +326,14 @@ const clearing = ref(false);
 const clearNotifications = async () => {
     clearing.value = true;
     try {
-        await fetch('/notifications/read-all', { method: 'POST', headers: { Accept: 'application/json', 'X-XSRF-TOKEN': xsrf() } });
-        const d = await (await fetch('/api/notifications', { headers: { Accept: 'application/json' } })).json();
+        await fetch('/notifications/read-all', { method: 'POST', headers: { Accept: 'application/json', 'X-XSRF-TOKEN': xsrf() }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+        const d = await fetchNotifications();
         notifications.value = d.notifications || [];
         actionable.value = d.actionable || [];
         unreadOverride.value = d.unread ?? 0;   // still-open actionable reminders keep the badge lit
     } catch (e) {
-        // TST-10: the server-side read-all may or may not have landed; the next open re-fetches
+        // TST-10: the server-side read-all may or may not have landed (a timeout included); the next
+        // open re-fetches
         console.warn('clear notifications failed', e);
     } finally { clearing.value = false; }
 };
