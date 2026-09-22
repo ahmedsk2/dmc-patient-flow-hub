@@ -38,6 +38,11 @@ class SecurityHeadersTest extends TestCase
         $csp = $response->headers->get('Content-Security-Policy');
         $this->assertNotNull($csp, 'enforce is the default CSP_MODE');
         $this->assertMatchesRegularExpression("/script-src 'self' 'nonce-[A-Za-z0-9+\/=]+'/", $csp);
+        // SPC-WEB-002, tightened 2026-09-22: styles are nonce-based too, so no inline allowance
+        // anywhere in the policy. Verified in a browser across every page before shipping.
+        $this->assertMatchesRegularExpression("/style-src 'self' 'nonce-[A-Za-z0-9+\/=]+'/", $csp);
+        $this->assertStringNotContainsString("'unsafe-inline'", $csp,
+            'no directive may take an inline allowance — give a nonce instead');
 
         $response->assertHeader('X-Frame-Options', 'DENY');
         $response->assertHeader('X-Content-Type-Options', 'nosniff');
@@ -54,6 +59,25 @@ class SecurityHeadersTest extends TestCase
             (string) $response->headers->get('Cache-Control'),
             'authenticated PHI pages must not persist in a shared-workstation cache'
         );
+    }
+
+    /**
+     * The JS runtime needs the same nonce: Inertia stamps it on the <style> elements it inserts
+     * (its navigation progress bar, and the modal it renders for a non-Inertia error response such
+     * as the 429 page). Without this meta tag those styles are silently dropped once style-src has
+     * no inline allowance — nothing errors, the progress bar just stops being visible.
+     */
+    public function test_the_csp_nonce_meta_tag_matches_the_header_nonce(): void
+    {
+        $response = $this->actingAs($this->admin())->get('/');
+        $response->assertOk();
+
+        preg_match("/'nonce-([A-Za-z0-9+\/=]+)'/", (string) $response->headers->get('Content-Security-Policy'), $header);
+        $this->assertNotEmpty($header, 'CSP header must carry a nonce');
+
+        preg_match('/<meta name="csp-nonce" content="([^"]+)">/', $response->getContent(), $meta);
+        $this->assertNotEmpty($meta, 'app.blade.php must publish the nonce for the JS runtime');
+        $this->assertSame($header[1], $meta[1], 'the meta nonce and the header nonce must be identical');
     }
 
     public function test_inline_theme_script_nonce_matches_the_csp_header_nonce(): void

@@ -64,8 +64,9 @@ biggest live risk** (the original un-hardened build, on US hosting).
   leaked legacy credentials were changed at their providers (CFG-04); a routine rotation schedule.
 - [ ] **Keep GitHub Actions billing enabled** — if it lapses, CI silently checks nothing.
 - [ ] *Optional:* Cloudflare WAF rules tuned for the app; clean up ~112 legacy records with non-numeric
-  MRNs (D1, D3); revisit auto-deploy / auto-rollback (off by your decision, CICD-08); decide whether you
-  want tagged releases (unblocks signed provenance, CICD-05) and infrastructure-as-code (CFG-11).
+  MRNs (D1, D3); revisit auto-deploy / auto-rollback (off by your decision, CICD-08).
+- [ ] **Start tagging releases** (`vYYYY.MM.DD`) now that CI signs what it builds on a tag — the
+  provenance only exists for tagged commits, so an untagged deploy has none. *(CICD-05, §F)*
 
 ## C. Hospital legal / DPO — the owner chases
 
@@ -143,18 +144,30 @@ had a cross-cutting adversarial review (6 more real problems found and fixed, li
 
 ### Still open — engineering
 
-- [ ] **Reinstall the host copy of `db-backup.py`** after this PR is deployed (the nightly job runs the
-  host copy, not the repo). Operator step at deploy time.
-- [ ] **Exercise the PITR `--start-position` path** at the next rehearsal, once a nightly dump carrying
-  the recorded position exists.
-- [ ] **Chart labels in PDF reports:** a non-Latin name inside the per-consultant bar charts (an SVG
-  image) prints as `?` — a dompdf SVG-text limitation. No impact today (0 of 331 staff names contain
-  Arabic, checked 2026-09-22); fix by drawing those labels as HTML next to the bars. *(low)*
+- [x] ~~Reinstall the host copy of `db-backup.py`~~ — **done 2026-09-22** with the deploy; the nightly
+  dump now records its exact binlog position.
+- [x] ~~Exercise the PITR `--start-position` path~~ — **done 2026-09-22**: a dump taken with the new
+  script was replayed from its own recorded position (rehearsal PASS, 107 events, recovered rows equal
+  to live). The rehearsal script now reads the coordinate itself and falls back to a timestamp only for
+  older dumps.
+- [x] ~~Chart labels in PDF reports~~ — **not reproducible 2026-09-22**, closed with a regression test:
+  an Arabic chart label renders as real glyphs in the PDF (`ReportSvgArabicLabelTest`), including on a
+  page carrying no other Arabic.
 
-**Needs a word from the owner first:** signed build provenance (needs a tagged-release process,
-CICD-05) · infrastructure as code (CFG-11) · removing `'unsafe-inline'` from the style CSP (needs a
-real-browser verification pass on every page) · rehearsing the whole-server-loss runbook (needs a
-throwaway OCI instance).
+### Decided 2026-09-22 (owner said yes to all four)
+
+- [x] **Style security policy tightened** — `'unsafe-inline'` removed from every directive; Inertia's
+  runtime styles now carry the nonce. Verified in a real browser against a production build: login,
+  two-factor, dashboard, board, statistics, consultations, handovers, registry, reports, control,
+  active list, style guide, the tour and the command palette — zero violations, every style intact.
+- [x] **Signed release provenance** — a release job attests the SBOM and the built bytes on a pushed
+  `vYYYY.MM.DD` tag (`gh attestation verify` checks a download). It attests what CI built, not the
+  container Coolify builds on the host — stated plainly in the docs.
+- [x] **Infrastructure as code** — [`infra/`](infra/): Terraform for the server, network, firewall,
+  buckets and DNS, plus a host bootstrap script. **Never applied, never validated** (no Terraform
+  here); adopting it needs a plan and an import of the live resources first. Read `infra/README.md`.
+- [ ] **Rehearse losing the whole server** — approved; needs a temporary second instance. Not done yet;
+  this is the one that produces a real recovery-time figure instead of an estimate.
 
 ---
 

@@ -1,0 +1,37 @@
+# infra/terraform.tfvars.example — placeholder values only. Copy to terraform.tfvars and fill in
+# real values from the owner's OCI console, Cloudflare dashboard and the private ops note. NEVER
+# commit terraform.tfvars.
+#
+# NOTE: the repo root .gitignore does NOT currently have a *.tfvars / *.tfstate* rule (checked —
+# this directory's task scope is infra/ files only, so that gate has deliberately not been added
+# here). Add one to the root .gitignore in a separate, reviewed change BEFORE ever creating a real
+# terraform.tfvars anywhere in this repo, the same way .env*/*.sql are already blocked.
+#
+# Every value below is a placeholder or a documented default copied from variables.tf for
+# visibility — none of it is real. See infra/README.md "Placeholders and TODOs" for why each one
+# is not filled in here.
+
+# --- OCI scope --------------------------------------------------------------------------------
+oci_region          = "me-riyadh-1"                          # DEPLOY-LARAVEL.md §0 — real value, safe to keep
+oci_tenancy_ocid     = "<PLACEHOLDER-OCI-TENANCY-OCID>"
+oci_compartment_id   = "<PLACEHOLDER-OCI-COMPARTMENT-OCID>"
+
+# --- Compute -----------------------------------------------------------------------------------
+instance_shape       = "<PLACEHOLDER-VERIFY-INSTANCE-SHAPE>"        # not documented anywhere — read from the OCI console
+instance_image_id    = "<PLACEHOLDER-VERIFY-UBUNTU-IMAGE-OCID-FOR-ME-RIYADH-1>"
+ssh_public_key        = "<PLACEHOLDER-SSH-PUBLIC-KEY>"
+
+# --- Networking ---------------------------------------------------------------------------------
+# SSH is documented as NOT YET IP-restricted (CLAUDE.md §14). ["0.0.0.0/0"] reproduces today's
+# actual (open) state; replace with a real allow-list once the owner decides — that decision is
+# the whole point of this variable having no default.
+ssh_allowed_cidrs    = ["0.0.0.0/0"] # TODO: replace once the owner's SSH allow-list decision (CLAUDE.md §14) is made
+
+# --- Cloudflare ----------------------------------------------------------------------------------
+cloudflare_zone_id   = "<PLACEHOLDER-CLOUDFLARE-ZONE-ID>"
+# CLOUDFLARE_API_TOKEN is an environment variable, not a tfvars entry — see variables.tf.
+
+# app_origin_ip is intentionally left unset here. Leave it commented out so the DNS record wires
+# to this configuration's own oci_core_instance.app_host.public_ip instead of a hand-typed value
+# (see variables.tf's comment on app_origin_ip and DEPLOY-LARAVEL.md §0).
+# app_origin_ip = "<only set this if importing DNS against an existing instance you are not also provisioning here>"

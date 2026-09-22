@@ -57,7 +57,7 @@
   in-Kingdom hosting, backups, privacy-notice link). No framework badges until certificates exist.
 - **Docs:** pruned of dev scaffolding; PDPL paper-trail drafts in `laravel/docs/compliance/`.
 - **Gate baselines (2026-09-22, after the engineering batch):** PHPUnit 1004 (+91 in the `pdf` group), PHP statement
-  coverage 86.1 % at the last CI measurement (floor 83), Vitest 792 on vitest 5 (floors 72/66/62/48 lines/statements/branches/
+  coverage 88.1 % at the last CI measurement (floor 83), Vitest 792 on vitest 5 (floors 72/66/62/48 lines/statements/branches/
   functions — re-baselined 2026-09-22 for the new coverage engine, then raised the same day by the
   IcdTypeahead + ActivityPanel specs), ESLint zero warnings, Pint clean.
 

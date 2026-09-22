@@ -33,8 +33,19 @@ Run from `laravel/` on the exact commit you will deploy.
 ## 2. Record the release
 
 - [ ] Commit messages follow `type(scope): summary` (`feat`, `fix`, `harden`, `docs`, …) and contain no PHI, credentials or dump filenames.
-- [ ] Annotated tag on the deploy commit — there is no CHANGELOG file; **the tag message is the release note**:
-  `git tag -a v<YYYY.MM.N> -m "<what changed, migrations included, rollback type>"` then `git push origin main --tags`.
+- [ ] Annotated tag on the deploy commit — there is no CHANGELOG file; **the tag message is the release note**.
+  Tag scheme is **`vYYYY.MM.DD`** (append `.N` only for a same-day second release, e.g. `v2026.09.22.2`) —
+  calendar-dated, matching how every other doc in this repo already refers to a release (deploy date,
+  not a counter). Tag the exact commit you are about to deploy, not just wherever `main` happens to sit:
+  `git tag -a v<YYYY.MM.DD> -m "<what changed, migrations included, rollback type>"` then `git push origin main --tags`.
+- [ ] Pushing the tag runs the `release` job in Laravel CI (§CICD-05, `docs/CI.md`) — confirm it went
+  green (GitHub → Actions). It signs a CycloneDX SBOM and a tarball of `public/build` + the two lock
+  files with `actions/attest-build-provenance`, and archives both on the run (90 days). Not a required
+  check and does not gate this deploy, but a red `release` job here means something about the tagged
+  commit's dependency lock files is broken — do not ignore it. Verify a downloaded copy any time with:
+  ```sh
+  gh attestation verify laravel/release/dmc-laravel-build.tar.gz --repo ahmedsk2/dmc-patient-flow-hub
+  ```
 - [ ] `git log --oneline <deployed-sha>..main -- laravel/database/migrations` reviewed; the list matches the header table.
 
 ## 3. Backup (§2) — mandatory when there are migrations, expected always
@@ -50,6 +61,9 @@ Run from `laravel/` on the exact commit you will deploy.
 
 ## 5. Deploy (§3)
 
+- [ ] Coolify builds whatever commit is `main` HEAD at the moment Deploy is clicked — confirm no
+  unplanned commit landed on `main` between tagging (§2) and this step, so the SHA that gets built,
+  the SHA the `release` job attested, and the SHA in the header table above are the same one.
 - [ ] Env-var changes applied first; rebuild-vs-restart noted (§5).
 - [ ] Deploy triggered (Coolify UI **Deploy**, or `GET /api/v1/deploy?uuid=v5d8vrnp418stpcwnup3yhta`). Deployment uuid: ______
 - [ ] Deploy log watched to the end: build OK; **migrations printed = migrations expected**; container healthy.

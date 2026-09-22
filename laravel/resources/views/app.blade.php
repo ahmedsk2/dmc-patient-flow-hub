@@ -4,6 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    {{-- The same per-request CSP nonce the inline script below carries, exposed for the JS runtime:
+         resources/js/app.js hands it to Inertia, which stamps it on the <style> elements its progress
+         bar and error modal insert. That is what lets style-src drop 'unsafe-inline'. --}}
+    <meta name="csp-nonce" content="{{ $cspNonce ?? '' }}">
     <title inertia>{{ config('app.name', 'DMC Internal Medicine') }}</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="alternate icon" sizes="48x48 32x32 16x16" href="/favicon.ico">
