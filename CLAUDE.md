@@ -61,7 +61,7 @@ deploy is a production change.
 | Runtime | PHP 8.3, MySQL 8.4 (InnoDB, utf8mb4, real foreign keys) | `laravel/composer.json`, `docs/DEPLOY-LARAVEL.md` |
 | Backend | Laravel `^13.8`, Inertia (`inertiajs/inertia-laravel ^3.1`), dompdf `^3.1` (PDF), openspout `^5.3` (XLSX) | `composer.json` |
 | Frontend | Vue `^3.5` (`<script setup>`), `@inertiajs/vue3 ^3.3`, Tailwind CSS `^4`, Chart.js `^4` via `ChartCanvas.vue`, Vite `^8`, driver.js (tour), zxcvbn (password meter), qrcode (MFA enrolment) | `package.json` |
-| Tests | PHPUnit `^12` against a real MySQL `dmc_test`, Vitest `^3` + vitest-axe | `phpunit.xml`, `vitest.config.js` |
+| Tests | PHPUnit `^12` against a real MySQL `dmc_test`, Vitest `^5` + vitest-axe | `phpunit.xml`, `vitest.config.js` |
 | Hosting | Coolify v4 + Nixpacks on one OCI Ubuntu instance (`me-riyadh-1`), MySQL 8 container on the same host, Cloudflare in front | `docs/DEPLOY-LARAVEL.md` §0 |
 
 No SSR. No queue worker (`QUEUE_CONNECTION=sync`). No third-party auth or AWS SDK: TOTP and S3
@@ -371,8 +371,9 @@ PR (no path filter), plus a blocking Pint gate and Vitest coverage thresholds. T
 a separate pipeline; never merge them.
 
 **Baselines (2026-09-03, after PR #11):** PHPUnit 936 tests (+75 in the `pdf` group), PHP
-statement coverage 86.1 % (floor 83), Vitest 754 (floors lines/statements 80, branches 76,
-functions 44), ESLint zero warnings, Pint clean.
+statement coverage 86.1 % (floor 83), Vitest 757 on vitest 5 (floors lines 71, statements 65,
+branches 60, functions 46 — re-baselined 2026-09-22 because vitest 5's AST-aware coverage counts
+different units than vitest 3; see the history in `vitest.config.js`), ESLint zero warnings, Pint clean.
 
 **Run locally from `laravel/`:**
 

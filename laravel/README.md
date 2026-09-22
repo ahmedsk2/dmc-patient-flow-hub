@@ -53,7 +53,7 @@ export are admin-only.
 | Runtime | PHP 8.3+, MySQL 8 (InnoDB, utf8mb4) | `composer.json`, `docs/DEPLOY-LARAVEL.md` |
 | Backend | Laravel `^13.8`, Inertia (`inertiajs/inertia-laravel ^3.1`), dompdf `^3.1` (PDF), openspout `^5.3` (XLSX) | `composer.json` |
 | Frontend | Vue `^3.5` (`<script setup>`), `@inertiajs/vue3 ^3.3`, Tailwind CSS `^4`, Chart.js `^4` via a thin `ChartCanvas` wrapper, Vite `^8` | `package.json` |
-| Tests | PHPUnit (Feature tests against a real MySQL database), Vitest `^3` | `phpunit.xml`, `vitest.config.js` |
+| Tests | PHPUnit (Feature tests against a real MySQL database), Vitest `^5` | `phpunit.xml`, `vitest.config.js` |
 
 No SSR; the browser renders everything. `public/build/` is committed so the deploy host needs no
 Node toolchain.
