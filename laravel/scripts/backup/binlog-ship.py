@@ -952,6 +952,14 @@ def run_restore_check(cfg, key):
             raise BackupError(f"openssl decrypt exited {rc} (wrong key?): "
                               f"{db_backup.scrub(db_backup._short(b''.join(dec_err)), [cfg.get('S3_SECRET')])}")
         if scan_error is not None:
+            # openssl can also exit 0 on a wrong key: CBC padding validates by luck often enough to
+            # see it (a few in a thousand runs), and then the garbage it emitted is what gzip chokes
+            # on. "Not a gzipped file" therefore means the same thing as a non-zero exit above — the
+            # key is wrong, or this object is not what it claims — so say so rather than blaming the
+            # archive. A stream that STARTS as gzip and then fails is a genuinely damaged archive and
+            # keeps the original wording.
+            if isinstance(scan_error, gzip.BadGzipFile):
+                raise BackupError(f"{key} did not decrypt to gzip data (wrong key?): {scan_error}")
             raise BackupError(f"{key} is not a usable binary log: {scan_error}")
 
         line = (f"RESTORE-CHECK ok object={key} bytes={size} sha256={sha_cipher} "
