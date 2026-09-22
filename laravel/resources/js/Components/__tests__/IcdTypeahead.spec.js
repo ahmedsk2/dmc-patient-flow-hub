@@ -70,6 +70,17 @@ describe('lookup', () => {
         expect(calls[0].opts.headers.Accept).toBe('application/json');
         w.unmount();
     });
+
+    // RES-01: every lookup carries a bounded AbortSignal so a stalled network can't leave the field
+    // waiting forever (see the "timeout" case under "failures" for what happens when it fires).
+    it('sends an AbortSignal with every lookup', async () => {
+        const w = mountIt();
+        await type(w, 'dia');
+        await settle();
+        expect(calls[0].opts.signal).toBeInstanceOf(AbortSignal);
+        expect(calls[0].opts.signal.aborted).toBe(false);
+        w.unmount();
+    });
 });
 
 describe('dropdown and keyboard', () => {
@@ -221,6 +232,33 @@ describe('failures', () => {
         calls[0].resolve({ ok: false, status: 419, json: async () => ({ message: 'CSRF token mismatch.' }) });
         await flushPromises();
         expect(w.find('[role="listbox"]').exists()).toBe(false);
+        w.unmount();
+    });
+
+    // RES-01: a real AbortSignal.timeout() rejects the fetch with a TimeoutError DOMException, not a
+    // TypeError — it must be treated exactly like any other failed lookup: no dropdown, no throw.
+    it('a timed-out lookup (AbortSignal fires) shows no dropdown and does not throw', async () => {
+        const w = mountIt();
+        await type(w, 'dia');
+        await settle();
+        calls[0].reject(new DOMException('The operation timed out.', 'TimeoutError'));
+        await flushPromises();
+        expect(w.find('[role="listbox"]').exists()).toBe(false);
+        w.unmount();
+    });
+
+    // A timeout that fires AFTER the user already typed on / picked / left must not reopen or
+    // disturb anything — same generation-guard contract as a slow, eventually-successful answer.
+    it('a timed-out lookup that resolves late (after a newer query) is dropped, not shown', async () => {
+        const w = mountIt();
+        await type(w, 'dia');
+        await settle();                         // lookup #0 in flight for "dia"
+        await type(w, 'diab');
+        await settle();                         // lookup #1 in flight for "diab"
+        await answer(1, rows('E11'));
+        calls[0].reject(new DOMException('The operation timed out.', 'TimeoutError'));
+        await flushPromises();
+        expect(options(w).map((o) => o.text())).toEqual([expect.stringContaining('E11')]);
         w.unmount();
     });
 });

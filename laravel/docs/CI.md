@@ -164,16 +164,26 @@ is *unreachable in this application*, never because it is inconvenient:
   again until someone re-reads the reason and moves the date — that is the point.
 - Prefer upgrading the package. An ignore is a debt with a due date, not a fix.
 
-**Baseline on 2026-09-03** (`composer audit --locked`, Composer 2.10.2): 27 advisories.
-Ignored with reasons: `guzzlehttp/guzzle` CVE-2026-69246 (high — the only outbound HTTP call is the
-backup upload to a fixed S3 endpoint, `app/Support/S3SigV4.php`) and the six `dompdf/dompdf`
-advisories (medium/low — application-authored templates only, `enable_remote=false`, chroot set).
-**Still blocking: `league/commonmark` 2.8.2 carries eight HIGH advisories** (DoS via crafted
-Markdown, and an `on*` event-handler filter bypass in the Attributes extension), all fixed in
-≥ 2.9.1 / 2.10.0. It is a transitive dependency of `laravel/framework` and nothing under `app/`
-calls Markdown; it was **not** added to the ignore list because it was not part of the reviewed
-set. Resolve with `composer update league/commonmark` (or a full `composer update`) and commit the
-lock file — until then the backend job is red, by design.
+**Baseline on 2026-09-03 morning** (`composer audit --locked`, Composer 2.10.2): 27 advisories,
+including **`league/commonmark` 2.8.2 carrying eight HIGH advisories** (DoS via crafted Markdown,
+and an `on*` event-handler filter bypass in the Attributes extension) — a transitive dependency of
+`laravel/framework` that nothing under `app/` calls directly (reachable only via a crafted
+self-registered username, itself closed separately by the existing `alpha_dash` validation rule).
+
+**Fixed the same day, commit `267d422` ("chore(deps): clear all 27 composer security advisories"):**
+`league/commonmark` 2.8.2 → **2.10.0**, `guzzlehttp/guzzle` 7.11.1 → 7.15.5, `guzzlehttp/psr7`
+2.11.0 → 2.13.1, `dompdf/dompdf` 3.1.5 → 3.1.6 — resolved inside the production PHP 8.3 container
+(`composer update --no-install --with-all-dependencies`) so the lock matches what Nixpacks actually
+installs. The commit's own `composer audit --locked` run against the new lock reported **zero**
+advisories. The ignore-list entries for these two packages in `.composer-audit-ignore.json` now describe
+advisories against *older* versions than what `composer.lock` currently pins (`guzzlehttp/guzzle`
+≥ 7.15.2, `dompdf/dompdf` ≥ 3.1.6 — both satisfied) — kept because the reviewed reasoning (why each
+is unreachable in this app) is still correct background if either advisory's fixed-version claim
+turns out to be wrong, and removing an ignore entry that currently matches nothing is a cleanup with
+no safety benefit, not a fix. **This is the state as of the commit above; `scripts/composer-audit-gate.php`
+is what re-verifies it on every CI run** — a lock-file bump since then that reintroduces a
+high/critical advisory would fail the gate again, which is the gate working as intended, not a
+regression in this document.
 
 ### `secrets` — Secret scan (gitleaks)
 

@@ -25,10 +25,12 @@ use Throwable;
  * AUDIT_S3_* yet.
  *
  *   php artisan audit:ship
+ *   php artisan audit:ship --status   (read-only — see handleStatus() below)
  */
 class AuditShip extends Command
 {
-    protected $signature = 'audit:ship';
+    protected $signature = 'audit:ship
+        {--status : print the shipped-through bookmark and pending-row count; writes nothing and ships nothing}';
 
     protected $description = 'Ship unshipped audit_log rows to the configured S3-compatible archive as NDJSON';
 
@@ -36,6 +38,10 @@ class AuditShip extends Command
 
     public function handle(): int
     {
+        if ($this->option('status')) {
+            return $this->handleStatus();
+        }
+
         $settings = Setting::current();
         $mark = (int) $settings->audit_shipped_through_id;
 
@@ -100,6 +106,26 @@ class AuditShip extends Command
         ]);
 
         $this->info("shipped {$count} row(s) (#{$firstId}-#{$lastId}) to {$key}");
+
+        return self::SUCCESS;
+    }
+
+    /**
+     * BACKUP-AND-RESTORE.md §5/§10.5 step 5 — after restoring `dmc_demo` from a dump or a
+     * point-in-time replay, an operator needs to see this command's bookmark WITHOUT the side
+     * effect of running it (a real `audit:ship` right after a restore could ship a batch built
+     * from a bookmark that no longer matches what the write-once archive already holds — see the
+     * runbook for why that mark must be reconciled against the archive first). This reads
+     * `settings.audit_shipped_through_id` and the local table's current max id and prints them;
+     * it never writes to `settings`, never calls the archive, and never selects/ships a row.
+     */
+    private function handleStatus(): int
+    {
+        $mark = (int) Setting::current()->audit_shipped_through_id;
+        $maxId = (int) AuditLog::max('id');
+        $pending = $maxId > $mark ? AuditLog::where('id', '>', $mark)->count() : 0;
+
+        $this->info("audit_shipped_through_id={$mark} max_audit_log_id={$maxId} pending={$pending}");
 
         return self::SUCCESS;
     }

@@ -26,6 +26,12 @@
             "needle": "NOW() - INTERVAL 24 HOUR",
             "reason": "Admin band security-anomaly count; mirrors the Security panel's 24h cluster query exactly (the two numbers must agree) and reads the same DB-written audit_log.created_at.",
             "reviewed": "2026-09-22"
+        },
+        {
+            "file": "app/Http/Controllers/HealthController.php",
+            "needle": "UTC_TIMESTAMP() AS db_utc_now",
+            "reason": "R2 clock-skew health check: UTC_TIMESTAMP() is read back as a plain value and compared in PHP with Carbon::now('UTC') (both explicit UTC) to measure database-vs-PHP host clock drift for /health. It is never compared against an app-written column, so the session-timezone hazard this guard exists for does not apply.",
+            "reviewed": "2026-09-22"
         }
     ]
 }

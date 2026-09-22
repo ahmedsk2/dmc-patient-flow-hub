@@ -7,9 +7,10 @@ deliberately minimal so it survives any host rebuild: python3 stdlib + `openssl`
 
 Pipeline (one streaming pass — no plaintext ever touches the disk):
 
-    docker exec <mysql container> mysqldump --single-transaction --routines --triggers --databases <db>
+    docker exec <mysql container> mysqldump --single-transaction --source-data=2 --routines --triggers --databases <db>
       │  (root password is read INSIDE the container from its MYSQL_ROOT_PASSWORD env var — it never
-      │   appears in a host process's argv/env)
+      │   appears in a host process's argv/env; --source-data=2 records the exact binlog file+position
+      │   the dump was taken at, as a commented line near the top, for point-in-time recovery — §10.5)
       ▼
     gzip (in-process, stdlib)
       ▼
@@ -460,9 +461,19 @@ def mysqldump_cmd(container, db_name):
     # The password is expanded by `sh` INSIDE the container from its own environment; nothing
     # secret is in this argv. --set-gtid-purged=OFF keeps the dump restorable into a scratch
     # database on the same server (the restore drill) even if GTIDs are ever switched on.
+    # --source-data=2 (MySQL 8.4's name for the old --master-data) writes the exact binlog
+    # coordinate the dump was taken at as a COMMENTED "-- CHANGE REPLICATION SOURCE TO
+    # SOURCE_LOG_FILE=…, SOURCE_LOG_POS=…;" line near the top of the dump — never executed on
+    # restore, only read by an operator doing point-in-time recovery (BACKUP-AND-RESTORE.md
+    # §10.5) so the replay can start from an exact position instead of a second-precision
+    # --start-datetime guess. Combined with --single-transaction, mysqldump takes a brief
+    # GLOBAL READ LOCK at the very start (just long enough to note the coordinate and start the
+    # transaction) rather than holding a lock for the whole dump — acceptable at the 02:15
+    # off-peak window this runs in. The dump runs as root inside the container (§2 of the
+    # runbook), so the RELOAD/FLUSH privilege --source-data needs is already there.
     inner = (
-        'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump --single-transaction --routines --triggers '
-        "--set-gtid-purged=OFF --databases " + shlex.quote(db_name)
+        'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump --single-transaction --source-data=2 '
+        "--routines --triggers --set-gtid-purged=OFF --databases " + shlex.quote(db_name)
     )
     return ["docker", "exec", container, "sh", "-c", inner]
 

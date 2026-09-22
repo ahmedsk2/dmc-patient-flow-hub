@@ -178,7 +178,8 @@ class Naming(unittest.TestCase):
         cmd = db_backup.mysqldump_cmd("u8ha9zwdgekz9djnjt1ndisf", "dmc_demo")
         self.assertEqual(cmd[:5], ["docker", "exec", "u8ha9zwdgekz9djnjt1ndisf", "sh", "-c"])
         self.assertIn('MYSQL_PWD="$MYSQL_ROOT_PASSWORD"', cmd[5])
-        self.assertIn("--single-transaction --routines --triggers", cmd[5])
+        self.assertIn("--single-transaction --source-data=2", cmd[5])
+        self.assertIn("--routines --triggers", cmd[5])
         self.assertTrue(cmd[5].endswith("--databases dmc_demo"))
 
     def test_openssl_commands_use_the_agreed_kdf(self):

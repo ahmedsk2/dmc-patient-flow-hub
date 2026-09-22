@@ -12,11 +12,13 @@ use App\Models\Patient;
 use App\Models\Setting;
 use App\Models\User;
 use App\Support\Audit;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -102,7 +104,34 @@ class AdmissionsController extends Controller
         // role gate lives in StoreAdmissionRequest::authorize() (403 before validation)
         $data = $request->validated();
 
-        $admission = DB::transaction(function () use ($data) {
+        try {
+            $this->createAdmission($data);
+        } catch (UniqueConstraintViolationException $e) {
+            // RES-06, the one race the in-transaction lock below cannot reach: the FIRST admission of a
+            // brand-new MRN double-submitted. Both requests find no patient and both insert one; the
+            // loser hits UNIQUE(patients.mrn). firstOrCreate() cannot recover from that here — it
+            // re-reads inside its own REPEATABLE READ snapshot, which predates the winner's commit, so
+            // it rethrows. By now the winner has committed (the unique check waited for it), so this
+            // read sees the patient and its active episode. A LOCKING read, so it sees the latest
+            // committed row even if this ever runs inside an enclosing transaction's older snapshot.
+            if (! Patient::where('mrn', $data['mrn'])->sharedLock()->exists()) {
+                throw $e;
+            }
+            throw ValidationException::withMessages([
+                'mrn' => 'This MRN already has an active admission.',
+            ]);
+        }
+
+        return redirect()->route('patients.index')->with('flash', [
+            'type' => 'success',
+            'message' => "Patient {$data['name']} admitted (MRN {$data['mrn']}).",
+        ]);
+    }
+
+    /** The admission write: patient upsert, race-safe active-episode re-check, episode, diagnoses, audit. */
+    private function createAdmission(array $data): Admission
+    {
+        return DB::transaction(function () use ($data) {
             $patient = Patient::firstOrCreate(
                 ['mrn' => $data['mrn']],
                 ['name' => $data['name'], 'gender' => $data['gender'] ?? null, 'age' => $data['age'] ?? null,
@@ -112,6 +141,32 @@ class AdmissionsController extends Controller
             $patient->fill(['name' => $data['name'], 'gender' => $data['gender'] ?? $patient->gender,
                 'age' => $data['age'] ?? $patient->age,
                 'nationality' => $data['nationality'] ?? $patient->nationality])->save();
+
+            // RES-06: StoreAdmissionRequest::withValidator() already rejects a second active
+            // episode (discharge_date IS NULL) for this MRN, but that check runs BEFORE this
+            // transaction opens — two requests double-submitted for the same MRN (double-click,
+            // a retried POST) can both pass it before either has inserted, so both would create
+            // an admission. `lockForUpdate()` on the patient row serializes them: a concurrent
+            // second request blocks here until the first request's transaction commits (or rolls
+            // back). Plain reads are not enough to close the race even after that: under InnoDB's
+            // default REPEATABLE READ, a non-locking SELECT keeps using the snapshot from this
+            // transaction's first read (patient lookup above), so it would still miss a row the
+            // first request just committed — only a locking read forces the latest committed data
+            // (verified empirically against MySQL 8.4 while building this fix). Hence FOR UPDATE
+            // on the re-check too, not just the patient row.
+            Patient::whereKey($patient->id)->lockForUpdate()->first();
+            $hasActiveEpisode = Admission::whereNull('discharge_date')
+                ->where('patient_id', $patient->id)
+                ->lockForUpdate()
+                ->exists();
+            if ($hasActiveEpisode) {
+                // Same field/message the FormRequest uses for the non-race case (K1's "already
+                // admitted" UX) — the loser of the race gets an ordinary validation error, not a
+                // 500: no second admissions row, no second admission.create audit row.
+                throw ValidationException::withMessages([
+                    'mrn' => 'This MRN already has an active admission.',
+                ]);
+            }
 
             $admission = Admission::create([
                 'patient_id' => $patient->id,
@@ -136,11 +191,6 @@ class AdmissionsController extends Controller
 
             return $admission;
         });
-
-        return redirect()->route('patients.index')->with('flash', [
-            'type' => 'success',
-            'message' => "Patient {$data['name']} admitted (MRN {$data['mrn']}).",
-        ]);
     }
 
     /** Full detail for the Modify modal (demographics + current diagnoses with names). */

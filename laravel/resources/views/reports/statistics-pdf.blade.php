@@ -3,10 +3,16 @@
 <head>
 <meta charset="utf-8">
 @php
+    use App\Support\ArabicShaper;
     use App\Support\ReportSvg;
     $intervalLabel = ['day' => 'Daily', 'quarter' => 'Quarterly'][$interval] ?? 'Monthly';
     // per-consultant LOS hBar rows (zeros included, like the screen / annual booklet)
-    $losRows = collect($perConsultant)->map(fn ($c) => ['name' => $c['name'], 'value' => (float) $c['avgLos']])->all();
+    // I18N-06: hBar() truncates each label to 26 chars itself (ReportSvg::hBar) — truncate the RAW
+    // logical name to that same width first, then shape, or shaping's RTL reversal makes the
+    // truncation keep the wrong end of the name and put the ellipsis on the wrong side.
+    $losRows = collect($perConsultant)->map(fn ($c) => ['name' => ArabicShaper::shape(mb_strimwidth((string) $c['name'], 0, 26, '…')), 'value' => (float) $c['avgLos']])->all();
+    $classificationFoot = ArabicShaper::shape('CONFIDENTIAL — Internal use / خاص — للاستخدام الداخلي');
+    $orgHeader = ArabicShaper::shape('Eastern Health Cluster · تجمع الشرقية الصحي');
 @endphp
 <style>
     @page { margin: 18pt 22pt; }
@@ -36,12 +42,12 @@
 </head>
 <body>
 
-<div class="classification-foot">CONFIDENTIAL — Internal use / خاص — للاستخدام الداخلي</div>
+<div class="classification-foot">{{ $classificationFoot }}</div>
 
 {{-- =============== PAGE 1 — HEADLINE KPIs + KPI GRID =============== --}}
 <div class="page">
     <div class="head">
-        <div class="org">Eastern Health Cluster · تجمع الشرقية الصحي<br>Generated {{ $generatedAt }}</div>
+        <div class="org">{{ $orgHeader }}<br>Generated {{ $generatedAt }}</div>
         <h1>DMC Internal Medicine</h1>
         <div class="sub">Statistics — {{ $from }} to {{ $to }} · {{ $intervalLabel }} interval</div>
     </div>
@@ -93,7 +99,7 @@
 {{-- =============== PAGE 2 — PER CONSULTANT TABLE + LOS BARS =============== --}}
 <div class="page-last">
     <div class="head">
-        <div class="org">Eastern Health Cluster · تجمع الشرقية الصحي<br>Generated {{ $generatedAt }}</div>
+        <div class="org">{{ $orgHeader }}<br>Generated {{ $generatedAt }}</div>
         <h1>DMC Internal Medicine</h1>
         <div class="sub">Statistics — per consultant · {{ $from }} to {{ $to }}</div>
     </div>
@@ -112,7 +118,7 @@
                     <tbody>
                         @forelse ($perConsultant as $i => $c)
                             <tr class="{{ $i % 2 ? 'even' : '' }}">
-                                <td>{{ $c['name'] }}</td>
+                                <td>{{ ArabicShaper::shape($c['name']) }}</td>
                                 <td class="r">{{ $c['admissions'] }}</td>
                                 <td class="r">{{ $c['discharges'] }}</td>
                                 <td class="r">{{ number_format($c['avgLos'], 1) }}d</td>

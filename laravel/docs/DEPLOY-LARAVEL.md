@@ -7,8 +7,8 @@
 > ([`DEPLOY.md`](../../DEPLOY.md)).
 >
 > Companions: [`RELEASE-CHECKLIST.md`](RELEASE-CHECKLIST.md) (the tick-list a human follows for every
-> release), [`BACKUP-AND-RESTORE.md`](BACKUP-AND-RESTORE.md) (the backup/restore procedure — being written
-> in a parallel workstream; the dump/restore commands quoted here defer to it), and
+> release), [`BACKUP-AND-RESTORE.md`](BACKUP-AND-RESTORE.md) (the backup, restore and point-in-time
+> recovery procedures; the dump/restore commands quoted here defer to it), and
 > [`../scripts/smoke.sh`](../scripts/smoke.sh) (the post-deploy check).
 >
 > ⚠️ This system holds real patient data. **Every deploy that carries a migration is preceded by a
@@ -47,7 +47,7 @@ When a deploy is triggered (§3), Coolify:
 
 What Coolify does **not** do: take a database backup (you do — §2), run the test suite (you do, before pushing), run the smoke test (you do — §3.3), or rebuild when you change a *build-time* env var without triggering a deploy (§5).
 
-Once live: `/up` returns 200 (Laravel's built-in liveness route, registered in `bootstrap/app.php`), and `/health` (a JSON check of `db`, `storage` and the scheduler heartbeat — being added in a parallel workstream) returns `{"status":"ok"}`. `scripts/smoke.sh` checks both (and warns rather than fails while `/health` is still 404).
+Once live: `/up` returns 200 (Laravel's built-in liveness route, registered in `bootstrap/app.php`), and `/health` (`App\Http\Controllers\HealthController`, `routes/public.php` — a deep JSON check of `db`, `storage_writable` and the `scheduler:heartbeat` beacon, 5-minute staleness window) returns `{"status":"ok"}` / HTTP 200, or `{"status":"degraded"}` / HTTP 503 when any check fails. `scripts/smoke.sh` checks both.
 
 ---
 
@@ -59,14 +59,27 @@ Once live: `/up` returns 200 (Laravel's built-in liveness route, registered in `
   git log --oneline <deployed-sha>..main -- laravel/database/migrations
   ```
   If any of them is a data-fix/backfill migration (§4.3 lists the ones whose `down()` is a no-op or destructive), the pre-deploy dump is the **only** way back for the data.
-- [ ] **Take the pre-deploy dump.** Mandatory when the deploy carries migrations; strongly recommended for every deploy. The canonical, automated form (and the container id) lives in [`BACKUP-AND-RESTORE.md`](BACKUP-AND-RESTORE.md); the manual form, run on the host, is:
+- [ ] **Take the pre-deploy dump.** Mandatory when the deploy carries migrations; strongly recommended for every deploy. Run the same encrypted, off-box script the nightly cron runs — there is no separate "manual dump" procedure any more, and there should not be: an unencrypted dump sitting in a home directory on the same host as the database it protects is exactly the gap this closes going forward (see `docs/compliance/DATA-CLASSIFICATION.md`'s "Pre-deploy / incident dumps" row for what is, and is not, yet confirmed about the dumps the old manual procedure already left behind).
   ```bash
-  MYSQL=$(sudo docker ps -q -f "name=<mysql-container>")   # the mysql:8 container — id in BACKUP-AND-RESTORE.md
-  sudo docker exec "$MYSQL" sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump --single-transaction --routines --triggers --databases dmc_demo' \
-    | gzip > ~/dmc_demo_pre-deploy_$(date +%F-%H%M%S).sql.gz
-  gzip -t ~/dmc_demo_pre-deploy_*.sql.gz && ls -lh ~/dmc_demo_pre-deploy_*.sql.gz
+  sudo /usr/bin/python3 /opt/dmc/backup/db-backup.py
+  sudo tail -n 1 /var/log/dmc-backup.log
   ```
-  Write the filename into the release checklist. **Copy it off the host** per the backup doc — a dump that exists only on the box it protects is not a backup.
+  Confirm the tail line starts `OK object=…` (a `FAIL` line means the run did not complete — do not
+  proceed with the deploy). The `object=` field is the exact bucket key to write into the release
+  checklist and, if this deploy needs rolling back, to hand to
+  [`BACKUP-AND-RESTORE.md`](BACKUP-AND-RESTORE.md) §5 step 3/4 (`--restore-check` first, then the
+  restore). Nothing further to copy off-host by hand — the script's own pipeline already uploaded it
+  to the in-Kingdom bucket before printing that line (`BACKUP-AND-RESTORE.md` §3).
+
+  **This is the same `mysqldump --source-data=2` the nightly cron runs, and that command briefly
+  takes a server-wide `FLUSH TABLES WITH READ LOCK`** (`scripts/backup/db-backup.py`'s own
+  `mysqldump_cmd()` comment) to note the binlog coordinate before `--single-transaction` starts —
+  normally just long enough not to matter, but the lock has to wait its turn behind any already
+  in-flight long query (a wide Registry export, a multi-year Statistics report), and every other
+  write on the live system queues up behind it in turn. The nightly cron's 02:15 window is chosen to
+  make that a non-issue; this deploy-time run is only "low activity" (the bullet below), not zero, so
+  a long query can still be running. If you can, glance at `SHOW PROCESSLIST` on the MySQL container
+  immediately before triggering the dump and let anything long-running finish first.
 - [ ] **Env-var changes?** Set them first (§5) and note whether they need a rebuild or a restart.
 - [ ] **Window + notice.** Deploy in the low-activity window agreed with the unit and tell the clinical owner it is starting (message template in the checklist). The swap itself is seconds, but any user mid-form at that instant loses the form, and file-backed sessions do not survive a new container (§10) — everyone signs in again.
 
@@ -100,7 +113,9 @@ Append `&force=true` to the deploy call to bypass the build cache when a build m
    ```bash
    BASE_URL=https://dmc-new.towardpcc.com bash laravel/scripts/smoke.sh
    ```
-   Every line must be `PASS`. `WARN` is acceptable only for the two endpoints the script names as not shipped yet (`/health`, `security.txt`). It exits non-zero on any `FAIL`; it never logs in and touches no PHI.
+   Every line should be `PASS` — `/health` and `/.well-known/security.txt` are both live (§1) and
+   the script checks them for real, not as a "not shipped yet" allowance. It exits non-zero on any
+   `FAIL`; it never logs in and touches no PHI.
 2. **Audit chain**, on the host:
    ```bash
    sudo docker exec $(sudo docker ps -q -f "label=coolify.name=v5d8vrnp418stpcwnup3yhta") php artisan audit:verify
@@ -140,21 +155,38 @@ Then run `scripts/smoke.sh` (its bundle-hash line will `FAIL` if your checkout i
 
 **Order matters: database first, then application.** Roll the app back first and the still-running new code keeps writing into the schema you are about to replace; restore the database but leave the new code running and the next deploy simply re-applies the migrations you just undid.
 
+This is [`BACKUP-AND-RESTORE.md`](BACKUP-AND-RESTORE.md) §5 (the FULL restore procedure) with the
+object named on the release checklist as the source — read that section in full before running it;
+what follows is the deploy-specific ordering, not a substitute for it:
+
 ```bash
 APP=$(sudo docker ps -q -f "label=coolify.name=v5d8vrnp418stpcwnup3yhta")
-MYSQL=$(sudo docker ps -q -f "name=<mysql-container>")
 
 # 1. Stop writes: maintenance mode in the running container (file driver — holds until `up`).
 sudo docker exec "$APP" php artisan down --secret="<long-random-string>"    # preview via https://host/<secret>
 
-# 2. Restore. The dump was taken with --databases, so it carries its own `USE dmc_demo`.
-gunzip -c ~/dmc_demo_pre-deploy_<timestamp>.sql.gz \
-  | sudo docker exec -i "$MYSQL" sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot'
+# 2. Restore — BACKUP-AND-RESTORE.md §5 steps 3–5: --restore-check the object first, then the
+#    download-decrypt-pipe restore (the object is still ENCRYPTED at rest; nothing plaintext
+#    touches the host disk at any point). Do not gunzip a local dump by hand — there is none;
+#    §2's pre-deploy dump uploaded straight to the bucket and left no local copy to restore from.
 
 # 3. Roll the application back — §4.1 (UI Rollback, or revert + deploy). The old code's migrate
 #    step finds the restored `migrations` table already at its own level → nothing to migrate.
+#    Start it well clear of the top of the hour: the scheduler ships the audit trail at :00.
 
-# 4. Leave maintenance mode in the NEW container after the swap, then verify.
+# 3b. RE-FREEZE AT ONCE. The swap started a NEW container, and maintenance mode does not survive
+#     it — the file driver's flag lived in the old container's storage/framework, which a
+#     container swap discards (ADR 0002). From the moment the new container is healthy the app is
+#     live again, so freeze it before anything else (the same secret works):
+APP=$(sudo docker ps -q -f "label=coolify.name=v5d8vrnp418stpcwnup3yhta")
+sudo docker exec "$APP" php artisan down --secret="<long-random-string>"
+sudo docker exec "$APP" php artisan audit:ship --status    # nothing may have shipped in the gap
+
+# 4. Audit archive reconciliation — BACKUP-AND-RESTORE.md §5 step 6 — BEFORE step 5 unfreezes the
+#    app: `audit:ship --status`, the archive key-name comparison, and the AUTO_INCREMENT/bookmark
+#    fix if the pre-deploy dump is behind what had already shipped off-box.
+
+# 5. Leave maintenance mode in the NEW container after the swap, then verify.
 APP=$(sudo docker ps -q -f "label=coolify.name=v5d8vrnp418stpcwnup3yhta")
 sudo docker exec "$APP" php artisan up
 sudo docker exec "$APP" php artisan audit:verify
@@ -230,7 +262,8 @@ curl -sS -X POST -H "Authorization: Bearer $COOLIFY_TOKEN" -H "Content-Type: app
 
 **What lives where:**
 
-- **Bootstrap-only in env (Coolify):** `APP_KEY`, `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL`, `DB_*`, `LOG_CHANNEL=daily` / `LOG_LEVEL=warning`, `SESSION_SECURE_COOKIE=true`, `CSP_MODE=enforce`, `AUDIT_S3_*`, `SENTRY_DSN` (optional; the SDK is inert while empty). `APP_TIMEZONE=Asia/Riyadh` is the fallback for the in-app value below — date columns are timezone-naive and every "today" rule drifts by 3 h if the app runs in UTC.
+- **Bootstrap-only in env (Coolify):** `APP_KEY`, `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL`, `DB_*`, `LOG_CHANNEL=daily` / `LOG_LEVEL=warning`, `SESSION_SECURE_COOKIE=true`, `CSP_MODE=enforce`, `AUDIT_S3_*`. (No error-tracking SDK is installed yet — choosing one is an open owner item, `REMAINING-WORK.md` §B.) `APP_TIMEZONE=Asia/Riyadh` is the fallback for the in-app value below — date columns are timezone-naive and every "today" rule drifts by 3 h if the app runs in UTC.
+- **Optional runtime tuning (safe defaults; set only to change them):** `DB_CONNECT_TIMEOUT` (seconds, default 5 — how long a request waits to *connect* to MySQL); `DB_WEB_MAX_EXECUTION_MS` (default 60000; MySQL's per-SELECT cap for **web requests only** — never applied to artisan, the scheduler or `legacy:import`; `0` disables it; synchronous report renders raise it to 120 s for their own request); `MAIL_TIMEOUT` (seconds, default 10, SMTP). All runtime variables — a restart applies them.
 - **Runtime configuration in the app (Control → System):** timezone and the `MAIL_*` set are editable in-app and take effect on the next request — no restart, no rebuild. `.env` values are the fallback for any field left blank. The SMTP password is stored encrypted (AES-256 under `APP_KEY`) and is write-only in the UI.
 - **Never in the repo:** no `.env`, no tokens, no dump files. Coolify's env store on the host is the secret store.
 
@@ -253,7 +286,7 @@ Because the script looks the container up **by label**, it survives every redepl
 |---|---|---|---|
 | `* * * * * /usr/local/bin/dmc-schedule.sh` | every minute | drives the Laravel scheduler (the table below) | §6 |
 | `/etc/cron.d/dmc-db-backup` | 02:15 daily | `db-backup.py` — nightly encrypted off-box `mysqldump` | BACKUP-AND-RESTORE.md §2.5 |
-| `/etc/cron.d/dmc-binlog-ship` | minute 40 of every hour | `binlog-ship.py` — encrypted off-box MySQL binary logs; this is what makes point-in-time recovery possible and takes the RPO from 24 h to ≤ 1 h. **Not installed yet** — the operator installs it. | BACKUP-AND-RESTORE.md §10.2 |
+| `/etc/cron.d/dmc-binlog-ship` | minute 40 of every hour | `binlog-ship.py` — encrypted off-box MySQL binary logs; this is what makes point-in-time recovery possible and takes the RPO from 24 h to ≤ 1 h. **Installed 2026-09-03 19:21 UTC** (PR #19) — see HANDOFF.md and the drill log in BACKUP-AND-RESTORE.md §8. | BACKUP-AND-RESTORE.md §10.2 |
 
 **Deploy-on-green (prepared, opt-in).** Deploys are operator-triggered today (Auto Deploy is off on purpose). `scripts/deploy-on-green.sh` is a host-side alternative that deploys `main` only when the Laravel CI run for that exact commit is green and the commit is not already the live image, then runs the smoke test and reports a red smoke as the rollback trigger. To enable: place a Coolify API token in a root-only file (`/root/.coolify-deploy-token`, mode 600 — never in the repo), copy the script to `/usr/local/bin/`, and add a root cron such as `*/5 * * * * /usr/local/bin/deploy-on-green.sh`. Because `main` only accepts green pull requests, "green" here is redundant protection, not the only gate. The nightly database backup is scheduled separately in `/etc/cron.d/dmc-db-backup` (see BACKUP-AND-RESTORE.md §2.5).
 
@@ -307,6 +340,12 @@ Not part of a deploy (code deploys and data reloads are independent — a deploy
 ## 9. First-time setup (a new environment, or rebuilding from zero)
 
 Nothing here is needed for a routine release; it is what it takes to recreate production.
+
+> **Recreating production because the old host is *gone*, not because you are planning a new one?**
+> That is [`BACKUP-AND-RESTORE.md`](BACKUP-AND-RESTORE.md) §5.1 (RES-09, whole-server loss) — it
+> reuses the steps below plus the data restore, the backup/shipping scripts and their secrets, the
+> host crons, and DNS. §5.1 is **unrehearsed**; this section describes the same infrastructure but
+> for a planned, from-scratch environment.
 
 1. **Host:** Ubuntu with Docker + Coolify v4; a `mysql:8` service (utf8mb4, InnoDB) with the app database and a **dedicated app user with a fresh password** — the legacy credentials were exposed in history and must never be reused. Firewall 80/443 to Cloudflare ranges only; SSH key-only.
 2. **Coolify application:** source = the GitHub repo, branch `main`, build pack Nixpacks, base directory `/laravel`, domain `https://dmc-new.towardpcc.com` (proxied in Cloudflare, SSL mode *strict*). Enable a health check on `/up` so a broken image is never routed to. Add the deploy-time `php artisan migrate --force` step (that is where §1 step 4 comes from).

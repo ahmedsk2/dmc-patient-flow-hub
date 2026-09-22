@@ -1,7 +1,11 @@
 # HANDOFF — current state, and what remains
 
 > Single ground-truth orientation for the next review session. Read this first (with `CLAUDE.md`).
-> Last updated 2026-09-22 (deploy + restore drill + first point-in-time-recovery rehearsal); CI green.
+> Last updated 2026-09-22 (deploy + restore drill + first point-in-time-recovery rehearsal + the engineering
+> batch); CI green.
+>
+> **The working checklist of everything still open, by who acts, is [`REMAINING-WORK.md`](REMAINING-WORK.md).**
+> Tick items there as they close; this file keeps the narrative.
 
 ## The product
 
@@ -52,8 +56,8 @@
 - **Login:** a trust-badge row of six **truthful** claims (encrypted in transit / at rest, MFA,
   in-Kingdom hosting, backups, privacy-notice link). No framework badges until certificates exist.
 - **Docs:** pruned of dev scaffolding; PDPL paper-trail drafts in `laravel/docs/compliance/`.
-- **Gate baselines (2026-09-03, after PR #11):** PHPUnit 936 (+75 in the `pdf` group), PHP statement
-  coverage 86.1 % (floor 83), Vitest 785 on vitest 5 (floors 72/66/62/48 lines/statements/branches/
+- **Gate baselines (2026-09-22, after the engineering batch):** PHPUnit 1004 (+91 in the `pdf` group), PHP statement
+  coverage 86.1 % at the last CI measurement (floor 83), Vitest 792 on vitest 5 (floors 72/66/62/48 lines/statements/branches/
   functions — re-baselined 2026-09-22 for the new coverage engine, then raised the same day by the
   IcdTypeahead + ActivityPanel specs), ESLint zero warnings, Pint clean.
 
@@ -189,6 +193,19 @@
    merge of PR #26** (deployed 2026-09-22, dumped first). The old `/home/ubuntu/migrate/dmc/` folder
    was re-checked the same day — scripts and `.gitignore` files only, no dumps, env files or keys —
    so it is off the open list.
+   **2026-09-22, engineering batch (owner: "do the engineering batch as one PR"):** every engineering
+   item from the remaining-work review, built in six file-disjoint groups (each with its own tests and a
+   two-lens review), then a cross-cutting adversarial review of the whole diff that found six more real
+   problems — all fixed, including a report job left on the new 60 s SELECT cap and a pre-existing
+   rollback-runbook gap (maintenance mode does not survive a container swap). Highlights: per-user rate
+   limits on patient data, database and fetch timeouts, Arabic text in PDF reports, self-healing report
+   downloads, a race-safe duplicate-admission guard (the brand-new-MRN case used to be a 500), COOP/CORP,
+   a clock-skew check in `/health`, a daily expired-row prune, a read-only retention report, the nightly
+   dump recording its binlog position, and a whole-server-loss runbook (unrehearsed). The full list and
+   what it left open are in [`REMAINING-WORK.md`](REMAINING-WORK.md) §F. **Not deployed yet** — and the
+   host copy of `db-backup.py` must be reinstalled when it is. Also found that day: the host was down
+   for ~13 h on 2026-09-16 (02:55–16:00 UTC, abrupt stop, nobody paged) — cause to be checked in the OCI
+   console (§B there).
    **Still open and all owner / infrastructure decisions, not code:** enable deploy-on-green
    (declined so far — "I don't want to autodeploy"), pick a log sink and set `LOG_STACK`
    (OBS-01/03/04/05), a second backup region + instance principal (DATA-02, CFG-10), SLOs and an

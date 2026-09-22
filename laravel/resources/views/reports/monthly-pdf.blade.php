@@ -3,9 +3,13 @@
 <head>
 <meta charset="utf-8">
 @php
+    use App\Support\ArabicShaper;
     use App\Support\ReportSvg;
     // plain absolute path — dompdf resolves local files directly (chroot = base_path covers public/)
     $img = fn (string $f) => public_path('images/' . $f);
+    // I18N-06: pre-shape every free-text/name field this template prints — see ArabicShaper's docblock.
+    $classificationFoot = ArabicShaper::shape('CONFIDENTIAL — Internal use / خاص — للاستخدام الداخلي');
+    $orgHeader = ArabicShaper::shape('Eastern Health Cluster · تجمع الشرقية الصحي');
 @endphp
 <style>
     @page { margin: 18pt 22pt; }
@@ -30,7 +34,7 @@
 </head>
 <body>
 
-<div class="classification-foot">CONFIDENTIAL — Internal use / خاص — للاستخدام الداخلي</div>
+<div class="classification-foot">{{ $classificationFoot }}</div>
 
 @if (empty($months))
     <div class="page-last">
@@ -40,7 +44,7 @@
             <p style="color: #5b6a6e; font-size: 12px; margin-top: 24pt;">No elapsed months in {{ $year }} yet — nothing to report.</p>
         </div>
         <div style="text-align: center; margin-top: 120pt; color: #5b6a6e; font-size: 10px;">
-            Eastern Health Cluster · تجمع الشرقية الصحي<br>Generated {{ $generatedAt }}
+            {{ $orgHeader }}<br>Generated {{ $generatedAt }}
         </div>
     </div>
 @endif
@@ -54,6 +58,14 @@
             ['label' => 'Signed Off Consultations', 'color' => ReportSvg::SERIES_COLORS[3], 'data' => $m['days']['signoffs']],
         ];
         $isLastMonth = $mi === count($months) - 1;
+        // I18N-06: consultant names feed the SVG hBar chart below. hBar() truncates each label to
+        // 26 chars itself (ReportSvg::hBar) — truncate the RAW logical name to that same width
+        // first, then shape, or shaping's RTL reversal makes the truncation keep the wrong end of
+        // the name and put the ellipsis on the wrong side (see the reviewer finding on this line).
+        $consultantLos = array_map(
+            fn ($r) => ['name' => ArabicShaper::shape(mb_strimwidth((string) $r['name'], 0, 26, '…')), 'value' => $r['value']],
+            $m['consultantLos']
+        );
     @endphp
 
     {{-- ---------- month page (a): counter cards + daily overview ---------- --}}
@@ -130,7 +142,7 @@
                         </div>
                     </td>
                     <td style="width: 42%; vertical-align: top;">
-                        {!! ReportSvg::hBar($m['consultantLos'], 310, 420, '#2986cc', 'Per Consultant Physical LOS') !!}
+                        {!! ReportSvg::hBar($consultantLos, 310, 420, '#2986cc', 'Per Consultant Physical LOS') !!}
                     </td>
                 </tr>
             </table>

@@ -18,6 +18,12 @@ const results = ref([]);
 const hi = ref(-1);
 let timer = null;
 
+// RES-01: a lookup that never answers (a stalled network, a hung web worker behind the per-request
+// MAX_EXECUTION_TIME cap) must not leave the field waiting forever. AbortSignal.timeout() cancels
+// the fetch after 10s; the abort surfaces as a rejected promise, which the existing catch below
+// already treats exactly like any other failed lookup — no dropdown, no throw, current state kept.
+const FETCH_TIMEOUT_MS = 10000;
+
 // Lookups race, and a stale answer here is a clinical hazard, not a cosmetic one: an earlier, slower
 // lookup would overwrite newer results, and an answer arriving after a pick would reopen the list
 // under a clinician's reflexive second Enter — adding a diagnosis nobody chose. Every keystroke,
@@ -33,7 +39,7 @@ watch(query, (q) => {
     timer = setTimeout(async () => {
         let rows = [];
         try {
-            const res = await fetch(`/api/icd10?q=${encodeURIComponent(term)}`, { headers: { Accept: 'application/json' } });
+            const res = await fetch(`/api/icd10?q=${encodeURIComponent(term)}`, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
             // a 419 (expired session) or 500 carries an error body, not a list of diagnoses
             if (res.ok) rows = await res.json();
         } catch (e) {

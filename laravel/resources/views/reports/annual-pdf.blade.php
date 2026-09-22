@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 @php
+    use App\Support\ArabicShaper;
     use App\Support\ReportSvg;
     // plain absolute path — dompdf resolves local files directly (chroot = base_path covers public/)
     $img = fn (string $f) => public_path('images/' . $f);
@@ -15,7 +16,18 @@
     ];
     $losSeries = fn (string $key, string $label, string $color) =>
         [['label' => $label, 'color' => $color, 'data' => array_column($months, $key)]];
-    $consultantRows = $legacy['consultantLos'];
+    // I18N-06: shape Arabic runs before dompdf draws them — see ArabicShaper's docblock (dompdf has
+    // no bidi/shaping engine; the bundled DejaVu Sans font has the glyphs, this supplies pre-shaped
+    // pre-reordered text). Applied at every point free text or a name reaches the page.
+    $classificationFoot = ArabicShaper::shape('CONFIDENTIAL — Internal use / خاص — للاستخدام الداخلي');
+    $orgHeader = ArabicShaper::shape('Eastern Health Cluster · تجمع الشرقية الصحي');
+    // hBar() truncates each label to 26 chars itself (ReportSvg::hBar) — truncate the RAW logical
+    // name to that same width first, then shape, or shaping's RTL reversal makes the truncation
+    // keep the wrong end of the name and put the ellipsis on the wrong side.
+    $consultantRows = array_map(
+        fn ($r) => ['name' => ArabicShaper::shape(mb_strimwidth((string) $r['name'], 0, 26, '…')), 'value' => $r['value']],
+        $legacy['consultantLos']
+    );
 @endphp
 <style>
     @page { margin: 18pt 22pt; }
@@ -58,7 +70,7 @@
 </head>
 <body>
 
-<div class="classification-foot">CONFIDENTIAL — Internal use / خاص — للاستخدام الداخلي</div>
+<div class="classification-foot">{{ $classificationFoot }}</div>
 
 {{-- ============================ PAGE 1 — COVER ============================ --}}
 <div class="page">
@@ -67,7 +79,7 @@
         <span style="color: #004aab; font-size: 26px; font-weight: 600;">Internal Medicine Department Performance Report For {{ $year }}</span>
     </div>
     <div style="text-align: center; margin-top: 150pt; color: #5b6a6e; font-size: 10px;">
-        Eastern Health Cluster · تجمع الشرقية الصحي<br>Generated {{ $generatedAt }}
+        {{ $orgHeader }}<br>Generated {{ $generatedAt }}
     </div>
 </div>
 
@@ -141,7 +153,7 @@
 {{-- ============ PAGE 4 — KPI SUMMARY + MONTHLY BREAKDOWN (Laravel additions) ============ --}}
 <div class="page-last">
     <div class="head">
-        <div class="org">Eastern Health Cluster · تجمع الشرقية الصحي<br>Generated {{ $generatedAt }}</div>
+        <div class="org">{{ $orgHeader }}<br>Generated {{ $generatedAt }}</div>
         <h1>DMC Internal Medicine</h1>
         <div class="sub">Annual Activity Report — {{ $year }} · detail annex</div>
     </div>
@@ -214,7 +226,7 @@
                 <table class="data">
                     <tbody>
                         @forelse ($topDx as $d)
-                            <tr><td>{{ \Illuminate\Support\Str::limit($d['name'], 48) }}</td><td class="r">{{ $d['count'] }}</td></tr>
+                            <tr><td>{{ ArabicShaper::shape(\Illuminate\Support\Str::limit($d['name'], 48)) }}</td><td class="r">{{ $d['count'] }}</td></tr>
                         @empty
                             <tr><td colspan="2">No data for {{ $year }}.</td></tr>
                         @endforelse
@@ -226,7 +238,7 @@
                 <table class="data">
                     <tbody>
                         @forelse ($perConsultant as $c)
-                            <tr><td>{{ $c['name'] }}</td><td class="r">{{ $c['count'] }}</td></tr>
+                            <tr><td>{{ ArabicShaper::shape($c['name']) }}</td><td class="r">{{ $c['count'] }}</td></tr>
                         @empty
                             <tr><td colspan="2">No data for {{ $year }}.</td></tr>
                         @endforelse

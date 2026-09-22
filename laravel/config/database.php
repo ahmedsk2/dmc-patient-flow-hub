@@ -3,6 +3,52 @@
 use Illuminate\Support\Str;
 use Pdo\Mysql;
 
+/*
+|--------------------------------------------------------------------------
+| RES-01 / CFG-06: DB connect timeout + web-only per-statement cap
+|--------------------------------------------------------------------------
+|
+| PDO::ATTR_TIMEOUT (seconds) is a CONNECT-time-only cap — PDO/libmysqlclient stop honouring it once
+| the TCP handshake finishes, so it bounds "the DB host is down or unreachable", not a slow query on
+| an already-open connection. It never needs to differ between a CLI process and a web request, so
+| it is safe to bake into the static config below even if `php artisan config:cache` is ever added
+| to the deploy (see the caveat further down).
+|
+| The per-statement cap is different: it sets MySQL's session `MAX_EXECUTION_TIME` variable
+| (milliseconds), which the SERVER enforces only on read-only SELECT statements — INSERT / UPDATE /
+| DELETE / DDL silently ignore it, so it can never truncate a write mid-transaction (MySQL 8 manual,
+| "MAX_EXECUTION_TIME optimizer hint / session variable"). It is applied via
+| PDO::MYSQL_ATTR_INIT_COMMAND. Laravel's own MySqlConnector::configureConnection() issues its SET
+| NAMES / time_zone / sql_mode via a separate ->exec() call made AFTER the connection opens (see
+| vendor/laravel/framework/src/Illuminate/Database/Connectors/MySqlConnector.php) — it never reads or
+| sets PDO::MYSQL_ATTR_INIT_COMMAND itself, so this does not clobber or get clobbered by it; PDO runs
+| the init command once, immediately after connecting, before that later ->exec() call.
+|
+| It is WEB-ONLY and hard-off in every CLI process: artisan, the host-cron scheduler, legacy:import
+| and the whole PHPUnit suite all run under PHP_SAPI === 'cli', so a long operator job is never cut
+| off by a budget sized for an interactive page load. DB_WEB_MAX_EXECUTION_MS=0 disables it outright
+| even for web requests. It is added only to the live 'mysql' connection — never to 'mariadb' (which
+| this app's DB_CONNECTION never actually selects; MariaDB has no MAX_EXECUTION_TIME session variable
+| — it uses the differently-scaled `max_statement_time` instead) and never to the read-only 'legacy'
+| connection used by `legacy:import`, which must stay unaffected.
+|
+| CAVEAT: `php artisan config:cache` evaluates this file once, under the CLI SAPI that ran the
+| command, and bakes the resulting array to disk — so if config:cache is ever added to the normal
+| deploy path (it is NOT today; docs/DEPLOY-LARAVEL.md's deploy has no config:cache step — only the
+| manual DR restore steps in docs/compliance/INCIDENT-RESPONSE.md run it), the PHP_SAPI check below
+| would be frozen at its CLI (disabled) value for web requests too. If config:cache is introduced,
+| this needs to move to a boot-time override (the RuntimeConfigServiceProvider pattern) instead of a
+| static config value.
+|
+*/
+$dbConnectTimeoutSeconds = (int) env('DB_CONNECT_TIMEOUT', 5);
+$dbWebMaxExecutionMs = (int) env('DB_WEB_MAX_EXECUTION_MS', 60000);
+$dbWebMaxExecutionInitCommand = $dbWebMaxExecutionMs > 0
+    ? sprintf('SET SESSION MAX_EXECUTION_TIME=%d', $dbWebMaxExecutionMs)
+    : null;
+// Never applied under the CLI (artisan / scheduler / legacy:import / the PHPUnit suite) — see above.
+$dbApplyWebStatementCap = PHP_SAPI !== 'cli' && $dbWebMaxExecutionInitCommand !== null;
+
 return [
 
     /*
@@ -61,6 +107,8 @@ return [
             'engine' => 'InnoDB',
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+                PDO::ATTR_TIMEOUT => $dbConnectTimeoutSeconds,
+                PDO::MYSQL_ATTR_INIT_COMMAND => $dbApplyWebStatementCap ? $dbWebMaxExecutionInitCommand : null,
             ]) : [],
         ],
 
@@ -97,6 +145,10 @@ return [
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+                // Connect timeout only — no MAX_EXECUTION_TIME statement cap here; see the file-top
+                // comment (MariaDB doesn't have that session variable, and this app never selects
+                // this connection anyway).
+                PDO::ATTR_TIMEOUT => $dbConnectTimeoutSeconds,
             ]) : [],
         ],
 
@@ -195,6 +247,25 @@ return [
             'backoff_cap' => env('REDIS_BACKOFF_CAP', 1000),
         ],
 
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | RES-01 / CFG-06 diagnostics (not read by any DB connector)
+    |--------------------------------------------------------------------------
+    |
+    | Laravel's connectors only ever look inside `connections.*` — this key is never consumed by
+    | anything. It exposes the raw, pre-CLI-gate web-statement-cap values (see the comment at the top
+    | of this file) purely so tests — and anyone debugging why queries do or don't appear capped —
+    | can see what DB_WEB_MAX_EXECUTION_MS resolved to without needing a non-CLI PHP process. The
+    | actual CLI-vs-web gate is exercised for real by asserting on
+    | config('database.connections.mysql.options') during the (CLI-run) test suite, where the init
+    | command must always be absent.
+    |
+    */
+    'web_statement_cap' => [
+        'ms' => $dbWebMaxExecutionMs,
+        'init_command' => $dbWebMaxExecutionInitCommand,
     ],
 
 ];

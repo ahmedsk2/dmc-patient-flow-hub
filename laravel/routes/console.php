@@ -36,6 +36,13 @@ Schedule::command('backup:verify')->dailyAt('06:30')->name('backup-verify')->wit
 // scheduled — it deletes rows and is operator-run only, gated behind --confirm.
 Schedule::command('audit:ship')->hourly()->name('audit-ship')->withoutOverlapping();
 
+// R11: daily sweep of expired pending_registrations, trusted_devices and password_reset_tokens
+// rows (never audit_log or notifications — see the command's own doc-comment). 03:15 sits after
+// the host's nightly DB dump (02:15) and audit:verify-daily (02:30), well before backup:verify
+// (06:30) and dq:notify (07:00), and off the host binlog-ship cron's :40-past-the-hour minute —
+// no collision with anything else in this file or in host cron.
+Schedule::command('auth:prune-expired')->dailyAt('03:15')->name('auth-prune-expired')->withoutOverlapping();
+
 // 2026-09 prod-readiness (OBS-07): scheduler liveness beacon. GET /health reports the scheduler
 // stale when this hasn't stamped the cache for 5 minutes — the check that catches a silently-dead
 // cron (a failure this deployment has already had once). Trivial on purpose: no DB, no mail, and

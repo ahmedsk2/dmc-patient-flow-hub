@@ -169,4 +169,66 @@ class AuditShipTest extends TestCase
         $this->artisan('audit:ship')->expectsOutput('nothing to ship')->assertExitCode(0);
         Http::assertNothingSent();
     }
+
+    /**
+     * --status is the read-only escape hatch BACKUP-AND-RESTORE.md §5/§10.5 step 5 needs after a
+     * restore: it must show the bookmark without ever advancing it, calling the archive, or
+     * selecting a row to ship — a real `audit:ship` run right after a restore is exactly what an
+     * operator must NOT do until the mark has been reconciled against the archive by hand.
+     */
+    public function test_status_prints_the_bookmark_and_pending_count_without_shipping(): void
+    {
+        $this->configureArchive();
+        Http::fake(['fake-s3.example.test/*' => Http::response('', 200)]);
+
+        $this->seedRows(3);
+        // MySQL's AUTO_INCREMENT does not roll back with the transaction between tests, so the id
+        // values themselves are not asserted — only that the count of rows actually above the mark
+        // (0, since nothing has ever shipped in this fresh RefreshDatabase table) is right.
+        $lastId = (int) AuditLog::max('id');
+        $count = AuditLog::count();
+
+        $this->artisan('audit:ship', ['--status' => true])
+            ->expectsOutputToContain("audit_shipped_through_id=0 max_audit_log_id={$lastId} pending={$count}")
+            ->assertExitCode(0);
+
+        Http::assertNothingSent();
+        $this->assertSame(0, (int) Setting::current()->audit_shipped_through_id, 'a status check must never advance the mark');
+        $this->assertSame(0, AuditLog::where('action', 'audit.shipped')->count(), 'a status check must never write an audit.shipped row');
+    }
+
+    public function test_status_reflects_the_mark_after_a_real_ship(): void
+    {
+        $this->configureArchive();
+        Http::fake(['fake-s3.example.test/*' => Http::response('', 200)]);
+
+        $this->seedRows(2);
+        $this->artisan('audit:ship')->assertExitCode(0);
+        $mark = (int) Setting::current()->audit_shipped_through_id;
+        // The ship run's own `Audit::log('audit.shipped', …)` row is written AFTER the batch it
+        // shipped was selected, so it is itself unshipped — the mark sits one row behind the true
+        // max id straight after a run, exactly as test_second_run_never_reships_… documents.
+        $maxId = (int) AuditLog::max('id');
+        $this->assertSame($mark + 1, $maxId, 'the audit.shipped meta-row is the one row left pending');
+
+        Http::fake(['fake-s3.example.test/*' => Http::response('', 200)]); // reset the recorder
+
+        $this->artisan('audit:ship', ['--status' => true])
+            ->expectsOutputToContain("audit_shipped_through_id={$mark} max_audit_log_id={$maxId} pending=1")
+            ->assertExitCode(0);
+
+        Http::assertNothingSent();
+    }
+
+    public function test_status_on_an_empty_table_reports_zeros(): void
+    {
+        $this->configureArchive();
+        Http::fake();
+
+        $this->artisan('audit:ship', ['--status' => true])
+            ->expectsOutputToContain('audit_shipped_through_id=0 max_audit_log_id=0 pending=0')
+            ->assertExitCode(0);
+
+        Http::assertNothingSent();
+    }
 }
