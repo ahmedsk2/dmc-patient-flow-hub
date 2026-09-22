@@ -51,7 +51,8 @@
   in-Kingdom hosting, backups, privacy-notice link). No framework badges until certificates exist.
 - **Docs:** pruned of dev scaffolding; PDPL paper-trail drafts in `laravel/docs/compliance/`.
 - **Gate baselines (2026-09-03, after PR #11):** PHPUnit 936 (+75 in the `pdf` group), PHP statement
-  coverage 86.1 % (floor 83), Vitest 754 (floors 80/80/76/44), ESLint zero warnings, Pint clean.
+  coverage 86.1 % (floor 83), Vitest 757 on vitest 5 (floors 71/65/60/46 lines/statements/branches/
+  functions — re-baselined 2026-09-22 for the new coverage engine), ESLint zero warnings, Pint clean.
 
 ## What remains (for the next session, with the owner)
 

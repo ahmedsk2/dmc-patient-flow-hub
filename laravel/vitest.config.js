@@ -34,12 +34,23 @@ export default defineConfig({
         //   pages into the instrumented set: +92 functions, +34 statements): lines 83.3 ·
         //   branches 78.1 · functions 45.9 → lines/statements RAISED to 80, functions reset to 44
         //   because the denominator changed, not because anything lost coverage.
+        //   2026-09-22 — RE-BASELINED on vitest 5 / @vitest/coverage-v8 5 (from 3). Same 757 tests,
+        //   same 88 source files, same code; only the measuring engine changed. v5's AST-aware
+        //   remapping counts EXECUTABLE lines and every logical branch (&&, ||, ?:, ??), where v3
+        //   counted whole source lines — so the units themselves moved: lines 10,155 → 3,744,
+        //   statements 10,155 → 5,093, branches 2,508 → 5,359, functions 719 → 1,710. Measured
+        //   under v5: lines 73.3 · statements 67.0 · branches 62.7 · functions 48.7 → floors
+        //   71 / 65 / 60 / 46, the same "a couple of points under the baseline" rule as above.
+        //   This is a new ruler, not a lower bar: v3 also OVERSTATED coverage. IcdTypeahead.vue and
+        //   ActivityPanel.vue read 100% under v3 although no spec ever loads them (every spec
+        //   vi.mock()s both); v5 reports them at 8% and 20%. They are the two genuinely untested
+        //   components, and the obvious place to raise these floors from.
         coverage: {
             provider: 'v8',
             include: ['resources/js/**/*.{js,vue}'],
             exclude: ['resources/js/**/__tests__/**', 'resources/js/**/*.{spec,test}.js'],
             reporter: ['text-summary'],
-            thresholds: { lines: 80, statements: 80, branches: 76, functions: 44 },
+            thresholds: { lines: 71, statements: 65, branches: 60, functions: 46 },
         },
     },
     resolve: {

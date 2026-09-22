@@ -36,7 +36,7 @@ Nothing here can push, tag, comment, or publish.
 | `npm audit --omit=dev --audit-level=moderate` | production npm advisories | any moderate+ advisory in a production dependency |
 | **Accessibility gate (vitest-axe)** | `resources/js/__tests__/a11y.axe.spec.js` | axe-core reports **any** violation on the consultation pages |
 | `npm run lint` (ESLint + eslint-plugin-vue, TST-04) | lint baseline | any error **or warning** (`--max-warnings=0`); the rules are in `eslint.config.js`, with the two deliberate exceptions documented there |
-| Vitest `--coverage` | the whole unit suite (includes the axe spec) + the coverage floor in `vitest.config.js` | any test fails, or lines / statements / branches / functions fall under 80 / 80 / 76 / 44 % |
+| Vitest `--coverage` | the whole unit suite (includes the axe spec) + the coverage floor in `vitest.config.js` | any test fails, or lines / statements / branches / functions fall under 71 / 65 / 60 / 46 % (vitest 5 units — re-baselined 2026-09-22; the reasoning and the v3 numbers are in `vitest.config.js`) |
 | `npm run build` | production build | build error |
 | `npm run check-allowlist` | class allow-list drift | a Tailwind utility appears that is not in the allow-list snapshot |
 | `node scripts/contrast.mjs` | AA contrast + perceptual distance of the palette tokens | a token pair falls below the threshold |
