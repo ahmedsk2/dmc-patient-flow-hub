@@ -21,7 +21,8 @@
 The pipeline streams: **no plaintext SQL is ever written to disk** — not during backup, not during
 `--restore-check`, not during binlog shipping, and not during the drill (decrypt → gunzip → mysql all
 happen in a pipe). The one deliberate exception is a point-in-time **replay** (§10.5): `mysqlbinlog`
-needs real files, so decrypted binary logs land in a mode-700 work directory and are shredded after.
+needs real files, so decrypted binary logs land in a mode-700 work directory, are read from there
+through a read-only mount (never copied into a container), and are shredded after.
 
 ---
 
@@ -359,6 +360,9 @@ Add one row per drill (monthly) and per real restore. This table *is* the eviden
 |---|---|---|---|---|---|---|---|
 | 2026-09-03 03:07 | Claude Code (on the owner's instruction) | db-backups/dmc_demo/2026/09/dmc_demo-2026-09-03T030653Z.sql.gz.enc | 1 | 6 | 8 | 17435 / 37662 / 331 / 0 | DRILL OK — first production drill; scratch DB counts matched the live DB (COMPARE_LIVE=1); RTO for a 20 MB dump ≈ 8 s plus operator time |
 | 2026-09-03 18:08 | Claude Code (on the owner's instruction) | db-backups/dmc_demo/2026/09/dmc_demo-2026-09-03T165232Z.sql.gz.enc (the pre-deploy dump for `a4dd4bd`, taken by running the nightly script by hand) | 1 | 6 | 7 | 17435 / 37662 / 331 / 0 | DRILL OK — counts matched live except `audit_log` 421 vs 423 (two rows written since the dump, as expected). `audit:verify` was not run against the scratch DB because the drill drops it on exit; add a keep-scratch option before claiming that check |
+| 2026-09-22 11:02 | Claude Code (on the owner's instruction) | db-backups/dmc_demo/2026/09/dmc_demo-2026-09-22T105019Z.sql.gz.enc (the pre-deploy dump for `fc44a0b`) | 1 | 6 | 7 | 17435 / 37662 / 331 / 0 | DRILL OK — monthly drill. Run twice (11:02, then 11:11 to capture the full count table; 0/7/7 s and 1/6/7 s). `audit_log` 861 restored vs 862 live: one row written after the dump, as expected |
+| 2026-09-22 11:09 | Claude Code (on the owner's instruction) | **PITR rehearsal** (§10.5): base db-backups/dmc_demo/2026/09/dmc_demo-2026-09-22T021501Z.sql.gz.enc + binlog.000430–000439, replayed 02:15:01 → 10:30:00 into a throwaway server (`scripts/backup/pitr-rehearsal.sh`) | — | 6 base (incl. download) + 26 replay | 50 | 17435 / 37662 / — / 0 | **PASS — but only after fixing two defects in §10.5 the rehearsal found.** (1) the stock `mysql:8` image has **no `mysqlbinlog`** (the runbook said it did), so step 3 could not run at all → `pitr-tools.Dockerfile` (§10.2). (2) step 4's `audit:verify --env=restore-drill` would have checked the **live** chain — the app container takes `DB_DATABASE` from its process env, which a `.env` file never overrides → replaced by the one-off container. Then: `audit_log` 853 → 861, **exactly** the 861 live rows created before STOP; newest recovered row 10:00:02; `Chain intact: 861 hashed row(s)`. Admissions/patients did not move because nothing clinical was written in the window (the Laravel app is not yet the daily system) — `audit_log` is the proof |
+| 2026-09-22 11:14 | Claude Code (on the owner's instruction) | PITR rehearsal, same inputs, re-run with the script switched to the **exact** documented step-3 command (tools container, work dir mounted read-only) | — | 7 base (incl. download) + 27 replay | 50 | 17435 / 37662 / — / 0 | PASS — identical result (853 → 861 = 861 live, chain intact). Throwaway server, its volume, the network and the work dir all gone afterwards (volumes 21 → 21, containers 30 → 30) |
 
 ---
 
@@ -510,6 +514,26 @@ MySQL will produce; check it with `SHOW VARIABLES LIKE 'max_binlog_size'` and le
 headroom **on top of** the two nightly dumps `LOCAL_KEEP_DAYS` already keeps there. A crashed run's
 work directory is swept at the start of the next run, so a failure cannot accumulate.
 
+**The replay tool — build it now, not during an incident.** Shipping needs nothing but `cat`, but
+*replaying* needs `mysqlbinlog`, and **the official `mysql:8` image does not contain it** (it ships
+`mysql`, `mysqldump`, `mysqladmin` and `mysqlsh`; the 2026-09-22 rehearsal found this when step 3
+died with `mysqlbinlog: command not found`). `scripts/backup/pitr-tools.Dockerfile` builds the
+production server image plus exactly that one binary, taken from MySQL's signed client package of the
+**same** version (the build checks the package signature and refuses a version mismatch). It needs
+outbound HTTPS to `repo.mysql.com` once (~3.3 MB):
+
+```bash
+sudo cp laravel/scripts/backup/pitr-tools.Dockerfile laravel/scripts/backup/pitr-rehearsal.sh /opt/dmc/backup/
+sudo chmod 644 /opt/dmc/backup/pitr-tools.Dockerfile && sudo chmod 750 /opt/dmc/backup/pitr-rehearsal.sh
+sudo sh -c 'docker build -t dmc/mysql-pitr:8.4.10 - < /opt/dmc/backup/pitr-tools.Dockerfile'
+docker run --rm --entrypoint mysqlbinlog dmc/mysql-pitr:8.4.10 --version   # "… Ver 8.4.10 …"
+```
+
+(`sudo sh -c` because `/opt/dmc/backup` is root-only and the `<` redirect is opened by the calling
+shell.) **Rebuild it whenever the production MySQL image changes version** — pass
+`--build-arg MYSQL_VERSION=<new>` and tag it `dmc/mysql-pitr:<new>` (the rehearsal script takes `IMG=`); a stale version fails the build rather than producing a mismatched
+tool. The server's version is `docker exec <mysql container> mysqld --version`.
+
 ### 10.3 What lands in the bucket
 
 ```
@@ -652,19 +676,29 @@ when you are done (step 5).
 
 Count the rows **before** the replay so step 4 can prove the replay did something:
 
-```bash
-docker exec "$MYSQL_CONTAINER" mysqlbinlog --version   # the server image ships it; --rewrite-db needs 8.0.26+
-docker cp "$W" "$MYSQL_CONTAINER":/tmp/pitr        # mysqlbinlog + mysql live inside the container
+`mysqlbinlog` is **not** in the production server image — it comes from the tools image built in
+§10.2 (`dmc/mysql-pitr:8.4.10`). It runs in a one-off container with **no network** and the work
+directory mounted **read-only**, and its output is piped into the production server's own `mysql`
+client. So the decrypted files are read in place and never copied into a container's writable layer.
 
-docker exec -i "$MYSQL_CONTAINER" sh -c '
-  MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqlbinlog \
+```bash
+PITR_IMG=dmc/mysql-pitr:8.4.10
+docker run --rm --entrypoint mysqlbinlog "$PITR_IMG" --version   # must be the server's version (mysqld --version)
+
+docker run --rm --network none -v "$W":/pitr:ro --entrypoint mysqlbinlog "$PITR_IMG" \
     --rewrite-db="dmc_demo->dmc_restore_drill" \
     --database=dmc_restore_drill \
     --start-datetime="2026-09-03 02:15:07" \
     --stop-datetime="2026-09-03 13:59:00" \
-    /tmp/pitr/binlog.000002 /tmp/pitr/binlog.000003 /tmp/pitr/binlog.000004 \
-  | MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --database=dmc_restore_drill'
+    /pitr/binlog.000002 /pitr/binlog.000003 /pitr/binlog.000004 \
+  | docker exec -i "$MYSQL_CONTAINER" sh -c \
+      'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot --database=dmc_restore_drill'
 ```
+
+It prints `WARNING: The option --database has been used. It may filter parts of transactions, but
+will include the GTIDs in any case` once per file. That is expected and harmless here: `gtid_mode` is
+OFF on this server, so there are no GTIDs to include. The 2026-09-22 rehearsal ran **exactly** this
+command (`scripts/backup/pitr-rehearsal.sh`, §8).
 
 Five things about that command are load-bearing:
 
@@ -719,13 +753,40 @@ did not apply, and promoting the scratch database would throw away exactly the h
 to save. Treat "counts moved as expected" as the gate, not "no errors printed".
 
 `newest_audit_row` must sit just under your `--stop-datetime`: that is the proof the replay reached
-where you intended and no further. Then check the tamper-evident chain over the recovered rows —
-point the app at the scratch database for one command only (a copy of the app `.env` with
-`DB_DATABASE=dmc_restore_drill`, **never** by editing the live one):
+where you intended and no further. For an exact figure rather than "it grew", compare with the live
+table: `audit_log.created_at` is written by the database in UTC, the same clock as
+`--stop-datetime`, so the recovered count must **equal** `SELECT COUNT(*) FROM dmc_demo.audit_log
+WHERE created_at < '<stop-datetime>'` (true while the live table is intact; a recovery *from* a
+destroyed `audit_log` has only the growth check).
+
+Then check the tamper-evident chain over the recovered rows with the app's own `audit:verify`, run
+**once, in a one-off container** from the running app's image, pointed at the scratch database:
 
 ```bash
-docker exec <app container> php artisan audit:verify --env=restore-drill
+APP_C=$(docker ps --filter name=v5d8vrnp418stpcwnup3yhta --format '{{.Names}}' | head -n1)
+APP_IMG=$(docker inspect --format '{{.Config.Image}}' "$APP_C")
+NET=$(docker inspect --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$MYSQL_CONTAINER" | awk '{print $1}')
+APP_KEY=$(docker exec "$APP_C" printenv APP_KEY); export APP_KEY   # never echo it
+DB_PASSWORD=$(docker exec "$MYSQL_CONTAINER" printenv MYSQL_ROOT_PASSWORD); export DB_PASSWORD
+docker run --rm --network "$NET" --entrypoint sh \
+    -e APP_KEY -e DB_PASSWORD -e APP_ENV=production -e APP_DEBUG=false \
+    -e DB_CONNECTION=mysql -e DB_HOST="$MYSQL_CONTAINER" -e DB_PORT=3306 \
+    -e DB_DATABASE=dmc_restore_drill -e DB_USERNAME=root \
+    -e CACHE_STORE=array -e SESSION_DRIVER=array -e QUEUE_CONNECTION=sync \
+    -e LOG_CHANNEL=stderr -e MAIL_MAILER=log \
+    "$APP_IMG" -c 'php artisan audit:verify'
+unset APP_KEY DB_PASSWORD
 ```
+
+**Do not** do this with `php artisan audit:verify --env=restore-drill` inside the live app container
+(this runbook said so until 2026-09-22). The container gets `DB_DATABASE=dmc_demo` from its
+**process environment**, and Laravel never lets a `.env` file override a variable that is already
+set — so that command silently verifies the **live** chain and prints "Chain intact" about the wrong
+database. The one-off container has no inherited settings, so what it checks is what you passed it.
+`audit:verify` only reads; the array cache/session drivers keep it from writing anything to the
+scratch database either. Both halves are proven: the rehearsal ran it against the throwaway server, and
+on 2026-09-22 this exact block (with `DB_DATABASE=dmc_demo`, read-only) reached the production server
+over the `coolify` network and printed `Chain intact: 862 hashed row(s)`.
 
 The chain must be intact end-to-end. A break means the replay landed rows out of order or mixed two
 sources — do not promote it; go back to step 3 with a different window.
@@ -736,20 +797,24 @@ what is there now, `RENAME`/reload into `dmc_demo`, `php artisan migrate`, `audi
 and tell people exactly which window was rolled back). Whatever you decide:
 
 ```bash
-# the decrypted copy INSIDE the container is patient data too — shred it, do not just unlink it
-docker exec "$MYSQL_CONTAINER" sh -c \
-  'command -v shred >/dev/null && shred -u /tmp/pitr/* 2>/dev/null; rm -rf /tmp/pitr'
+# the decrypted binary logs are patient data — shred them, do not just unlink them. Step 3 read them
+# through a read-only mount, so this directory is the ONLY plaintext copy.
 shred -u "$W"/* 2>/dev/null; rm -rf "$W"
 docker exec -i "$MYSQL_CONTAINER" sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -e "DROP DATABASE IF EXISTS \`dmc_restore_drill\`"'
 ```
-
-If the MySQL image has no `shred`, the `rm` is what you get: note it in the incident record, and
-remember the copy lived in the container's writable layer, which is replaced at the next deploy.
 
 Record the exercise in §8's drill log — a PITR rehearsal is the strongest evidence this control
 works. **Rehearse it before you need it**, on a quiet day, against a **throwaway MySQL container**
 (see the third bullet in step 3), with a `--stop-datetime` a few minutes in the past. The rehearsal
 only counts if step 4 showed the row counts move.
+
+`scripts/backup/pitr-rehearsal.sh` is that rehearsal, end to end: a throwaway server from the tools
+image on a `docker network create --internal` network with no published port, the base dump,
+steps 2–4 with the commands above, a PASS/FAIL verdict on all four gates (the rows moved, they equal
+the live rows before STOP, the newest is before STOP, the chain is intact), and cleanup on any exit
+(`docker rm -f -v`, so the restored copy's volume goes too). Its header carries the 2026-09-22
+invocation as the worked example; each run takes about a minute. Suggested cadence: quarterly, and
+after any change to MySQL's version, the backup scripts or this procedure.
 
 ### 10.6 Limits — what binlog shipping does *not* give you
 

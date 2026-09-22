@@ -1,7 +1,7 @@
 # HANDOFF — current state, and what remains
 
 > Single ground-truth orientation for the next review session. Read this first (with `CLAUDE.md`).
-> Last updated 2026-09-03 (after the compliance fact-fill and the prod-ready re-score); CI green.
+> Last updated 2026-09-22 (deploy + restore drill + first point-in-time-recovery rehearsal); CI green.
 
 ## The product
 
@@ -37,7 +37,9 @@
   rate-limit, and geo-challenge on the auth pages; host patched and rebooted; `LOG_LEVEL=warning`,
   `SESSION_ENCRYPT=true`, `APP_TIMEZONE=Asia/Riyadh`.
 - **Backups:** nightly **encrypted off-box** DB backup to an **in-Kingdom** OCI bucket, a daily
-  `backup:verify`, and a **proven restore drill**. See `laravel/docs/BACKUP-AND-RESTORE.md`.
+  `backup:verify`, a **proven restore drill** (monthly), and hourly encrypted binlog shipping with a
+  **rehearsed point-in-time recovery** (2026-09-22: 50 s, exact row match, chain intact). See
+  `laravel/docs/BACKUP-AND-RESTORE.md` §8 and §10.
 - **Encryption at rest:** the free-text clinical narrative columns are encrypted
   (`App\Casts\EncryptedNarrative`); **`APP_KEY` is the root of trust** (escrowed by the owner).
   See `laravel/docs/ENCRYPTION-AT-REST.md`.
@@ -51,8 +53,9 @@
   in-Kingdom hosting, backups, privacy-notice link). No framework badges until certificates exist.
 - **Docs:** pruned of dev scaffolding; PDPL paper-trail drafts in `laravel/docs/compliance/`.
 - **Gate baselines (2026-09-03, after PR #11):** PHPUnit 936 (+75 in the `pdf` group), PHP statement
-  coverage 86.1 % (floor 83), Vitest 757 on vitest 5 (floors 71/65/60/46 lines/statements/branches/
-  functions — re-baselined 2026-09-22 for the new coverage engine), ESLint zero warnings, Pint clean.
+  coverage 86.1 % (floor 83), Vitest 785 on vitest 5 (floors 72/66/62/48 lines/statements/branches/
+  functions — re-baselined 2026-09-22 for the new coverage engine, then raised the same day by the
+  IcdTypeahead + ActivityPanel specs), ESLint zero warnings, Pint clean.
 
 ## What remains (for the next session, with the owner)
 
@@ -168,11 +171,26 @@
    (SBOM half)~~ — `scripts/sbom.php` emits a deterministic CycloneDX 1.5 document of both lock
    files, archived per run. Signed provenance stays open by nature: CI builds no release artifact
    to attest.
+   **2026-09-22 later — deploy, drill, PITR rehearsal (owner: "deploy main, dump first and complete
+   the engineering things"):** `main` @ `fc44a0b` deployed after a pre-deploy dump (smoke 15/15,
+   audit chain intact); the two components no spec loaded got real ones (IcdTypeahead 15 tests,
+   ActivityPanel 13) and the Vitest floors went up to 72/66/62/48. Writing the IcdTypeahead spec
+   exposed a **clinical race**: a slow ICD-10 lookup answering after a pick reopened the list under
+   the clinician's next Enter, adding a diagnosis nobody chose — fixed with a generation guard, and
+   a failed or non-OK lookup now shows nothing instead of throwing. Monthly restore drill OK (7 s).
+   **First PITR rehearsal**: the documented recovery procedure did **not** work as written — the
+   `mysql:8` image has no `mysqlbinlog`, and the chain-check command would have verified the
+   **live** database (the app container's `DB_DATABASE` is a process env var, which a `.env` file
+   never overrides). Both fixed (`scripts/backup/pitr-tools.Dockerfile`, a one-off verify
+   container), then rehearsed twice on a throwaway server with `scripts/backup/pitr-rehearsal.sh`:
+   base 02:15 dump + 10 binlogs replayed to 10:30 in 50 s, recovered `audit_log` = exactly the 861
+   live rows before the stop time, `audit:verify` intact, nothing left behind. The runbook's
+   chain-check form was also proven read-only against the production server. The fix was deployed
+   with a pre-deploy dump — see the PR for the deployed SHA.
    **Still open and all owner / infrastructure decisions, not code:** enable deploy-on-green
    (declined so far — "I don't want to autodeploy"), pick a log sink and set `LOG_STACK`
    (OBS-01/03/04/05), a second backup region + instance principal (DATA-02, CFG-10), SLOs and an
-   on-call/paging channel (OPS-02/03, REL-01..05), the PHI copies still on the host under
-   `/home/ubuntu/migrate/dmc/`, repo private before go-live, the legacy daily site, contracts / DPO /
+   on-call/paging channel (OPS-02/03, REL-01..05), repo private before go-live, the legacy daily site, contracts / DPO /
    names / counsel decisions (CMP-03/06 and item 2 above).
 
 ## Doc map
