@@ -1,0 +1,31 @@
+{
+    "_comment": [
+        "Allow-list for scripts/clock-guard.php (I18N-02). A raw MySQL clock function in a string",
+        "literal under app/, routes/ or database/ fails CI unless it is listed here with a reason.",
+        "The ONLY defensible reason is that the column on the other side of the comparison is",
+        "written by the DATABASE (a ->useCurrent() column default), so both sides share the DB",
+        "clock. If the column is written by Laravel it is an app-clock value: bind the bound from",
+        "PHP (Carbon::today() / now()) as a query parameter instead of reaching for NOW().",
+        "See the script's header and docs/DEPLOY-LARAVEL.md for the full reasoning."
+    ],
+    "allow": [
+        {
+            "file": "app/Http/Controllers/Auth/AuthController.php",
+            "needle": "NOW() - INTERVAL 10 MINUTE",
+            "reason": "Failed-login burst window. Compares audit_log.created_at, which is filled by the column default (timestamp()->useCurrent() in 2026_06_08_120006_create_settings_and_audit) and is therefore a DB-clock value, against the DB clock. Both sides are the same clock, so the 10-minute window is exact whatever the app/DB offset is.",
+            "reviewed": "2026-09-22"
+        },
+        {
+            "file": "app/Http/Controllers/SecurityController.php",
+            "needle": "NOW() - INTERVAL 24 HOUR",
+            "reason": "Security panel, last-24h failed-login clusters. Same column and same reasoning as the AuthController entry: audit_log.created_at is DB-written, so comparing it against the DB clock is the correct pairing.",
+            "reviewed": "2026-09-22"
+        },
+        {
+            "file": "app/Http/Controllers/DashboardController.php",
+            "needle": "NOW() - INTERVAL 24 HOUR",
+            "reason": "Admin band security-anomaly count; mirrors the Security panel's 24h cluster query exactly (the two numbers must agree) and reads the same DB-written audit_log.created_at.",
+            "reviewed": "2026-09-22"
+        }
+    ]
+}

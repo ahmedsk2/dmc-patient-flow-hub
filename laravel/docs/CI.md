@@ -83,6 +83,8 @@ stable DOM root.
 | PHPUnit pass 1 (`--exclude-group pdf --coverage-clover`) | the suite against real MySQL 8.4 on PHP 8.3; writes `coverage/clover.xml` (pcov) | any test fails |
 | **`scripts/coverage-gate.php coverage/clover.xml 83`** (TST-02) | PHP statement coverage over `app/` | below 83 % (measured 86.15 % on 2026-09-03), or no usable Clover report (exit 3 — a missing driver must not pass silently) |
 | PHPUnit pass 2 (`--group pdf`) | dompdf tests in an isolated process | any test fails |
+| **`scripts/clock-guard.php`** (I18N-02) | raw MySQL clock functions in `app/`, `routes/`, `database/` | a string literal uses `NOW()` / `CURDATE()` / `UTC_TIMESTAMP()` etc. and is not allow-listed with a reason in `.clock-allowlist.json` |
+| **`scripts/sbom.php`** (CICD-05) | CycloneDX SBOM of both lock files, archived as the `sbom-cyclonedx` run artifact (90 days) | a lock file is missing or unreadable |
 | `vendor/bin/pint --test` | Laravel Pint code style | any file would be rewritten |
 
 **The composer audit gate.** `composer audit` exits non-zero for *any* advisory (medium and low
@@ -96,6 +98,33 @@ reads the `--format=json` report and decides:
 | no severity from the advisory source | **BLOCK** — unknown is not "low"; review it, then ignore it explicitly if it is unreachable |
 | medium / low | `::warning::` only — visible in the run, does not fail |
 | listed in `.composer-audit-ignore.json` | `::notice::` with the recorded reason |
+
+**The raw-clock guard.** `config/database.php` deliberately pins no MySQL session timezone, so the
+database session runs in the DB host's zone (UTC) while the app runs Asia/Riyadh. That is safe until
+the two clocks are mixed: an **app-written** column (Laravel writes `admit_date`, `assigned_at`,
+`handovers.updated_at` as Riyadh-local strings) compared against MySQL's `NOW()` is three hours wrong
+all year and fails silently. The guard tokenises each file and inspects **string literals only**, so
+prose in a comment ("never use `CURDATE()` here") cannot trip it and PHP's `now()` helper is never
+mistaken for SQL's. Every hit must be listed in `.clock-allowlist.json` with a reason; the only
+defensible one is that the column on the other side is **DB-written** (a `->useCurrent()` default),
+which is why the three `audit_log.created_at` comparisons are allowed. An allow-list entry that
+matches nothing is reported as a `::warning::` so the file cannot rot. Pinning the session timezone
+is a data migration, not a config change — `docs/DEPLOY-LARAVEL.md` §10 carries the procedure, and
+`AppClockDayBoundaryTest` fails if the config key ever appears.
+
+**The SBOM.** `scripts/sbom.php` builds one CycloneDX 1.5 document from `composer.lock` and
+`package-lock.json` — the files that pin what CI actually installed. It is deliberately
+dependency-free (no plugin, no network, no `npm sbom`): a supply-chain artifact that pulls its own
+supply chain is self-defeating, and this runs identically on Windows and the runner. Output is sorted
+by purl with no timestamp or serial number, so identical lock files give a byte-identical document
+and any diff between runs means the dependencies moved. Run it locally with
+`php scripts/sbom.php sbom/dmc-laravel.cdx.json` (git-ignored).
+
+**Signed build provenance is NOT part of this (CICD-05 stays partly open).** Attestation signs a
+released artifact, and this pipeline produces none: Coolify builds the image from source on the
+host, so CI has no subject to attest. It becomes worth adding the day CI builds a release artifact
+or an image — and it would need the workflow token widened (`id-token: write`, `attestations: write`),
+which is an owner decision given the token is deliberately read-only.
 | listed, but its `review_by` date has passed | the entry is **expired** — it suppresses nothing until re-reviewed |
 | abandoned package | `::warning::` only |
 | composer produced no JSON / no `advisories` key | exit 2 — composer itself failed; never a pass |

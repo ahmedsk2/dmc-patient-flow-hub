@@ -62,15 +62,21 @@
    with the owner and applied to all nine drafts (record:
    [`CONFIRMED-FACTS.md`](laravel/docs/compliance/CONFIRMED-FACTS.md)); every legal marker has a
    sourced, proposed citation in [`PROPOSED-CITATIONS.md`](laravel/docs/compliance/PROPOSED-CITATIONS.md)
-   for counsel to verify. **Parked by the owner (resume when ready):** (a) the `[NAME]` / `[DATE]` /
+   for counsel to verify. ~~(c) the deeper per-activity rework of ROPA / DATA-RETENTION / DPIA to the
+   processor-and-legacy-daily framing~~ — **DONE 2026-09-03 (PR #18)**: all three describe the real
+   picture (DMC as controller, the operator company as processor with no contract yet, the legacy
+   daily system on US hosting, the Laravel parallel copy as its own RoPA activity A10, DPIA risks
+   R13–R15), `CONFIRMED-FACTS.md` C12/C13 reconciled with the shipped export auditing and labelling,
+   `DATA-CLASSIFICATION.md` aligned, and `OPEN-ITEMS.md` regenerated against the live files (575
+   markers, machine-checked; 30 further keyword-final placeholders such as `[DPO NAME]` are listed
+   in its banner). **Still parked by the owner (resume when ready):** (a) the `[NAME]` / `[DATE]` /
    contact placeholders still owed — operator company legal name + CR, DPO, Head of IM, HIM office
    contacts, SDAIA complaint channel; (b) the counsel/DPO **DECISION** rows — registering entity,
-   medical-record retention period (MoH Annex 5), classification tier, Cloudflare edge decryption;
-   (c) the deeper per-activity rework of ROPA / DATA-RETENTION / DPIA to the processor-and-legacy-daily
-   framing (each carries a confirmed-inputs callout; internal tables still read as if the hospital
-   operates the Laravel app). Master checklist: [`OPEN-ITEMS.md`](laravel/docs/compliance/OPEN-ITEMS.md).
+   medical-record retention period (MoH Annex 5), classification tier, Cloudflare edge decryption.
+   Master checklist: [`OPEN-ITEMS.md`](laravel/docs/compliance/OPEN-ITEMS.md).
 3. **Evidence pack — DRAFTED 2026-09-03.** [`EVIDENCE-PACK.md`](laravel/docs/compliance/EVIDENCE-PACK.md)
-   maps 20 PDPL obligations + NCA domains to evidence, with gap register G1–G16 and dated evidence
+   maps 20 PDPL obligations + NCA domains to evidence, with gap register G1–G17 (G1, G2 and G14
+   closed; G17 is the dated SEC-11/CICD-11 risk acceptance) and dated evidence
    under `laravel/docs/compliance/evidence/`. Extend to ISO 27001 / SOC 2 / CBAHI only if pursued.
 4. **Owner-side ops:** APP_KEY escrow (done), SSH IP allowlist (deferred by owner), keep GitHub
    Actions billing enabled, **make the repo private before go-live** (public by owner decision for
