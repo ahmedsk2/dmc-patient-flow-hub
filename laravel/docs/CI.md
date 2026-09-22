@@ -98,6 +98,11 @@ reads the `--format=json` report and decides:
 | no severity from the advisory source | **BLOCK** — unknown is not "low"; review it, then ignore it explicitly if it is unreachable |
 | medium / low | `::warning::` only — visible in the run, does not fail |
 | listed in `.composer-audit-ignore.json` | `::notice::` with the recorded reason |
+| listed, but its `review_by` date has passed | the entry is **expired** — it suppresses nothing until re-reviewed |
+| abandoned package | `::warning::` only |
+| composer produced no JSON / no `advisories` key | exit 2 — composer itself failed; never a pass |
+
+A summary also lands in the job's step summary.
 
 **The raw-clock guard.** `config/database.php` deliberately pins no MySQL session timezone, so the
 database session runs in the DB host's zone (UTC) while the app runs Asia/Riyadh. That is safe until
@@ -117,19 +122,25 @@ is a data migration, not a config change — `docs/DEPLOY-LARAVEL.md` §10 carri
 dependency-free (no plugin, no network, no `npm sbom`): a supply-chain artifact that pulls its own
 supply chain is self-defeating, and this runs identically on Windows and the runner. Output is sorted
 by purl with no timestamp or serial number, so identical lock files give a byte-identical document
-and any diff between runs means the dependencies moved. Run it locally with
-`php scripts/sbom.php sbom/dmc-laravel.cdx.json` (git-ignored).
+and any diff between runs means the dependencies moved; `metadata.component.version` carries
+`GITHUB_SHA` in CI (and nothing locally) so an archived document says which build it describes.
+
+Licences are the part that is easy to get wrong. CycloneDX validates `licenses[].license.id`
+against the SPDX enum, so ONE unknown id invalidates the whole document — which would be discovered
+the day an auditor loads it, not before. `id` is therefore emitted only for identifiers present in
+the vendored `scripts/spdx-license-ids.json`; anything else becomes a free-text `name` (always
+valid) with a `::warning::` naming it, so drift is visible instead of fatal. A *choice* of licences
+is an expression, not a list: composer writes it as an array (`BSD-3-Clause`, `GPL-2.0-only`,
+`GPL-3.0-only` means pick one) and npm as `(MIT OR CC0-1.0)`; emitting either as a list of ids would
+assert every licence at once, the opposite of what the package grants. De-duplication by purl lets
+`required` win over `dev`, so a package pulled in both ways is never filed as a dev dependency.
+Run it locally with `php scripts/sbom.php sbom/dmc-laravel.cdx.json` (git-ignored).
 
 **Signed build provenance is NOT part of this (CICD-05 stays partly open).** Attestation signs a
 released artifact, and this pipeline produces none: Coolify builds the image from source on the
 host, so CI has no subject to attest. It becomes worth adding the day CI builds a release artifact
 or an image — and it would need the workflow token widened (`id-token: write`, `attestations: write`),
 which is an owner decision given the token is deliberately read-only.
-| listed, but its `review_by` date has passed | the entry is **expired** — it suppresses nothing until re-reviewed |
-| abandoned package | `::warning::` only |
-| composer produced no JSON / no `advisories` key | exit 2 — composer itself failed; never a pass |
-
-A summary also lands in the job's step summary.
 
 **Adding an ignore** (`laravel/.composer-audit-ignore.json`) — only for an advisory you have verified
 is *unreachable in this application*, never because it is inconvenient:

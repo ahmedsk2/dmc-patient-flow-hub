@@ -32,8 +32,9 @@ class PatientsController extends Controller
      * (legacy parity: the long-term registry is mostly discharged rows), so it is the only board
      * query whose result set grows for ever. Production held 176 such rows on 2026-09-03, all
      * discharged, accumulated since 2022 — so this cap is a guard against the decade, not a change
-     * to what anyone sees today. When it does bite, the newest episodes are kept and the page says
-     * the list was trimmed rather than quietly showing a partial registry.
+     * to what anyone sees today. When it does bite, every OPEN episode is kept (a long-stay patient
+     * still in a bed is the whole point of the view) and only the oldest CLOSED ones are dropped —
+     * and the page says the list was trimmed rather than quietly showing a partial registry.
      *
      * The effective value is `config('board.longterm_row_cap')` when set, so a test can drive the
      * capped path with three rows instead of a thousand. No config/board.php ships: with the key
@@ -290,13 +291,24 @@ class PatientsController extends Controller
             ->when($filters['needs_handover'] ?? null, fn ($q) => $q->handoverPending());
 
         // PERF-03: cap the long-term registry (see self::LONGTERM_ROW_CAP). The COUNT only runs on
-        // that one view, so the everyday board keeps its single query. Ordering is reversed for the
-        // cap so the rows dropped are the OLDEST closed episodes, then restored to ascending
-        // admit_date for display — the order every caller and the printable census expect.
+        // that one view, so the everyday board keeps its single query.
+        //
+        // WHAT THE CAP KEEPS matters more than the cap itself. A long-term patient who is STILL IN
+        // A BED has one of the OLDEST admit_dates on this view — that is what makes them long-term —
+        // so ordering by admit_date alone would drop the live patients FIRST and leave a registry of
+        // nothing but discharged ones. Open episodes are therefore sorted ahead of closed ones and
+        // can never be trimmed; only the oldest CLOSED episodes are. `id` breaks ties so the cut is
+        // the same list on every reload rather than whatever MySQL returns that time. The result is
+        // then restored to ascending admit_date for display — the order every caller and the
+        // printable census expect.
         $cap = max(1, (int) config('board.longterm_row_cap', self::LONGTERM_ROW_CAP));
         $truncated = null;
         if ($includeDischarged && ($total = (clone $query)->count()) > $cap) {
-            $admissions = (clone $query)->orderByDesc('admit_date')->limit($cap)
+            $admissions = (clone $query)
+                ->orderByRaw('discharge_date IS NULL DESC')   // open episodes first: never trimmed
+                ->orderByDesc('admit_date')
+                ->orderByDesc('id')
+                ->limit($cap)
                 ->get()->sortBy('admit_date')->values();
             $truncated = ['shown' => $cap, 'total' => $total];
         } else {

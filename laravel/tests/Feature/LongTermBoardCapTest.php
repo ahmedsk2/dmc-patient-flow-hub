@@ -89,6 +89,48 @@ class LongTermBoardCapTest extends TestCase
     }
 
     /**
+     * The one that matters clinically. A long-term patient who is STILL IN A BED has one of the
+     * OLDEST admit_dates on this view — that is what makes them long-term — so a cap that simply
+     * kept the newest admit_dates would drop the live patients FIRST and leave a registry of
+     * nothing but discharged ones. Open episodes sort ahead of closed ones and are never trimmed.
+     *
+     * This test fails against an `orderByDesc('admit_date')`-only cap.
+     */
+    public function test_a_patient_still_admitted_is_never_trimmed_however_old_the_admission(): void
+    {
+        config(['board.longterm_row_cap' => 2]);
+        $c = $this->user();
+
+        $mk = function (string $admit, ?string $discharge) use ($c) {
+            $p = Patient::create(['mrn' => (string) random_int(10000000, 99999999), 'name' => 'LT Patient']);
+
+            return Admission::create(array_filter([
+                'patient_id' => $p->id, 'consultant_id' => $c->id, 'admit_date' => $admit,
+                'current_location' => 'Ward', 'is_longterm' => 1, 'is_new_assignment' => 0,
+                'discharge_date' => $discharge,
+                'transfer_type' => $discharge ? 'discharge from ward' : null,
+                'outcome' => $discharge ? 'Alive' : null,
+            ], fn ($v) => $v !== null));
+        };
+
+        // the long-stay patient: admitted years before either closed episode, still in a bed
+        $stillIn = $mk('2021-03-01', null);
+        $mk('2024-01-01', '2024-02-01');
+        $newestClosed = $mk('2025-01-01', '2025-02-01');
+
+        $this->actingAs($this->user(User::ROLE_ADMIN))->get('/patients?view=longterm')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('truncated.shown', 2)
+                ->where('truncated.total', 3)
+                ->where('groups.0.patients', function ($patients) use ($stillIn, $newestClosed) {
+                    $ids = collect($patients)->pluck('id')->all();
+
+                    // still-admitted kept despite being the oldest; the MIDDLE closed one is dropped
+                    return $ids === [$stillIn->id, $newestClosed->id];
+                }));
+    }
+
+    /**
      * The cap exists only because view=longterm includes closed episodes. Every other view is
      * already bounded, so it must never be trimmed — even with the cap set below the row count.
      */

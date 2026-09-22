@@ -254,13 +254,17 @@ const closeModify = () => guardModify(() => { editing.value = null; });
         </FlowAlert>
 
         <!-- PERF-03: the long-term registry is the one board view that lists closed episodes, so it
-             grows for ever. The server caps it and reports the cap here; on a capped list the OLDEST
-             episodes are the ones missing, so say that rather than leave a silently partial list. -->
+             grows for ever. The server caps it and reports the cap here. Every patient still in a
+             bed is kept — only the oldest DISCHARGED episodes are dropped — so say exactly that
+             rather than leave a silently partial list. Registry search is admin-only, so the
+             recovery link is too; everyone else is pointed at the search this page already has. -->
         <FlowAlert v-if="truncated" tone="info"
-                   :title="`Showing the ${truncated.shown} most recent of ${truncated.total} long-term episodes`" class="mb-4">
-            The oldest episodes are not listed. Use
-            <Link href="/registry" class="font-semibold underline">Registry search</Link>
-            to find a specific patient.
+                   :title="`Showing ${truncated.shown} of ${truncated.total} long-term episodes`" class="mb-4">
+            Every patient still admitted is listed; the oldest discharged episodes are not.
+            <template v-if="me.is_admin">
+                Use <Link href="/registry" class="font-semibold underline">Registry search</Link> to find a specific patient.
+            </template>
+            <template v-else>Search by name or MRN above to find a specific patient.</template>
         </FlowAlert>
 
         <!-- result-count announcement for screen readers (filters change the visible groups) -->

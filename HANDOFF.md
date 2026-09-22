@@ -154,13 +154,25 @@
    single-flight cache with jittered TTL (RES-08); JSON stderr log channel wired, production opt-in
    via `LOG_STACK=daily,stderr` (OBS-01 code part); in-app privacy text synced with the drafts;
    `scripts/deploy-on-green.sh` prepared (not enabled); drain-step settings documented (RES-12);
-   legacy CI no longer fires on docs-only changes; root README current. **Still open and all
-   owner / infrastructure decisions, not code:** enable deploy-on-green and the drain step
-   (CICD-08 / RES-12), pick a log sink and set `LOG_STACK` (OBS-01/03/04/05), binlog or a second
-   backup region + instance principal (DATA-02/04), SLOs and a rollback rehearsal (OPS-02/06),
-   PERF-03 pagination, the PHI copies still on the host under `/home/ubuntu/migrate/dmc/`, repo
-   private before go-live, the legacy daily site, contracts / DPO / names / counsel decisions
-   (CMP-03/06 and item 2 above).
+   legacy CI no longer fires on docs-only changes; root README current.
+   **Engineering decisions closed 2026-09-22** (the items earlier reports listed as "left as
+   decisions"; adversarially reviewed, 10 findings folded in before merge): ~~PERF-03~~ — the
+   long-term registry, the one board query with no natural bound, is capped at 1000 with every
+   **open** episode protected (a long-stay patient still in a bed has the oldest admit_date, so a
+   naive newest-first cap would have dropped exactly the patients the view exists for) and the page
+   told when it trimmed; ~~I18N-02~~ — the unpinned MySQL session timezone stays accepted but is now
+   *enforced*: `scripts/clock-guard.php` blocks new raw-clock SQL unless `.clock-allowlist.json`
+   records why the column opposite is DB-written, a tripwire test fails if anyone pins the config,
+   and DEPLOY-LARAVEL §10 carries the data migration pinning would really require; ~~CICD-05
+   (SBOM half)~~ — `scripts/sbom.php` emits a deterministic CycloneDX 1.5 document of both lock
+   files, archived per run. Signed provenance stays open by nature: CI builds no release artifact
+   to attest.
+   **Still open and all owner / infrastructure decisions, not code:** enable deploy-on-green
+   (declined so far — "I don't want to autodeploy"), pick a log sink and set `LOG_STACK`
+   (OBS-01/03/04/05), a second backup region + instance principal (DATA-02, CFG-10), SLOs and an
+   on-call/paging channel (OPS-02/03, REL-01..05), the PHI copies still on the host under
+   `/home/ubuntu/migrate/dmc/`, repo private before go-live, the legacy daily site, contracts / DPO /
+   names / counsel decisions (CMP-03/06 and item 2 above).
 
 ## Doc map
 
