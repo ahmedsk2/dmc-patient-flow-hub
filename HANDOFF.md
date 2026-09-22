@@ -185,8 +185,10 @@
    container), then rehearsed twice on a throwaway server with `scripts/backup/pitr-rehearsal.sh`:
    base 02:15 dump + 10 binlogs replayed to 10:30 in 50 s, recovered `audit_log` = exactly the 861
    live rows before the stop time, `audit:verify` intact, nothing left behind. The runbook's
-   chain-check form was also proven read-only against the production server. The fix was deployed
-   with a pre-deploy dump — see the PR for the deployed SHA.
+   chain-check form was also proven read-only against the production server. **Production runs the
+   merge of PR #26** (deployed 2026-09-22, dumped first). The old `/home/ubuntu/migrate/dmc/` folder
+   was re-checked the same day — scripts and `.gitignore` files only, no dumps, env files or keys —
+   so it is off the open list.
    **Still open and all owner / infrastructure decisions, not code:** enable deploy-on-green
    (declined so far — "I don't want to autodeploy"), pick a log sink and set `LOG_STACK`
    (OBS-01/03/04/05), a second backup region + instance principal (DATA-02, CFG-10), SLOs and an
