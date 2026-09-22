@@ -366,14 +366,27 @@ worse than an extra hour of downtime.
    clinicians will need to re-enter admissions/discharges/consultations from that window.
 9. Run `php artisan backup:verify` and a fresh `db-backup.py` so the next night starts clean.
 
-### 5.1 Whole-server loss (RES-09) — **UNREHEARSED**
+### 5.1 Whole-server loss (RES-09) — **data half rehearsed 2026-09-22**
 
-> **Status.** Unlike the drills in §8 (restore drill, rollback rehearsal, PITR rehearsal), **this
-> exact scenario — the whole OCI instance gone, not just the database — has never been rehearsed.**
-> Everything below is assembled from what is already true elsewhere in this repo (§9 of
-> [`DEPLOY-LARAVEL.md`](DEPLOY-LARAVEL.md) is the "recreate production" procedure this reuses) plus
-> this doc's own restore/PITR steps; treat the RTO as **unmeasured** until someone actually runs it,
-> ideally against a throwaway OCI instance the way the PITR rehearsal uses a throwaway container.
+> **Status.** The **data** half of this procedure was rehearsed end to end on 2026-09-22 against a
+> throwaway OCI instance (§8's drill log has the row). Measured, on a 2-OCPU/12 GB Ampere instance in
+> the same region, from "launch the replacement" to "the database is back and provably identical":
+> instance reachable over SSH **75 s**, Docker + tooling **33 s**, MySQL 8.4 up **45 s** (including the
+> image pull), latest dump downloaded and restored **8 s**, PITR tools image built **11 s**, shipped
+> binary logs replayed **4 s** — about **3 minutes of machine time**, plus whatever the operator takes
+> between steps. Proof: the recovered `audit_log` was byte-identical to production's over the
+> recovered range (same SHA-256 over `id:row_hash`), with 17,435 patients / 37,662 admissions / 331
+> users restored.
+>
+> **The application half was NOT rehearsed**: installing Coolify, rebuilding the app image from
+> source and repointing DNS. Those are the steps that would dominate a real RTO, so treat the
+> end-to-end figure as **still unmeasured** — what is measured is that the data comes back, fast, from
+> the off-box archive alone.
+>
+> Three defects in this very procedure were found by rehearsing it, and are fixed below: the PITR
+> tools image could not be built at all (its pinned MySQL version had gone stale), the replay had no
+> way to find the archived binary logs once the shipper's state file died with the host, and the
+> listing the fix depends on was truncated at 64 KB. A procedure nobody has run is a hypothesis.
 
 Scenario: the OCI instance itself is gone — destroyed, unrecoverable, or the tenancy is
 inaccessible — not merely "the database container crashed" (that is §5 above) or "the app deploy is
@@ -410,14 +423,38 @@ holds outside the host (below).
    `ENCRYPTION-AT-REST.md`). The rest of `DB_*` / `AUDIT_S3_*` / `SESSION_ENCRYPT` etc. as documented
    there; the backup bucket's own `S3_ACCESS_KEY`/`S3_SECRET` (below) are separate from `AUDIT_S3_*`.
 4. **MySQL 8.4 container** on the new host, same shape as today's (§0's topology: `mysql:8`, utf8mb4,
-   InnoDB, a dedicated `dmc_demo` app user — never root — `DEPLOY-LARAVEL.md` §9 step 1).
+   InnoDB, a dedicated `dmc_demo` app user — never root — `DEPLOY-LARAVEL.md` §9 step 1). Two things
+   the rehearsal showed are easy to miss here:
+   - **`/root/.dmc-backup.env` still names the OLD container.** Every backup/PITR command finds MySQL
+     through `MYSQL_CONTAINER=`; point it at the new container's name before running any of them.
+   - **The dump carries the database, not the accounts.** `mysqldump --databases dmc_demo` contains no
+     `CREATE USER`, so after the restore recreate the app's own login and grant it — the app never
+     connects as root:
+
+     ```sql
+     CREATE USER 'dmc_demo'@'%' IDENTIFIED BY '<new password>';
+     GRANT ALL PRIVILEGES ON `dmc_demo`.* TO 'dmc_demo'@'%';
+     ```
+     then set the same password in the app's `DB_PASSWORD` (step 3).
 5. **Restore the data — base dump, then replay as far as the archive allows.** This is §5 above (the
    latest dump the bucket holds) followed by §10.5 (every binlog shipped after that dump, replayed up
    to the moment the old host was lost) **into `dmc_demo` directly** — there is no old database to
    protect from a stray write any more, so skip the `dmc_restore_drill` detour and the
    `--rewrite-db` flag (§10.5's third bullet under step 3: only drop `--rewrite-db` when replaying
    onto a real `dmc_demo`, which this is). Needs the backup key from escrow (next step) to decrypt
-   anything.
+   anything. Rehearsed specifics:
+   - **Build the PITR tools image first** (§10.2) — `mysqlbinlog` is not in `mysql:8`, and the image
+     takes its version from the base image, so build it on the new host rather than expecting a copy.
+   - **The shipper's state file is gone with the old host, so the bucket is the inventory.**
+     `python3 /opt/dmc/backup/db-backup.py --list-objects db-backups/dmc_demo/binlogs/` prints every
+     archived binary log (`key<TAB>bytes`); replay from the one the dump's own coordinate names
+     (§10.5 step 3) through the newest. Do not go looking for `/var/backups/dmc/binlog-shipped.json`
+     — it died with the host, and the listing is what replaces it.
+   - **The recovery point is the last binary log that was SHIPPED**, not the last one MySQL had: the
+     active file was still on the lost host. That gap is the ≤ 1 h RPO in §1, made concrete.
+   - `mysqlbinlog` with an empty file list prints its usage to stdout, which the `mysql` client then
+     tries to execute — if the listing yields nothing at or after the coordinate, stop and find out
+     why rather than "replaying" nothing.
 6. **Reinstall the backup/shipping scripts and their secrets.** `/opt/dmc/backup/*.py` and
    `*.sh` are just files in this repo — §2.1 and §10.2 install them fresh. `/root/.dmc-backup.env`
    is rebuilt from the private ops note (bucket name, region, endpoint, the backup `S3_ACCESS_KEY` /
@@ -537,6 +574,7 @@ Add one row per drill (monthly) and per real restore. This table *is* the eviden
 | 2026-09-22 11:09 | Claude Code (on the owner's instruction) | **PITR rehearsal** (§10.5): base db-backups/dmc_demo/2026/09/dmc_demo-2026-09-22T021501Z.sql.gz.enc + binlog.000430–000439, replayed 02:15:01 → 10:30:00 into a throwaway server (`scripts/backup/pitr-rehearsal.sh`) | — | 6 base (incl. download) + 26 replay | 50 | 17435 / 37662 / — / 0 | **PASS — but only after fixing two defects in §10.5 the rehearsal found.** (1) the stock `mysql:8` image has **no `mysqlbinlog`** (the runbook said it did), so step 3 could not run at all → `pitr-tools.Dockerfile` (§10.2). (2) step 4's `audit:verify --env=restore-drill` would have checked the **live** chain — the app container takes `DB_DATABASE` from its process env, which a `.env` file never overrides → replaced by the one-off container. Then: `audit_log` 853 → 861, **exactly** the 861 live rows created before STOP; newest recovered row 10:00:02; `Chain intact: 861 hashed row(s)`. Admissions/patients did not move because nothing clinical was written in the window (the Laravel app is not yet the daily system) — `audit_log` is the proof |
 | 2026-09-22 11:14 | Claude Code (on the owner's instruction) | PITR rehearsal, same inputs, re-run with the script switched to the **exact** documented step-3 command (tools container, work dir mounted read-only) | — | 7 base (incl. download) + 27 replay | 50 | 17435 / 37662 / — / 0 | PASS — identical result (853 → 861 = 861 live, chain intact). Throwaway server, its volume, the network and the work dir all gone afterwards (volumes 21 → 21, containers 30 → 30) |
 | 2026-09-22 19:26 | Claude Code (on the owner's instruction) | PITR rehearsal on the **exact recorded position**: base db-backups/dmc_demo/2026/09/dmc_demo-2026-09-22T192313Z.sql.gz.enc (the first dump taken with `--source-data=2`) + binlog.000448, replayed from `--start-position=524989` to 19:26:00 | — | 7 base + 1 replay | 21 | 17435 / 37662 / — / 0 | PASS — the dump's own coordinate was read out of the encrypted copy in a pipe and used instead of a timestamp guess; 107 events applied; recovered `audit_log` 870 = the 870 live rows before the stop time; chain intact. The audit trail itself did not move (a quiet evening window, legitimate while this app is not the daily system) — which is why the script now also counts the events the replay carried |
+| 2026-09-22 20:04–20:19 | Claude Code (owner-approved) | **Whole-server-loss rehearsal (RES-09, §5.1)** — a throwaway 2-OCPU/12 GB instance in me-riyadh-1, recovered from the off-box archive alone (base dump dmc_demo-2026-09-22T192313Z + shipped binlogs from the dump's own coordinate) | — | 8 restore + 4 replay (75 s to SSH, 33 s Docker/tooling, 45 s MySQL, 11 s tools image) | ≈180 s of machine time | 17435 / 37662 / 331 / 0 | **PASS for the data half.** Recovered `audit_log` digest over rows 1–870 identical to production's (`e2cbaeaa…b31a6a`); production had one newer row — the active binary log that a real loss takes with the host, i.e. the ≤ 1 h RPO. **Found and fixed three defects in the procedure**: the PITR tools image could not build (stale version pin), the replay had no inventory once the shipper's state file died with the host (added `db-backup.py --list-objects`), and that listing was truncated by the client's 64 KB body cap. **Not rehearsed:** Coolify install, app image rebuild, DNS repoint. Instance terminated with its boot volume; production untouched throughout |
 
 ---
 
@@ -701,12 +739,17 @@ outbound HTTPS to `repo.mysql.com` once (~3.3 MB):
 ```bash
 sudo cp laravel/scripts/backup/pitr-tools.Dockerfile laravel/scripts/backup/pitr-rehearsal.sh /opt/dmc/backup/
 sudo chmod 644 /opt/dmc/backup/pitr-tools.Dockerfile && sudo chmod 750 /opt/dmc/backup/pitr-rehearsal.sh
-sudo sh -c 'docker build -t dmc/mysql-pitr:8.4.10 - < /opt/dmc/backup/pitr-tools.Dockerfile'
-docker run --rm --entrypoint mysqlbinlog dmc/mysql-pitr:8.4.10 --version   # "… Ver 8.4.10 …"
+# the tag is the SERVER's version — the build reads it out of the base image and fetches the
+# matching client package, so the tool can never drift from the server that wrote the logs
+V=$(sudo docker run --rm mysql:8 mysqld --version | sed -n 's/.* Ver \([0-9.]*\).*/\1/p')
+sudo sh -c "docker build -t dmc/mysql-pitr:$V - < /opt/dmc/backup/pitr-tools.Dockerfile"
+docker run --rm --entrypoint mysqlbinlog "dmc/mysql-pitr:$V" --version   # must match $V
 ```
 
 (`sudo sh -c` because `/opt/dmc/backup` is root-only and the `<` redirect is opened by the calling
-shell.) **Rebuild it whenever the production MySQL image changes version** — pass
+shell.) The version is no longer pinned in the Dockerfile: a pin went stale between 2026-09-03 and the
+2026-09-22 whole-server-loss rehearsal, which then could not build the image **at all** — the failure mode
+you would meet mid-recovery. **Rebuild it whenever the production MySQL image changes version** — pass
 `--build-arg MYSQL_VERSION=<new>` and tag it `dmc/mysql-pitr:<new>` (the rehearsal script takes `IMG=`); a stale version fails the build rather than producing a mismatched
 tool. The server's version is `docker exec <mysql container> mysqld --version`.
 

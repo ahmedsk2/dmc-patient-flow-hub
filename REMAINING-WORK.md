@@ -65,6 +65,9 @@ biggest live risk** (the original un-hardened build, on US hosting).
 - [ ] **Keep GitHub Actions billing enabled** — if it lapses, CI silently checks nothing.
 - [ ] *Optional:* Cloudflare WAF rules tuned for the app; clean up ~112 legacy records with non-numeric
   MRNs (D1, D3); revisit auto-deploy / auto-rollback (off by your decision, CICD-08).
+- [ ] **Rehearse the application half of a server loss** (install the deploy platform, rebuild the app
+  from source, repoint DNS) — the remaining unknown in the recovery time. Needs another temporary
+  instance and about an hour.
 - [ ] **Start tagging releases** (`vYYYY.MM.DD`) now that CI signs what it builds on a tag — the
   provenance only exists for tagged commits, so an untagged deploy has none. *(CICD-05, §F)*
 
@@ -166,8 +169,13 @@ had a cross-cutting adversarial review (6 more real problems found and fixed, li
 - [x] **Infrastructure as code** — [`infra/`](infra/): Terraform for the server, network, firewall,
   buckets and DNS, plus a host bootstrap script. **Never applied, never validated** (no Terraform
   here); adopting it needs a plan and an import of the live resources first. Read `infra/README.md`.
-- [ ] **Rehearse losing the whole server** — approved; needs a temporary second instance. Not done yet;
-  this is the one that produces a real recovery-time figure instead of an estimate.
+- [x] **Rehearsed losing the whole server** — 2026-09-22, on a temporary instance since destroyed.
+  **The data comes back in about 3 minutes of machine time** from the off-box archive alone, and the
+  recovered audit trail was byte-identical to production's. It found three defects in the recovery
+  procedure itself (the recovery tools image could not be built; the replay had no way to find the
+  archived logs once the server that listed them was gone; that listing was then truncated) — all
+  fixed. **The application half is still unrehearsed**: installing the deploy platform, rebuilding the
+  app and repointing DNS are what would dominate a real outage.
 
 ---
 

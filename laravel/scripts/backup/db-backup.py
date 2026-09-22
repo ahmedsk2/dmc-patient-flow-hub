@@ -76,6 +76,7 @@ import tempfile
 import threading
 import time
 import urllib.parse
+from xml.etree import ElementTree
 
 CHUNK = 1024 * 1024
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
@@ -175,7 +176,7 @@ class S3Client:
                                                context=ssl.create_default_context())
         return http.client.HTTPConnection(self.host, self.port, timeout=self.timeout)
 
-    def _signed(self, method, key, payload_hash, extra_signed=None):
+    def _signed(self, method, key, payload_hash, extra_signed=None, query=""):
         """(path, headers) for one request. Signs host + x-amz-content-sha256 + x-amz-date and any
         extra headers passed (content-md5 on uploads), exactly like the PHP signedRequestHeaders()."""
         path = canonical_uri(self.bucket, key)
@@ -185,7 +186,7 @@ class S3Client:
         signed = {"host": self.host_header, "x-amz-content-sha256": payload_hash, "x-amz-date": amz_date}
         signed.update({k.lower(): v for k, v in (extra_signed or {}).items()})
 
-        signature = sigv4_signature(method, path, "", signed, self.secret, self.region, "s3",
+        signature = sigv4_signature(method, path, query, signed, self.secret, self.region, "s3",
                                     date_stamp, amz_date, payload_hash)
         authorization = (
             "AWS4-HMAC-SHA256 Credential=%s/%s/%s/s3/aws4_request, SignedHeaders=%s, Signature=%s"
@@ -200,9 +201,13 @@ class S3Client:
         headers.update(extra_signed or {})
         return path, headers
 
-    def _request(self, method, key, payload_hash, body=None, extra_signed=None, extra_headers=None, sink=None):
-        """One attempt. Returns (status, response headers, body bytes or None when sink is given)."""
-        path, headers = self._signed(method, key, payload_hash, extra_signed)
+    def _request(self, method, key, payload_hash, body=None, extra_signed=None, extra_headers=None,
+                 sink=None, query="", full_body=False):
+        """One attempt. Returns (status, response headers, body bytes or None when sink is given).
+        `query` is the CANONICAL query string (sorted, encoded) — it is signed and sent verbatim."""
+        path, headers = self._signed(method, key, payload_hash, extra_signed, query)
+        if query:
+            path = f"{path}?{query}"
         headers.update(extra_headers or {})
         conn = self._connection()
         try:
@@ -215,7 +220,10 @@ class S3Client:
                         break
                     sink.write(chunk)
                 return resp.status, resp.getheaders(), None
-            return resp.status, resp.getheaders(), resp.read(64 * 1024)
+            # 64 KB is plenty for an error body and keeps a hostile response bounded; a listing is
+            # the one reply we genuinely need in full (hundreds of archived binlogs run past it, and
+            # a truncated one is not parseable XML).
+            return resp.status, resp.getheaders(), resp.read() if full_body else resp.read(64 * 1024)
         finally:
             conn.close()
 
@@ -264,6 +272,27 @@ class S3Client:
     def get_bytes(self, key):
         return self._with_retries(f"GET {key}", lambda: self._request("GET", key, EMPTY_SHA256))
 
+    def list_objects(self, prefix="", max_keys=1000):
+        """Every object key under `prefix`, with its size — ListObjectsV2, following continuation
+        tokens. Recovery needs this: after a whole-server loss the shipper's state file is gone with
+        the host, and the bucket is then the only inventory of what can be replayed."""
+        out, token = [], None
+        while True:
+            params = {"list-type": "2", "max-keys": str(max_keys), "prefix": prefix}
+            if token:
+                params["continuation-token"] = token
+            query = "&".join(f"{urllib.parse.quote(k, safe='')}={urllib.parse.quote(v, safe='')}"
+                             for k, v in sorted(params.items()))
+            status, _, body = self._with_retries(
+                f"LIST {prefix}",
+                lambda q=query: self._request("GET", "", EMPTY_SHA256, query=q, full_body=True))
+            if status != 200:
+                raise BackupError(f"LIST {prefix}: HTTP {status} {_short(body)}")
+            page, token = parse_list_objects(body)
+            out.extend(page)
+            if not token:
+                return out
+
     def get_to_file(self, key, dest_path):
         def attempt():
             with open(dest_path, "wb") as fh:
@@ -276,6 +305,37 @@ class S3Client:
 # --------------------------------------------------------------------------------------------------
 # Pure helpers (unit-tested)
 # --------------------------------------------------------------------------------------------------
+
+def parse_list_objects(body: bytes):
+    """([(key, size), ...], next continuation token or None) from a ListObjectsV2 response.
+    Namespace-agnostic: S3-compatible endpoints differ in whether they set a default namespace."""
+    try:
+        root = ElementTree.fromstring(body)
+    except ElementTree.ParseError as exc:
+        raise BackupError(f"LIST: response is not XML ({exc})") from exc
+    tag = lambda el: el.tag.rsplit("}", 1)[-1]  # noqa: E731 — strip any namespace
+    # A proxy's error page ("<html>502…</html>") is well-formed XML too, so parsing is not enough:
+    # insist this really is a listing, or an outage would read as "the bucket is empty".
+    if tag(root) != "ListBucketResult":
+        raise BackupError(f"LIST: expected a ListBucketResult, got <{tag(root)}>")
+    keys, token = [], None
+    for child in root:
+        name = tag(child)
+        if name == "Contents":
+            key = size = None
+            for field in child:
+                if tag(field) == "Key":
+                    key = field.text
+                elif tag(field) == "Size":
+                    size = int(field.text or 0)
+            if key:
+                keys.append((key, size or 0))
+        elif name == "NextContinuationToken":
+            token = child.text
+        elif name == "IsTruncated" and (child.text or "").lower() != "true":
+            token = token if token else None
+    return keys, token
+
 
 def parse_env_file(text: str) -> dict:
     """KEY=value lines; '#' comments and blanks ignored; optional single/double quotes stripped;
@@ -730,6 +790,13 @@ def run_print_latest(cfg):
     return 0
 
 
+def run_list_objects(cfg, prefix):
+    """Print every object under PREFIX, one `key<TAB>bytes` line each, oldest key first."""
+    for key, size in sorted(make_client(cfg).list_objects(prefix)):
+        print(f"{key}	{size}")
+    return 0
+
+
 def run_download(cfg, key, dest):
     status, _, body = make_client(cfg).get_to_file(key, dest)
     if status != 200:
@@ -752,6 +819,9 @@ def main(argv=None):
     mode.add_argument("--restore-check", metavar="OBJECT", help="download, decrypt and validate OBJECT")
     mode.add_argument("--print-latest", action="store_true", help="print the LATEST.json heartbeat")
     mode.add_argument("--download", nargs=2, metavar=("OBJECT", "DEST"), help="download OBJECT (still encrypted) to DEST")
+    mode.add_argument("--list-objects", metavar="PREFIX", nargs="?", const="",
+                      help="list every object under PREFIX (the bucket is the only inventory left "
+                           "after a whole-server loss — see BACKUP-AND-RESTORE.md §5.1)")
     args = parser.parse_args(argv)
 
     if os.name == "posix":
@@ -770,6 +840,8 @@ def main(argv=None):
             return run_print_latest(cfg)
         if args.download:
             return run_download(cfg, args.download[0], args.download[1])
+        if args.list_objects is not None:
+            return run_list_objects(cfg, args.list_objects)
         return run_backup(cfg, dry_run=args.dry_run)
     except BackupError as exc:
         sys.stderr.write(f"FAIL {exc}\n")
