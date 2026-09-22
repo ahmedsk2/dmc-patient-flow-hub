@@ -882,6 +882,23 @@ class RestoreCheck(ShippingHarness, unittest.TestCase):
         self.assertEqual(binlog_ship.run_restore_check(self.cfg, key), 1)
         self.assertIn("wrong key?", self.log())
 
+    def test_bytes_that_decrypt_to_non_gzip_are_reported_as_a_key_problem(self):
+        # The same operator-visible failure as the wrong-key case above, reached the other way: the
+        # RIGHT key, but the object's plaintext is not gzip. That is exactly what a wrong key looks
+        # like whenever openssl's padding check happens to pass (CBC padding validates by luck often
+        # enough to see it), so both paths must name the key — never blame the archive for it.
+        self.assertEqual(binlog_ship.run_ship(self.cfg), 0)
+        key = self.key_for("binlog.000001")
+        enc = subprocess.run(
+            ["openssl", "enc", "-aes-256-cbc", "-pbkdf2", "-iter", "200000", "-salt",
+             "-pass", f"file:{self.keyfile}"],
+            input=b"this is plainly not gzip data", stdout=subprocess.PIPE, check=True)
+        self.fake.objects[key] = enc.stdout
+
+        self.assertEqual(binlog_ship.run_restore_check(self.cfg, key), 1)
+        self.assertIn("wrong key?", self.log())
+        self.assertNotIn("is not a usable binary log", self.log())
+
     def test_a_missing_object_fails_cleanly(self):
         self.assertEqual(binlog_ship.run_restore_check(self.cfg, "db-backups/dmc_demo/binlogs/2026/01/nope.gz.enc"), 1)
         self.assertIn("HTTP 404", self.log())

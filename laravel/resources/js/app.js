@@ -40,7 +40,14 @@ window.addEventListener('unhandledrejection', (event) => {
     console.error('[unhandled promise rejection]', event.reason);
 });
 
+// The per-request CSP nonce, from the meta tag app.blade.php renders. Inertia stamps it on the
+// <style> elements it inserts at runtime (the navigation progress bar, and the modal it shows for a
+// non-Inertia error response such as the 429 page), which is why style-src needs no inline
+// allowance. Undefined when absent, so nothing changes if the meta tag is ever missing.
+const cspNonce = document.querySelector('meta[name="csp-nonce"]')?.content || undefined;
+
 createInertiaApp({
+    nonce: cspNonce,
     title: (title) => (title ? `${title} · ${appName}` : appName),
     resolve: (name) =>
         resolvePageComponent(`./Pages/${name}.vue`, import.meta.glob('./Pages/**/*.vue')),

@@ -4,7 +4,7 @@ Two GitHub Actions workflows live at the repo root:
 
 | Workflow | File | Runs when | Guards |
 |---|---|---|---|
-| **Laravel CI** | `.github/workflows/laravel-ci.yml` | push / PR to `main` touching `laravel/**` or the workflow file | the Laravel re-platform (this directory) |
+| **Laravel CI** | `.github/workflows/laravel-ci.yml` | every push / PR to `main` (no path filter — the four jobs are required checks, and a check that never runs blocks a merge forever); a pushed `v*` tag runs the `release` job only (§ below) | the Laravel re-platform (this directory) |
 | **Legacy CI** | `.github/workflows/ci.yml` | push / PR touching anything *except* `laravel/**`, the Laravel workflow, `docs/superpowers/**`, `README.md`, `.gitignore` | the legacy PHP app at the repo root |
 
 They were both called `CI` until 2026-09; the run list conflated them. Do not merge them — the
@@ -136,11 +136,13 @@ assert every licence at once, the opposite of what the package grants. De-duplic
 `required` win over `dev`, so a package pulled in both ways is never filed as a dev dependency.
 Run it locally with `php scripts/sbom.php sbom/dmc-laravel.cdx.json` (git-ignored).
 
-**Signed build provenance is NOT part of this (CICD-05 stays partly open).** Attestation signs a
-released artifact, and this pipeline produces none: Coolify builds the image from source on the
-host, so CI has no subject to attest. It becomes worth adding the day CI builds a release artifact
-or an image — and it would need the workflow token widened (`id-token: write`, `attestations: write`),
-which is an owner decision given the token is deliberately read-only.
+**Signed build provenance (CICD-05, added 2026-09-22) lives in the separate `release` job below,
+gated on a pushed tag — it is not part of every `backend` run.** This job still produces no
+release artifact on an ordinary push or PR: Coolify builds the image from source on the host, so
+there is still nothing to attest on the commits that flow through `frontend`/`backend`/`secrets`/`sast`.
+The SBOM step here stays as it is — the `release` job regenerates its own copy of the SBOM (same
+generator, same deterministic output) so the signed one matches the tagged commit, not whichever
+`main` push happened to build it first.
 
 **Adding an ignore** (`laravel/.composer-audit-ignore.json`) — only for an advisory you have verified
 is *unreachable in this application*, never because it is inconvenient:
@@ -233,6 +235,84 @@ When it fails: fix the code. If a finding is a true false-positive, Semgrep's in
 comment saying why** — the rule id keeps the exemption narrow and greppable. Never drop a ruleset or
 widen `--exclude` to make a finding go away.
 
+### `release` — Release provenance (signed build attestation)
+
+**Added 2026-09-22 (CICD-05).** Runs **only** when a tag matching `v*` is pushed
+(`if: startsWith(github.ref, 'refs/tags/v')`) — never on a plain push to `main` or a PR. It is **not**
+a required status check and has no `needs:` on the four jobs above: a tag is only ever pushed against
+a commit that is already on `main`, which branch protection already required to pass all four checks
+before merge, so re-running them here would just duplicate work already done. (If that assumption is
+ever violated — a tag pushed at a non-`main` commit — this job still truthfully attests whatever it
+built from that commit; it is simply not, by itself, proof that commit passed CI. The deploy step in
+`RELEASE-CHECKLIST.md` is what actually checks that.)
+
+Adding the `tags: ['v*']` trigger to the shared `on.push` block would, by itself, also re-run
+`frontend`, `backend`, `secrets` and `sast` a redundant fifth time on every tag push (a tag push
+satisfies the same `on.push` event). Each of those four jobs therefore carries
+`if: ${{ !startsWith(github.ref, 'refs/tags/') }}`, added purely to cancel that side effect — their
+real trigger conditions (push/PR to `main`) have not changed.
+
+**Tag scheme: `vYYYY.MM.DD`** (e.g. `v2026.09.22`; a same-day second release appends a counter,
+`v2026.09.22.2`). Chosen over `vN.N.N` because this repo already keys everything else to calendar
+dates rather than a version counter — deploy dates, audit dates, and doc-revision dates are how every
+other doc in this tree (`HANDOFF.md`, `CLAUDE.md`, the compliance evidence packs) already refers to a
+point in time — so a release tag needs no separate counter file or negotiation over what the next
+number is; whoever is deploying today writes today's date. This supersedes the older
+`v<YYYY.MM.N>` example in `RELEASE-CHECKLIST.md`, updated alongside this change.
+
+**What gets attested.** The job (job-scoped `permissions: { contents: read, id-token: write,
+attestations: write }` — nothing else in the workflow gets those last two) builds two files at the
+tagged commit and signs both with `actions/attest-build-provenance`:
+
+- **`laravel/sbom/dmc-laravel.cdx.json`** — the same CycloneDX SBOM `scripts/sbom.php` produces in
+  `backend` (deterministic from `composer.lock` + `package-lock.json`), regenerated here so the
+  signed copy is built from the tagged commit, not carried over from an earlier `main` push.
+- **`laravel/release/dmc-laravel-build.tar.gz`** — a tarball of the committed `public/build`
+  (Nixpacks never runs Node on the host, CLAUDE.md §3, so this directory *is* the compiled frontend
+  Coolify deploys, byte for byte) plus `composer.lock` and `package-lock.json` — the two files that
+  pin exactly what `composer install` resolves at deploy time. Together these are the bytes that
+  determine what reaches production. Application source (`app/`, `routes/`, `resources/js/*.vue`, …)
+  is deliberately **not** repackaged: the git tag itself is that provenance, and every line of it
+  already passed `secrets` and `sast`, plus the full PHPUnit/Vitest suites, before it could reach
+  `main`.
+
+Both files are archived on the workflow run via `actions/upload-artifact`
+(`release-<tag>`, 90-day retention — the same convention as the SBOM archived in `backend`).
+
+**What this proves.** That the named tag, at the exact commit `github.sha` records, built through
+this exact GitHub Actions workflow (identity `https://github.com/ahmedsk2/dmc-patient-flow-hub/.github/workflows/laravel-ci.yml@<ref>`),
+produced these exact bytes — bound cryptographically by SHA-256 digest and signed with GitHub's own
+OIDC-backed Sigstore identity, not a maintainer-held key that could leak or be reused elsewhere. A
+downloaded copy that fails verification was altered, or never came out of this pipeline at all.
+
+**What this does NOT prove.** The container the app actually runs. Coolify builds a Nixpacks image
+from `main` HEAD **on the host** (`docs/DEPLOY-LARAVEL.md`) at deploy time, entirely separately from
+this job — this attestation covers what CI built and signed here, not that image. There is no
+attestation chain from this tarball to the running container; closing that gap would mean building
+the deploy image itself inside CI, which is a bigger change than CICD-05 asked for and is not what
+this job does. Nothing here is pushed to any package/image registry (`push-to-registry` is unused).
+
+**Deliberately left out: attaching the artifact to a GitHub Release.** This job's permissions are
+read-only on `contents` (above); uploading a release asset needs `contents: write`, and widening a
+read-only job just to save one manual download is not worth it. There is also no GitHub Release
+object in this project's process today — `RELEASE-CHECKLIST.md`'s release record is the annotated git
+tag itself, not a Release page. The 90-day workflow-run artifact plus the pushed tag is the release
+record until the owner decides that trade-off is worth making.
+
+**Verifying a downloaded artifact** (needs `gh` ≥ 2.60 with the `attestation` command; no extra auth
+beyond a normal `gh auth login` against a repo you can read):
+
+```sh
+gh attestation verify laravel/release/dmc-laravel-build.tar.gz --repo ahmedsk2/dmc-patient-flow-hub
+gh attestation verify laravel/sbom/dmc-laravel.cdx.json --repo ahmedsk2/dmc-patient-flow-hub
+```
+
+A successful verify prints `✓ Verification succeeded` together with the signing workflow's identity
+and **the exact tag/commit it ran at** — matching cryptographically is not enough on its own; read
+that tag/commit back and confirm it is the release you intended before trusting the file. The full
+release procedure (tag → this job attests → deploy that exact `main` HEAD) is in
+`RELEASE-CHECKLIST.md`.
+
 ## Pinned actions
 
 Every `uses:` in both workflows is pinned to a full commit SHA with the tag it was resolved from as a
@@ -247,6 +327,7 @@ therefore cannot change what runs here.
 | `gitleaks/gitleaks-action` | `ff98106e4c7b2bc287b24eaf42907196329070c7` | `v2` → `v2.3.9` (annotated tag dereferenced) | 2026-09-03 |
 | `github/codeql-action/upload-sarif` | `cdf488f595d80d6e07e03d4674febd5ab45fa938` | `v4` → `v4.37.9` (annotated tag dereferenced) | 2026-09-03 |
 | `semgrep/semgrep` (image) | `sha256:b94b53d02fd4a022f9eac4e2af1380f5c3c4c21400e79d3336bdff1d1db5e796` | Docker Hub tag `1.175.0` (= `latest`) | 2026-09-03 |
+| `actions/attest-build-provenance` | `4d101475d8b20a2381f78447822ac1eab6504dd8` | `v4` → `v4.2.2` (lightweight tag) | 2026-09-22 |
 
 **Bumping a pin:**
 

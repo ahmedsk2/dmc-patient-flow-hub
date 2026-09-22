@@ -17,19 +17,20 @@ use Symfony\Component\HttpFoundation\Response;
  * it here reaches app.blade.php's one inline script (the no-flash theme bootstrap) regardless of
  * this middleware's position in the `web` group.
  *
- * style-src keeps the inline-style allowance: the app moved off ApexCharts to Chart.js long ago
- * (resources/js/lib/chartjs.js), but 'unsafe-inline' is still load-bearing for reasons that have
- * nothing to do with the charting library — checked one by one while auditing this (2026-09):
- *   - Inertia's own router (progress option in resources/js/app.js, plus its error-page iframe)
- *     sets inline `style` attributes directly via the DOM API and has no CSP-nonce integration.
- *   - Vue's `:style` bindings, used throughout (progress bars in Dashboard.vue/Consultations,
- *     OccupancyTracker, ChartCanvas's wrapper height) — CSP has no nonce mechanism for style
- *     ATTRIBUTES (only for <style> elements), so there is no nonce-based alternative for these.
- *   - driver.js (the onboarding tour) positions its overlay/popover by setting dozens of inline
- *     style properties on plain DOM nodes every step.
- *   - Chart.js itself sets canvas.style.width/height directly for responsive resizing.
- * Blocking style-src would break all of the above for no script-execution benefit — script-src
- * stays locked to 'self' plus the per-request nonce regardless.
+ * style-src takes NO inline allowance (tightened 2026-09-22, SPC-WEB-002). Each reason the old
+ * allowance cited was re-checked against the built bundle and the browser's actual rules:
+ *   - Vue's `:style` bindings, Chart.js's responsive canvas sizing and driver.js's tour positioning
+ *     all set style PROPERTIES through the DOM (`el.style.x = …`). CSP does not police the CSSOM —
+ *     only markup `style` attributes and <style> elements — so none of them ever needed it.
+ *   - Inertia inserts <style> elements at runtime (its progress bar, and the modal it renders for a
+ *     non-Inertia error response such as the branded 429 page). Those DO need permission, and
+ *     Inertia stamps a nonce on them when it is given one: app.blade.php publishes the per-request
+ *     nonce as <meta name="csp-nonce">, resources/js/app.js passes it to createInertiaApp().
+ *   - The Blade templates carry no `style` attributes at all (the PDF report templates do, but
+ *     dompdf renders those server-side — no browser, no CSP).
+ * Verified in a browser against a production build before shipping: every page reached, zero CSP
+ * violations. If a future change needs an inline <style>, give it the nonce rather than reopening
+ * the allowance. script-src stays locked to 'self' plus the per-request nonce regardless.
  */
 class SecurityHeaders
 {
@@ -55,7 +56,7 @@ class SecurityHeaders
         if ($mode !== 'off') {
             $policy = "default-src 'self'; "
                 ."script-src 'self' 'nonce-{$nonce}'; "
-                ."style-src 'self' 'unsafe-inline'; "
+                ."style-src 'self' 'nonce-{$nonce}'; "
                 ."img-src 'self' data: blob:; "
                 ."font-src 'self' data:; "
                 ."connect-src 'self'; "

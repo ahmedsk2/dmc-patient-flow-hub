@@ -51,3 +51,13 @@ Thumbs.db
 
 # superpowers brainstorming visual companion (local only)
 .superpowers/
+
+# Terraform (infra/ describes the live infrastructure as code — see infra/README.md).
+# State can hold resource metadata and secrets; real variable values name live resources.
+# The committed example file stays.
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform/
+crash.*.log

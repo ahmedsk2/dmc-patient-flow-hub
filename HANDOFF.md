@@ -57,7 +57,7 @@
   in-Kingdom hosting, backups, privacy-notice link). No framework badges until certificates exist.
 - **Docs:** pruned of dev scaffolding; PDPL paper-trail drafts in `laravel/docs/compliance/`.
 - **Gate baselines (2026-09-22, after the engineering batch):** PHPUnit 1004 (+91 in the `pdf` group), PHP statement
-  coverage 86.1 % at the last CI measurement (floor 83), Vitest 792 on vitest 5 (floors 72/66/62/48 lines/statements/branches/
+  coverage 88.1 % at the last CI measurement (floor 83), Vitest 792 on vitest 5 (floors 72/66/62/48 lines/statements/branches/
   functions — re-baselined 2026-09-22 for the new coverage engine, then raised the same day by the
   IcdTypeahead + ActivityPanel specs), ESLint zero warnings, Pint clean.
 
@@ -206,6 +206,15 @@
    host copy of `db-backup.py` must be reinstalled when it is. Also found that day: the host was down
    for ~13 h on 2026-09-16 (02:55–16:00 UTC, abrupt stop, nobody paged) — cause to be checked in the OCI
    console (§B there).
+   **2026-09-22, the four approved items + a whole-server-loss rehearsal:** the style policy dropped
+   `'unsafe-inline'` (browser-verified across every page), CI signs a tagged release's SBOM and built
+   bytes, `infra/` describes the live infrastructure as unapplied Terraform, and the **data half of
+   RES-09 is now rehearsed** on a throwaway instance (≈3 min of machine time; recovered `audit_log`
+   digest identical to production's; instance destroyed). That rehearsal found three defects in the
+   recovery procedure — the PITR tools image could not build from its stale version pin, the replay
+   had no inventory once the shipper's state file died with the host (`db-backup.py --list-objects`
+   now provides one), and that listing was truncated by a 64 KB body cap — all fixed. The application
+   half (deploy platform, image rebuild, DNS) is still unrehearsed and is what a real RTO hinges on.
    **Still open and all owner / infrastructure decisions, not code:** enable deploy-on-green
    (declined so far — "I don't want to autodeploy"), pick a log sink and set `LOG_STACK`
    (OBS-01/03/04/05), a second backup region + instance principal (DATA-02, CFG-10), SLOs and an

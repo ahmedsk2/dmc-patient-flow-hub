@@ -4,7 +4,7 @@ name: Laravel CI
 # app, which has its own separate pipeline at .github/workflows/ci.yml ("Legacy CI") — do not
 # merge them. What each job gates, and how to change a gate, is documented in laravel/docs/CI.md.
 #
-# Five independent jobs:
+# Four independent jobs gate every push/PR to `main`; a fifth, `release`, runs only on a pushed tag:
 #  - frontend : npm ci, the vitest-axe accessibility gate, Vitest, production build, the allow-list +
 #               contrast style gates, and a build-reproducibility check (public/build is committed and
 #               must be exactly what `npm run build` regenerates from source).
@@ -18,6 +18,12 @@ name: Laravel CI
 #  - secrets  : gitleaks over the pushed commits / PR commits, with laravel/.gitleaks.toml.
 #  - sast     : Semgrep (p/php, p/owasp-top-ten, p/javascript) over app/, routes/ and resources/js;
 #               ERROR-severity findings fail the job, the SARIF goes to the Security tab.
+#  - release  : CICD-05. Gated on a pushed `vYYYY.MM.DD` tag only (never a branch push or PR — not a
+#               required status check). Rebuilds the CycloneDX SBOM and tars up the committed
+#               public/build plus both lock files — the bytes that actually reach production — then
+#               signs both with actions/attest-build-provenance and archives them on the run. It does
+#               not re-run the four jobs above: branch protection already required them green before
+#               the tagged commit could reach `main`. Details: laravel/docs/CI.md.
 #
 # Neither test job hard-codes a test count or snapshot value — the gates themselves are the assertion.
 #
@@ -39,9 +45,17 @@ permissions:
 # matching path shows as "Expected — waiting" and blocks the merge forever, so CI runs on every
 # push and PR to `main`, docs-only ones included (~4 min). The legacy pipeline (ci.yml) keeps its
 # own path filter; it is not a required check.
+#
+# `tags: ['v*']` (added 2026-09-22, CICD-05) exists ONLY to gate the `release` job below on a
+# pushed release tag (scheme: laravel/docs/RELEASE-CHECKLIST.md). A tag push still satisfies this
+# same `on.push` trigger, which would otherwise also re-run frontend/backend/secrets/sast a
+# redundant fifth time — each of those four jobs therefore carries its own
+# `if: ${{ !startsWith(github.ref, 'refs/tags/') }}` guard so their run conditions are exactly what
+# they were before this line was added (push/PR to `main` only).
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
 
@@ -52,6 +66,9 @@ concurrency:
 jobs:
   frontend:
     name: Frontend (Vitest, axe, build, style gates)
+    # Guards against the `tags: ['v*']` trigger added for the `release` job — keeps this job's run
+    # conditions exactly push/PR to `main`, unchanged from before that trigger existed.
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -112,6 +129,9 @@ jobs:
 
   backend:
     name: Backend (PHPUnit, MySQL, composer audit)
+    # Guards against the `tags: ['v*']` trigger added for the `release` job — keeps this job's run
+    # conditions exactly push/PR to `main`, unchanged from before that trigger existed.
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     defaults:
@@ -232,6 +252,9 @@ jobs:
 
   secrets:
     name: Secret scan (gitleaks)
+    # Guards against the `tags: ['v*']` trigger added for the `release` job — keeps this job's run
+    # conditions exactly push/PR to `main`, unchanged from before that trigger existed.
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -258,6 +281,9 @@ jobs:
 
   sast:
     name: SAST (Semgrep, ERROR severity blocks)
+    # Guards against the `tags: ['v*']` trigger added for the `release` job — keeps this job's run
+    # conditions exactly push/PR to `main`, unchanged from before that trigger existed.
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -296,3 +322,85 @@ jobs:
         with:
           sarif_file: semgrep.sarif
           category: semgrep
+
+  release:
+    name: Release provenance (signed build attestation)
+    # CICD-05. Runs ONLY on a pushed `vYYYY.MM.DD` release tag (laravel/docs/RELEASE-CHECKLIST.md) —
+    # never on a branch push or a PR. Not a required status check and not in `needs:` of/on any of
+    # the four jobs above: a tag is only ever pushed against a commit already on `main`, which
+    # branch protection already required to pass all four checks before merge, so re-running them
+    # here would be pure duplication. If that assumption is ever wrong (a tag pushed against a
+    # non-`main` commit), this job still faithfully attests exactly what it built from that commit —
+    # it just isn't a guarantee that commit passed CI, which the deploy step in
+    # RELEASE-CHECKLIST.md is what actually checks.
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Least privilege, scoped to this job only (workflow default stays `contents: read`, §top of
+    # file): `id-token` lets actions/attest-build-provenance mint a short-lived OIDC token to sign
+    # with Sigstore; `attestations: write` lets it publish the resulting attestation to this repo.
+    # Deliberately NOT `contents: write`: this job never creates or modifies a GitHub Release, a
+    # tag, or any repo content — see the note on the last step below.
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    defaults:
+      run:
+        working-directory: laravel
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2.37.2
+        with:
+          php-version: '8.3'   # matches the backend job and the production runtime (composer.json "php": "^8.3")
+          extensions: mbstring, pdo_mysql, gd, zip, intl, bcmath
+
+      # Same generator the backend job already runs (CICD-05); re-run here so the SBOM in this
+      # release's attested set matches composer.lock / package-lock.json AT THE TAGGED COMMIT, not
+      # a copy carried over from whichever push-to-main CI run happened to build it. Deterministic
+      # by construction (scripts/sbom.php), so this is not a second "version" of the SBOM — running
+      # it again on the same lock files at the same commit reproduces the same bytes.
+      - name: Software Bill of Materials (CycloneDX)
+        run: php scripts/sbom.php sbom/dmc-laravel.cdx.json
+
+      # The bytes that actually reach production: public/build is committed and Nixpacks never runs
+      # Node on the host (CLAUDE.md §3), so the compiled frontend Coolify deploys IS this tree's
+      # public/build, verbatim. composer.lock and package-lock.json are the exact dependency graphs
+      # `composer install` / `npm ci` resolve from. Application source (app/, routes/,
+      # resources/js/*.vue, …) is not repackaged here — the git tag is that provenance, and every
+      # line of it already passed gitleaks/Semgrep/PHPUnit/Vitest before it could reach `main`.
+      - name: Package the release artifact set
+        run: |
+          mkdir -p release
+          tar -czf release/dmc-laravel-build.tar.gz public/build composer.lock package-lock.json
+          tar -tzf release/dmc-laravel-build.tar.gz | head -20
+
+      # Signs both files with a Sigstore identity bound to this repo, workflow, and commit (OIDC —
+      # no maintainer-held signing key exists or is needed). `uses:` steps ignore the job's
+      # working-directory default (same note as the SBOM upload in `backend`), so paths here are
+      # workspace-relative.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            laravel/release/dmc-laravel-build.tar.gz
+            laravel/sbom/dmc-laravel.cdx.json
+
+      # Archived on the workflow run (90 days, matching the SBOM retention in `backend`) so the
+      # exact attested bytes are downloadable without rebuilding. Deliberately NOT attached to a
+      # GitHub Release: this job's permissions are read-only on `contents` (above) and uploading a
+      # release asset needs `contents: write`, which is not worth granting just to save a manual
+      # download — and there is no GitHub Release object in this project's process today anyway
+      # (laravel/docs/RELEASE-CHECKLIST.md's release record is the annotated git tag itself). See
+      # laravel/docs/CI.md for how to verify a downloaded copy with `gh attestation verify`.
+      - name: Upload release artifact set to the workflow run
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-${{ github.ref_name }}
+          # `uses` steps ignore the job's working-directory default, so these are workspace-relative.
+          path: |
+            laravel/release/dmc-laravel-build.tar.gz
+            laravel/sbom/dmc-laravel.cdx.json
+          if-no-files-found: error
+          retention-days: 90

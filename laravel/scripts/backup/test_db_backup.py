@@ -409,5 +409,70 @@ class EndToEndPipeline(unittest.TestCase):
         self.assertIn("pruned=1", self.log())
 
 
+
+class ListObjects(unittest.TestCase):
+    """The bucket as inventory. After a whole-server loss the shipper's state file is gone with the
+    host, so `--list-objects` is the only way to learn which archives exist to replay
+    (BACKUP-AND-RESTORE.md §5.1). Exercised here against the real XML parser and a stubbed HTTP
+    layer, because the fake bucket used elsewhere has no HTTP surface."""
+
+    def page(self, keys, token=None, truncated=False):
+        contents = "".join(
+            f"<Contents><Key>{k}</Key><Size>{s}</Size></Contents>" for k, s in keys)
+        nxt = f"<NextContinuationToken>{token}</NextContinuationToken>" if token else ""
+        return (f'<?xml version="1.0" encoding="UTF-8"?>'
+                f'<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">'
+                f"<IsTruncated>{'true' if truncated else 'false'}</IsTruncated>"
+                f"{contents}{nxt}</ListBucketResult>").encode()
+
+    def client(self, pages):
+        c = db_backup.S3Client("https://x.example.com", "dmc-db-backups", "me-riyadh-1", "AK", "SK")
+        seen = []
+
+        def fake_request(method, key, payload_hash, body=None, extra_signed=None,
+                         extra_headers=None, sink=None, query="", full_body=False):
+            # a listing must be read in full: the 64 KB cap the other calls use truncates it into
+            # unparseable XML once a few hundred binlogs are archived (found in the 2026-09-22
+            # whole-server-loss rehearsal, where the real listing was ~90 KB)
+            seen.append((method, key, query, full_body))
+            return 200, [], pages[len(seen) - 1]
+
+        c._request = fake_request
+        return c, seen
+
+    def test_one_page_returns_every_key_with_its_size(self):
+        c, seen = self.client([self.page([("db-backups/dmc_demo/binlogs/2026/09/binlog.000448-x.gz.enc", 152544)])])
+        self.assertEqual(c.list_objects("db-backups/dmc_demo/binlogs/"),
+                         [("db-backups/dmc_demo/binlogs/2026/09/binlog.000448-x.gz.enc", 152544)])
+        method, key, query, full_body = seen[0]
+        self.assertEqual((method, key), ("GET", ""))
+        self.assertTrue(full_body, "a listing must not be read through the 64 KB error-body cap")
+        # canonical query: sorted, encoded — the signature is computed over exactly this string
+        self.assertEqual(query,
+                         "list-type=2&max-keys=1000&prefix=db-backups%2Fdmc_demo%2Fbinlogs%2F")
+
+    def test_it_follows_continuation_tokens_to_the_end(self):
+        pages = [self.page([("a", 1)], token="tok1", truncated=True),
+                 self.page([("b", 2)], token="tok2", truncated=True),
+                 self.page([("c", 3)])]
+        c, seen = self.client(pages)
+        self.assertEqual(c.list_objects("p/"), [("a", 1), ("b", 2), ("c", 3)])
+        self.assertEqual(len(seen), 3)
+        self.assertIn("continuation-token=tok1", seen[1][2])
+        self.assertIn("continuation-token=tok2", seen[2][2])
+
+    def test_an_empty_prefix_listing_is_an_empty_list_not_an_error(self):
+        c, _ = self.client([self.page([])])
+        self.assertEqual(c.list_objects("nothing/"), [])
+
+    def test_a_non_xml_body_fails_loudly(self):
+        c, _ = self.client([b"<html>502 from a proxy</html>"])
+        with self.assertRaises(db_backup.BackupError):
+            c.list_objects("p/")
+
+    def test_the_parser_ignores_the_namespace_and_reads_sizes(self):
+        keys, token = db_backup.parse_list_objects(self.page([("k", 7)]))
+        self.assertEqual((keys, token), ([("k", 7)], None))
+
 if __name__ == "__main__":
     unittest.main()

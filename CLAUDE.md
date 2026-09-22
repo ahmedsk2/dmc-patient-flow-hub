@@ -279,7 +279,12 @@ Each flow names its controller; per-endpoint database effects are in DATABASE-AN
 
 - **Transport:** Cloudflare proxy, minimum TLS 1.2, HSTS; the origin's 80/443 accept **only
   Cloudflare ranges** (an unproxied DNS record or a direct curl gets nothing).
-- **Headers and cookie:** nonce CSP enforced + static header set (§5); the session cookie is
+- **Headers and cookie:** nonce CSP enforced + static header set (§5) — **no `'unsafe-inline'` in any
+  directive since 2026-09-22**: styles are nonce-based too, so anything that must inject a `<style>` at
+  runtime takes the nonce (`<meta name="csp-nonce">` → `createInertiaApp({ nonce })`). CSP does not
+  police the CSSOM, so Vue `:style`, Chart.js sizing and driver.js positioning never needed it. Also
+  COOP/CORP `same-origin` and a Permissions-Policy that denies camera, microphone, geolocation,
+  payment, usb, serial, bluetooth, hid and browsing-topics. The session cookie is
   `__Host-`-prefixed (Secure, HttpOnly, host-only; `scripts/smoke.sh` checks it); `SESSION_ENCRYPT=true`,
   `APP_DEBUG=false`, `LOG_LEVEL=warning` (present in Coolify as both a build-time and, since
   2026-09-03 18:13 UTC, a runtime variable — only the runtime one reaches the container).
@@ -387,7 +392,7 @@ PR (no path filter), plus a blocking Pint gate and Vitest coverage thresholds. T
 a separate pipeline; never merge them.
 
 **Baselines (2026-09-22, after the engineering batch):** PHPUnit 1004 tests (+91 in the `pdf` group), PHP
-statement coverage 86.1 % at the last CI measurement (floor 83), Vitest 792 on vitest 5 (floors lines 72, statements 66,
+statement coverage 88.1 % at the last CI measurement (floor 83), Vitest 792 on vitest 5 (floors lines 72, statements 66,
 branches 62, functions 48 — re-baselined 2026-09-22 because vitest 5's AST-aware coverage counts
 different units than vitest 3, then raised the same day; see the history in `vitest.config.js`),
 ESLint zero warnings, Pint clean.
@@ -494,6 +499,7 @@ CBAHI. State on 2026-09-03:
 | Behaviour / metrics | `laravel/docs/{DATABASE-AND-BEHAVIOR, DASHBOARD-AND-STATISTICS-METRICS, HANDOVER-COMPLIANCE, RECONCILIATION, UAT-TEST-PLAN}.md` |
 | Compliance (PDPL paper trail) | `laravel/docs/compliance/` + `OPEN-ITEMS.md` |
 | Decisions (ADRs) | [`laravel/docs/adr/`](laravel/docs/adr/) — backfilled MADR records of the load-bearing decisions, with a README index |
+| Infrastructure as code | [`infra/`](infra/) — Terraform + host bootstrap describing the live infrastructure (written 2026-09-22, **never applied**; read its README first) |
 | Legacy app (history only) | repo root `README.md`, `REVIEW-FINDINGS.md`, `RENOVATION-PLAN.md`, `PERMISSION-MATRIX.md`, `PROJECT-*.md`, `DEPLOY.md`, `SECURITY-*.md` |
 
 ---

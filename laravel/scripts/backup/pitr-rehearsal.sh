@@ -6,7 +6,8 @@
 # on exit, success or failure.
 #
 # What PASS proves (and the rehearsal only counts if all four hold):
-#   1. the replay applied something  — audit_log grew beyond the base dump;
+#   1. the replay applied something  — audit_log grew beyond the base dump, or (on a quiet window,
+#      legitimate while this app is not yet the daily system) the replay carried binlog events at all;
 #   2. the replay applied everything — the recovered audit_log equals the live rows created before
 #      STOP (audit_log.created_at is DB-written in UTC, the same clock the binlog stamps events with);
 #   3. it stopped where asked        — the newest recovered audit row is before STOP;
@@ -75,7 +76,22 @@ T1=$(date +%s)
 python3 "$BACKUP_PY" --download "$BASE_OBJ" "$W/base.sql.gz.enc" >/dev/null
 q -e 'CREATE DATABASE `dmc_restore_drill`' </dev/null
 decrypt "$W/base.sql.gz.enc" | gunzip -c | sed -e 's/`dmc_demo`/`dmc_restore_drill`/g' | q --database=dmc_restore_drill
+
+# A dump taken with --source-data=2 names the exact binlog file and position it corresponds to, in a
+# comment near the top. Use it: --start-position is exact, where --start-datetime is a second-precision
+# guess that re-applies a handful of boundary events. Read it from the same encrypted copy, in a pipe.
+COORD=$( { decrypt "$W/base.sql.gz.enc" 2>/dev/null | gunzip -c 2>/dev/null | head -c 262144; } \
+        | grep -m1 -oE "SOURCE_LOG_FILE='[^']+', SOURCE_LOG_POS=[0-9]+" || true)   # head closing the pipe is expected
 shred -u "$W/base.sql.gz.enc"
+START_POS=""
+if [ -n "$COORD" ]; then
+    CFILE=${COORD#*SOURCE_LOG_FILE=\'}; CFILE=${CFILE%%\'*}
+    START_POS=${COORD##*SOURCE_LOG_POS=}
+    FIRST=$((10#$(printf '%s' "$CFILE" | tr -dc '0-9')))   # the position belongs to THIS file, so start here
+    say "dump records its own coordinate ($CFILE pos $START_POS) — replaying with --start-position"
+else
+    say "dump carries no coordinate (taken before --source-data=2) — falling back to --start-datetime=$START"
+fi
 BEFORE=$(echo "$COUNTS_SQL" | q -N dmc_restore_drill)
 say "base restored in $(( $(date +%s) - T1 ))s   audit_log admissions patients handover_revisions newest_audit: $BEFORE"
 
@@ -95,12 +111,24 @@ say "binlog.$(printf %06d "$FIRST")..binlog.$(printf %06d "$LAST") fetched and d
 #          (no network, the work dir mounted read-only, so no second plaintext copy anywhere),
 #          --rewrite-db, --database AFTER the rewrite, piped into the target server's own client --
 T3=$(date +%s)
-# shellcheck disable=SC2086  # FILES is a deliberate word list of paths without spaces
+if [ -n "$START_POS" ]; then START_FLAG="--start-position=$START_POS"; else START_FLAG="--start-datetime=$START"; fi
+# shellcheck disable=SC2086  # FILES is a deliberate word list of paths without spaces; START_FLAG is one token
 docker run --rm --network none -v "$W":/pitr:ro --entrypoint mysqlbinlog "$IMG" \
     --rewrite-db="dmc_demo->dmc_restore_drill" \
     --database=dmc_restore_drill \
-    --start-datetime="$START" --stop-datetime="$STOP" $FILES \
+    $START_FLAG --stop-datetime="$STOP" $FILES \
   | q --database=dmc_restore_drill
+
+# How much the replay actually carried. On a quiet window (this app is not yet the daily system) the
+# audit trail can legitimately not move, and then "applied everything" and "applied nothing" look the
+# same from row counts alone — so count the events too. A second pass over the same files, decoded but
+# never stored: grep counts the event headers and throws the rest, including any PHI, away.
+# shellcheck disable=SC2086
+EVENTS=$(docker run --rm --network none -v "$W":/pitr:ro --entrypoint mysqlbinlog "$IMG" \
+    --rewrite-db="dmc_demo->dmc_restore_drill" \
+    --database=dmc_restore_drill --base64-output=DECODE-ROWS \
+    $START_FLAG --stop-datetime="$STOP" $FILES 2>/dev/null \
+  | grep -c '^# at ' || true)
 AFTER=$(echo "$COUNTS_SQL" | q -N dmc_restore_drill)
 say "replayed $START -> $STOP in $(( $(date +%s) - T3 ))s   audit_log admissions patients handover_revisions newest_audit: $AFTER"
 
@@ -125,9 +153,15 @@ CHAIN=$(docker run --rm --network "$NET" --entrypoint sh \
 unset APP_KEY DB_PASSWORD
 say "audit:verify on the recovered copy: $CHAIN"
 
-# ---- 5. verdict — the rehearsal only counts if the rows MOVED ---------------------------------
+# ---- 5. verdict — the rehearsal only counts if the replay actually carried the window ---------
 PASS=1
-[ "$A_AUD" -gt "$B_AUD" ] || { say "FAIL: audit_log did not grow — the replay applied nothing"; PASS=0; }
+if [ "$A_AUD" -gt "$B_AUD" ]; then
+    say "applied: audit_log grew $B_AUD -> $A_AUD over the window ($EVENTS binlog events)"
+elif [ "$EVENTS" -gt 0 ]; then
+    say "applied: $EVENTS binlog event(s); audit_log did not move — a quiet window, legitimate while this app is not yet the daily system"
+else
+    say "FAIL: the replay applied nothing at all — no rows, no events"; PASS=0
+fi
 [ "$A_AUD" -eq "$LIVE" ]  || { say "FAIL: replayed audit_log ($A_AUD) != live rows before STOP ($LIVE)"; PASS=0; }
 [[ "$NEWEST" < "$STOP" ]] || { say "FAIL: newest recovered audit row $NEWEST is not before $STOP"; PASS=0; }
 echo "$CHAIN" | grep -q 'Chain intact' || { say "FAIL: hash chain not intact on the recovered copy"; PASS=0; }
