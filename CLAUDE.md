@@ -96,7 +96,8 @@ composer-audit gate in CI passes.
    ├─ database/migrations/    47 migrations — the authoritative schema
    ├─ resources/js/           Pages/<Module>/ · Components/ · Layouts/ · composables/ · lib/ · __tests__
    ├─ tests/Feature (105 files) · tests/Unit (2)
-   ├─ scripts/                smoke.sh, contrast.mjs, check-source-allowlist.mjs, coverage-gate.php, deploy-on-green.sh (opt-in, off),
+   ├─ scripts/                smoke.sh, contrast.mjs, check-source-allowlist.mjs, coverage-gate.php, clock-guard.php,
+   │                          sbom.php, composer-audit-gate.php, deploy-on-green.sh (opt-in, off),
    │                          backup/{db-backup.py, binlog-ship.py, db-restore-drill.sh, test_*.py}
    ├─ docs/                   runbooks + behaviour docs (§13) · docs/compliance/ (PDPL paper trail)
    └─ .prod-ready/            local audit workspace — git-ignored except waivers.yml (the committed risk-acceptance record)
@@ -278,6 +279,12 @@ Each flow names its controller; per-endpoint database effects are in DATABASE-AN
   encrypted: `users.mfa_secret`, `settings.mail_password`. **`APP_KEY` is the root of trust**: a
   backup without the key at the time of the dump is incomplete; never run `key:generate` on a live
   environment. Rotation procedure and developer rules: `docs/ENCRYPTION-AT-REST.md`.
+- **Never compare an app-written datetime against MySQL's clock.** The `mysql` connection pins no
+  session timezone (deliberately — pinning it would reinterpret every stored `TIMESTAMP`; the
+  migration path is in `docs/DEPLOY-LARAVEL.md` §10), so `NOW()` / `CURDATE()` is the DB host's
+  clock while Laravel writes Riyadh-local values. Bind "today"/"now" from PHP as a query parameter.
+  `scripts/clock-guard.php` blocks new raw-clock literals in CI unless `.clock-allowlist.json`
+  records why the column on the other side is DB-written; `AppClockDayBoundaryTest` guards the config.
 - **Never filter, sort, group or join on an encrypted column in SQL**, and never add one to an
   export, notification, log, dashboard or email payload. Raw reads (`DB::table`, `selectRaw`) return
   ciphertext; decrypt explicitly and add a test.
@@ -352,7 +359,7 @@ four jobs, all under a read-only token and SHA-pinned actions:
 | Job | Gates |
 |---|---|
 | `frontend` | `npm ci`, `npm audit --omit=dev`, `npm run lint` (ESLint + eslint-plugin-vue, zero warnings), Vitest `--coverage` (+ axe) with the thresholds in `vitest.config.js`, `npm run build`, Tailwind `@source` allow-list drift guard, contrast/perceptual-distance gate, build-reproducibility (`public/build` must be unchanged after a rebuild) |
-| `backend` | PHPUnit two-pass against MySQL 8.4 on PHP 8.3 (everything except `pdf` with `--coverage-clover`, then `pdf` alone because dompdf segfaults in a shared process), `scripts/coverage-gate.php` statement floor 83 % over `app/`, `composer audit` arbitrated by `scripts/composer-audit-gate.php` (high/critical advisories block unless allow-listed with a reason), `vendor/bin/pint --test` |
+| `backend` | PHPUnit two-pass against MySQL 8.4 on PHP 8.3 (everything except `pdf` with `--coverage-clover`, then `pdf` alone because dompdf segfaults in a shared process), `scripts/coverage-gate.php` statement floor 83 % over `app/`, `composer audit` arbitrated by `scripts/composer-audit-gate.php` (high/critical advisories block unless allow-listed with a reason), `scripts/clock-guard.php` (raw MySQL clock functions must be allow-listed in `.clock-allowlist.json` — I18N-02), `scripts/sbom.php` (CycloneDX SBOM of both lock files, archived per run — CICD-05), `python3 -m unittest` over the backup/PITR tooling, `vendor/bin/pint --test` |
 | `secrets` | gitleaks |
 | `sast` | Semgrep, ERROR severity blocks |
 

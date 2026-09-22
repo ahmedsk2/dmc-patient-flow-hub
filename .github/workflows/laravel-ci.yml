@@ -199,6 +199,31 @@ jobs:
         # rest of the suite — a fresh process per pass avoids crossing that threshold.
         run: php artisan test --group pdf
 
+      # BLOCKING. I18N-02: config/database.php deliberately pins no MySQL session timezone, so the
+      # DB session runs in the DB host's zone (UTC) while the app runs Asia/Riyadh. Mixing the two
+      # clocks skews a comparison by three hours and nothing fails visibly, so every raw MySQL clock
+      # function in a string literal must be allow-listed with a reason in .clock-allowlist.json —
+      # the only defensible one being that the column on the other side is DB-written (useCurrent).
+      # Placed after the suite for the same reason as Pint: a guard trip must not hide test results.
+      - name: Raw-clock guard (I18N-02) — blocking
+        run: php scripts/clock-guard.php .clock-allowlist.json app routes database
+
+      # CICD-05. A CycloneDX SBOM of both dependency trees, generated from composer.lock and
+      # package-lock.json (dependency-free and deterministic — see scripts/sbom.php). Archived per
+      # run so "what shipped on that date" is answerable after the fact. NOT an attestation: this
+      # pipeline builds no release artifact to sign, since Coolify builds from source on the host.
+      - name: Software Bill of Materials (CICD-05)
+        run: php scripts/sbom.php sbom/dmc-laravel.cdx.json
+
+      - name: Archive the SBOM
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sbom-cyclonedx
+          # `uses` steps ignore the job's working-directory default, so this is workspace-relative.
+          path: laravel/sbom/dmc-laravel.cdx.json
+          if-no-files-found: error
+          retention-days: 90
+
       # BLOCKING, deliberately LAST so a style drift never hides the test results above it.
       # Laravel Pint (Laravel preset): the codebase was normalised once; any drift fails here.
       # Fix locally with `vendor/bin/pint` and commit the result.

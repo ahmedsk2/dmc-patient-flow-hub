@@ -24,6 +24,24 @@ use Inertia\Response;
  */
 class PatientsController extends Controller
 {
+    /**
+     * PERF-03 (prod-ready 2026-09-03): safety net on the ONE unbounded board query.
+     *
+     * Every board view except `longterm` is bounded by `discharge_date IS NULL` — the open census,
+     * which ward capacity bounds for us. `view=longterm` deliberately lists CLOSED episodes too
+     * (legacy parity: the long-term registry is mostly discharged rows), so it is the only board
+     * query whose result set grows for ever. Production held 176 such rows on 2026-09-03, all
+     * discharged, accumulated since 2022 — so this cap is a guard against the decade, not a change
+     * to what anyone sees today. When it does bite, every OPEN episode is kept (a long-stay patient
+     * still in a bed is the whole point of the view) and only the oldest CLOSED ones are dropped —
+     * and the page says the list was trimmed rather than quietly showing a partial registry.
+     *
+     * The effective value is `config('board.longterm_row_cap')` when set, so a test can drive the
+     * capped path with three rows instead of a thousand. No config/board.php ships: with the key
+     * absent, config() returns this constant and production always runs on it.
+     */
+    private const LONGTERM_ROW_CAP = 1000;
+
     public function index(Request $request): Response|RedirectResponse
     {
         // SPC-TM-011 (Wave 1): the free-text term is patient name/MRN — it now travels in a POST
@@ -39,7 +57,7 @@ class PatientsController extends Controller
         $filters = $request->only('search', 'location', 'view', 'consultant_id', 'specialty_id', 'needs_handover');
         $scope = $this->boardScope($request);
         $tbExists = $this->tbExists();
-        [$groups, $readmitWindow] = $this->boardGroups($filters, $settings, $scope, $tbExists);
+        [$groups, $readmitWindow, $truncated] = $this->boardGroups($filters, $settings, $scope, $tbExists);
 
         // Wave 2, Item 1: discharged/unassigned fall-through. The board only matches active+assigned
         // patients, so a search for a discharged or not-yet-assigned patient silently returns nothing.
@@ -65,6 +83,8 @@ class PatientsController extends Controller
             // client which already-visible admission to expand/scroll/flash to.
             'highlight' => $request->integer('highlight') ?: null,
             'readmitWindow' => $readmitWindow,
+            // PERF-03: {shown, total} only when the long-term registry exceeded the cap, else null.
+            'truncated' => $truncated,
             // "needs handover" count (TD-T3): SAME predicate as the needs_handover board filter
             // above (own-only for a plain consultant, unit-wide otherwise) — the chip, the pinned
             // banner and the filtered result must always agree on what "the number" means.
@@ -192,6 +212,8 @@ class PatientsController extends Controller
      */
     public function activeList(Request $request): Response
     {
+        // no filters => never view=longterm => the PERF-03 cap cannot bite here, so the third
+        // element of boardGroups() is always null and is deliberately not destructured.
         [$groups, $readmitWindow] = $this->boardGroups(
             [], Setting::current(), fn ($q) => $q, $this->tbExists());
 
@@ -230,7 +252,8 @@ class PatientsController extends Controller
      * A consultant appears only while they hold at least one matching admission — a consultant
      * holding zero patients is hidden everywhere (TD-T5), even on-service ones.
      *
-     * @return array{0: array, 1: int} [$groups, $readmitWindow]
+     * @return array{0: array, 1: int, 2: ?array} [$groups, $readmitWindow, $truncated]
+     *                                            $truncated is null unless the long-term cap bit
      */
     private function boardGroups(array $filters, Setting $settings, \Closure $scope, \Closure $tbExists): array
     {
@@ -246,7 +269,7 @@ class PatientsController extends Controller
             $scope = fn ($q) => $q;
         }
 
-        $admissions = Admission::query()
+        $query = Admission::query()
             ->when(! $includeDischarged, fn ($q) => $q->whereNull('discharge_date'))
             ->whereNotNull('consultant_id')                       // assigned only (unassigned → New Admissions)
             ->tap($scope)
@@ -265,9 +288,32 @@ class PatientsController extends Controller
             ->when($filters['search'] ?? null, fn ($q, $s) => $q->whereHas('patient',
                 fn ($p) => $p->where('name', 'like', "%{$s}%")->orWhere('mrn', 'like', "%{$s}%")))
             // needs-handover filter (TD-T3): active admissions carrying an unresolved transfer-driven reminder
-            ->when($filters['needs_handover'] ?? null, fn ($q) => $q->handoverPending())
-            ->orderBy('admit_date')
-            ->get();
+            ->when($filters['needs_handover'] ?? null, fn ($q) => $q->handoverPending());
+
+        // PERF-03: cap the long-term registry (see self::LONGTERM_ROW_CAP). The COUNT only runs on
+        // that one view, so the everyday board keeps its single query.
+        //
+        // WHAT THE CAP KEEPS matters more than the cap itself. A long-term patient who is STILL IN
+        // A BED has one of the OLDEST admit_dates on this view — that is what makes them long-term —
+        // so ordering by admit_date alone would drop the live patients FIRST and leave a registry of
+        // nothing but discharged ones. Open episodes are therefore sorted ahead of closed ones and
+        // can never be trimmed; only the oldest CLOSED episodes are. `id` breaks ties so the cut is
+        // the same list on every reload rather than whatever MySQL returns that time. The result is
+        // then restored to ascending admit_date for display — the order every caller and the
+        // printable census expect.
+        $cap = max(1, (int) config('board.longterm_row_cap', self::LONGTERM_ROW_CAP));
+        $truncated = null;
+        if ($includeDischarged && ($total = (clone $query)->count()) > $cap) {
+            $admissions = (clone $query)
+                ->orderByRaw('discharge_date IS NULL DESC')   // open episodes first: never trimmed
+                ->orderByDesc('admit_date')
+                ->orderByDesc('id')
+                ->limit($cap)
+                ->get()->sortBy('admit_date')->values();
+            $truncated = ['shown' => $cap, 'total' => $total];
+        } else {
+            $admissions = $query->orderBy('admit_date')->get();
+        }
 
         // readmission flag: admitted within the configured window of a prior REAL discharge
         // (typed real discharge OR NULL-typed historical close — legacy parity, J1-4)
@@ -387,6 +433,6 @@ class PatientsController extends Controller
         $groups = array_values($groups);
         usort($groups, fn ($a, $b) => [$rank($a), $a['name']] <=> [$rank($b), $b['name']]);
 
-        return [$groups, $readmitWindow];
+        return [$groups, $readmitWindow, $truncated];
     }
 }

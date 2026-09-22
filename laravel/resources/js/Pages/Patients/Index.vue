@@ -22,7 +22,7 @@ const { ask } = useConfirm();
 // reloads/flashes on each child's `saved` emit. Each child owns its own useForm(s) + a11y via
 // BaseModal. The Modify modal still uses the canonical PatientForm + usePatientEdit here.
 
-const props = defineProps({ groups: Array, filters: Object, stats: Object, consultants: Array, specialties: Array, externalServices: Array, readmitWindow: Number, countries: Array, fallback: { type: Object, default: null }, highlight: { type: Number, default: null }, needsHandoverCount: { type: Number, default: 0 } });
+const props = defineProps({ groups: Array, filters: Object, stats: Object, consultants: Array, specialties: Array, externalServices: Array, readmitWindow: Number, countries: Array, fallback: { type: Object, default: null }, highlight: { type: Number, default: null }, needsHandoverCount: { type: Number, default: 0 }, truncated: { type: Object, default: null } });
 
 const page = usePage();
 const me = computed(() => page.props.auth.user);
@@ -251,6 +251,20 @@ const closeModify = () => guardModify(() => { editing.value = null; });
         <FlowAlert v-if="needsHandoverCount > 0" tone="warning"
                    :title="`${needsHandoverCount} of your patients have no handover today`" class="mb-4">
             <Link href="/patients?needs_handover=1" class="font-semibold underline">Show them</Link>
+        </FlowAlert>
+
+        <!-- PERF-03: the long-term registry is the one board view that lists closed episodes, so it
+             grows for ever. The server caps it and reports the cap here. Every patient still in a
+             bed is kept — only the oldest DISCHARGED episodes are dropped — so say exactly that
+             rather than leave a silently partial list. Registry search is admin-only, so the
+             recovery link is too; everyone else is pointed at the search this page already has. -->
+        <FlowAlert v-if="truncated" tone="info"
+                   :title="`Showing ${truncated.shown} of ${truncated.total} long-term episodes`" class="mb-4">
+            Every patient still admitted is listed; the oldest discharged episodes are not.
+            <template v-if="me.is_admin">
+                Use <Link href="/registry" class="font-semibold underline">Registry search</Link> to find a specific patient.
+            </template>
+            <template v-else>Search by name or MRN above to find a specific patient.</template>
         </FlowAlert>
 
         <!-- result-count announcement for screen readers (filters change the visible groups) -->
