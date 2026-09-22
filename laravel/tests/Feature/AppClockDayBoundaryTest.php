@@ -139,4 +139,26 @@ class AppClockDayBoundaryTest extends TestCase
                     return $iLong !== false && $iShort !== false && $iLong < $iShort;
                 }));
     }
+
+    /**
+     * TRIPWIRE (I18N-02). The accepted risk is that the mysql connection pins NO session timezone.
+     * That is deliberate and it must stay deliberate: the schema is full of TIMESTAMP columns, which
+     * MySQL re-interprets through the session zone on both write AND read, so adding a `timezone`
+     * key here would silently reinterpret every value already stored — every created_at, assigned_at,
+     * mfa_enrolled_at and signoff_date would move by three hours with no migration and no error.
+     *
+     * Pinning it is therefore a DATA MIGRATION, not a config change; docs/DEPLOY-LARAVEL.md carries
+     * the procedure. This test fails the moment someone "fixes" the finding by editing the config,
+     * and points them at that procedure. The companion guard scripts/clock-guard.php covers the
+     * other half — new code reaching for MySQL's clock instead of the app's.
+     */
+    public function test_the_mysql_connection_pins_no_session_timezone(): void
+    {
+        $this->assertNull(
+            config('database.connections.mysql.timezone'),
+            'config/database.php must NOT pin a MySQL session timezone: every TIMESTAMP column '
+            .'already stored would be reinterpreted through the new zone and shift by the offset. '
+            .'Pinning it requires the data migration in docs/DEPLOY-LARAVEL.md, not a config edit.'
+        );
+    }
 }

@@ -164,3 +164,28 @@ describe('Wave 5 — board summary row is keyboard-operable', () => {
         expect(w.vm.open.has(5)).toBe(true);
     });
 });
+
+// PERF-03: the long-term registry is capped server-side; the page must SAY it was trimmed rather
+// than present a partial registry as a complete one. Registry search is admin-only, so the
+// recovery affordance differs by role — a consultant pointed at /registry would hit a 403.
+describe('PERF-03 — truncated long-term registry banner', () => {
+    it('says nothing when the server did not trim', () => {
+        const w = renderWith(admin, { truncated: null });
+        expect(w.text()).not.toContain('long-term episodes');
+    });
+
+    it('reports the counts and promises that admitted patients are still listed', () => {
+        const w = renderWith(admin, { truncated: { shown: 1000, total: 1200 } });
+        expect(w.text()).toContain('Showing 1000 of 1200 long-term episodes');
+        expect(w.text()).toContain('Every patient still admitted is listed');
+    });
+
+    it('offers Registry search to an admin only, and the board search to everyone else', () => {
+        const forAdmin = renderWith(admin, { truncated: { shown: 1000, total: 1200 } });
+        expect(forAdmin.html()).toContain('/registry');
+
+        const forConsultant = renderWith(consultant(), { truncated: { shown: 1000, total: 1200 } });
+        expect(forConsultant.html()).not.toContain('/registry');
+        expect(forConsultant.text()).toContain('Search by name or MRN above');
+    });
+});
