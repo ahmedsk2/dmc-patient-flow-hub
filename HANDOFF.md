@@ -246,7 +246,10 @@
    live site; now 116 ms, identical results); forgot-username showed no confirmation; light-mode grey
    and teal text below WCAG AA; the header title squeezed out on phones and tablets; the closed mobile
    menu still reachable with Tab. Details and the short list that still needs a person on the live site
-   are in the same evidence file.
+   are in the same evidence file. **Production runs `a13a845`** (merge of PR #31, release
+   `v2026.09.23.2`, build and SBOM attestations verified), deployed 2026-09-23 after a pre-deploy dump;
+   no migrations; smoke 15/15, `/health` ok, audit chain intact, backup heartbeats fresh, and the live
+   Patient Merge duplicate finder measured in the new container at 124 ms (14 pairs).
    **Still open and all owner / infrastructure decisions, not code:** enable deploy-on-green
    (declined so far — "I don't want to autodeploy"), pick a log sink and set `LOG_STACK`
    (OBS-01/03/04/05), a second backup region + instance principal (DATA-02, CFG-10), SLOs and an
