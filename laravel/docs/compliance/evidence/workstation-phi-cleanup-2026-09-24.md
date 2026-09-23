@@ -88,7 +88,8 @@ DMC-relevant items that are databases or the owner's own backups, so not "loose 
    uses the Docker test database with demo data. Dropping them is the owner's step (permanent).
 2. **The owner's daily local mirror of the OCI bucket `coolify-backups`**, which includes Coolify's
    own **unencrypted** daily dumps of the production `dmc_demo` database (66 dumps from 2026-07-19,
-   ≈ 1.3 GB) alongside other apps' backups. This is the owner's local backup; it should sit on an
+   ≈ 1.3 GB) alongside other apps' backups. (Later the same night `dmc_demo` was taken out of that
+   Coolify job, so no new DMC dumps reach the mirror; the 66 remain.) This is the owner's local backup; it should sit on an
    encrypted disk or be replaced by the encrypted DMC backups (BACKUP-AND-RESTORE §6).
 3. Local WAMP and Docker **test** databases (`dmc_test*`, `dmc_test_legacy`, the `dmc-test-mysql`
    container) — demo/test data only.
