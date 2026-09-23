@@ -27,7 +27,7 @@ const submit = () => form.post('/forgot-username');
                 <p v-if="form.errors.email" :id="fid('email') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.email }}</p>
                 <button type="submit" :disabled="form.processing" class="mt-4 w-full rounded-xl bg-gradient-to-r from-brand-500 to-brand-700 px-4 py-3 font-semibold text-white shadow-lg shadow-brand-900/20 transition hover:from-brand-600 hover:to-brand-800 disabled:opacity-60">{{ form.processing ? 'Sending…' : 'Email me my username' }}</button>
             </form>
-            <p class="mt-6 text-center text-xs text-ink-400"><Link href="/login" class="font-semibold text-brand-600 hover:text-brand-700">Back to sign in</Link></p>
+            <p class="mt-6 text-center text-xs text-ink-400"><Link href="/login" class="font-semibold text-brand-700 hover:text-brand-800">Back to sign in</Link></p>
         </div>
     </div>
 </template>

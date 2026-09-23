@@ -80,11 +80,11 @@ defineExpose({ data, hForm, editing, histOpen, submitHandover });
                 </p>
                 <template v-if="editing">
                     <div class="mb-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm text-ink-600 sm:grid-cols-3">
-                        <label class="flex items-center gap-2"><input type="checkbox" v-model="hForm.checkpoints.vte_completed" class="rounded text-brand-600" /> VTE prophylaxis</label>
-                        <label class="flex items-center gap-2"><input type="checkbox" v-model="hForm.checkpoints.ready_for_discharge" class="rounded text-brand-600" /> Ready for discharge</label>
-                        <label class="flex items-center gap-2"><input type="checkbox" v-model="hForm.checkpoints.high_risk" class="rounded text-brand-600" /> High-risk</label>
-                        <label class="flex items-center gap-2"><input type="checkbox" v-model="hForm.checkpoints.needs_workup" class="rounded text-brand-600" /> Needs more workup</label>
-                        <label class="flex items-center gap-2"><input type="checkbox" v-model="hForm.checkpoints.workup_pending" class="rounded text-brand-600" /> Workup pending</label>
+                        <label class="flex items-center gap-2"><input type="checkbox" v-model="hForm.checkpoints.vte_completed" class="rounded text-brand-700" /> VTE prophylaxis</label>
+                        <label class="flex items-center gap-2"><input type="checkbox" v-model="hForm.checkpoints.ready_for_discharge" class="rounded text-brand-700" /> Ready for discharge</label>
+                        <label class="flex items-center gap-2"><input type="checkbox" v-model="hForm.checkpoints.high_risk" class="rounded text-brand-700" /> High-risk</label>
+                        <label class="flex items-center gap-2"><input type="checkbox" v-model="hForm.checkpoints.needs_workup" class="rounded text-brand-700" /> Needs more workup</label>
+                        <label class="flex items-center gap-2"><input type="checkbox" v-model="hForm.checkpoints.workup_pending" class="rounded text-brand-700" /> Workup pending</label>
                         <label class="flex items-center gap-2">Code status
                             <select v-model="hForm.checkpoints.code_status" aria-label="Code status" class="rounded-lg border border-ink-200 px-2 py-1 text-xs outline-none focus:border-brand-500">
                                 <option :value="null">None</option>
@@ -105,7 +105,7 @@ defineExpose({ data, hForm, editing, histOpen, submitHandover });
                     <CheckpointChips :checkpoints="data?.checkpoints" class="mb-2" />
                     <p class="whitespace-pre-wrap rounded-xl bg-app/70 px-3 py-2.5 text-sm leading-relaxed text-ink-700">{{ data.body || 'No handover text recorded.' }}</p>
                     <div class="mt-3 flex items-center justify-between">
-                        <button v-if="data.revisions?.length" type="button" @click="histOpen = !histOpen" :aria-expanded="histOpen" class="text-xs font-semibold text-brand-600 hover:underline">{{ histOpen ? 'Hide history' : `History (${data.revisions.length})` }}</button>
+                        <button v-if="data.revisions?.length" type="button" @click="histOpen = !histOpen" :aria-expanded="histOpen" class="text-xs font-semibold text-brand-700 hover:underline">{{ histOpen ? 'Hide history' : `History (${data.revisions.length})` }}</button>
                         <span v-else class="text-xs text-ink-400">No history yet.</span>
                         <button v-if="canManage && !isObserver" type="button" @click="editing = true" class="rounded-xl bg-brand-solid px-4 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover">Edit</button>
                     </div>

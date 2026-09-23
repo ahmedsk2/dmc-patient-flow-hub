@@ -97,14 +97,14 @@ const hasItems = computed(() => props.items && props.items.length > 0);
                     <span class="nums ml-auto text-xs text-ink-400">{{ when(it.at) }}</span>
                 </div>
                 <details v-if="entries(it.details).length" class="mt-1">
-                    <summary class="cursor-pointer select-none text-xs text-brand-600 hover:underline">details</summary>
+                    <summary class="cursor-pointer select-none text-xs text-brand-700 hover:underline">details</summary>
                     <dl class="mt-1 grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-xs">
                         <template v-for="e in entries(it.details)" :key="e.key">
                             <dt class="font-semibold capitalize text-ink-500">{{ prettyKey(e.key) }}</dt>
                             <dd v-if="e.kind === 'diff'" class="text-ink-700">
                                 <span class="text-on-danger line-through">{{ e.from }}</span>
                                 <span class="mx-1 text-ink-400">→</span>
-                                <span class="font-semibold text-brand-600">{{ e.to }}</span>
+                                <span class="font-semibold text-brand-700">{{ e.to }}</span>
                             </dd>
                             <dd v-else-if="e.kind === 'diagnoses'" class="space-x-1">
                                 <span v-for="c in e.added" :key="'a' + c" class="nums inline-block rounded bg-tint-success px-1.5 py-0.5 font-semibold text-on-success">+{{ c }}</span>

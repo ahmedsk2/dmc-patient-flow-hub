@@ -479,6 +479,26 @@ class PatientActionController extends Controller
         return back()->with('flash', ['type' => 'success', 'message' => 'Bed updated.']);
     }
 
+    /**
+     * The earliest date a discharge-type date may take on this episode: the latest of the dates it
+     * must not precede. The database CHECK constraints (chk_discharge_gte_admit,
+     * chk_medical_discharge_gte_admit, chk_discharge_gte_medical) make an out-of-order date
+     * unstorable; validating against the same floor first turns what would be a 500 into a
+     * field-level message (2026-09-23 UAT, NEG-03).
+     */
+    private static function dateFloor(?CarbonInterface ...$dates): ?string
+    {
+        $present = array_filter($dates);
+
+        return $present === [] ? null : max(array_map(fn (CarbonInterface $d) => $d->toDateString(), $present));
+    }
+
+    /** `after_or_equal:<floor>` when there is a floor, nothing otherwise. */
+    private static function notBefore(?string $floor): array
+    {
+        return $floor === null ? [] : ['after_or_equal:'.$floor];
+    }
+
     /** Controlled destination vocabulary (legacy "Discharged to" list; ICU kept for historical rows). */
     private const DISCHARGE_DESTINATIONS = 'in:Home,Other Facility,LAMA,Absconded,Mortuary,Intensive Care (ICU)';
 
@@ -501,13 +521,15 @@ class PatientActionController extends Controller
         $data = $request->validate([
             // medical-only carries no status (forced Alive below); the one-step close asks it
             'outcome' => [$complete ? 'required' : 'nullable', 'in:Alive,Dead'],
-            'medical_discharge_date' => ['required', 'date', 'before_or_equal:today'],
+            'medical_discharge_date' => ['required', 'date', 'before_or_equal:today', ...self::notBefore(self::dateFloor($admission->admit_date))],
             // legacy required "Discharged to" on every CLOSE (complete=true); a Dead close needs none
             // (Mortuary is forced). The medical-only path captures no destination (asked at complete).
             'discharge_to' => [$complete && ! $deadClose ? 'required' : 'nullable', self::DISCHARGE_DESTINATIONS],
             // legacy required the still-in delay REASON on a medical-only ("discharged still in") close
             'delay_reason' => [$complete ? 'nullable' : 'required', 'in:Physical,System'],
             'complete' => ['nullable', 'boolean'],
+        ], [
+            'medical_discharge_date.after_or_equal' => 'The medical discharge date cannot be before the admission date (:date).',
         ]);
         if ($admission->discharge_date) {
             return back()->with('flash', ['type' => 'error', 'message' => 'This admission is already fully discharged.']);
@@ -555,9 +577,12 @@ class PatientActionController extends Controller
         // so the destination is NOT required in that case (legacy required it on every other close)
         $effectiveOutcome = $request->input('outcome') ?? $admission->outcome;
         $data = $request->validate([
-            'discharge_date' => ['required', 'date', 'before_or_equal:today'],
+            'discharge_date' => ['required', 'date', 'before_or_equal:today',
+                ...self::notBefore(self::dateFloor($admission->admit_date, $admission->medical_discharge_date))],
             'outcome' => ['nullable', 'in:Alive,Dead'],   // strict vocabulary — LAMA etc. are destinations
             'discharge_to' => [$effectiveOutcome === 'Dead' ? 'nullable' : 'required', self::DISCHARGE_DESTINATIONS],
+        ], [
+            'discharge_date.after_or_equal' => 'The discharge date cannot be before the admission or medical discharge date (:date).',
         ]);
         if ($admission->discharge_date) {
             return back()->with('flash', ['type' => 'error', 'message' => 'Already discharged.']);
@@ -605,8 +630,10 @@ class PatientActionController extends Controller
         $deadClose = $request->input('outcome') === 'Dead';
         $data = $request->validate([
             'outcome' => ['required', 'in:Alive,Dead'],   // strict vocabulary — LAMA etc. are destinations
-            'discharge_date' => ['required', 'date', 'before_or_equal:today'],
+            'discharge_date' => ['required', 'date', 'before_or_equal:today', ...self::notBefore(self::dateFloor($admission->admit_date))],
             'discharge_to' => [$deadClose ? 'nullable' : 'required', self::DISCHARGE_DESTINATIONS],
+        ], [
+            'discharge_date.after_or_equal' => 'The discharge date cannot be before the admission date (:date).',
         ]);
         if ($admission->discharge_date) {
             return back()->with('flash', ['type' => 'error', 'message' => 'Already discharged.']);

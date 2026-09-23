@@ -100,7 +100,7 @@ const cell = 'w-full min-w-16 rounded-lg border border-ink-200 bg-card px-1.5 py
                                 <td class="px-1 py-1"><input v-model="r.admitted_from" aria-label="Admitted from" :class="cell" /></td>
                                 <td class="px-1 py-1"><input v-model="r.bed" aria-label="Bed" :class="cell" /></td>
                                 <td class="px-1 py-1"><input v-model="r.delay_reason" aria-label="Delay reason" :class="cell" /></td>
-                                <td class="px-1 py-1 text-center"><input v-model="r.is_longterm" type="checkbox" aria-label="Long-term" class="rounded text-brand-600" /></td>
+                                <td class="px-1 py-1 text-center"><input v-model="r.is_longterm" type="checkbox" aria-label="Long-term" class="rounded text-brand-700" /></td>
                                 <td class="px-1 py-1"><input v-model="r.transfer_type" placeholder="other transfer…" aria-label="Transfer type" :class="[cell, 'min-w-24']" /></td>
                                 <td class="px-3 py-1">
                                     <span v-if="!r.ok" class="font-semibold text-on-danger">{{ r.error }}</span>

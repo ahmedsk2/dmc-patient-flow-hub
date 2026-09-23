@@ -95,6 +95,8 @@ const hamburger = ref(null);
 const aside = ref(null);
 // Track whether we're below the lg breakpoint (drawer overlay mode). Used to scope aria-hidden
 // to the mobile drawer only — the always-visible desktop sidebar must NOT be hidden from AT.
+// The closed drawer is also `inert`: aria-hidden alone left its ~20 links in the Tab order, so a
+// keyboard user tabbed through invisible links (axe aria-hidden-focus, 2026-09-23 UAT).
 const lgMql = typeof window !== 'undefined' ? window.matchMedia('(max-width: 1023px)') : null;
 const mobileViewport = ref(lgMql?.matches ?? false);
 // Wave 2 fix: drop display:none controls (the `hidden lg:flex` desktop icon-mode toggle added below)
@@ -443,6 +445,7 @@ onUnmounted(() => {
             class="fixed inset-y-0 left-0 z-40 flex flex-col w-64 -translate-x-full bg-gradient-to-b from-navy-900 to-navy-950 text-navy-100 transition-[width,transform] lg:translate-x-0"
             :class="{ 'translate-x-0': sidebarOpen, 'lg:w-16': sidebarCollapsed }"
             :aria-hidden="sidebarOpen ? undefined : (mobileViewport ? 'true' : undefined)"
+            :inert="!sidebarOpen && mobileViewport ? true : undefined"
             @keydown="sidebarOpen && onDrawerKeydown($event)"
         >
             <div class="flex h-16 items-center gap-3 px-5 border-b border-white/5" :class="{ 'lg:justify-center lg:px-2': sidebarCollapsed }">
@@ -511,19 +514,23 @@ onUnmounted(() => {
 
         <!-- Main -->
         <div :class="mainPadClass">
-            <header class="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-line bg-card/80 px-5 backdrop-blur">
+            <!-- min-h, not h: a breadcrumb trail that wraps on a narrow screen grows the bar instead of pushing
+                 the page title out of view (2026-09-23 UAT, NF-02); with one line it is still 64px. -->
+            <header class="sticky top-0 z-20 flex min-h-16 items-center gap-4 border-b border-line bg-card/80 px-5 py-2 backdrop-blur">
                 <button ref="hamburger" class="grid h-9 w-9 coarse:h-10 coarse:w-10 place-items-center rounded-full text-ink-500 transition hover:bg-ink-50 lg:hidden" @click="openDrawer" aria-label="Open navigation menu" :aria-expanded="sidebarOpen" aria-controls="app-sidebar">
                     <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" /></svg>
                 </button>
-                <div class="min-w-0">
+                <div class="min-w-0 flex-1">
                     <h1 class="truncate text-lg font-bold text-ink-900">{{ title }}</h1>
-                    <!-- Wave 1, Item 5: optional breadcrumb trail (renders only with 2+ crumbs) -->
-                    <Breadcrumbs :crumbs="breadcrumbs" />
+                    <!-- Wave 1, Item 5: optional breadcrumb trail (renders only with 2+ crumbs). Hidden
+                         below sm: at phone width its one-word crumbs cannot wrap and ran under the
+                         header icons (2026-09-23 UAT, NF-01); the title alone says where you are. -->
+                    <Breadcrumbs class="hidden sm:block" :crumbs="breadcrumbs" />
                 </div>
                 <div class="ms-auto flex items-center gap-3">
                     <!-- Wave 2, Item 2: global patient quick-jump (press /) -->
                     <QuickJump />
-                    <div class="hidden items-center gap-2 rounded-full bg-tint-success px-3 py-1 text-xs font-semibold text-on-success sm:flex">
+                    <div class="hidden items-center gap-2 rounded-full bg-tint-success px-3 py-1 text-xs font-semibold text-on-success xl:flex">
                         <span class="relative flex h-2 w-2"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-success-500 opacity-60"></span><span class="relative inline-flex h-2 w-2 rounded-full bg-success-500"></span></span>
                         Live
                     </div>
@@ -559,7 +566,7 @@ onUnmounted(() => {
                                          unresolved handover alarms stay pinned (see clearNotifications()). -->
                                     <button v-if="feedNotifications.length" type="button" @click="clearNotifications" :disabled="clearing"
                                             class="text-xs font-semibold text-ink-500 transition hover:text-ink-700 disabled:opacity-50">{{ clearing ? 'Clearing…' : 'Clear' }}</button>
-                                    <button @click="goInbox" class="text-xs font-semibold text-brand-600 hover:underline">Handover inbox →</button>
+                                    <button @click="goInbox" class="text-xs font-semibold text-brand-700 hover:underline">Handover inbox →</button>
                                 </div>
                             </div>
                             <div v-if="bellLoading" class="px-4 py-6 text-center text-sm text-ink-400">Loading…</div>
@@ -598,7 +605,7 @@ onUnmounted(() => {
                         </div>
                     </div>
                     <div class="flex items-center gap-3 border-s border-line ps-3">
-                        <Link href="/profile" class="flex items-center gap-3 rounded-xl px-1 py-1 transition hover:bg-ink-50">
+                        <Link href="/profile" :aria-label="`My profile: ${page.props.auth?.user?.name || 'DMC Staff'}, ${page.props.auth?.user?.role_label || 'Internal Medicine'}`" class="flex items-center gap-3 rounded-xl px-1 py-1 transition hover:bg-ink-50">
                             <!-- Wave 5 residual (measured, not assumed): bg-brand-600/text-white measures 4.31:1
                                  in LIGHT (fails the 4.5 AA-normal-text bar for this 14px label) and 2.09:1 in
                                  DARK (brand-600 is deliberately LIGHTENED there for text-on-dark-card legibility
@@ -608,7 +615,7 @@ onUnmounted(() => {
                             <div class="grid h-9 w-9 place-items-center rounded-full bg-navy-700 text-sm font-semibold text-white">
                                 {{ (page.props.auth?.user?.name || 'DMC').slice(0, 2).toUpperCase() }}
                             </div>
-                            <div class="hidden leading-tight sm:block">
+                            <div class="hidden leading-tight xl:block">
                                 <div class="text-sm font-semibold text-ink-800">{{ page.props.auth?.user?.name || 'DMC Staff' }}</div>
                                 <div class="text-xs text-ink-400">{{ page.props.auth?.user?.role_label || 'Internal Medicine' }}</div>
                             </div>

@@ -105,7 +105,7 @@ const signOut = () => router.post('/logout');
                         {{ verifying ? 'Verifying…' : 'Verify' }}
                     </button>
                     <button type="button" :disabled="resendSeconds > 0" @click="resend"
-                        class="mt-3 w-full text-center text-xs font-semibold text-brand-600 hover:text-brand-700 disabled:cursor-not-allowed disabled:text-ink-400">
+                        class="mt-3 w-full text-center text-xs font-semibold text-brand-700 hover:text-brand-800 disabled:cursor-not-allowed disabled:text-ink-400">
                         {{ resendSeconds > 0 ? `Resend (${resendSeconds}s)` : 'Resend' }}
                     </button>
                 </template>

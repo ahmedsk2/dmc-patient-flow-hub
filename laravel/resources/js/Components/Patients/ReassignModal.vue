@@ -145,7 +145,7 @@ defineExpose({
         <form @submit.prevent="confirmThenSubmit" class="space-y-4">
             <div><label class="mb-1 block text-sm font-semibold text-ink-700">From</label><SearchableSelect v-model="rForm.from_consultant_id" input-class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" placeholder="Select…" :options="consultants" /></div>
             <div><label class="mb-1 block text-sm font-semibold text-ink-700">To <span class="font-normal text-ink-400">(on-service only)</span></label><SearchableSelect v-model="rForm.to_consultant_id" title="On-service consultants only" input-class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" placeholder="Select…" :options="onServiceConsultants" /></div>
-            <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="rForm.mark_new" class="rounded text-brand-600" /> Mark as new patients <span class="text-xs text-ink-400">(uncheck to keep their current “New” status)</span></label>
+            <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="rForm.mark_new" class="rounded text-brand-700" /> Mark as new patients <span class="text-xs text-ink-400">(uncheck to keep their current “New” status)</span></label>
 
             <!-- preflight: pick WHO moves (all checked by default); every SELECTED patient
                  needs a handover updated TODAY before the move unlocks -->
@@ -157,7 +157,7 @@ defineExpose({
                     <ul class="mt-2 max-h-44 space-y-1 overflow-auto">
                         <li v-for="r in preflight.rows" :key="r.id">
                             <label class="flex items-center gap-2 text-sm text-ink-700">
-                                <input type="checkbox" :checked="selectedIds.has(r.id)" @change="toggleSelected(r.id)" class="rounded text-brand-600" />
+                                <input type="checkbox" :checked="selectedIds.has(r.id)" @change="toggleSelected(r.id)" class="rounded text-brand-700" />
                                 <!-- Wave 1 (EHC UI): the same identity tuple as the palette rows — data unchanged -->
                                 <IdentityChip :name="r.name" :mrn="String(r.mrn ?? '')" />
                                 <span v-if="!r.handover_today" class="ml-auto rounded-full bg-tint-warning px-2 py-0.5 text-[10px] font-semibold text-on-warning">handover stale</span>

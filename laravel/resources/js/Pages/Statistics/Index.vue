@@ -290,7 +290,7 @@ const reasonsOptions = computed(() => barOptions({ gridColor: gridColor.value, a
         <div v-if="compareData" class="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-5">
             <div v-for="k in deltaCards" :key="k.label" class="rounded-xl bg-app p-2 text-center ring-1 ring-line text-sm">
                 <div class="text-[10px] uppercase tracking-wide text-ink-400">{{ k.label }} vs {{ compareData.range.from }}–{{ compareData.range.to }}</div>
-                <div class="nums font-bold" :class="k.delta > 0 ? 'text-on-danger' : k.delta < 0 ? 'text-brand-600' : 'text-ink-400'">{{ k.delta > 0 ? '+' : '' }}{{ k.delta }}</div>
+                <div class="nums font-bold" :class="k.delta > 0 ? 'text-on-danger' : k.delta < 0 ? 'text-brand-700' : 'text-ink-400'">{{ k.delta > 0 ? '+' : '' }}{{ k.delta }}</div>
             </div>
         </div>
         <div v-else class="mb-6"></div>

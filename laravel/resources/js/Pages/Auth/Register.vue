@@ -178,11 +178,11 @@ const codeField = 'w-32 rounded-xl border border-ink-200 px-3 py-2 text-center t
             </div>
 
             <p class="mb-4 text-center text-xs font-semibold uppercase tracking-wide text-ink-400" aria-hidden="true">
-                <span :class="{ 'text-brand-600': !emailVerified }">1 Verify email</span>
+                <span :class="{ 'text-brand-700': !emailVerified }">1 Verify email</span>
                 <span> · </span>
-                <span :class="{ 'text-brand-600': emailVerified && !mfaConfirmed }">2 Details</span>
+                <span :class="{ 'text-brand-700': emailVerified && !mfaConfirmed }">2 Details</span>
                 <span> · </span>
-                <span :class="{ 'text-brand-600': mfaConfirmed }">3 Authenticator</span>
+                <span :class="{ 'text-brand-700': mfaConfirmed }">3 Authenticator</span>
             </p>
 
             <form @submit.prevent="submit" class="space-y-3 rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
@@ -222,7 +222,7 @@ const codeField = 'w-32 rounded-xl border border-ink-200 px-3 py-2 text-center t
                     <p v-if="form.errors.email" class="mt-1 text-xs text-on-danger">{{ form.errors.email }}</p>
                     <p v-if="emailStepError" class="mt-1 text-xs text-on-danger">{{ emailStepError }}</p>
                     <p v-if="emailVerified" class="mt-1 text-xs font-semibold text-on-success">Email verified</p>
-                    <button v-else-if="emailSent" type="button" @click="changeEmail" class="mt-1 text-xs font-semibold text-brand-600 hover:text-brand-700">Change email</button>
+                    <button v-else-if="emailSent" type="button" @click="changeEmail" class="mt-1 text-xs font-semibold text-brand-700 hover:text-brand-800">Change email</button>
                 </div>
 
                 <!-- phase 2: confirm the emailed code -->
@@ -238,7 +238,7 @@ const codeField = 'w-32 rounded-xl border border-ink-200 px-3 py-2 text-center t
                     </div>
                     <p v-if="codeError" class="mt-1 text-xs text-on-danger">{{ codeError }}</p>
                     <button type="button" :disabled="resendSeconds > 0" @click="resendCode"
-                        class="mt-1 text-xs font-semibold text-brand-600 hover:text-brand-700 disabled:cursor-not-allowed disabled:text-ink-400">
+                        class="mt-1 text-xs font-semibold text-brand-700 hover:text-brand-800 disabled:cursor-not-allowed disabled:text-ink-400">
                         {{ resendSeconds > 0 ? `Resend (${resendSeconds}s)` : 'Resend' }}
                     </button>
                 </div>
@@ -308,7 +308,7 @@ const codeField = 'w-32 rounded-xl border border-ink-200 px-3 py-2 text-center t
                     </button>
                 </template>
             </form>
-            <p class="mt-6 text-center text-xs text-ink-400">Already have an account? <Link href="/login" class="font-semibold text-brand-600 hover:text-brand-700">Sign in</Link></p>
+            <p class="mt-6 text-center text-xs text-ink-400">Already have an account? <Link href="/login" class="font-semibold text-brand-700 hover:text-brand-800">Sign in</Link></p>
         </div>
     </div>
 </template>

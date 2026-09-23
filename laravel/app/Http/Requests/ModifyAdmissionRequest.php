@@ -75,6 +75,19 @@ class ModifyAdmissionRequest extends FormRequest
         // data-correction fields (wrong admit date / source / location on the existing episode);
         // a CHANGED admitted_from must come from the legacy ADMFROM enum, untouched dirty stays
         $rules['admit_date'] = ['required', 'date', 'before_or_equal:today'];
+        // …and never after a discharge already recorded on this episode: the database CHECK
+        // constraints refuse that write, so catch it here as a field message instead of a 500
+        // (2026-09-23 UAT, NEG-03)
+        $ceiling = collect([$admission?->medical_discharge_date, $admission?->discharge_date])
+            ->filter()->map->toDateString()->min();
+        if ($ceiling !== null) {
+            $rules['admit_date'][] = function (string $attribute, mixed $value, \Closure $fail) use ($ceiling) {
+                $ts = strtotime((string) $value);
+                if ($ts !== false && date('Y-m-d', $ts) > $ceiling) {
+                    $fail("The admission date cannot be after a discharge date already recorded on this episode ({$ceiling}).");
+                }
+            };
+        }
         $rules['admitted_from'] = ($admission && $this->changed('admitted_from', $admission->admitted_from))
             ? ['nullable', 'string', 'max:64', 'in:'.implode(',', StoreAdmissionRequest::ADMIT_FROM)]
             : ['nullable', 'string', 'max:64'];

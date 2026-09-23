@@ -56,8 +56,8 @@
 - **Login:** a trust-badge row of six **truthful** claims (encrypted in transit / at rest, MFA,
   in-Kingdom hosting, backups, privacy-notice link). No framework badges until certificates exist.
 - **Docs:** pruned of dev scaffolding; PDPL paper-trail drafts in `laravel/docs/compliance/`.
-- **Gate baselines (2026-09-23, after the walkthrough fixes):** PHPUnit 1044 (+92 in the `pdf` group), PHP statement
-  coverage 88.1 % at the last CI measurement (floor 83), Vitest 820 on vitest 5 (floors 72/66/62/48 lines/statements/branches/
+- **Gate baselines (2026-09-23, after the second UAT pass):** PHPUnit 1057 (+92 in the `pdf` group), PHP statement
+  coverage 88.1 % at the last CI measurement (floor 83), Vitest 824 on vitest 5 (floors 72/66/62/48 lines/statements/branches/
   functions — re-baselined 2026-09-22 for the new coverage engine, then raised the same day by the
   IcdTypeahead + ActivityPanel specs), ESLint zero warnings, Pint clean.
 
@@ -234,6 +234,19 @@
    the served merge-page bundle confirmed to be the compiled picker. The host's `binlog-ship.py` was
    reinstalled the same day (it predated the 2026-09-22 wrong-key message fix; the old copy is kept
    as `.prev`).
+   **2026-09-23, second pass (owner: "try to complete these too" — test accounts and data are
+   temporary):** the rows the first pass could not run, on three more isolated local servers set up
+   like production — every credential journey as automated test code (nobody typed a password or code
+   into the site), the leftover functional rows, a browser / accessibility pass — plus **read-only
+   checks on production** that print numbers only: all 52 dashboard / statistics / consultation / Active
+   List figures match an independent recomputation on the real data, and 148 page loads across the four
+   roles present had no errors, no access breaches and no writes. That found **six more defects, all
+   fixed with tests**: impossible discharge dates crashed instead of showing a message; **Admin →
+   Patient Merge took 57 s on the real volume** (over the 60 s web limit — it could not open on the
+   live site; now 116 ms, identical results); forgot-username showed no confirmation; light-mode grey
+   and teal text below WCAG AA; the header title squeezed out on phones and tablets; the closed mobile
+   menu still reachable with Tab. Details and the short list that still needs a person on the live site
+   are in the same evidence file.
    **Still open and all owner / infrastructure decisions, not code:** enable deploy-on-green
    (declined so far — "I don't want to autodeploy"), pick a log sink and set `LOG_STACK`
    (OBS-01/03/04/05), a second backup region + instance principal (DATA-02, CFG-10), SLOs and an

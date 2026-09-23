@@ -81,11 +81,103 @@ Doc corrections the run prompted: Observer access (board, active list and handov
 and the test plan), residents with Can Manage may transfer/discharge (test-plan matrix), the Active List
 covers assigned patients only (DATABASE-AND-BEHAVIOR.md), and CTL-06's wording.
 
-## Not covered
+## Second pass — the rows the first pass could not run, and the real system (same day)
 
-- Sign-in, MFA challenge and enrolment, email verification, registration, forgot/reset/change password
-  (need typed credentials — covered by the automated suite).
-- Section 14 layout checks (mobile, tablet, dark mode, Arabic/RTL, keyboard-only) and most of Section 15
-  (odd input, concurrent edits, network loss).
-- Committing a bulk import; subspecialty shuffle pools; next-day boundaries (e.g. reverse sign-off
-  refused the following day).
+The owner asked for the remaining rows to be completed too, noting that test accounts and test data are
+temporary (the database is wiped and re-migrated from the legacy system at cutover). Two limits still
+held, by design: **nobody typed a password, authenticator code or recovery code into the site** (a hard
+rule for the assistant, even with the owner's permission), and **nothing was ever signed in to on the
+live site** — there is no way in without a password, and pulling real patient screens into the
+assistant would move patient data out of the Kingdom.
+
+**How.** Three more isolated local servers, each on its own copy of the fake demo data and set up like
+production (debug off, sessions and cache in the database, encrypted sessions, CSP enforced):
+- **Credential journeys as automated test code** — a scripted HTTP client with synthetic accounts it
+  created itself, codes computed from their own secrets, and emailed codes read from the local mail log
+  (AUTH-01 … AUTH-37, CTL-06/07/09, AUD-04, NF-09, plus login by email, forgot-username, trusted
+  device, deleted-user eviction, and a server-side check that nobody can register as Admin).
+- **The leftover functional rows** — bulk import committed (IMP-01 … 06), shuffle with hospitalist and
+  subspecialty pools, next-day boundaries (reverse discharge / sign-off refused the next day, undo
+  medical discharge, the handover reminder, the "New" flag, the readmission-window edge), Section 15
+  (odd input, concurrent edits, an aborted request, impossible dates, back / refresh), NF-10 (a
+  discharge just after midnight) and NF-13 (double submit).
+- **A browser pass** — every sign-in screen rendered and audited with axe without entering a
+  credential; phone and tablet widths, dark mode, keyboard-only, command palette, unsaved-changes
+  guard, 404 / 403, print styles and page timings.
+- Then the gaps a coverage critic listed: a second consultant refused on another's patient (discharge,
+  transfer, sign-off), a resident unable to raise their own role through Profile, no route that edits
+  or deletes the audit log, and every PDF / CSV / XLSX download opened and checked.
+
+**The real system (read-only).** On the live site, without signing in: http redirects to https, there is
+no "remember me", the sign-up roles exclude Admin, an unknown account gets the same "if that account
+exists" message, and unknown pages get a friendly 404. On the production database, through scripts that
+run inside a **read-only transaction** (the database itself refuses any write, the run is rolled back,
+and only numbers are printed):
+
+| Check | Result |
+|---|---|
+| Every Dashboard, Statistics (last full month and year to date), Consultation dashboard, ledger and Active List figure — the app's own value against an independent recomputation written from the metrics doc | **52 / 52 match** |
+| Every signed-in page, as a real user of each role present (Admin, Registrar, Consultant, Resident — production has no Observer account), through the full middleware stack | **148 requests: 0 server errors, 0 access-rule breaches, 0 writes** |
+| Page time on the real volume (17,435 patients, 37,662 episodes) | median 11 ms, 90% under 135 ms, slowest ordinary page 0.7 s (Statistics) — **except Patient Merge: 57–63 s** (defect 10) |
+| Data integrity: inverted dates, two open episodes for one patient, ages outside 0–150, drifted consultations, orphan diagnoses, outcomes outside Alive / Dead | all 0 |
+| Application log since the last deploy | 0 server errors, 0 CSP violations, 0 warnings |
+
+| Area | Rows | Pass | Failed, fixed now | Partial / by design | Not run |
+|---|---:|---:|---:|---:|---:|
+| Credential journeys (scripted) | 47 | 44 | 1 | 2 | 0 |
+| Functional leftovers | 21 | 20 | 1 | 0 | 0 |
+| Browser / non-functional | 15 | 10 | 3 | 1 | 1 |
+| Coverage-critic gaps (authorization, audit, downloads) | 14 | 14 | 0 | 0 | 0 |
+| Live site, public surface | 5 | 5 | 0 | 0 | 0 |
+| Production, read-only (figures + page loads) | 200 | 199 | 1 | 0 | 0 |
+
+The one "not run" row is NF-04 (Arabic / RTL): the app offers no language switch. "Partial / by
+design": AUTH-07 — closing the tab or the browser does not end the session by itself (the cookie lasts
+the session lifetime; the 30-minute idle timeout ends it; there is no "remember me") — the row is
+reworded, and whether shared ward computers should drop the session when the browser closes is left to
+the owner; the MFA challenge's 8-try cap is never reached because a stricter 5-per-minute limit trips first
+(AUTH-05 reworded); and NF-11 — the print styles were checked, paper printing needs a person.
+
+### Defects found in the second pass and fixed
+
+| # | Severity | Defect | Fix |
+|---|---|---|---|
+| 9 | Major | A discharge dated before the admission (medical, complete or ICU discharge), or a completion dated before the medical discharge, crashed with a server error: the database refused it, but the app had not checked first. Nothing was stored. The same gap existed in Modify (moving the admission date after a recorded discharge) | Each action and Modify now check the date order first — a field message, nothing written (the same day is allowed). Any database-rule violation that still slips through becomes a plain "not saved" message instead of a server error |
+| 10 | Major | Admin → Patient Merge took **57 s** on the real volume (a patient-to-patient comparison that no index could serve), over the 60 s limit for web requests, so on the live site the page could not open. Invisible on local data | The finder first picks the few candidate MRN / name keys, then compares only those rows: **116 ms** on production with identical results (14 pairs) |
+| 11 | Minor | Forgot-username never showed its confirmation after submitting | The confirmation is shown |
+| 12 | Minor | Light-mode grey help text (3.3:1) and teal link / step text (3.9:1) were below the WCAG AA 4.5:1 minimum | The grey text token is darkened in place (4.6–5.0:1); brand text uses the darker teal already used for text elsewhere; the contrast gate now covers both |
+| 13 | Minor | On phones and tablets the page title was clipped or squeezed out of the header (a fixed-height header whose right-hand controls never shrank) | The header grows with its content, the breadcrumb trail hides on phones, and the wide search box, "Live" chip and user name collapse to icons below 1280 px |
+| 14 | Minor | On phones and tablets the closed navigation drawer's links were still reachable with Tab (invisible links) | The closed drawer is out of the Tab order; opening it still moves focus in, and Escape returns it |
+
+Before shipping, the fixes went through an adversarial review (four independent reviewers, each finding
+re-checked by a separate skeptic). It confirmed three more issues in the fixes themselves, all fixed:
+the new duplicate finder had capped its candidate-key pass at 50, which could silently drop whole
+duplicate groups once there are more than 50 (the cap now applies only to the pair list, as before,
+in a stable order); the Modify date message could read "(today)" when both date rules failed; and the
+profile link lost its accessible name below 1280 px. A last axe pass also named the merge list's action
+column for screen readers.
+
+Doc corrections the second pass prompted: the "New" badge is a managed flag, not a 24-hour timer
+(CLAUDE.md, DATABASE-AND-BEHAVIOR.md, ADM-12); the same-day handover rule is a soft gate with a
+reminder, never a block (CLAUDE.md, ADM-11); AUTH-05 and AUTH-07 reworded to what the app does.
+
+### What still needs a person on the live site
+
+Everything above was proven either by automation on a copy or read-only on production. What remains
+genuinely needs a signed-in human with real devices:
+
+- **PRE-02 / AUTH-04, 08–11, 19–20, 34** — a real authenticator app on a real phone (enrol, sign in with
+  it, use one recovery code, step-up).
+- **PRE-03 / AUTH-13, 17, 25–27, CTL-09** — a real mailbox, which also proves the outgoing mail relay
+  delivers verification codes and reset links.
+- **PRE-07 / NF-01, NF-02, NF-11** — a real phone, a real tablet and a real printer.
+- **SMK-01 … 06 and one short pass per role** on the real data, by the people who will use it.
+- **The Go / No-Go table** — only the owner and clinicians can sign it.
+
+Test accounts for this are created by the testers themselves through the sign-up page (that is part of
+the test) and activated by an admin; deactivate them afterwards.
+
+## Not covered (after both passes)
+
+- Arabic / RTL layout (NF-04): the app has no language switch to test.
+- Everything in "What still needs a person on the live site" above.

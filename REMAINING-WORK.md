@@ -26,11 +26,18 @@ biggest live risk** (the original un-hardened build, on US hosting).
 
 - [ ] **Cut over from the legacy site to the Laravel app.** Set a date; run the UAT checklist
   (`laravel/docs/UAT-TEST-PLAN.md` — every row and the Go/No-Go table are still blank; a technical dry
-  run on a local copy passed on 2026-09-23 after eight fixes —
-  `laravel/docs/compliance/evidence/uat-dry-run-2026-09-23.md` — but it is not the clinical sign-off); plan staff
+  run passed on 2026-09-23 in two passes — a local copy for everything that changes data, read-only
+  checks on production for the figures and pages — after fourteen fixes; its "What still needs a person
+  on the live site" list is the short human pass: real phone authenticator, real mailbox, real
+  devices, one pass per role, and the Go/No-Go signature —
+  `laravel/docs/compliance/evidence/uat-dry-run-2026-09-23.md`); plan staff
   communication and training; get the legacy host's backup-retention/deletion terms; inventory what the
   legacy site leaks through its own logs, URLs and exports. *(B1–B3, G11, G15, R13–R15;
   `laravel/docs/compliance/CONFIRMED-FACTS.md`)*
+- [ ] **Plan the first sign-in day.** Almost no one has signed in to the new app yet: at their first
+  sign-in each person verifies their email, sets up an authenticator app and chooses a new password.
+  Two active accounts have no email address on file — add one (they cannot receive codes or reset
+  links). *(2026-09-23 read-only check)*
 - [ ] **Sign the controller–processor contract** between the hospital and the operating company — the top
   compliance action in every audit pass. *(A0/A5, G12, CMP-03)*
 - [ ] **Appoint a DPO.** The DPO charter and the privacy notices still carry `[DPO NAME]` placeholders.
@@ -59,7 +66,10 @@ biggest live risk** (the original un-hardened build, on US hosting).
 - [ ] **Commission an external penetration test.** *(SEC-09)*
 - [ ] **Decide on column encryption for names / MRNs / diagnosis codes** (trade-off: they stop being
   searchable/sortable in SQL). *(G3)*
-- [ ] **Decide `log_record_opens`** (record every chart open) and **who reviews the export/report audit
+- [ ] **Decide whether shared ward computers should end the session when the browser closes.** Today a
+  session survives closing the tab or browser until the 30-minute idle timeout (there is no "remember
+  me"); ending it on browser close is a one-setting change. *(2026-09-23 UAT, AUTH-07)*
+- [ ] **Decide `log_record_opens`** (record every chart open — now a switch in Control → Settings) and **who reviews the export/report audit
   rows**, how often. *(R6, R12)*
 - [ ] **Quarterly access review + joiner/leaver process** for both systems' accounts. *(R4, R11)*
 - [ ] **Host and account hygiene:** SSH source restriction (deferred by owner, G7); a recurring
@@ -71,7 +81,7 @@ biggest live risk** (the original un-hardened build, on US hosting).
 - [ ] **Rehearse the application half of a server loss** (install the deploy platform, rebuild the app
   from source, repoint DNS) — the remaining unknown in the recovery time. Needs another temporary
   instance and about an hour.
-- [ ] **Start tagging releases** (`vYYYY.MM.DD`) now that CI signs what it builds on a tag — the
+- [x] **Start tagging releases** (`vYYYY.MM.DD`) — done from 2026-09-22 (`v2026.09.22`, `v2026.09.23`); CI signs what it builds on a tag — the
   provenance only exists for tagged commits, so an untagged deploy has none. *(CICD-05, §F)*
 
 ## C. Hospital legal / DPO — the owner chases

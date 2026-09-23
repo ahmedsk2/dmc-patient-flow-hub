@@ -151,6 +151,15 @@ const PAIRS = [
     // Dashboard YTD strip micro-caption ("adm / disch non-ICU"): text-ink-300 measured 2.16:1 light /
     // 3.24:1 dark — both fail 4.5 at 10px. ink-500 is the lightest step clearing 4.5 in BOTH themes.
     ['ink-500 on card (YTD micro-caption, light)', '#5b6a6e', '#ffffff'],
+    // ink-400 is the muted TEXT step (311 call sites: captions, help text, table metadata). The 2026-09-23
+    // UAT's live axe pass found the old light value #7c8a8d at 3.28:1 on the app surface / 3.57:1 on
+    // cards; the token was darkened in place (same hue). No row covered it before, which is how it
+    // shipped — these four keep it honest in both themes. Brand TEXT uses brand-700 (rows above).
+    ['ink-400 muted text on app surface (light)', '#657174', '#f1f6f6'],
+    ['ink-400 muted text on card (light)', '#657174', '#ffffff'],
+    ['ink-400 muted text on app surface (dark)', '#8aa0a3', '#0c1416'],
+    ['ink-400 muted text on card (dark)', '#8aa0a3', '#13201f'],
+    ['(HISTORICAL) old light ink-400 on app surface', '#7c8a8d', '#f1f6f6', { known: '2026-09-23 UAT — the pre-fix muted-text value (3.28:1); kept as a canary' }],
     ['ink-500 on card (YTD micro-caption, dark)', '#a7bbbd', '#13201f'],
     // --- Prod-readiness brand-solid CTA sweep ---
     // The app-wide primary-button fill (Save/Assign/Search/"Stay signed in", active-pagination pills,

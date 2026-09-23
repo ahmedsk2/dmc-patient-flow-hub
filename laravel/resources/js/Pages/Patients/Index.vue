@@ -352,11 +352,11 @@ const closeModify = () => guardModify(() => { editing.value = null; });
                     Found <strong class="nums text-ink-700">{{ fallback.discharged }}</strong> discharged
                     <!-- SPC-TM-011: the term POSTs to the registry in the body -->
                     <button type="button" @click="router.post('/registry?mode=admissions&discharged=1', { search: fallback.search })"
-                        class="font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700">view →</button>
+                        class="font-semibold text-brand-700 underline underline-offset-2 hover:text-brand-800">view →</button>
                 </span>
                 <span v-if="fallback.unassigned">
                     / <strong class="nums text-ink-700">{{ fallback.unassigned }}</strong> awaiting assignment
-                    <Link href="/admissions" class="font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700">queue →</Link>
+                    <Link href="/admissions" class="font-semibold text-brand-700 underline underline-offset-2 hover:text-brand-800">queue →</Link>
                 </span>
             </p>
         </div>
@@ -393,7 +393,7 @@ const closeModify = () => guardModify(() => { editing.value = null; });
           </div>
         </div>
 
-        <div v-if="groups.length" class="mb-3 flex gap-3 text-xs font-semibold text-brand-600">
+        <div v-if="groups.length" class="mb-3 flex gap-3 text-xs font-semibold text-brand-700">
             <button @click="allOpen" class="hover:underline">Expand all</button>
             <button @click="allClosed" class="hover:underline">Collapse all</button>
         </div>

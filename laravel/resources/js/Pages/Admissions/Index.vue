@@ -155,7 +155,7 @@ const destroyAdmission = async (p) => {
                     <option value="">Select consultant…</option>
                     <option v-for="c in onServiceConsultants" :key="c.id" :value="c.id">{{ c.name }}</option>
                 </select>
-                <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="aForm.mark_new" class="rounded text-brand-600" /> Mark as new patient <span class="text-xs text-ink-400">(check to show the “New” badge)</span></label>
+                <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="aForm.mark_new" class="rounded text-brand-700" /> Mark as new patient <span class="text-xs text-ink-400">(check to show the “New” badge)</span></label>
                 <div class="flex justify-end gap-2">
                     <button type="button" @click="closeAssign" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button>
                     <button type="submit" :disabled="aForm.processing || !aForm.consultant_id" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Assign</button>

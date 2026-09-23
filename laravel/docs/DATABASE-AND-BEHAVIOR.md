@@ -82,7 +82,7 @@ A re-admission or a ward↔ICU transfer creates a **new** row, so one patient = 
 | `transfer_type` | varchar | `discharge from ward` / `discharge from ICU` / `other transfer` / `transfer to other speciality` / `Transfer from ICU`. |
 | `is_longterm`, `is_new_assignment` | bool | Long-term flag; sticky legacy "new" flag (set on assignment). |
 | `assigned_on` | date | When the consultant was assigned. |
-| `assigned_at` | timestamp | Precise assignment moment — drives the rolling 24-hour "New" badge (NULL on historical rows = not new). |
+| `assigned_at` | timestamp | Precise assignment moment (NULL on historical rows). It does **not** drive the "New" badge — that is the managed `is_new_assignment` flag (set on assign / handover / shuffle, cleared on discharge or reassign), re-checked at 23 h and 25 h by the 2026-09-23 UAT. |
 | `deleted_at` | timestamp | **Soft delete** (`2026_06_14_010001`) — the admin Delete action; recover from Recently Deleted. |
 | `legacy_id` | int | Maps to old `picupatients.ID`. |
 
@@ -313,6 +313,8 @@ queries in Dashboard/Statistics/Reports bypass the SoftDeletes global scope.
 | **Delete** (Admin, step-up) | DELETE `/admissions/{id}` | **Soft delete** — sets `deleted_at`; the audit row is written FIRST inside the transaction, and pending signatures are voided. Diagnoses are untouched (hidden with their parent). Recover from `/trashed`. → `admission.delete` |
 | **Shuffle / Bulk reassign** (toolbar) | POST `/admissions/shuffle` · `/admissions/reassign` | Shuffle (above); Bulk reassign UPDATEs `consultant_id` for the **selected subset** (`admission_ids[]`) of one consultant's active admissions, creating a signature + notification per moved patient and reminders for stale handovers. → `admission.bulk_reassign`, `handover.reassign_incomplete` |
 | **Active List** (printable census) | GET `/active-list` | Read only. Not audited (same posture as the consultation handover sheet). Lists **assigned** active patients only — it shares the board's query, which excludes unassigned admissions (they are on the New Admissions queue) — so its total is the dashboard census **minus** the queue. |
+
+> **Date order (since 2026-09-23).** Every discharge-type date is validated against the episode before anything is written: a medical discharge or ICU discharge may not precede `admit_date`, a completing discharge may not precede `admit_date` **or** `medical_discharge_date`, and Modify may not move `admit_date` after a discharge date already recorded on the episode (same-day is allowed). A breach is a field error on the form; nothing changes. These mirror the database CHECK constraints (`chk_discharge_gte_admit`, `chk_medical_discharge_gte_admit`, `chk_discharge_gte_medical`, `chk_age_range`), which stay as the last line of defence — and if one ever fires anyway, the app answers with a plain "not saved" message (JSON 422 for API callers) instead of a 500 (`bootstrap/app.php`).
 
 Every write above also **busts the dashboard heavy-tier cache** (below).
 

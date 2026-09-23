@@ -37,11 +37,11 @@ const generateAsync = () => router.get('/reports/monthly/pdf', { year: year.valu
             <header class="mb-6 flex items-start justify-between border-b-2 border-brand-600 pb-4">
                 <div>
                     <!-- h2, not h1: AppLayout already renders the page's single h1 (UX-03) -->
-                    <h2 class="text-2xl font-extrabold text-navy-900">DMC <span class="text-brand-600">Internal Medicine</span></h2>
+                    <h2 class="text-2xl font-extrabold text-navy-900">DMC <span class="text-brand-700">Internal Medicine</span></h2>
                     <p class="text-sm text-ink-500">Monthly Activity Report — {{ monthName }} {{ year }}</p>
                 </div>
                 <div class="text-right text-xs text-ink-400">
-                    <p>Eastern Health Cluster</p><p class="text-brand-600">تجمع الشرقية الصحي</p><p class="mt-1">Generated {{ generatedAt }}</p>
+                    <p>Eastern Health Cluster</p><p class="text-brand-700">تجمع الشرقية الصحي</p><p class="mt-1">Generated {{ generatedAt }}</p>
                 </div>
             </header>
 

@@ -229,10 +229,10 @@ const toggleExpand = (id) => {
                     <label class="flex items-center gap-1 text-xs text-ink-500"><input type="radio" value="and" v-model="f.dx_match" /> all</label>
                 </div>
                 <div class="flex flex-wrap items-center gap-4">
-                    <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.longterm" class="rounded text-brand-600" /> Long-term</label>
-                    <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.discharged" class="rounded text-brand-600" /> Discharged only</label>
-                    <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.tb" class="rounded text-brand-600" /> TB</label>
-                    <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.readmit72" class="rounded text-brand-600" /> {{ options.readmitWindow ?? 3 }}-day readmissions</label>
+                    <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.longterm" class="rounded text-brand-700" /> Long-term</label>
+                    <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.discharged" class="rounded text-brand-700" /> Discharged only</label>
+                    <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.tb" class="rounded text-brand-700" /> TB</label>
+                    <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.readmit72" class="rounded text-brand-700" /> {{ options.readmitWindow ?? 3 }}-day readmissions</label>
                     <button @click="apply" class="ms-auto rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover">Search</button>
                     <button @click="reset" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 hover:text-ink-700">Reset</button>
                     <template v-if="hasTerm">
@@ -264,7 +264,7 @@ const toggleExpand = (id) => {
                     </template>
                 </div>
                 <div class="flex flex-wrap items-center gap-4">
-                    <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.signed_only" class="rounded text-brand-600" /> Signed off only</label>
+                    <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.signed_only" class="rounded text-brand-700" /> Signed off only</label>
                     <button @click="apply" class="ms-auto rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover">Search</button>
                     <button @click="reset" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 hover:text-ink-700">Reset</button>
                     <template v-if="hasTerm">

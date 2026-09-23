@@ -206,7 +206,7 @@ const btn = 'rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opac
                     <th :class="th" scope="col">Patient A</th>
                     <th :class="th" scope="col">Patient B</th>
                     <th :class="th" scope="col">Why</th>
-                    <th :class="th" scope="col"></th>
+                    <th :class="th" scope="col"><span class="sr-only">Action</span></th>
                 </tr></thead>
                 <tbody class="divide-y divide-line">
                     <tr v-for="(d, i) in possibleDuplicates" :key="i">
