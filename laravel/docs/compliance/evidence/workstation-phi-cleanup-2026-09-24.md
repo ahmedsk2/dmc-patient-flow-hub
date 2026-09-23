@@ -19,15 +19,18 @@ from those, never from content.
 
 ## What was moved to the Recycle Bin (38 files, 165,744,759 bytes)
 
-**Action:** moved to the Windows Recycle Bin on 2026-09-24 (≈ 01:22 Riyadh) by Claude Code, on the
+**Action:** moved to the Windows Recycle Bin on 2026-09-24 (≈ 01:22 Riyadh) by Claude Code, then
+destroyed the same day when the owner emptied the bin (below), on the
 owner's instruction ("you may delete the files you want to delete"). Every file was hashed before the
 move; afterwards all 38 were confirmed present in the Recycle Bin and absent from their folders.
 
-**Not yet destroyed:** the Recycle Bin is reversible by design. **Permanent destruction is the owner's
-step — empty the Recycle Bin** — and record the date here: `[DATE EMPTIED]`. The bin also holds an
-older copy of that export, `dmc_laravel_export.sql` (18,626,097 bytes, deleted 2026-06-10), which the
-same step removes. (Emptying the bin frees the blocks; on an SSD the drive discards them via TRIM. Full-disk
-encryption is what makes any remnant unreadable — see REMAINING-WORK.)
+**Destroyed 2026-09-24 — the owner emptied the Recycle Bin** (permanent deletion was the owner's
+step; the Recycle Bin is reversible by design). The same step removed an older copy of that export,
+`dmc_laravel_export.sql` (18,626,097 bytes, deleted 2026-06-10). **Verified the same day** by Claude
+Code, metadata only: the Recycle Bin holds no items; none of the 38 files, nor the older copy, is in
+it; none is back in its original folder. (Emptying the bin frees the blocks; on an SSD the drive
+discards them via TRIM, which leaves no recoverable copy in normal use. Full-disk encryption is what
+makes any remnant unreadable — REMAINING-WORK.)
 
 Real patient data: rows 1–11 (legacy production dumps and exports, 2026-06 to 2026-08), 12–13 (the
 local Laravel export of 2026-07-13) and 16 and 23 (two app pages saved while the local copy held the

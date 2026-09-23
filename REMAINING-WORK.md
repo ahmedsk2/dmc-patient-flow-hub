@@ -44,13 +44,14 @@ biggest live risk** (the original un-hardened build, on US hosting).
   compliance action in every audit pass. *(A0/A5, G12, CMP-03)*
 - [ ] **Appoint a DPO.** The DPO charter and the privacy notices still carry `[DPO NAME]` placeholders.
   *(A6, G9, CMP-06; `laravel/docs/compliance/DPO.md`)*
-- [ ] **Empty your Recycle Bin — the last step of the workstation clean-up.** On 2026-09-24, on your
-  instruction, 38 DMC files (the legacy dumps and exports, the local Laravel export, saved app pages,
-  report renders and work files) were moved to the Recycle Bin, with an inventory of names, sizes,
-  dates and SHA-256 hashes in `laravel/docs/compliance/evidence/workstation-phi-cleanup-2026-09-24.md`.
-  Emptying the bin is the permanent step, and it also removes an older copy of the Laravel export
-  sitting there since June; then write the date into that file. Google Drive was left untouched, as you asked.
-  (The copies on the production host were shredded and re-checked 2026-09-22.) *(D1, G8, DATA-14)*
+- [x] **Workstation clean-up of the DMC exports** — done 2026-09-24: 38 DMC files (the legacy dumps and
+  exports, the local Laravel export, saved app pages, report renders and work files) were hashed and
+  moved to the Recycle Bin, and **you emptied the bin the same day** (verified: bin empty, nothing
+  restored), which also removed an older copy of the Laravel export from June. Inventory and dates in
+  `laravel/docs/compliance/evidence/workstation-phi-cleanup-2026-09-24.md`. Google Drive was left
+  untouched, as you asked. (The copies on the production host were shredded and re-checked
+  2026-09-22.) Still on the laptop: the WAMP databases and the old Coolify dumps (items below).
+  *(D1, G8, DATA-14)*
 - [ ] **Drop the real-data databases in WAMP on your laptop** — `dmc_laravel`, `dmc_prod` and `dmc`
   (together ≈ 170 MB) hold imports of the real legacy data, which CLAUDE.md says local development
   must never use; local work now runs on the Docker test database with demo data. Drop them in

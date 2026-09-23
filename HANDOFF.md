@@ -274,7 +274,7 @@
    stay Riyadh-only (DATA-02 closed by decision; the empty Jeddah bucket deleted). A read-only sweep of
    the owner's workstation (Google Drive excluded, as asked) moved **38 DMC files** to the Recycle Bin
    with a hashed inventory (`laravel/docs/compliance/evidence/workstation-phi-cleanup-2026-09-24.md`);
-   emptying the bin is the owner's. It also found, and left for the owner: real-data databases in the
+   the owner emptied the bin the same day (verified). It also found, and left for the owner: real-data databases in the
    laptop's WAMP, and the owner's daily local mirror of the `coolify-backups` bucket — which revealed
    that **Coolify's own backup writes unencrypted daily dumps of `dmc_demo` with no expiry**. Checking
    OCI for cross-region copies found none, but did surface the host's weekly boot-volume backups and
