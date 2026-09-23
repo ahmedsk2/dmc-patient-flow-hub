@@ -84,9 +84,9 @@ If any of these fail, stop and report — deeper testing is pointless until they
 | AUTH-02 | Sign in with a **wrong** password | Rejected with a generic error; **not** told whether the username exists | | |
 | AUTH-03 | Enter the wrong password repeatedly (~6+ times quickly) | After a few tries, further attempts are **rate-limited** ("too many attempts") | | |
 | AUTH-04 | At the MFA challenge, enter the **correct** 6-digit authenticator code | Signs in, lands on Dashboard | | |
-| AUTH-05 | At the MFA challenge, enter a **wrong** code several times | Rejected; after ~8 tries it stops accepting and sends you back to sign in | | |
+| AUTH-05 | At the MFA challenge, enter a **wrong** code several times | Rejected each time; the 6th try within a minute is refused ("too many attempts" — the 5-per-minute limit trips before the 8-attempt cap that would send you back to sign in) | | |
 | AUTH-06 | Confirm there is **no "Remember me"** option on the login page | Absent (persistent login is intentionally disabled) | | |
-| AUTH-07 | Sign in, close the tab **without** logging out, reopen the site | You are asked to sign in again (no persistent auto-login) | | |
+| AUTH-07 | Sign in, close the **browser** without logging out, wait past the idle timeout (30 min), reopen the site | You are asked to sign in again. (Closing only the tab, or reopening within the idle window, keeps the session — the idle timeout, not the cookie, ends it; there is no "remember me") | | |
 
 ### 1b. First-time MFA enrolment (existing user without MFA)
 
@@ -193,8 +193,8 @@ If any of these fail, stop and report — deeper testing is pointless until they
 | ADM-08 | **Assign** a queued patient to a consultant (with Can Assign) | Moves off the queue onto that consultant's active list | | |
 | ADM-09 | **Assign to me** as a consultant | Patient assigned to you | | |
 | ADM-10 | Run the **auto-assign / shuffle** (balancing) | Unassigned patients are distributed across consultants; result looks balanced; no error/debug text on screen | | |
-| ADM-11 | **Bulk change-consultant**: reassign several patients from consultant A to B | All move; a **handover preflight** warns about un-refreshed handovers first | | |
-| ADM-12 | Newly-assigned patient shows the **"New"** badge for ~24h | Badge present, then clears | | |
+| ADM-11 | **Bulk change-consultant**: reassign several patients from consultant A to B | All selected patients move; any whose handover was not updated today raise a persistent **"incomplete handover"** reminder (a soft gate — the move is never blocked) | | |
+| ADM-12 | Newly-assigned patient shows the **"New"** badge | Badge present until the patient is discharged or reassigned (a managed flag, not a 24-hour timer); a quiet administrative move with "Mark as new" unticked shows no badge | | |
 
 ---
 

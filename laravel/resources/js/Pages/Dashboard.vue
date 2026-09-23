@@ -424,7 +424,7 @@ onUnmounted(() => clearInterval(autoRefresh));
             </Link>
         </div>
         <div v-else-if="isConsultant && myUnit && !myToggle" class="mb-5">
-            <button @click="setMyToggle(true)" class="text-xs font-semibold text-brand-600 hover:underline">Show my patients →</button>
+            <button @click="setMyToggle(true)" class="text-xs font-semibold text-brand-700 hover:underline">Show my patients →</button>
         </div>
 
         <!-- KPI hero row (data-tour anchor for the onboarding tour, Item 10) -->
@@ -448,7 +448,7 @@ onUnmounted(() => clearInterval(autoRefresh));
                         <div v-if="chip(c) || c.spark?.length" class="mt-2 flex items-center gap-2">
                             <span v-if="chip(c)" class="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-bold" :class="chip(c).cls">{{ chip(c).label }}</span>
                             <div v-if="c.spark?.length" class="min-w-0 flex-1">
-                                <Sparkline :data="c.spark" :aria-label="`${c.label}, recent trend`" class="text-brand-600" />
+                                <Sparkline :data="c.spark" :aria-label="`${c.label}, recent trend`" class="text-brand-700" />
                             </div>
                         </div>
                     </div>
@@ -467,7 +467,7 @@ onUnmounted(() => clearInterval(autoRefresh));
                 <h2 class="font-semibold text-ink-700">Boarding patients
                     <span class="nums ms-2 rounded-full bg-tint-warning px-2 py-0.5 text-xs font-bold text-on-warning">{{ boardingCount }}</span>
                 </h2>
-                <button @click="goHref('/patients?view=boarding')" class="text-xs font-semibold text-brand-600 hover:underline">View board →</button>
+                <button @click="goHref('/patients?view=boarding')" class="text-xs font-semibold text-brand-700 hover:underline">View board →</button>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
@@ -581,7 +581,7 @@ onUnmounted(() => clearInterval(autoRefresh));
                 <div v-if="overloaded || underloaded" class="mt-3 flex items-center gap-3 text-xs">
                     <span v-if="overloaded" class="font-semibold text-on-danger">{{ overloaded }} over max</span>
                     <span v-if="underloaded" class="font-semibold text-on-warning">{{ underloaded }} below min</span>
-                    <button v-if="canShuffle" @click="goHref('/patients')" class="ms-auto font-semibold text-brand-600 hover:underline">
+                    <button v-if="canShuffle" @click="goHref('/patients')" class="ms-auto font-semibold text-brand-700 hover:underline">
                         Rebalance (Shuffle / Reassign) →
                     </button>
                 </div>

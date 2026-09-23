@@ -241,13 +241,13 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
                 <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Failed-login alert threshold</span><input v-model="sForm.failed_login_notify_threshold" type="number" min="0" max="50" :class="field" /><span class="mt-1 block text-xs text-ink-400">Notify admins after this many failed logins for one account in 10 minutes; 0 disables it.</span></label>
                 <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Data-quality LOS multiplier</span><input v-model="sForm.dq_los_multiplier" type="number" min="1" max="10" :class="field" /><span class="mt-1 block text-xs text-ink-400">Flag active non-long-term episodes with LOS &gt; Long&nbsp;LOS × this (default 2).</span></label>
                 <label class="block sm:col-span-2"><span class="mb-1 block text-sm font-semibold text-ink-700">Trusted-device window (hours)</span><input v-model="sForm.mfa_trusted_device_hours" type="number" min="0" max="720" :class="field" /><span class="mt-1 block text-xs text-ink-400">0 turns the trusted-device option off. Changing this does not shorten windows already granted.</span></label>
-                <label class="block sm:col-span-2"><span class="mb-1 flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" v-model="sForm.log_record_opens" class="rounded text-brand-600" /> Log every record and handover open</span><span class="mt-1 block text-xs text-ink-400">Records an audit entry every time a patient record or handover is opened, not just when it's changed — a break-glass access trail. Off by default; can generate a high volume of audit rows.</span></label>
+                <label class="block sm:col-span-2"><span class="mb-1 flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" v-model="sForm.log_record_opens" class="rounded text-brand-700" /> Log every record and handover open</span><span class="mt-1 block text-xs text-ink-400">Records an audit entry every time a patient record or handover is opened, not just when it's changed — a break-glass access trail. Off by default; can generate a high volume of audit rows.</span></label>
             </div>
 
             <!-- Consultation ledger cutover gate -->
             <h4 class="mb-1 mt-6 font-bold text-ink-800">Consultation ledger</h4>
             <div class="grid gap-4 sm:grid-cols-2">
-                <label class="block sm:col-span-2"><span class="mb-1 flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" :checked="sForm.consultations_source_of_truth" @change="onSourceOfTruthChange" class="rounded text-brand-600" /> Consultations: this system is the source of truth</span><span class="mt-1 block text-xs text-ink-400">When on, importing legacy data preserves the consultation ledger instead of rebuilding it. Turn this on at cutover. Turning it off allows the next legacy import to truncate and rebuild consultations, destroying every consultation entered here since cutover.</span></label>
+                <label class="block sm:col-span-2"><span class="mb-1 flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" :checked="sForm.consultations_source_of_truth" @change="onSourceOfTruthChange" class="rounded text-brand-700" /> Consultations: this system is the source of truth</span><span class="mt-1 block text-xs text-ink-400">When on, importing legacy data preserves the consultation ledger instead of rebuilding it. Turn this on at cutover. Turning it off allows the next legacy import to truncate and rebuild consultations, destroying every consultation entered here since cutover.</span></label>
             </div>
 
             <div class="mt-5 flex items-center gap-3">
@@ -383,8 +383,8 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
                 <h3 class="mb-3 font-bold text-ink-800">Specialties</h3>
                 <div class="mb-4 flex max-h-48 flex-wrap gap-2 overflow-auto"><span v-for="s in specialties" :key="s.id" class="rounded-full px-3 py-1 text-sm" :class="s.is_external ? 'bg-tint-accent text-on-accent' : 'bg-app text-ink-600'">{{ s.name }}<span v-if="s.is_external" class="ml-1 text-[10px] font-semibold uppercase">ext</span></span></div>
                 <form @submit.prevent="submitSpec" class="flex gap-2"><input v-model="specForm.name" :class="field" placeholder="New specialty" /><button :disabled="specForm.processing || !specForm.name" class="rounded-xl bg-brand-solid px-4 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Add</button></form>
-                <label class="mt-2 flex items-center gap-2 text-xs text-ink-500"><input type="checkbox" v-model="specForm.is_subspecialty" class="rounded text-brand-600" /> Subspecialty (uncheck for hospitalist)</label>
-                <label class="mt-1 flex items-center gap-2 text-xs text-ink-500"><input type="checkbox" v-model="specForm.is_external" class="rounded text-brand-600" /> External / allied service (transfer-out target only — not an internal specialty)</label>
+                <label class="mt-2 flex items-center gap-2 text-xs text-ink-500"><input type="checkbox" v-model="specForm.is_subspecialty" class="rounded text-brand-700" /> Subspecialty (uncheck for hospitalist)</label>
+                <label class="mt-1 flex items-center gap-2 text-xs text-ink-500"><input type="checkbox" v-model="specForm.is_external" class="rounded text-brand-700" /> External / allied service (transfer-out target only — not an internal specialty)</label>
             </div>
             <div class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <h3 class="mb-3 font-bold text-ink-800">Consultation indications</h3>
@@ -436,18 +436,18 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
                         <select v-model.number="uForm.role" :class="field"><option v-for="(label, id) in roles" :key="id" :value="Number(id)">{{ label }}</option></select>
                     </label>
                     <div class="flex items-center gap-4">
-                        <label class="flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" v-model="uForm.active" class="rounded text-brand-600" /> Active</label>
-                        <label class="flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" v-model="uForm.on_service" class="rounded text-brand-600" /> On service</label>
+                        <label class="flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" v-model="uForm.active" class="rounded text-brand-700" /> Active</label>
+                        <label class="flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" v-model="uForm.on_service" class="rounded text-brand-700" /> On service</label>
                     </div>
                     <label v-if="uForm.role === 3" class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Specialty</span>
                         <SearchableSelect v-model="uForm.specialty_id" :input-class="field" placeholder="—" :options="specialties.filter((x) => !x.is_external)" />
                     </label>
                     <div class="grid grid-cols-2 gap-2">
-                        <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_assign" class="rounded text-brand-600" /> Can assign</label>
-                        <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_add" class="rounded text-brand-600" /> Can add</label>
-                        <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_manage" class="rounded text-brand-600" /> Can manage</label>
-                        <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_modify" class="rounded text-brand-600" /> Can modify</label>
-                        <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_coordinate_consultations" class="rounded text-brand-600" /> Can coordinate consults</label>
+                        <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_assign" class="rounded text-brand-700" /> Can assign</label>
+                        <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_add" class="rounded text-brand-700" /> Can add</label>
+                        <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_manage" class="rounded text-brand-700" /> Can manage</label>
+                        <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_modify" class="rounded text-brand-700" /> Can modify</label>
+                        <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_coordinate_consultations" class="rounded text-brand-700" /> Can coordinate consults</label>
                     </div>
                 </div>
                 <div class="mt-6 flex items-center justify-end gap-2">

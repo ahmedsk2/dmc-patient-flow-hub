@@ -105,11 +105,11 @@ describe('opening and closing', () => {
         w.unmount();
     });
 
-    it('has a trigger for touch users at EVERY breakpoint (a compact one below sm)', () => {
+    it('has a trigger for touch users at EVERY breakpoint (a compact one below xl)', () => {
         const w = mountPalette();
         expect(w.find('[data-qj-trigger]').exists()).toBe(true);
         const mobile = w.get('[data-qj-trigger-mobile]');
-        expect(mobile.classes()).toContain('sm:hidden');
+        expect(mobile.classes()).toContain('xl:hidden');
         expect(mobile.attributes('aria-label')).toBeTruthy();
         w.unmount();
     });

@@ -188,8 +188,10 @@ writes: [`laravel/docs/DATABASE-AND-BEHAVIOR.md`](laravel/docs/DATABASE-AND-BEHA
 - `admissions` — one row per **episode**; a readmission or ward ↔ ICU transfer opens a new row.
   `consultant_id` NULL = unassigned. `medical_discharge_date` (phase 1) and `discharge_date`
   (phase 2; NULL = active). `discharge_to` is a destination, `outcome` is strictly Alive/Dead.
-  `transfer_type`, `current_location` (ER/Ward/ICU), `is_longterm`, `assigned_at` (drives the
-  24-hour "New" badge), `admitted_by` / `discharged_by` from the session. Soft-deleted.
+  `transfer_type`, `current_location` (ER/Ward/ICU), `is_longterm`, `is_new_assignment` (the board's
+  "New" badge — a managed flag set on assign / handover / shuffle and cleared on discharge or
+  reassign, **not** a 24-hour timer), `assigned_at` (the precise assignment moment),
+  `admitted_by` / `discharged_by` from the session. Soft-deleted.
 - `admission_diagnoses` — one ICD-10 row per diagnosis (unique per admission).
 - `consultations` — the ledger: `status` ∈ `new / active / ongoing / signed_off`, indication JSON,
   `to_service`, receiving `consultant_id`, `entered_by`, `signoff_date`, encrypted `response_note`.
@@ -249,9 +251,10 @@ Each flow names its controller; per-endpoint database effects are in DATABASE-AN
    `patients` upsert + new `admissions` row + diagnoses, consultant NULL → unassigned queue.
 2. **Assignment**: assign-to-primary, assign-to-me, or **shuffle** (`ShuffleService` balances
    unassigned patients across on-service consultants using the settings min/max pools). Bulk
-   reassign moves a selected subset of one consultant's patients and is gated by the **same-day
-   handover rule**: a patient may move to a different consultant only if their handover was updated
-   today (first assignments exempt).
+   reassign moves a selected subset of one consultant's patients under the **same-day handover
+   rule**, which is a *soft* gate: the move always proceeds, and a patient whose handover was not
+   updated today raises a persistent "incomplete handover" reminder (first assignments exempt;
+   HANDOVER-COMPLIANCE.md §2.2 / §4).
 3. **Board actions** (`PatientsController`, `PatientActionController`, `/patients`): modify,
    long-term toggle, ward ↔ ICU transfer (closes the episode and opens a new one in a transaction,
    bed and diagnoses carried), specialty transfer (external specialties close without reopening),
@@ -397,8 +400,8 @@ the same gates must be run locally per RELEASE-CHECKLIST.md. Since 2026-09-03 th
 PR (no path filter), plus a blocking Pint gate and Vitest coverage thresholds. The legacy `ci.yml` is
 a separate pipeline; never merge them.
 
-**Baselines (2026-09-23, after the walkthrough fixes):** PHPUnit 1044 tests (+92 in the `pdf` group), PHP
-statement coverage 88.1 % at the last CI measurement (floor 83), Vitest 820 on vitest 5 (floors lines 72, statements 66,
+**Baselines (2026-09-23, after the second UAT pass):** PHPUnit 1057 tests (+92 in the `pdf` group), PHP
+statement coverage 88.1 % at the last CI measurement (floor 83), Vitest 824 on vitest 5 (floors lines 72, statements 66,
 branches 62, functions 48 — re-baselined 2026-09-22 because vitest 5's AST-aware coverage counts
 different units than vitest 3, then raised the same day; see the history in `vitest.config.js`),
 ESLint zero warnings, Pint clean.
@@ -435,6 +438,14 @@ redirects the test. Run the isolated suite on a throwaway database to avoid race
   (no template compiler; CSP forbids `'unsafe-eval'` anyway), so such a component renders as an empty
   comment in production while Vitest, whose Vue has the compiler, passes. Use a `.vue` file;
   `resources/js/__tests__/noRuntimeTemplates.spec.js` enforces it (test mocks are exempt).
+- **Validate before a CHECK constraint can fire.** The admissions/patients CHECK constraints (date order,
+  age 0–150) are the backstop, not the validation: a write that reaches one used to be a 500. Mirror the
+  rule in the request/controller validation; `bootstrap/app.php` turns any MySQL 3819 that still slips
+  through into a "not saved" message (2026-09-23 UAT).
+- **Local data is ~470 patients; production is ~17k.** A self-join on a computed expression (CAST, LOWER)
+  was instant locally and took 57 s in production (the patient-merge duplicate finder, fixed 2026-09-23).
+  Find candidate keys with one grouped pass first, then join only those rows; measure anything
+  heavier than a keyed lookup against production volume read-only before shipping.
 - **Eloquent `encrypted` casts decrypt on `toArray()`**; use `$hidden` for anything that must not ship
   to the client (pattern: `Setting::$mail_password`).
 - **`Schema::hasTable` throws (not false) when the DB is unreachable** inside a boot-time provider;

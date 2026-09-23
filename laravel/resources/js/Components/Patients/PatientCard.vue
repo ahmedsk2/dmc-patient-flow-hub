@@ -62,7 +62,7 @@ const destroyAdmission = async () => {
 
 // presentational helpers (were inline in Index) — pure, patient-scoped.
 const fmtAt = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
-const handoverTone = computed(() => !props.patient.handover ? 'text-ink-300 hover:text-ink-500' : props.patient.handover.today ? 'text-brand-600 hover:text-brand-700' : 'text-on-warning hover:text-on-warning');
+const handoverTone = computed(() => !props.patient.handover ? 'text-ink-300 hover:text-ink-500' : props.patient.handover.today ? 'text-brand-700 hover:text-brand-800' : 'text-on-warning hover:text-on-warning');
 const handoverTitle = computed(() => props.patient.handover ? `Handover — last updated ${props.patient.handover.updated_by || '—'} ${fmtAt(props.patient.handover.updated_at)}` : 'No handover yet');
 const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b === 'long' ? 'bg-tint-danger text-on-danger' : 'bg-tint-warning text-on-warning';
 </script>

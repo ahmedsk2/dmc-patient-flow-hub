@@ -128,7 +128,7 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
                             </template>
                             <template v-else>
                                 <p class="whitespace-pre-wrap text-sm text-ink-600">{{ s.body || '—' }}</p>
-                                <button v-if="!s.signed_at && !s.voided_at" @click="startEdit(s)" class="mt-1 text-xs font-semibold text-brand-600 hover:underline">Update text</button>
+                                <button v-if="!s.signed_at && !s.voided_at" @click="startEdit(s)" class="mt-1 text-xs font-semibold text-brand-700 hover:underline">Update text</button>
                                 <p v-else-if="s.signed_at" class="mt-1 text-xs text-ink-400">Signed — text locked for this handover.</p>
                             </template>
                         </td>

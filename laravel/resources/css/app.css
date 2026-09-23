@@ -261,7 +261,10 @@
     --ink-100: #e3eaea;
     --ink-200: #cdd6d6;
     --ink-300: #a6b3b3;
-    --ink-400: #7c8a8d;
+    /* 2026-09-23 UAT (axe, WCAG 1.4.3): was #7c8a8d = 3.28:1 on the app surface and 3.57:1 on cards, and
+     * ink-400 is the muted TEXT step (311 call sites). Same hue, darker: 4.62:1 app / 5.04:1 card /
+     * 4.74:1 brand-50 (scripts/contrast.mjs). Dark ink-400 was already fine. */
+    --ink-400: #657174;
     --ink-500: #5b6a6e;
     --ink-600: #46555a;
     --ink-700: #344145;

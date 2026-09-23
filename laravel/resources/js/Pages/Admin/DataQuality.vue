@@ -54,7 +54,7 @@ const badge = (n) => `nums rounded-full px-2 py-0.5 text-xs font-bold ${n > 0 ? 
                     <thead><tr><th :class="th">MRN</th><th :class="th">Patient</th><th :class="th">LOS (d)</th><th :class="th">Admitted</th></tr></thead>
                     <tbody class="divide-y divide-line">
                         <tr v-for="r in overLos" :key="r.id">
-                            <td :class="[td, 'nums']"><Link :href="patientLink(r.id)" class="text-brand-600 hover:underline">{{ r.mrn }}</Link></td>
+                            <td :class="[td, 'nums']"><Link :href="patientLink(r.id)" class="text-brand-700 hover:underline">{{ r.mrn }}</Link></td>
                             <td :class="td">{{ r.name }}</td><td :class="[td, 'nums']">{{ r.los }}</td><td :class="[td, 'nums']">{{ when(r.admit_date) }}</td>
                         </tr>
                         <tr v-if="!overLos.length"><td :class="[td, 'text-on-success']" colspan="4">None.</td></tr>
@@ -73,7 +73,7 @@ const badge = (n) => `nums rounded-full px-2 py-0.5 text-xs font-bold ${n > 0 ? 
                     <thead><tr><th :class="th">MRN</th><th :class="th">Patient</th><th :class="th">Admitted</th></tr></thead>
                     <tbody class="divide-y divide-line">
                         <tr v-for="r in noDx" :key="r.id">
-                            <td :class="[td, 'nums']"><Link :href="patientLink(r.id)" class="text-brand-600 hover:underline">{{ r.mrn }}</Link></td>
+                            <td :class="[td, 'nums']"><Link :href="patientLink(r.id)" class="text-brand-700 hover:underline">{{ r.mrn }}</Link></td>
                             <td :class="td">{{ r.name }}</td><td :class="[td, 'nums']">{{ when(r.admit_date) }}</td>
                         </tr>
                         <tr v-if="!noDx.length"><td :class="[td, 'text-on-success']" colspan="3">None.</td></tr>
@@ -92,7 +92,7 @@ const badge = (n) => `nums rounded-full px-2 py-0.5 text-xs font-bold ${n > 0 ? 
                     <thead><tr><th :class="th">MRN</th><th :class="th">Patient</th><th :class="th">Admit</th><th :class="th">Discharge</th></tr></thead>
                     <tbody class="divide-y divide-line">
                         <tr v-for="r in badDates" :key="r.id">
-                            <td :class="[td, 'nums']"><Link :href="patientLink(r.id)" class="text-brand-600 hover:underline">{{ r.mrn }}</Link></td>
+                            <td :class="[td, 'nums']"><Link :href="patientLink(r.id)" class="text-brand-700 hover:underline">{{ r.mrn }}</Link></td>
                             <td :class="td">{{ r.name }}</td><td :class="[td, 'nums']">{{ when(r.admit_date) }}</td><td :class="[td, 'nums']">{{ when(r.discharge_date) }}</td>
                         </tr>
                         <tr v-if="!badDates.length"><td :class="[td, 'text-on-success']" colspan="4">None.</td></tr>
@@ -111,7 +111,7 @@ const badge = (n) => `nums rounded-full px-2 py-0.5 text-xs font-bold ${n > 0 ? 
                     <thead><tr><th :class="th">MRN</th><th :class="th">Patient</th><th :class="th">Code</th></tr></thead>
                     <tbody class="divide-y divide-line">
                         <tr v-for="(r, i) in orphanDx" :key="i">
-                            <td :class="[td, 'nums']"><Link :href="patientLink(r.id)" class="text-brand-600 hover:underline">{{ r.mrn }}</Link></td>
+                            <td :class="[td, 'nums']"><Link :href="patientLink(r.id)" class="text-brand-700 hover:underline">{{ r.mrn }}</Link></td>
                             <td :class="td">{{ r.name }}</td><td :class="[td, 'nums']">{{ r.icd10_code }}</td>
                         </tr>
                         <tr v-if="!orphanDx.length"><td :class="[td, 'text-on-success']" colspan="3">None.</td></tr>
@@ -130,7 +130,7 @@ const badge = (n) => `nums rounded-full px-2 py-0.5 text-xs font-bold ${n > 0 ? 
                     <thead><tr><th :class="th">MRN</th><th :class="th">Patient</th><th :class="th">Open episodes</th></tr></thead>
                     <tbody class="divide-y divide-line">
                         <tr v-for="(r, i) in doubleOpen" :key="i">
-                            <td :class="[td, 'nums']"><Link :href="patientLink(r.id)" class="text-brand-600 hover:underline">{{ r.mrn }}</Link></td>
+                            <td :class="[td, 'nums']"><Link :href="patientLink(r.id)" class="text-brand-700 hover:underline">{{ r.mrn }}</Link></td>
                             <td :class="td">{{ r.name }}</td><td :class="[td, 'nums']">{{ r.open_episodes }}</td>
                         </tr>
                         <tr v-if="!doubleOpen.length"><td :class="[td, 'text-on-success']" colspan="3">None.</td></tr>

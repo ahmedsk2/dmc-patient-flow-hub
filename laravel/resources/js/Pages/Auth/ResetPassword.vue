@@ -32,7 +32,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-4 py-2.5 text-sm outli
                 <div><label :for="fid('password_confirmation')" class="mb-1 block text-sm font-semibold text-ink-700">Confirm password</label><input :id="fid('password_confirmation')" v-model="form.password_confirmation" type="password" :class="field" /></div>
                 <button type="submit" :disabled="form.processing || pwTooWeak" class="w-full rounded-xl bg-gradient-to-r from-brand-500 to-brand-700 px-4 py-3 font-semibold text-white shadow-lg shadow-brand-900/20 transition hover:from-brand-600 hover:to-brand-800 disabled:opacity-60">{{ form.processing ? 'Saving…' : 'Reset password' }}</button>
             </form>
-            <p class="mt-6 text-center text-xs text-ink-400"><Link href="/login" class="font-semibold text-brand-600 hover:text-brand-700">Back to sign in</Link></p>
+            <p class="mt-6 text-center text-xs text-ink-400"><Link href="/login" class="font-semibold text-brand-700 hover:text-brand-800">Back to sign in</Link></p>
         </div>
     </div>
 </template>

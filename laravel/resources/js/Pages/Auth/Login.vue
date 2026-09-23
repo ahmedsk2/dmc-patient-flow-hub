@@ -84,7 +84,7 @@ const flash = computed(() => usePage().props.flash);
                 </form>
 
                 <div class="mt-6 flex items-center justify-between text-sm">
-                    <Link href="/register" class="font-semibold text-brand-600 hover:text-brand-700">Create account</Link>
+                    <Link href="/register" class="font-semibold text-brand-700 hover:text-brand-800">Create account</Link>
                     <div class="flex flex-col items-end gap-1">
                         <Link href="/forgot-password" class="font-semibold text-ink-500 hover:text-ink-700">Forgot password?</Link>
                         <Link href="/forgot-username" class="font-semibold text-ink-500 hover:text-ink-700">Forgot username?</Link>

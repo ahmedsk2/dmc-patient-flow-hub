@@ -48,10 +48,29 @@ class PatientMergeController extends Controller
      */
     private function possibleDuplicates(): array
     {
+        // Scale (2026-09-23 UAT): both pair queries self-join `patients` ON a computed expression
+        // (CAST(mrn), LOWER(name)) that no index can serve — on the production volume (~17k patients)
+        // that was ~300M row pairs and the page took over a minute, past the 60 s web SELECT cap.
+        // Each heuristic now first finds its candidate KEYS in one grouped pass, and the unchanged
+        // pair query is restricted to rows carrying those keys on both sides — same pairs, same
+        // collation semantics, a tiny join. The key pass is NOT capped (a grouped scan is cheap, and a
+        // cap there would silently drop whole duplicate groups); only the pair lists keep their 50.
+        $mrnKeys = DB::table('patients')->whereNull('deleted_at')
+            ->whereRaw('CAST(mrn AS UNSIGNED) > 0')
+            ->selectRaw('CAST(mrn AS UNSIGNED) k')
+            ->groupBy('k')->havingRaw('COUNT(DISTINCT mrn) > 1')
+            ->pluck('k')->all();
+        $nameKeys = DB::table('patients')->whereNull('deleted_at')
+            ->whereNotNull('name')->where('name', '<>', '')
+            ->selectRaw('LOWER(name) k')
+            ->groupBy('k')
+            ->havingRaw("SUM(mrn LIKE 'NOMRN-%') > 0 AND SUM(mrn NOT LIKE 'NOMRN-%') > 0")
+            ->pluck('k')->all();
+
         // 1. Normalised-MRN pairs. CAST(... AS UNSIGNED) strips leading zeros and non-digit noise in
         // MySQL; require the digits-only form to be non-empty (>0) so two blank/non-digit MRNs do not
         // all collapse onto 0 and pair with each other.
-        $normalized = DB::table('patients as p1')
+        $normalized = $mrnKeys === [] ? collect() : DB::table('patients as p1')
             ->join('patients as p2', function ($j) {
                 $j->on(DB::raw('CAST(p1.mrn AS UNSIGNED)'), '=', DB::raw('CAST(p2.mrn AS UNSIGNED)'))
                     ->whereColumn('p1.id', '<', 'p2.id');
@@ -60,11 +79,14 @@ class PatientMergeController extends Controller
             ->whereRaw('CAST(p1.mrn AS UNSIGNED) > 0')
             // …but a literally-identical MRN is the unique-constraint case, not a dedup candidate
             ->whereColumn('p1.mrn', '<>', 'p2.mrn')
+            ->whereIn(DB::raw('CAST(p1.mrn AS UNSIGNED)'), $mrnKeys)
+            ->whereIn(DB::raw('CAST(p2.mrn AS UNSIGNED)'), $mrnKeys)
             ->selectRaw("p1.id id1, p1.mrn mrn1, p1.name name1, p2.id id2, p2.mrn mrn2, p2.name name2, 'normalized-mrn' reason")
+            ->orderBy('p1.id')->orderBy('p2.id')
             ->limit(50)->get();
 
         // 2. NOMRN placeholder ~ real patient by exact (case-insensitive) name.
-        $nomrn = DB::table('patients as ph')
+        $nomrn = $nameKeys === [] ? collect() : DB::table('patients as ph')
             ->join('patients as real', function ($j) {
                 $j->on(DB::raw('LOWER(ph.name)'), '=', DB::raw('LOWER(real.name)'))
                     ->whereColumn('ph.id', '<>', 'real.id');
@@ -73,7 +95,10 @@ class PatientMergeController extends Controller
             ->where('ph.mrn', 'like', 'NOMRN-%')
             ->where('real.mrn', 'not like', 'NOMRN-%')
             ->whereNotNull('ph.name')->where('ph.name', '<>', '')
+            ->whereIn(DB::raw('LOWER(ph.name)'), $nameKeys)
+            ->whereIn(DB::raw('LOWER(real.name)'), $nameKeys)
             ->selectRaw("ph.id id1, ph.mrn mrn1, ph.name name1, real.id id2, real.mrn mrn2, real.name name2, 'nomrn-name-match' reason")
+            ->orderBy('ph.id')->orderBy('real.id')
             ->limit(50)->get();
 
         // de-dup the union on the unordered id-pair (a pair can match both heuristics)

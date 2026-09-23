@@ -206,17 +206,18 @@ const chipStatus = (row) => (row.deceased ? 'deceased' : (row.status || ''));
     <div class="relative" data-tour="quick-jump">
         <button ref="trigger" type="button" data-qj-trigger @click="focusInput"
             title="Search patients & commands (/ or Ctrl+K)" aria-label="Search patients and commands"
-            class="hidden items-center gap-2 rounded-xl border border-line bg-card px-3 py-1.5 text-sm text-ink-400 shadow-sm transition hover:border-brand-400 hover:text-ink-600 sm:flex">
+            class="hidden items-center gap-2 rounded-xl border border-line bg-card px-3 py-1.5 text-sm text-ink-400 shadow-sm transition hover:border-brand-400 hover:text-ink-600 xl:flex">
             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" />
             </svg>
             <span>Search patient…</span>
             <kbd class="rounded bg-ink-100 px-1.5 py-0.5 text-[10px] font-bold text-ink-500">Ctrl K</kbd>
         </button>
-        <!-- compact trigger so touch users can reach the palette below the sm breakpoint -->
+        <!-- compact trigger below xl: phones, and the tablet / docked-sidebar widths where the wide box
+             squeezed the page title out of the header (2026-09-23 UAT, NF-02) -->
         <button type="button" data-qj-trigger-mobile @click="focusInput"
             aria-label="Search patients and commands (Ctrl+K)" title="Search patients & commands (Ctrl+K)"
-            class="grid h-9 w-9 coarse:h-10 coarse:w-10 place-items-center rounded-full text-ink-400 transition hover:bg-ink-50 hover:text-ink-700 sm:hidden">
+            class="grid h-9 w-9 coarse:h-10 coarse:w-10 place-items-center rounded-full text-ink-400 transition hover:bg-ink-50 hover:text-ink-700 xl:hidden">
             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" />
             </svg>

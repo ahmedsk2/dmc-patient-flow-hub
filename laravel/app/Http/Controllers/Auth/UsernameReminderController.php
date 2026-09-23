@@ -24,7 +24,7 @@ class UsernameReminderController extends Controller
 
     public function request(): Response
     {
-        return Inertia::render('Auth/ForgotUsername');
+        return Inertia::render('Auth/ForgotUsername', ['status' => session('status')]);
     }
 
     public function email(Request $request): RedirectResponse

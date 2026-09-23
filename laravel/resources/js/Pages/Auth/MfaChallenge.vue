@@ -34,7 +34,7 @@ const submit = () => form.post('/mfa/challenge', { onFinish: () => form.reset('c
                 <div v-if="props.trustedDeviceHours > 0" class="mt-4">
                     <div class="flex items-start gap-2.5">
                         <input id="trust_device" v-model="form.trust_device" type="checkbox"
-                            class="mt-0.5 h-4 w-4 shrink-0 rounded border-ink-200 text-brand-600 focus:ring-2 focus:ring-brand-500/20" />
+                            class="mt-0.5 h-4 w-4 shrink-0 rounded border-ink-200 text-brand-700 focus:ring-2 focus:ring-brand-500/20" />
                         <label for="trust_device" class="text-sm text-ink-700">Don't ask for a code on this device for the next {{ props.trustedDeviceHours }} hours.</label>
                     </div>
                     <p class="mt-1 pl-6 text-xs text-ink-400">Leave this unticked on a shared or ward computer.</p>
@@ -44,7 +44,7 @@ const submit = () => form.post('/mfa/challenge', { onFinish: () => form.reset('c
                     class="mt-4 w-full rounded-xl bg-gradient-to-r from-brand-500 to-brand-700 px-4 py-3 font-semibold text-white shadow-lg shadow-brand-900/20 transition hover:from-brand-600 hover:to-brand-800 disabled:opacity-60">
                     {{ form.processing ? 'Verifying…' : 'Verify' }}
                 </button>
-                <button type="button" @click="recovery = !recovery; form.reset('code')" class="mt-3 w-full text-center text-xs font-semibold text-brand-600 hover:text-brand-700">
+                <button type="button" @click="recovery = !recovery; form.reset('code')" class="mt-3 w-full text-center text-xs font-semibold text-brand-700 hover:text-brand-800">
                     {{ recovery ? 'Use an authenticator code instead' : 'Use a recovery code instead' }}
                 </button>
             </form>

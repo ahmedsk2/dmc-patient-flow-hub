@@ -60,7 +60,7 @@ const aria = (suffix) => (props.label ? `${suffix} for ${props.label}` : suffix)
         <!-- full: labelled controls with room to breathe -->
         <div v-else class="mb-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm text-ink-600 sm:grid-cols-3">
             <label v-for="f in CHECKPOINT_FIELDS" :key="f.key" class="flex items-center gap-2">
-                <input type="checkbox" class="rounded text-brand-600" :checked="cp[f.key]" @change="toggle(f.key)" />
+                <input type="checkbox" class="rounded text-brand-700" :checked="cp[f.key]" @change="toggle(f.key)" />
                 {{ f.label }}
             </label>
             <label class="flex items-center gap-2">Code status
@@ -77,7 +77,7 @@ const aria = (suffix) => (props.label ? `${suffix} for ${props.label}` : suffix)
                   class="w-full rounded-xl border border-ink-200 bg-card px-3 py-2 text-sm outline-none focus:border-brand-500"></textarea>
 
         <details v-if="density === 'full' && revisions.length" class="mt-2">
-            <summary class="cursor-pointer text-xs font-semibold text-brand-600">History ({{ revisions.length }})</summary>
+            <summary class="cursor-pointer text-xs font-semibold text-brand-700">History ({{ revisions.length }})</summary>
             <ul class="mt-1 space-y-1">
                 <li v-for="(r, i) in revisions" :key="i" class="rounded-lg bg-app/70 px-2 py-1 text-xs text-ink-600">
                     <span class="font-semibold">{{ r.author || '—' }}</span> · {{ fmtAt(r.at) }}

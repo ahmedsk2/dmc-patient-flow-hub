@@ -8,6 +8,7 @@ use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\RequireStepUp;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SessionTimeout;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -79,4 +80,20 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
         );
+
+        // A MySQL CHECK constraint (error 3819: out-of-order admission/discharge dates, age outside
+        // 0-150) refused a write, which means request validation missed an impossible value. The
+        // transaction has already rolled back, so nothing was stored: answer with a plain message
+        // instead of a 500. The exception is still reported, so the validation gap shows in the log.
+        // (2026-09-23 UAT, NEG-03 — the discharge actions now validate first; this is the backstop.)
+        $exceptions->render(function (QueryException $e, Request $request) {
+            if ((int) ($e->errorInfo[1] ?? 0) !== 3819) {
+                return null;
+            }
+            $message = 'That change was not saved: a date or value is out of order (for example a discharge before the admission). Please check it and try again.';
+
+            return $request->expectsJson() && ! $request->header('X-Inertia')
+                ? response()->json(['message' => $message], 422)
+                : back()->with('flash', ['type' => 'error', 'message' => $message]);
+        });
     })->create();

@@ -7,6 +7,7 @@ use App\Mail\UsernameReminderMail;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
+use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
 /**
@@ -110,5 +111,18 @@ class UsernameReminderTest extends TestCase
         }
         // throttle:auth = 5/min → the 6th attempt within the minute is blocked
         $this->assertSame(429, $statuses[5], 'forgot-username should be throttled after 5 attempts');
+    }
+
+    /** 2026-09-23 UAT: the page never showed the confirmation — request() did not pass `status` on. */
+    public function test_the_page_shows_the_generic_confirmation_after_a_submit(): void
+    {
+        Mail::fake();
+        $this->from('/forgot-username')->post('/forgot-username', ['email' => 'nobody-'.uniqid().'@example.test'])
+            ->assertRedirect('/forgot-username');
+
+        $this->get('/forgot-username')->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('Auth/ForgotUsername')
+                ->where('status', UsernameReminderController::GENERIC_MESSAGE));
     }
 }

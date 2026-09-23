@@ -255,7 +255,7 @@ defineExpose({
             <ErrorSummary :errors="modeErrors" />
             <form v-if="mode === 'assign'" @submit.prevent="changingConsultant ? submitWithHandoverGuard(submitAssign, aForm) : submitAssign()" class="space-y-4">
                 <div><label :for="fid('consultant_id')" class="sr-only">Consultant</label><SearchableSelect :id="fid('consultant_id')" v-model="aForm.consultant_id" title="On-service consultants only" :aria-describedby="aForm.errors.consultant_id ? fid('consultant_id') + '-err' : undefined" input-class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" placeholder="Select consultant…" :options="assignConsultantsLabelled" /><p v-if="aForm.errors.consultant_id" :id="fid('consultant_id') + '-err'" class="mt-1 text-xs text-on-danger">{{ aForm.errors.consultant_id }}</p></div>
-                <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="aForm.mark_new" class="rounded text-brand-600" /> Mark as new patient <span class="text-xs text-ink-400">(uncheck for a quiet administrative move — no “New” badge)</span></label>
+                <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="aForm.mark_new" class="rounded text-brand-700" /> Mark as new patient <span class="text-xs text-ink-400">(uncheck for a quiet administrative move — no “New” badge)</span></label>
                 <!-- proactive handover panel (HC-T6): appears the moment the picked consultant differs
                      from the current one — never a reaction to a rejected submit -->
                 <div v-if="changingConsultant" class="rounded-xl bg-app/60 p-3 ring-1 ring-line">
