@@ -366,7 +366,7 @@ worse than an extra hour of downtime.
    clinicians will need to re-enter admissions/discharges/consultations from that window.
 9. Run `php artisan backup:verify` and a fresh `db-backup.py` so the next night starts clean.
 
-### 5.1 Whole-server loss (RES-09) — **data half rehearsed 2026-09-22**
+### 5.1 Whole-server loss (RES-09) — **data half rehearsed 2026-09-22, application half 2026-09-23**
 
 > **Status.** The **data** half of this procedure was rehearsed end to end on 2026-09-22 against a
 > throwaway OCI instance (§8's drill log has the row). Measured, on a 2-OCPU/12 GB Ampere instance in
@@ -378,10 +378,15 @@ worse than an extra hour of downtime.
 > recovered range (same SHA-256 over `id:row_hash`), with 17,435 patients / 37,662 admissions / 331
 > users restored.
 >
-> **The application half was NOT rehearsed**: installing Coolify, rebuilding the app image from
-> source and repointing DNS. Those are the steps that would dominate a real RTO, so treat the
-> end-to-end figure as **still unmeasured** — what is measured is that the data comes back, fast, from
-> the off-box archive alone.
+> **The application half was rehearsed on 2026-09-23** on another throwaway instance (§8's drill log):
+> launch → SSH **64 s**, Docker + Coolify 4.1.2 installed **130 s**, the app recreated through
+> Coolify's API and built from source **214 s**, `/health` ok once the scheduler ran. With the data
+> half that is roughly **12 minutes of machine time** from nothing to a serving app, plus operator
+> time. It found two defects in this procedure, fixed below (step 2): the first deploy onto an empty
+> database can never pass its health check, and production depends on an undocumented Nixpacks
+> setting without which the container never starts. **Still not exercised: the DNS repoint** (the
+> production record was deliberately left alone); a proxied Cloudflare record normally takes effect
+> in seconds.
 >
 > Three defects in this very procedure were found by rehearsing it, and are fixed below: the PITR
 > tools image could not be built at all (its pinned MySQL version had gone stale), the replay had no
@@ -402,7 +407,17 @@ holds outside the host (below).
    (`DEPLOY-LARAVEL.md` §9 step 1). Firewall 80/443 to **Cloudflare's published ranges only** — never
    `0.0.0.0/0` — and SSH key-only (§0's topology note: the origin talks to nothing else).
 2. **Recreate the Coolify application.** Source = the GitHub repo, branch `main`, Nixpacks, base
-   directory `laravel/` (`DEPLOY-LARAVEL.md` §9 step 2). This is a **new** Coolify application with a
+   directory `laravel/` (`DEPLOY-LARAVEL.md` §9 step 2). Match production exactly (read off the live
+   application 2026-09-23): exposed port **8000**, health check **`/login`**, post-deployment command
+   `php artisan migrate --force`, and three Nixpacks variables set for build **and** runtime —
+   `NIXPACKS_NODE_VERSION=22`, `NIXPACKS_PHP_ROOT_DIR=/app/public` and
+   **`NIXPACKS_PHP_FALLBACK_PATH=` (present, empty)**. Without the empty fallback path Nixpacks writes
+   a second `location /` into nginx's config (`duplicate location "/"`), nginx refuses to start and
+   every deploy rolls back (found by the 2026-09-23 rehearsal). **Restore the database (step 5)
+   before the first deploy**: `/login` needs the `sessions` table, and migrations only run after a
+   deploy's health check has passed, so a first deploy onto an empty database can never succeed.
+   On a genuinely empty database (a new environment), run `php artisan migrate --force` once from a
+   one-off container of the built image first. This is a **new** Coolify application with a
    **new** uuid — every runbook line that names `v5d8vrnp418stpcwnup3yhta` (host-lookup-by-label in
    `dmc-schedule.sh`, the rollback script, the API examples) needs the new uuid substituted in. As
    soon as the container exists, **freeze it** (`php artisan down` inside it, same as §5 step 1) and
@@ -518,6 +533,22 @@ records-retention / privacy officer (PDPL + MOH health-record retention rules ap
 minuted, treat 90 days as a placeholder, not a decision. Bucket versioning, if enabled, also needs a
 retention decision.
 
+**Writer key cannot delete (since 2026-09-23).** The key the scripts and the app use can **create,
+overwrite, read and list — but not delete** (IAM policy `dmc-audit-writers-policy`, tightened
+2026-09-23 and proven with a refused DELETE); expiry is the bucket's own 90-day lifecycle rule. A
+stolen key can add junk but cannot wipe the backups.
+
+**Second-region copy — attempted 2026-09-23, blocked by the tenancy's own residency control.** The
+plan was to replicate `dmc-db-backups` to a bucket in **`me-jeddah-1`** (the other Saudi OCI region,
+still in-Kingdom). The tenancy was subscribed to `me-jeddah-1` (OCI subscriptions cannot be undone) and
+an empty, private bucket `dmc-db-backups-jed` was created there, but seeding it failed with
+`StorageQuotaExceeded`: the tenancy quota policy **`ksa-data-residency`** (created 2026-08-08) sets
+every data-bearing service's quota to zero `where request.region != me-riyadh-1` — Jeddah included —
+and its own description says to lift it only by a deliberate decision. **No replication policy was
+created; there is no second copy today.** Enabling it is an owner decision: amend that quota to allow
+object storage in `me-jeddah-1` only (and record it), then seed and switch on replication; or keep
+the quota and delete the empty bucket.
+
 **Measured bucket volume (2026-09-22, `db-backup.py`/`binlog-ship.py`'s own log lines on the
 host — hourly rotation has been running since 2026-09-04, §10.2).** Nightly dumps run about
 **2.3 MB each**; hourly binlog shipping produces 24 objects/day totalling about **4.8 MB/day**
@@ -575,6 +606,10 @@ Add one row per drill (monthly) and per real restore. This table *is* the eviden
 | 2026-09-22 11:14 | Claude Code (on the owner's instruction) | PITR rehearsal, same inputs, re-run with the script switched to the **exact** documented step-3 command (tools container, work dir mounted read-only) | — | 7 base (incl. download) + 27 replay | 50 | 17435 / 37662 / — / 0 | PASS — identical result (853 → 861 = 861 live, chain intact). Throwaway server, its volume, the network and the work dir all gone afterwards (volumes 21 → 21, containers 30 → 30) |
 | 2026-09-22 19:26 | Claude Code (on the owner's instruction) | PITR rehearsal on the **exact recorded position**: base db-backups/dmc_demo/2026/09/dmc_demo-2026-09-22T192313Z.sql.gz.enc (the first dump taken with `--source-data=2`) + binlog.000448, replayed from `--start-position=524989` to 19:26:00 | — | 7 base + 1 replay | 21 | 17435 / 37662 / — / 0 | PASS — the dump's own coordinate was read out of the encrypted copy in a pipe and used instead of a timestamp guess; 107 events applied; recovered `audit_log` 870 = the 870 live rows before the stop time; chain intact. The audit trail itself did not move (a quiet evening window, legitimate while this app is not the daily system) — which is why the script now also counts the events the replay carried |
 | 2026-09-22 20:04–20:19 | Claude Code (owner-approved) | **Whole-server-loss rehearsal (RES-09, §5.1)** — a throwaway 2-OCPU/12 GB instance in me-riyadh-1, recovered from the off-box archive alone (base dump dmc_demo-2026-09-22T192313Z + shipped binlogs from the dump's own coordinate) | — | 8 restore + 4 replay (75 s to SSH, 33 s Docker/tooling, 45 s MySQL, 11 s tools image) | ≈180 s of machine time | 17435 / 37662 / 331 / 0 | **PASS for the data half.** Recovered `audit_log` digest over rows 1–870 identical to production's (`e2cbaeaa…b31a6a`); production had one newer row — the active binary log that a real loss takes with the host, i.e. the ≤ 1 h RPO. **Found and fixed three defects in the procedure**: the PITR tools image could not build (stale version pin), the replay had no inventory once the shipper's state file died with the host (added `db-backup.py --list-objects`), and that listing was truncated by the client's 64 KB body cap. **Not rehearsed:** Coolify install, app image rebuild, DNS repoint. Instance terminated with its boot volume; production untouched throughout |
+| 2026-09-23 19:58 | Claude Code (on the owner's instruction) | db-backups/dmc_demo/2026/09/dmc_demo-2026-09-23T193634Z.sql.gz.enc (the pre-deploy dump for `4bd5bba`) | 0 | 6 | 6 | 17435 / 37662 / 331 / 0 | DRILL OK — monthly drill; the restored copy was identical to live, `audit_log` 895 = 895 |
+| 2026-09-23 20:00 | Claude Code (on the owner's instruction) | **PITR rehearsal (quarterly)**: base db-backups/dmc_demo/2026/09/dmc_demo-2026-09-23T021501Z.sql.gz.enc + binlog.000456–000473, replayed 02:15:01 → 19:30:00 into a throwaway server (`pitr-rehearsal.sh`) | — | 8 base + 59 replay | 87 | 17435 / 37662 / — / 0 | PASS — 82,869 binlog events carried (a full working day, incl. three deploys); `audit_log` 878 → 895 = exactly the 895 live rows before the stop; chain intact; throwaway server, volume and work dir removed. The PITR tools image was **not** on the host (it had only been built on the 2026-09-22 throwaway instance) — rebuilt from `pitr-tools.Dockerfile` first; §10.2 already says to build it where you replay |
+| 2026-09-23 20:11 | Claude Code (on the owner's instruction) | **Cutover reload rehearsal** (DEPLOY-LARAVEL §8, keep-MFA path): the latest dump restored into a throwaway database on the production server, `legacy:import` run from a one-off container of the live image under a temporary login limited to that database + read-only `dmc_prod` | — | 7 restore + 18 import | 29 | 17435 / 37662 / 331 / 0 | PASS — counts equal the legacy source; every authenticator enrolment and verified email carried over (3 / 4); settings byte-identical; audit chain intact (896); 52/52 figures reconcile; `notifications` cleared by the import (by design). Found: DEPLOY-LARAVEL §8 still cleared **file** sessions — sessions are in the database since 2026-09-03 and must be truncated there (fixed). Throwaway database and login removed |
+| 2026-09-23 20:24–20:47 | Claude Code (on the owner's instruction) | **Whole-server-loss rehearsal, APPLICATION half (RES-09, §5.1)** — throwaway 2-OCPU/12 GB instance in me-riyadh-1: fresh Docker + Coolify 4.1.2, the app recreated through Coolify's API from GitHub `main` with production's settings, built from source | — | — | ≈ 7 min on a clean run (64 s to SSH, 130 s Docker + Coolify, 214 s build + start) | fresh database, no production data or secrets | **PASS after two procedure defects, both fixed in §5.1 step 2**: the first deploy onto an empty database can never pass its `/login` health check, and production relies on an undocumented `NIXPACKS_PHP_FALLBACK_PATH=` (empty) without which nginx has a duplicate `location /` and never starts. `/login`, `/up`, `/privacy`, `security.txt`, the 404 page and the security headers all served through the new proxy; `/health` ok once the scheduler ran. DNS not exercised. Instance terminated with its disk |
 
 ---
 
