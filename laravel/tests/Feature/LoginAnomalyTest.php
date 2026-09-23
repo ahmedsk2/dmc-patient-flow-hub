@@ -104,4 +104,55 @@ class LoginAnomalyTest extends TestCase
         $this->actingAs($this->user(User::ROLE_CONSULTANT, ['mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]))
             ->get('/security')->assertForbidden();
     }
+
+    // ------------------------------------------------------------------------------------------
+    // 2026-09-23 walkthrough (B): MFA is mandatory for EVERY active user regardless of
+    // settings.mfa_enforcement (EnsureMfaEnrolled ignores it — the setting is inert), but the
+    // Security panel used to compute mfaNonCompliant ONLY while mfa_enforcement > 0 (and, at
+    // level 1, only for admins) — so at the default/live value of 0 it silently reported nobody,
+    // even though every unenrolled active user was in fact non-compliant with the real (mandatory)
+    // policy. These prove the fix: the list — and the mfaMandatory flag the page reads to word it
+    // accurately — no longer depend on that setting.
+    // ------------------------------------------------------------------------------------------
+
+    public function test_mfa_noncompliant_includes_unenrolled_users_even_with_enforcement_off(): void
+    {
+        $admin = $this->user(User::ROLE_ADMIN, ['mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
+        // Setting::current() default is mfa_enforcement = 0 (the live production value) — do not change it.
+        $this->assertSame(0, (int) Setting::current()->mfa_enforcement);
+        $unenrolled = $this->user(User::ROLE_CONSULTANT);   // no mfa_secret/mfa_enrolled_at
+
+        $this->actingAs($admin)->get('/security')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->component('Security/Index')
+                ->where('mfaMandatory', true)
+                ->where('mfaNonCompliant', fn ($list) => collect($list)->pluck('id')->contains($unenrolled->id)));
+    }
+
+    public function test_mfa_noncompliant_is_not_scoped_to_admins_when_enforcement_is_required_for_administrators(): void
+    {
+        $admin = $this->user(User::ROLE_ADMIN, ['mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
+        Setting::current()->update(['mfa_enforcement' => 1]);   // "Required for administrators" — the old code excluded non-admins here
+        $unenrolledConsultant = $this->user(User::ROLE_CONSULTANT);
+
+        $this->actingAs($admin)->get('/security')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('mfaNonCompliant', fn ($list) => collect($list)->pluck('id')->contains($unenrolledConsultant->id)));
+    }
+
+    public function test_mfa_noncompliant_excludes_inactive_and_enrolled_users(): void
+    {
+        $admin = $this->user(User::ROLE_ADMIN, ['mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
+        $enrolled = $this->user(User::ROLE_CONSULTANT, ['mfa_secret' => Totp::secret(), 'mfa_enrolled_at' => now()]);
+        $inactive = $this->user(User::ROLE_CONSULTANT, ['active' => 0]);
+
+        $this->actingAs($admin)->get('/security')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('mfaNonCompliant', function ($list) use ($enrolled, $inactive) {
+                $ids = collect($list)->pluck('id');
+
+                return ! $ids->contains($enrolled->id) && ! $ids->contains($inactive->id);
+            }));
+    }
 }

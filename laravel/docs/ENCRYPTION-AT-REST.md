@@ -48,7 +48,7 @@ the application only ever *displays*.
 | Admission/discharge/consultation dates, LOS | every statistic, dashboard tile, ageing rule and A4 report filters and aggregates on them in SQL. |
 | ICD-10 codes, `admission_diagnoses`, consultation `indication` ids | joined to reference tables and counted per code. |
 | Bed, location, consultant / specialty / status columns | the board, the worklist and the ledger scopes filter on them. |
-| Audit log `details` JSON | the audit trail is a hash-chained, shippable record (`audit:verify`, `audit:ship`); encrypting its payload would break external verification. **Note:** `consultation.reverse_signoff` deliberately preserves the cleared `response_note` plaintext inside the audit row (that is where an undone clinical assertion belongs). That copy is *outside* this change's scope and remains plaintext — flagged for the follow-up review. |
+| Audit log `details` JSON | the audit trail is a hash-chained, shippable record (`audit:verify`, `audit:ship`); encrypting its payload would break external verification. **Exception (since 2026-09-23):** `consultation.reverse_signoff` preserves the cleared `response_note` as `note_encrypted` (`Crypt::encryptString`, same `APP_KEY`) plus a `note_length` marker — never the plaintext. Only that one value is ciphertext; the rest of the row stays plaintext and verifiable. The audit viewer and the audit CSV/XLSX export show `[encrypted note]` in its place. See §4 for what a key rotation means for it. |
 
 **Why not full-disk / tablespace encryption instead?** MySQL's InnoDB tablespace encryption
 needs a keyring plugin whose key manifest lives on the DB host. On the Coolify-managed stock
@@ -137,6 +137,11 @@ new key. Procedure:
 
 6. Remove the old key from APP_PREVIOUS_KEYS, redeploy. Keep the old key in escrow alongside
    any backup taken while it was live (a restore of such a backup needs it — §3).
+   **Audit rows are the one thing step 4 cannot re-encrypt:** `audit_log` is append-only and
+   hash-chained (never UPDATE it), so a `note_encrypted` value written by
+   `consultation.reverse_signoff` before the rotation stays under the old key forever. Once the
+   old key leaves APP_PREVIOUS_KEYS those values can only be read with the escrowed key, so keep
+   every retired key in escrow for as long as the audit rows are retained.
 ```
 
 ## 5. How the data migration works (and how to reverse it)

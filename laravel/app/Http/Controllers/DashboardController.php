@@ -421,15 +421,13 @@ class DashboardController extends Controller
             $dqIssues = array_sum(array_map(fn ($c) => $c->count(), $dq));
 
             // securityAnomalies mirrors the three Security-panel sections: 24h failed-login clusters,
-            // first-seen IPs, and (while enforcement is on) MFA-noncompliant active users.
+            // first-seen IPs, and MFA-noncompliant active users. MFA is mandatory for every user
+            // (EnsureMfaEnrolled; mfa_enforcement is inert), so the MFA count is never gated on it —
+            // the same rule as SecurityController::index().
             $failedClusters = (int) DB::table('audit_log')->where('action', 'login.failed')
                 ->where('created_at', '>=', DB::raw('NOW() - INTERVAL 24 HOUR'))
                 ->distinct()->count(DB::raw('CONCAT(COALESCE(actor_name, ""), "|", COALESCE(ip, ""))'));
-            $mfaLevel = (int) $settings->mfa_enforcement;
-            $mfaNonCompliant = $mfaLevel > 0
-                ? (int) User::where('active', 1)->whereNull('mfa_enrolled_at')
-                    ->when($mfaLevel === 1, fn ($q) => $q->where('role', User::ROLE_ADMIN))->count()
-                : 0;
+            $mfaNonCompliant = (int) User::where('active', 1)->whereNull('mfa_enrolled_at')->count();
             $securityAnomalies = $failedClusters + $mfaNonCompliant;
 
             $recentlyDeleted = (int) Admission::onlyTrashed()->count()

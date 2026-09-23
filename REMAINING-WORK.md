@@ -8,7 +8,8 @@
 > and `OPEN-ITEMS.md`, `EVIDENCE-PACK.md`, the 2026-09-03 prod-ready close-out, the runbooks, the ADRs,
 > `waivers.yml`, code TODOs), each item checked against the code and the commits since 2026-09-03, then
 > adversarially re-checked. Live checks the same day: 0 open PRs / issues / Dependabot / secret-scanning
-> alerts; production at `8319f0b`.
+> alerts. Production was `379ef29` (release `v2026.09.22`) when this header was last touched on 2026-09-23;
+> `HANDOFF.md` records each later deploy.
 >
 > **This repository is public.** Items below are worded so they do not hand an attacker a map; the
 > specifics live with the owner.
@@ -24,7 +25,9 @@ biggest live risk** (the original un-hardened build, on US hosting).
 ## A. Owner — urgent
 
 - [ ] **Cut over from the legacy site to the Laravel app.** Set a date; run the UAT checklist
-  (`laravel/docs/UAT-TEST-PLAN.md` — every row and the Go/No-Go table are still blank); plan staff
+  (`laravel/docs/UAT-TEST-PLAN.md` — every row and the Go/No-Go table are still blank; a technical dry
+  run on a local copy passed on 2026-09-23 after eight fixes —
+  `laravel/docs/compliance/evidence/uat-dry-run-2026-09-23.md` — but it is not the clinical sign-off); plan staff
   communication and training; get the legacy host's backup-retention/deletion terms; inventory what the
   legacy site leaks through its own logs, URLs and exports. *(B1–B3, G11, G15, R13–R15;
   `laravel/docs/compliance/CONFIRMED-FACTS.md`)*

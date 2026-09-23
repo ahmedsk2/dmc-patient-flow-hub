@@ -94,8 +94,10 @@ class RecentActivityTest extends TestCase
     {
         $a = $this->dischargedTodayAdmission();
 
-        // a valid step-up window bypasses the RequireStepUp middleware on this route, so the request
-        // reaches the controller — proving the ADMIN gate (not just step-up) is what blocks it.
+        // Walkthrough fix (2026-09-23): the route now runs ->middleware(['admin', 'stepup']), so the
+        // admin gate denies a non-admin before step-up is even consulted; the step-up window below is
+        // supplied anyway to prove that's not what's carrying the denial (see AdminRouteOrderingTest
+        // for the no-step-up-session case).
         $this->actingAs($this->user(User::ROLE_CONSULTANT))
             ->withSession(['stepup.verified_at' => now()->getTimestamp()])
             ->post("/admissions/{$a->id}/reverse-discharge")

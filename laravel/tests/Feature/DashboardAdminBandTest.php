@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Admission;
 use App\Models\HandoverSignature;
 use App\Models\Patient;
+use App\Models\Setting;
 use App\Models\User;
 use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -57,6 +58,20 @@ class DashboardAdminBandTest extends TestCase
 
         $this->actingAs($this->user(User::ROLE_ADMIN))->get('/')->assertOk()
             ->assertInertia(fn (AssertableInertia $p) => $p->where('adminBand.recentlyDeleted', 1));
+    }
+
+    public function test_security_anomalies_count_mfa_noncompliance_even_with_enforcement_setting_off(): void
+    {
+        // 2026-09-23 walkthrough: MFA is mandatory for everyone, so the inert mfa_enforcement
+        // setting (0 here, the production value) must not hide an unenrolled active user.
+        Setting::current()->update(['mfa_enforcement' => 0]);
+        User::create([
+            'username' => 'band_nomfa_'.substr(md5(uniqid('', true)), 0, 8),
+            'name' => 'No MFA', 'password' => 'secret12345', 'role' => User::ROLE_RESIDENT, 'active' => 1,
+        ]);
+
+        $this->actingAs($this->user(User::ROLE_ADMIN))->get('/')->assertOk()
+            ->assertInertia(fn (AssertableInertia $p) => $p->where('adminBand.securityAnomalies', 1));
     }
 
     public function test_pending_handovers_count_reflects_unsigned_signatures(): void

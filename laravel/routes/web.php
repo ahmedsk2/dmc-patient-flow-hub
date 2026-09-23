@@ -134,9 +134,13 @@ Route::middleware(['auth', 'session.timeout', 'email.verify', 'mfa.enroll', 'pwd
     Route::post('/admissions/{admission}/icu-discharge', [PatientActionController::class, 'icuDischarge'])->name('admissions.icuDischarge');
     Route::post('/admissions/{admission}/transfer', [PatientActionController::class, 'transfer'])->name('admissions.transfer');
     Route::post('/admissions/{admission}/icu-pull', [PatientActionController::class, 'icuPull'])->name('admissions.icuPull');
-    Route::post('/admissions/{admission}/reverse-discharge', [PatientActionController::class, 'reverseDischarge'])->name('admissions.reverse')->middleware('stepup');   // Phase 4 — Item 4
+    // Admin-only + step-up. 'admin' must run BEFORE 'stepup' so a non-admin gets 403 immediately
+    // instead of being sent through the step-up password re-check first (neither alias is in
+    // Laravel's default middleware-priority list, so SortedMiddleware keeps this array order).
+    Route::post('/admissions/{admission}/reverse-discharge', [PatientActionController::class, 'reverseDischarge'])->name('admissions.reverse')->middleware(['admin', 'stepup']);   // Phase 4 — Item 4
     Route::post('/admissions/{admission}/undo-medical-discharge', [PatientActionController::class, 'undoMedicalDischarge'])->name('admissions.undoMedical');
-    Route::delete('/admissions/{admission}', [PatientActionController::class, 'destroy'])->name('admissions.destroy')->middleware('stepup');   // admin-only + step-up (Phase 4 — Item 4)
+    // Same admin-before-stepup ordering as reverse-discharge above.
+    Route::delete('/admissions/{admission}', [PatientActionController::class, 'destroy'])->name('admissions.destroy')->middleware(['admin', 'stepup']);   // admin-only + step-up (Phase 4 — Item 4)
 
     // Phase 4 — Item 4: step-up re-auth form (auth-only; the gated actions enforce admin themselves)
     Route::get('/stepup', [StepUpController::class, 'show'])->name('stepup.show');

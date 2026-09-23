@@ -34,8 +34,10 @@ One writer, one chain, one archive.
 - Retrospective edits and deletions are detectable, and off-box copies survive a compromise of the
   application database.
 - The audit `details` JSON stays **plaintext** — encrypting it would break external verification
-  (ENCRYPTION-AT-REST.md §2). One deliberate, flagged consequence: `consultation.reverse_signoff`
-  preserves the cleared response note in the clear.
+  (ENCRYPTION-AT-REST.md §2). The one exception is `consultation.reverse_signoff`, which keeps the
+  cleared response note as a single encrypted value (`note_encrypted`) rather than in the clear
+  (changed 2026-09-23; it used to be plaintext). Because rows are never updated, that value is not
+  re-encrypted by a key rotation, so retired keys stay in escrow (ENCRYPTION-AT-REST.md §4).
 - Missing `AUDIT_S3_*` config is a valid "not set up yet" state, not a failure, so the hourly
   schedule does not spam an unconfigured environment.
 - `audit_retention_years` is 6 by internal choice; no sector rule requiring six was found.

@@ -13,7 +13,7 @@ use Inertia\Response;
  * the existing audit_log + users tables (no new schema). Three sections:
  *   1. failed-login clusters per (account, IP) in the last 24h;
  *   2. first-seen IPs for known users (no earlier audit row from the same actor+IP);
- *   3. MFA-noncompliant users while enforcement is on.
+ *   3. MFA-noncompliant active users (MFA is mandatory for everyone — see EnsureMfaEnrolled).
  * Admin-only (inside the `admin` route group). Account lockdown is the existing Control user edit
  * (set active=false) — this panel only surfaces, it never writes.
  */
@@ -48,27 +48,32 @@ class SecurityController extends Controller
             ->selectRaw('a.actor_name, a.ip, a.action, a.created_at first_at')
             ->get();
 
-        // 3. MFA-noncompliant active users while enforcement is on (level 1 = admins only; 2 = all)
+        // 3. MFA-noncompliant active users. 2026-09-23 walkthrough fix: MFA has been mandatory for
+        //    EVERY active user, unconditionally, since 2026-07-11 (EnsureMfaEnrolled — the
+        //    mfa_enforcement setting is inert and no longer gates enrolment). This list must therefore
+        //    cover all active users regardless of $level, not just while $level > 0 / not just admins
+        //    under level 1 — the previous role/level gating under-reported compliance whenever
+        //    mfa_enforcement was left at its default (0), which is the live production value.
         $level = (int) Setting::current()->mfa_enforcement;
-        $mfaNonCompliant = $level > 0
-            ? User::where('active', 1)
-                ->whereNull('mfa_enrolled_at')
-                ->when($level === 1, fn ($q) => $q->where('role', User::ROLE_ADMIN))
-                ->orderBy('role')->orderBy('full_name')
-                ->get(['id', 'username', 'full_name', 'name', 'role', 'created_at'])
-                ->map(fn (User $u) => [
-                    'id' => $u->id,
-                    'username' => $u->username,
-                    'name' => $u->full_name ?: $u->name,
-                    'role_label' => $u->roleLabel(),
-                ])
-            : collect();
+        $mfaNonCompliant = User::where('active', 1)
+            ->whereNull('mfa_enrolled_at')
+            ->orderBy('role')->orderBy('full_name')
+            ->get(['id', 'username', 'full_name', 'name', 'role', 'created_at'])
+            ->map(fn (User $u) => [
+                'id' => $u->id,
+                'username' => $u->username,
+                'name' => $u->full_name ?: $u->name,
+                'role_label' => $u->roleLabel(),
+            ]);
 
         return Inertia::render('Security/Index', [
             'failedClusters' => $failedClusters,
             'firstSeenIps' => $firstSeenIps,
             'mfaNonCompliant' => $mfaNonCompliant->values(),
             'mfaEnforcement' => $level,
+            // mirrors ControlController::index()'s prop of the same name — MFA is mandatory
+            // regardless of $level, so the page must say so rather than imply $level gates it.
+            'mfaMandatory' => true,
             'notifyThreshold' => (int) (Setting::current()->failed_login_notify_threshold ?? 0),
         ]);
     }

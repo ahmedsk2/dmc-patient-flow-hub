@@ -152,11 +152,13 @@ If any of these fail, stop and report — deeper testing is pointless until they
 | Area / action | Admin | Registrar | Consultant | Resident | Observer | Result | Notes |
 |---|:--:|:--:|:--:|:--:|:--:|---|---|
 | See the Active Patients board | ✓ | ✓ | ✓ | ✓ | ✓ (read-only) | | |
+| See the New Admissions queue | ✓ | ✓ | ✓ | ✓ | ✗ | | |
+| See the consultations pages (ledger, dashboard, handover sheet) | ✓ | ✓ | ✓ | ✓ | ✗ | | |
 | Add a new admission | ✓ | ✓ (if Can Add) | ✓ (if Can Add) | ✓ (if Can Add) | ✗ | | |
 | Assign a patient to a consultant | ✓ | ✓ (if Can Assign) | ✓ (if Can Assign) | ✗ | ✗ | | |
 | "Assign to me" | ✓ | — | ✓ | — | ✗ | | |
 | Modify a patient's details | ✓ | ✓ (if Can Modify) | ✓ (if Can Modify) | ✓ (if Can Modify) | ✗ | | |
-| Transfer / discharge a patient | ✓ | ✗ | ✓ (own patient **or** Can Manage) | ✗ | ✗ | | |
+| Transfer / discharge a patient | ✓ | ✗ | ✓ (own patient **or** Can Manage) | ✓ (if Can Manage) | ✗ | | |
 | Reverse a discharge (same-day undo) | ✓ (step-up) | ✗ | ✗ | ✗ | ✗ | | |
 | Delete an admission | ✓ (step-up) | ✗ | ✗ | ✗ | ✗ | | |
 | Add a consultation | ✓ | ✓ | ✓ | ✓ | ✗ | | |
@@ -170,7 +172,7 @@ If any of these fail, stop and report — deeper testing is pointless until they
 
 | ID | Steps | Expected | Result | Notes |
 |---|---|---|---|---|
-| AUTHZ-01 | As **Observer**, confirm every edit/action button is absent or disabled across the board | Read-only everywhere | | |
+| AUTHZ-01 | As **Observer**, confirm every edit/action button is absent or disabled across the board | Read-only on the board, active list and handovers; the New Admissions queue and consultations are refused (403) | | |
 | AUTHZ-02 | As a **non-admin**, directly type an admin URL (e.g. `/control`, `/statistics`, `/registry`) into the address bar | Blocked (403 / redirect), **not** shown | | |
 | AUTHZ-03 | As **Consultant #2** (not the primary), try to sign off / discharge **another** consultant's patient without Can Manage | Denied | | |
 | AUTHZ-04 | As a non-admin, confirm you cannot elevate your own role or capabilities anywhere in Profile | No such option; no way to self-promote | | |
@@ -303,12 +305,12 @@ If any of these fail, stop and report — deeper testing is pointless until they
 | CTL-03 | Confirm the **MFA enforcement** control notes it is **mandatory for all** (setting is inert) | Shown as mandatory-for-everyone | | |
 | CTL-04 | **Settings history**: after changing bed counts, view the change log | The change is recorded (who/when/old→new) | | |
 | CTL-05 | **Reference data**: add/edit/remove a specialty and a consultation reason | CRUD works; dropdowns update | | |
-| CTL-06 | **Users**: create a new user with a role + capabilities | Created; can then be activated | | |
+| CTL-06 | **Users**: an admin does **not** create accounts directly — people self-register (created inactive, never Admin). Activate a pending registration and set its role + capabilities | Activated user can sign in with exactly those rights | | |
 | CTL-07 | **Users**: activate / deactivate an account | Deactivated user can no longer sign in | | |
 | CTL-08 | **Users**: edit capabilities (Can Add/Assign/Manage/Modify) | Takes effect for that user immediately | | |
 | CTL-09 | **Users**: admin-trigger a password reset / MFA reset for a user | User is forced to reset/re-enrol at next login | | |
 | CTL-10 | **Report recipients**: add an email; adding a **duplicate** is rejected | Add works; dup blocked | | |
-| CTL-11 | Turn on **record-open logging** (log_record_opens); open a patient detail; check the Audit log | A break-glass "record open" entry is written | | |
+| CTL-11 | Control → Settings → tick **Log every record and handover open**, save; open a handover; check the Audit log; untick it again | A break-glass "record open" entry is written | | |
 
 ---
 

@@ -157,7 +157,8 @@ every minute, `audit:ship` hourly, `audit:verify-daily` 02:30, `auth:prune-expir
 **Audit trail.** `App\Support\Audit::log()` writes an `audit_log` row `{actor, action, entity,
 details JSON, ip}` for every write and for PHI reads: exports, report PDFs and registry searches
 always; record opens and handover reads only while the `log_record_opens` setting is on (default
-off — verified against `HandoverController::show` on 2026-09-03). Rows are **hash-chained** (`prev_hash` + sha256
+off — verified against `HandoverController::show` on 2026-09-03; switched in Control → Settings since
+2026-09-23). Rows are **hash-chained** (`prev_hash` + sha256
 `row_hash`, taken under a row lock), verified nightly, and shipped hourly as write-once NDJSON to the
 in-Kingdom bucket `dmc-audit-log`. `AuditDiff` records before/after on updates.
 
@@ -218,7 +219,9 @@ Active ICU by `current_location`; Medically discharged ("still in") = `medical_d
 ## 7. Roles, capabilities and authorization
 
 - **Page access by role.** Clinical pages: Admin, Registrar, Consultant, Resident. **Observer is
-  read-only** everywhere. Admin-only: everything in the `admin` route group (§5).
+  read-only, and only on the patients board, the active list and handovers** — it cannot open the New
+  Admissions queue or any consultations page (legacy parity, `denyObservers()`; verified by the
+  2026-09-23 role walkthrough). Admin-only: everything in the `admin` route group (§5).
 - **Per-action by capability.** `can_add` admits; `can_assign` assigns to a chosen consultant,
   shuffles, bulk-reassigns; `can_manage` transfers/discharges any patient; `can_modify` edits patient
   details; `can_coordinate_consultations` coordinates the ledger. The **primary consultant** may
@@ -231,7 +234,10 @@ Active ICU by `current_location`; Medically discharged ("still in") = `medical_d
   Control → Reset MFA clears it; mandatory email verification; phased self-registration (email
   OTP + authenticator confirmed **before** the account row exists, then `active=0` pending admin
   activation, role never Admin); password expiry at three months; idle timeout; step-up for §5's
-  sensitive actions; failed-login throttling keyed by IP and username.
+  sensitive actions; failed-login throttling keyed by IP and username. Deactivating or deleting a
+  user ends their sessions at once, and `SessionTimeout` re-checks on every request that the account
+  is still active and not deleted (`session.evicted`). On admin-only step-up routes `admin` runs
+  before `stepup`, so a non-admin gets 403, never the password prompt.
 
 ---
 
@@ -391,8 +397,8 @@ the same gates must be run locally per RELEASE-CHECKLIST.md. Since 2026-09-03 th
 PR (no path filter), plus a blocking Pint gate and Vitest coverage thresholds. The legacy `ci.yml` is
 a separate pipeline; never merge them.
 
-**Baselines (2026-09-22, after the engineering batch):** PHPUnit 1004 tests (+91 in the `pdf` group), PHP
-statement coverage 88.1 % at the last CI measurement (floor 83), Vitest 792 on vitest 5 (floors lines 72, statements 66,
+**Baselines (2026-09-23, after the walkthrough fixes):** PHPUnit 1044 tests (+92 in the `pdf` group), PHP
+statement coverage 88.1 % at the last CI measurement (floor 83), Vitest 820 on vitest 5 (floors lines 72, statements 66,
 branches 62, functions 48 — re-baselined 2026-09-22 because vitest 5's AST-aware coverage counts
 different units than vitest 3, then raised the same day; see the history in `vitest.config.js`),
 ESLint zero warnings, Pint clean.
@@ -425,6 +431,10 @@ redirects the test. Run the isolated suite on a throwaway database to avoid race
   Never write `*/` inside a comment in `app.css` (it ends the block and breaks cold builds; the Vite
   cache masks it once).
 - **Publish vendor configs whose defaults embed paths** (Inertia's page directory).
+- **No runtime `template:` strings in app code.** The production bundle is Vue's runtime-only build
+  (no template compiler; CSP forbids `'unsafe-eval'` anyway), so such a component renders as an empty
+  comment in production while Vitest, whose Vue has the compiler, passes. Use a `.vue` file;
+  `resources/js/__tests__/noRuntimeTemplates.spec.js` enforces it (test mocks are exempt).
 - **Eloquent `encrypted` casts decrypt on `toArray()`**; use `$hidden` for anything that must not ship
   to the client (pattern: `Setting::$mail_password`).
 - **`Schema::hasTable` throws (not false) when the DB is unreachable** inside a boot-time provider;
