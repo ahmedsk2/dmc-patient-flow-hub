@@ -282,6 +282,9 @@
    Same night, on the owner's instruction, **`dmc_demo` was taken out of Coolify's backup job** (it now
    dumps only `default`; one setting, nothing restarted) — the encrypted DMC pipeline is the only
    backup of the DMC database; the 66 old Coolify dumps in the bucket are the owner's to delete.
+   Then, also on instruction, the owner's daily workstation sync gained a DMC part: it keeps a local
+   copy of the **encrypted** DMC backups (new objects only, 90 days by file date, refuses while the
+   backup key is on that machine) — seeded with 510 objects, all verified against the bucket.
    **Still open and all owner / infrastructure decisions, not code:** enable deploy-on-green
    (declined so far — "I don't want to autodeploy"), pick a log sink and set `LOG_STACK`
    (OBS-01/03/04/05), instance principal (CFG-10), SLOs and an

@@ -77,15 +77,17 @@ biggest live risk** (the original un-hardened build, on US hosting).
   by the tenancy's own residency quota (`ksa-data-residency`, which stays as it is); its empty bucket
   was deleted 2026-09-24. The Jeddah region subscription itself cannot be removed in OCI — it stays,
   empty, and the quota keeps it unusable. *(DATA-02 — closed by decision)*
-- [ ] **Your local backup copy — DMC's part of it is unencrypted.** Your daily sync of the
-  `coolify-backups` bucket to your computer holds Coolify's past daily dumps of the production DMC
-  database — plain SQL, 66 of them from 2026-07-19 to 2026-09-23 (≈ 1.3 GB; no new ones since
-  `dmc_demo` left that job on 2026-09-24), so your laptop has no current DMC copy. Either turn on
-  Windows disk encryption on that computer (Settings → Privacy & security → Device encryption, or
-  BitLocker), or keep the DMC part as the already-encrypted `.enc` backups instead (the command is in
-  `laravel/docs/BACKUP-AND-RESTORE.md` §6) and stop mirroring the plain dumps. Either way, keep the
-  backup key and `APP_KEY` apart from the copy: without them it cannot be restored, and stored beside
-  it they make it readable to whoever takes the disk.
+- [x] **Your local copy of the encrypted DMC backups** — added to your daily sync 2026-09-24 on your
+  instruction: every run fetches the new nightly dumps and hourly binlogs exactly as stored (still
+  encrypted), keeps each for 90 days by the date in its name (the bucket's own rule — so the copy
+  outlives a wiped bucket instead of mirroring it), and refuses to run while the backup key is on the
+  same machine. Seeded the same night: 510 files, 264 MB, every one identical in name and size to the
+  bucket and every one encrypted. Keep the backup key and `APP_KEY` off that computer.
+- [ ] **Your laptop still holds 66 old, unencrypted Coolify dumps of the DMC database** (from the
+  `coolify-backups` mirror, 2026-07-19 → 2026-09-23). They leave by themselves: once you delete them
+  from the bucket (item below), your sync stops refreshing them and its own 30-day clean-up removes
+  them. Until then, Windows disk encryption on that computer (Settings → Privacy & security → Device
+  encryption, or BitLocker) is what protects them.
 - [x] **Take `dmc_demo` out of Coolify's own backup job** — done 2026-09-24 on your instruction: the
   shared MySQL's scheduled Coolify backup now dumps only `default`; the DMC database is backed up only
   by its own encrypted pipeline (nightly dump + hourly binlogs, both checked healthy the same night).
