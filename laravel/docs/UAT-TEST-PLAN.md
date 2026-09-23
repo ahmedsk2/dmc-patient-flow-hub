@@ -86,7 +86,7 @@ If any of these fail, stop and report — deeper testing is pointless until they
 | AUTH-04 | At the MFA challenge, enter the **correct** 6-digit authenticator code | Signs in, lands on Dashboard | | |
 | AUTH-05 | At the MFA challenge, enter a **wrong** code several times | Rejected each time; the 6th try within a minute is refused ("too many attempts" — the 5-per-minute limit trips before the 8-attempt cap that would send you back to sign in) | | |
 | AUTH-06 | Confirm there is **no "Remember me"** option on the login page | Absent (persistent login is intentionally disabled) | | |
-| AUTH-07 | Sign in, close the **browser** without logging out, wait past the idle timeout (30 min), reopen the site | You are asked to sign in again. (Closing only the tab, or reopening within the idle window, keeps the session — the idle timeout, not the cookie, ends it; there is no "remember me") | | |
+| AUTH-07 | Sign in, close the **browser** completely without logging out, reopen it and go to the site | You are asked to sign in again — the session ends when the browser closes (there is no "remember me"). Closing only a tab keeps the session until the idle timeout. If the browser is set to restore the previous session on start-up ("Continue where you left off"), it can bring the session back — turn that off on shared ward computers | | |
 
 ### 1b. First-time MFA enrolment (existing user without MFA)
 

@@ -294,7 +294,9 @@ Each flow names its controller; per-endpoint database effects are in DATABASE-AN
   police the CSSOM, so Vue `:style`, Chart.js sizing and driver.js positioning never needed it. Also
   COOP/CORP `same-origin` and a Permissions-Policy that denies camera, microphone, geolocation,
   payment, usb, serial, bluetooth, hid and browsing-topics. The session cookie is
-  `__Host-`-prefixed (Secure, HttpOnly, host-only; `scripts/smoke.sh` checks it); `SESSION_ENCRYPT=true`,
+  `__Host-`-prefixed (Secure, HttpOnly, host-only) and a **browser-session cookie** — no Expires/Max-Age, so
+  closing the browser signs the user out (`expire_on_close` defaults to true since 2026-09-23, owner decision;
+  `scripts/smoke.sh` checks both); `SESSION_ENCRYPT=true`,
   `APP_DEBUG=false`, `LOG_LEVEL=warning` (present in Coolify as both a build-time and, since
   2026-09-03 18:13 UTC, a runtime variable — only the runtime one reaches the container).
 - **Encryption at rest:** the four narrative columns (`handovers.body`, `handover_revisions.body`,

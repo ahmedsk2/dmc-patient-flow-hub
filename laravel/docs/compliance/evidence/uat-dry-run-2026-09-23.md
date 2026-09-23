@@ -135,7 +135,8 @@ The one "not run" row is NF-04 (Arabic / RTL): the app offers no language switch
 design": AUTH-07 — closing the tab or the browser does not end the session by itself (the cookie lasts
 the session lifetime; the 30-minute idle timeout ends it; there is no "remember me") — the row is
 reworded, and whether shared ward computers should drop the session when the browser closes is left to
-the owner; the MFA challenge's 8-try cap is never reached because a stricter 5-per-minute limit trips first
+the owner (who then decided it should: since the same evening the session cookie ends with the browser,
+checked by a test and by `smoke.sh`); the MFA challenge's 8-try cap is never reached because a stricter 5-per-minute limit trips first
 (AUTH-05 reworded); and NF-11 — the print styles were checked, paper printing needs a person.
 
 ### Defects found in the second pass and fixed
