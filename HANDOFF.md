@@ -228,7 +228,12 @@
    Can-Manage, Active List scope) in
    [`evidence/uat-dry-run-2026-09-23.md`](laravel/docs/compliance/evidence/uat-dry-run-2026-09-23.md).
    This is **not** the clinical UAT sign-off — the cutover item in `REMAINING-WORK.md` still needs the
-   owner and clinicians on the real system.
+   owner and clinicians on the real system. **Production runs `afa7f60`** (merge of PR #29, release
+   `v2026.09.23`, build and SBOM attestations verified), deployed 2026-09-23 after a pre-deploy dump;
+   no migrations; smoke 15/15, `/health` ok, audit chain intact, both backup heartbeats fresh, and
+   the served merge-page bundle confirmed to be the compiled picker. The host's `binlog-ship.py` was
+   reinstalled the same day (it predated the 2026-09-22 wrong-key message fix; the old copy is kept
+   as `.prev`).
    **Still open and all owner / infrastructure decisions, not code:** enable deploy-on-green
    (declined so far — "I don't want to autodeploy"), pick a log sink and set `LOG_STACK`
    (OBS-01/03/04/05), a second backup region + instance principal (DATA-02, CFG-10), SLOs and an
