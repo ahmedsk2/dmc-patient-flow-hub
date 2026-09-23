@@ -547,9 +547,10 @@ request.region != me-riyadh-1`. The quota stays. The empty bucket `dmc-db-backup
 nothing. Verified the same day, read-only: no replication policy on `dmc-db-backups` or
 `dmc-audit-log`, no cross-region replica or cross-region backup of the host's boot volume.
 
-**The owner's local copy.** The owner already runs a daily sync of the `coolify-backups` bucket (below)
-to their workstation, so the local copy of DMC data today is Coolify's **unencrypted** dumps. The
-recommended form for DMC is the encrypted objects of this pipeline, copied exactly as stored
+**The owner's local copy.** The owner runs a daily sync of the `coolify-backups` bucket (below) to
+their workstation; for DMC it holds only Coolify's past **unencrypted** dumps (to 2026-09-23), since
+`dmc_demo` left that job on 2026-09-24. The recommended form for DMC is the encrypted objects of this
+pipeline, copied exactly as stored
 (`*.sql.gz.enc`, `binlogs/…*.gz.enc`) and never decrypted on the workstation. With the owner's own OCI
 CLI profile, this fetches only what is new since the last run:
 
@@ -562,15 +563,17 @@ it — a copy stored next to its key is plaintext to whoever takes the disk — 
 disk encrypted (Windows device encryption / BitLocker). The bucket's 90-day expiry does not reach the
 local copy: prune it by hand to the same retention (a placeholder pending legal, above).
 
-**Coolify's own database backups (found 2026-09-24).** Independently of this runbook, Coolify's
-scheduled backup of the shared MySQL container writes a daily **plain-SQL** dump of `dmc_demo` (among
-other databases) to the private in-Kingdom bucket `coolify-backups` (66 `dmc_demo` dumps from
-2026-07-19 to 2026-09-23, ≈ 1.3 GB). They are not client-side encrypted (OCI's at-rest encryption
-only), the bucket has **no lifecycle expiry** (only a 14-day retention rule, which blocks deletion for
-14 days and expires nothing), and the owner mirrors the bucket to their workstation daily. They are a
-usable extra recovery source — a plain `mysql < dump` — but they sit outside this runbook's encryption
-and 90-day retention. Whether to drop `dmc_demo` from that job or add an expiry is an owner decision
-(REMAINING-WORK); the job and bucket are shared with the other apps on the host.
+**Coolify's own database backups — `dmc_demo` removed 2026-09-24.** Coolify's scheduled backup of the
+shared MySQL container (daily 03:00 UTC, to the private in-Kingdom bucket `coolify-backups`) used to
+include `dmc_demo` as a daily **plain-SQL** dump. Found on 2026-09-24 and, by owner decision the same
+day, taken out of the job: it now dumps only `default`, so **this runbook's encrypted pipeline is the
+only backup of the DMC database** (rollback: set the job's databases back to `default,dmc_demo` in
+Coolify → the shared MySQL → Backups). What the job left behind, all unencrypted (OCI at-rest
+encryption only): **66 dumps in the bucket** (2026-07-19 → 2026-09-23, ≈ 1.3 GB), which Coolify's
+"keep 14 on S3" setting has not been pruning and the bucket (no lifecycle expiry; a 14-day retention
+rule only blocks early deletion) will keep until someone deletes them — an owner step; **7 on the host**
+under `/data/coolify/backups/databases/…/shared-mysql-…/`, which Coolify's local "keep 14" rule ages out
+within about two weeks; and the owner's workstation mirror of the bucket.
 
 **OCI boot-volume backups (found 2026-09-24).** Separately from everything above, OCI backs up the
 host's **entire boot volume** — the whole disk, so the MySQL data of DMC *and of every other app on the

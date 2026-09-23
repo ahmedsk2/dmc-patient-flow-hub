@@ -279,6 +279,9 @@
    that **Coolify's own backup writes unencrypted daily dumps of `dmc_demo` with no expiry**. Checking
    OCI for cross-region copies found none, but did surface the host's weekly boot-volume backups and
    a manual full one from 2026-07-19 with no expiry. All three are owner decisions in REMAINING-WORK.
+   Same night, on the owner's instruction, **`dmc_demo` was taken out of Coolify's backup job** (it now
+   dumps only `default`; one setting, nothing restarted) — the encrypted DMC pipeline is the only
+   backup of the DMC database; the 66 old Coolify dumps in the bucket are the owner's to delete.
    **Still open and all owner / infrastructure decisions, not code:** enable deploy-on-green
    (declined so far — "I don't want to autodeploy"), pick a log sink and set `LOG_STACK`
    (OBS-01/03/04/05), instance principal (CFG-10), SLOs and an

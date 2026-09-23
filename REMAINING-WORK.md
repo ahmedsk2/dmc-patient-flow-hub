@@ -77,21 +77,28 @@ biggest live risk** (the original un-hardened build, on US hosting).
   by the tenancy's own residency quota (`ksa-data-residency`, which stays as it is); its empty bucket
   was deleted 2026-09-24. The Jeddah region subscription itself cannot be removed in OCI — it stays,
   empty, and the quota keeps it unusable. *(DATA-02 — closed by decision)*
-- [ ] **Your local backup copy — it already exists, but DMC's part of it is unencrypted.** Your daily
-  sync of the `coolify-backups` bucket to your computer includes Coolify's own daily dumps of the
-  production DMC database — plain SQL, 66 of them since 2026-07-19 (≈ 1.3 GB). Either turn on
+- [ ] **Your local backup copy — DMC's part of it is unencrypted.** Your daily sync of the
+  `coolify-backups` bucket to your computer holds Coolify's past daily dumps of the production DMC
+  database — plain SQL, 66 of them from 2026-07-19 to 2026-09-23 (≈ 1.3 GB; no new ones since
+  `dmc_demo` left that job on 2026-09-24), so your laptop has no current DMC copy. Either turn on
   Windows disk encryption on that computer (Settings → Privacy & security → Device encryption, or
   BitLocker), or keep the DMC part as the already-encrypted `.enc` backups instead (the command is in
   `laravel/docs/BACKUP-AND-RESTORE.md` §6) and stop mirroring the plain dumps. Either way, keep the
   backup key and `APP_KEY` apart from the copy: without them it cannot be restored, and stored beside
   it they make it readable to whoever takes the disk.
-- [ ] **Coolify's own backups of the DMC database are unencrypted and never expire** (found
-  2026-09-24). Besides the encrypted DMC backups, Coolify's scheduled backup of the shared MySQL
-  writes a plain daily dump of `dmc_demo` to the private Riyadh bucket `coolify-backups`, with no
-  expiry rule — so every day's patient data since 2026-07-19 is kept indefinitely, outside the
-  90-day retention the DMC backups follow. Choose: take `dmc_demo` out of that Coolify backup (the
-  encrypted pipeline already covers it), or add a lifecycle expiry to the bucket. That bucket and
-  backup job are shared with your other apps, so I will not change them without your go-ahead.
+- [x] **Take `dmc_demo` out of Coolify's own backup job** — done 2026-09-24 on your instruction: the
+  shared MySQL's scheduled Coolify backup now dumps only `default`; the DMC database is backed up only
+  by its own encrypted pipeline (nightly dump + hourly binlogs, both checked healthy the same night).
+  One setting changed, nothing restarted; rollback = set the job's databases back to
+  `default,dmc_demo`.
+- [ ] **The old unencrypted Coolify dumps of the DMC database are still there — deleting them is
+  yours.** (1) **66 in the `coolify-backups` bucket** (2026-07-19 → 2026-09-23, ≈ 1.3 GB, names
+  `…/shared-mysql-…/mysql-dump-dmc_demo-*.dmp`). Coolify's own "keep 14 on S3" setting has evidently
+  not been removing them, and the bucket has no expiry, so they stay until deleted — in the OCI
+  console, or with a lifecycle rule on that prefix. (2) **7 on the server** under Coolify's backup
+  folder (2026-09-17 → 09-23): Coolify's local "keep 14" rule has been working and will age them out
+  within about two weeks. (3) **The same 66 in your laptop's mirror** of that bucket; your sync adds
+  no new DMC dumps from now on.
 - [ ] **Decide on OCI's whole-disk backups** (found 2026-09-24). OCI backs up the server's entire disk —
   every app's data, not only DMC's — weekly, keeping 4 weeks, all in Riyadh; and a **manual full copy
   from 2026-07-19 has no expiry**, so it keeps a July snapshot of every app's patient data indefinitely.
