@@ -66,9 +66,10 @@ biggest live risk** (the original un-hardened build, on US hosting).
 - [ ] **Commission an external penetration test.** *(SEC-09)*
 - [ ] **Decide on column encryption for names / MRNs / diagnosis codes** (trade-off: they stop being
   searchable/sortable in SQL). *(G3)*
-- [ ] **Decide whether shared ward computers should end the session when the browser closes.** Today a
-  session survives closing the tab or browser until the 30-minute idle timeout (there is no "remember
-  me"); ending it on browser close is a one-setting change. *(2026-09-23 UAT, AUTH-07)*
+- [x] **End the session when the browser closes** — decided and shipped 2026-09-23. Closing the browser
+  now signs the user out; a closed tab still lasts until the idle timeout. On shared ward computers, turn
+  off the browser's "continue where you left off" start-up option, which can restore a session.
+  *(2026-09-23 UAT, AUTH-07)*
 - [ ] **Decide `log_record_opens`** (record every chart open — now a switch in Control → Settings) and **who reviews the export/report audit
   rows**, how often. *(R6, R12)*
 - [ ] **Quarterly access review + joiner/leaver process** for both systems' accounts. *(R4, R11)*

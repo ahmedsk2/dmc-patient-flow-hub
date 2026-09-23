@@ -34,7 +34,11 @@ return [
 
     'lifetime' => (int) env('SESSION_LIFETIME', 120),
 
-    'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', false),
+    // Owner decision 2026-09-23 (UAT AUTH-07): ward computers are shared, so the session cookie is a
+    // browser-session cookie — closing the browser signs the user out. The server-side idle timeout
+    // (Control → Settings) still ends a session left open in a running browser. scripts/smoke.sh
+    // fails if the live cookie ever carries an Expires / Max-Age again.
+    'expire_on_close' => (bool) env('SESSION_EXPIRE_ON_CLOSE', true),
 
     /*
     |--------------------------------------------------------------------------

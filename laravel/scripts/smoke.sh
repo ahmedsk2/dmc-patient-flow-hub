@@ -214,6 +214,13 @@ if [ "$CURL_RC" -eq 0 ] && [ -s "$TMP/login.hdr" ]; then
                 fi ;;
             *) warn "session cookie ${sc%%=*} has no __Host- prefix (SESSION_SECURE_COOKIE unset, or SESSION_COOKIE overrides the name)" ;;
         esac
+        # ...and it ends with the browser (owner decision 2026-09-23, SESSION_EXPIRE_ON_CLOSE): no
+        # Expires / Max-Age, so a closed browser on a shared ward computer is signed out.
+        if printf '%s' "$sc_l" | grep -Eq 'expires=|max-age='; then
+            fail "session cookie ${sc%%=*} is persistent (Expires / Max-Age set) — it should end when the browser closes (SESSION_EXPIRE_ON_CLOSE)"
+        else
+            pass "session cookie ${sc%%=*} ends when the browser closes (no Expires / Max-Age)"
+        fi
     fi
 else
     fail "security headers — no /login response to inspect"

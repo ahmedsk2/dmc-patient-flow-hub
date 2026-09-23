@@ -250,6 +250,9 @@
    `v2026.09.23.2`, build and SBOM attestations verified), deployed 2026-09-23 after a pre-deploy dump;
    no migrations; smoke 15/15, `/health` ok, audit chain intact, backup heartbeats fresh, and the live
    Patient Merge duplicate finder measured in the new container at 124 ms (14 pairs).
+   **2026-09-23, owner decision — the session ends when the browser closes** (`expire_on_close`
+   defaults to true; the cookie no longer carries Max-Age=7200). A test and a new `smoke.sh` check
+   (16 checks now) guard it.
    **Still open and all owner / infrastructure decisions, not code:** enable deploy-on-green
    (declined so far — "I don't want to autodeploy"), pick a log sink and set `LOG_STACK`
    (OBS-01/03/04/05), a second backup region + instance principal (DATA-02, CFG-10), SLOs and an
