@@ -32,7 +32,9 @@ biggest live risk** (the original un-hardened build, on US hosting).
   devices, one pass per role, and the Go/No-Go signature —
   `laravel/docs/compliance/evidence/uat-dry-run-2026-09-23.md`); plan staff
   communication and training; get the legacy host's backup-retention/deletion terms; inventory what the
-  legacy site leaks through its own logs, URLs and exports. *(B1–B3, G11, G15, R13–R15;
+  legacy site leaks through its own logs, URLs and exports. **The reload itself is rehearsed**
+  (2026-09-23, on a copy of production: 29 s end to end, MFA and settings kept, every figure
+  reconciled) — the real run needs a fresh legacy dump and the date. *(B1–B3, G11, G15, R13–R15;
   `laravel/docs/compliance/CONFIRMED-FACTS.md`)*
 - [ ] **Plan the first sign-in day.** Almost no one has signed in to the new app yet: at their first
   sign-in each person verifies their email, sets up an authenticator app and chooses a new password.
@@ -43,22 +45,39 @@ biggest live risk** (the original un-hardened build, on US hosting).
 - [ ] **Appoint a DPO.** The DPO charter and the privacy notices still carry `[DPO NAME]` placeholders.
   *(A6, G9, CMP-06; `laravel/docs/compliance/DPO.md`)*
 - [ ] **Destroy or encrypt the old patient-data exports kept on a personal workstation**, and keep an
-  inventory of what was destroyed. (The copies on the production host were shredded and re-checked
+  inventory of what was destroyed. The files were located and listed for the owner on 2026-09-23
+  (legacy dumps and CSV exports in the Downloads folder, plus possibly-related research files in a
+  cloud-synced folder); deleting them is the owner's. (The copies on the production host were shredded and re-checked
   2026-09-22.) *(D1, G8, DATA-14)*
 - [ ] **Make the GitHub repository private** before go-live (decided earlier; still public). *(B8, G10)*
 
 ## B. Owner — decisions and console work
 
-- [ ] **Explain the 2026-09-16 outage.** The host stopped abruptly at 02:55 UTC and came back at 16:00
-  UTC (~13 h); the system journal ends with no shutdown sequence, same kernel before and after, memory
-  ample. Nothing paged anyone. Check the OCI console (instance events / maintenance / audit) for the
-  cause. *(new, found 2026-09-22)*
+- [x] **Explain the 2026-09-16 outage** — investigated 2026-09-23 in the OCI audit trail and metrics.
+  **Oracle stopped the server itself** (02:56 UTC, no user or API caller — service-side Compute calls
+  just before) and **Oracle started it again** (16:00 UTC, network card re-attached — i.e. restored,
+  likely onto other hardware); the instance's recovery setting is already "restore instance", no
+  maintenance was scheduled or announced, and the metrics show the server dark 03:00–16:10. So: an
+  unplanned infrastructure failure whose automatic recovery took 13 h — plausibly waiting for Ampere
+  capacity in the region. **Owner, optional:** open an Oracle support request with the instance and
+  those times for their root cause; and see the on-call item below — nothing alerted anyone.
 - [ ] **On-call and paging, with agreed uptime targets.** Today nothing pages anyone out of hours.
   *(OPS-02/03, REL-01..05)*
 - [ ] **Pick a log / error-tracking / metrics service.** The code side is ready (`LOG_STACK`); container
   logs are lost on every redeploy until then. *(OBS-01/03/04/05)*
-- [ ] **Second-region backup copy** and **OCI instance-principal auth** for the backup/audit buckets
-  (removes the standing static key). Needs OCI IAM. *(DATA-02/04, CFG-10)*
+- [ ] **Second-region backup copy — your decision.** Tried 2026-09-23 with **me-jeddah-1** (the other
+  Saudi region): the region is subscribed and an empty private bucket exists there, but copying was
+  refused by the tenancy's own data-residency quota (`ksa-data-residency`, set up 2026-08-08), which
+  blocks storage in every region except Riyadh — Jeddah included. Choose: **allow object storage in
+  Jeddah only** (then I seed it and switch replication on), or **keep Riyadh-only** (then the empty
+  bucket is deleted and the gap stays accepted). *(DATA-02)*
+- [x] **Backup key can no longer delete** — done 2026-09-23: it can create, overwrite, read and list
+  only, so a stolen key cannot wipe the backups (proven with a refused delete). *(DATA-02)*
+- [ ] **Instance-principal auth instead of the static key** — not done, and not a console switch: the
+  backup scripts and the app's audit shipper use OCI's S3-compatible API, which only accepts static
+  keys, so this means moving all three to the native API with instance-principal signing. The key is
+  a dedicated service user limited to the two DMC buckets and can no longer delete. Engineering, if
+  you want it. *(DATA-04, CFG-10)*
 - [ ] **Single-reviewer waiver expires 2026-12-03** — renew with fresh reasoning or add a second reviewer.
   *(SEC-11, CICD-11, G17; `laravel/.prod-ready/waivers.yml`)*
 - [ ] **Name a backup person** — today only the owner can deploy, decrypt backups or lead an incident.
@@ -73,15 +92,19 @@ biggest live risk** (the original un-hardened build, on US hosting).
 - [ ] **Decide `log_record_opens`** (record every chart open — now a switch in Control → Settings) and **who reviews the export/report audit
   rows**, how often. *(R6, R12)*
 - [ ] **Quarterly access review + joiner/leaver process** for both systems' accounts. *(R4, R11)*
-- [ ] **Host and account hygiene:** SSH source restriction (deferred by owner, G7); a recurring
-  patch/reboot window (R9, R10); confirm every GitHub collaborator has MFA; confirm the historically
+- [ ] **Host and account hygiene:** ~~SSH source restriction (G7)~~ done 2026-09-23 — SSH only from the
+  owner's workstation address (update the rule in the OCI console if it changes); patched and rebooted
+  2026-09-23 (38 packages incl. Docker; every app on the host came back) — **still needed: a
+  recurring** patch/reboot window (R9, R10); confirm every GitHub collaborator has MFA; confirm the historically
   leaked legacy credentials were changed at their providers (CFG-04); a routine rotation schedule.
 - [ ] **Keep GitHub Actions billing enabled** — if it lapses, CI silently checks nothing.
 - [ ] *Optional:* Cloudflare WAF rules tuned for the app; clean up ~112 legacy records with non-numeric
   MRNs (D1, D3); revisit auto-deploy / auto-rollback (off by your decision, CICD-08).
-- [ ] **Rehearse the application half of a server loss** (install the deploy platform, rebuild the app
-  from source, repoint DNS) — the remaining unknown in the recovery time. Needs another temporary
-  instance and about an hour.
+- [x] **Rehearse the application half of a server loss** — done 2026-09-23 on a throwaway instance:
+  from launch to a serving app built from source in about 7 minutes of machine time (≈ 12 with the
+  data). It found two defects in the recovery procedure — an empty database can never pass the first
+  deploy's health check, and production relies on a Nixpacks setting nobody had written down — both
+  fixed in the runbooks. Only the DNS repoint was not exercised.
 - [x] **Start tagging releases** (`vYYYY.MM.DD`) — done from 2026-09-22 (`v2026.09.22`, `v2026.09.23`); CI signs what it builds on a tag — the
   provenance only exists for tagged commits, so an untagged deploy has none. *(CICD-05, §F)*
 
@@ -113,10 +136,10 @@ biggest live risk** (the original un-hardened build, on US hosting).
 
 | Due | Duty | Where |
 |---|---|---|
-| ~2026-10-22, then monthly | Restore drill (`db-restore-drill.sh`), log it in §8 | `laravel/docs/BACKUP-AND-RESTORE.md` §4, §8 |
+| ~2026-10-23, then monthly (last run 2026-09-23) | Restore drill (`db-restore-drill.sh`), log it in §8 | `laravel/docs/BACKUP-AND-RESTORE.md` §4, §8 |
 | 2026-12-03 | Single-reviewer waiver: renew or retire | `laravel/.prod-ready/waivers.yml` |
 | each entry's `review_by` | Composer-audit ignore list — **empty since 2026-09-22** (every advisory fixed by an update); any entry added later carries its own review date | `laravel/.composer-audit-ignore.json` |
-| ~2026-12-22, then quarterly (suggested) — and after any MySQL version change | PITR rehearsal (`pitr-rehearsal.sh`); rebuild the tools image on a version change | `BACKUP-AND-RESTORE.md` §10.2, §10.5 |
+| ~2026-12-23, then quarterly (last run 2026-09-23) — and after any MySQL version change | PITR rehearsal (`pitr-rehearsal.sh`); build the tools image first if the host lacks it | `BACKUP-AND-RESTORE.md` §10.2, §10.5 |
 | ongoing | GitHub Actions billing on; host patching | — |
 
 ## F. Engineering (no owner decision needed)

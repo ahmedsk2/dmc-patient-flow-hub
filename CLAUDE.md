@@ -317,7 +317,9 @@ Each flow names its controller; per-endpoint database effects are in DATABASE-AN
 - **Backups and point-in-time recovery:** nightly (02:15 host time) encrypted off-box dump to the
   in-Kingdom bucket `dmc-db-backups`, plus **hourly encrypted binlog shipping** to the same bucket
   (`scripts/backup/binlog-ship.py`, host cron at minute 40, installed 2026-09-03; MySQL 8.4 keeps
-  binlogs in ROW format for 30 days). RPO ≤ 1 h for binlog-covered changes, ≤ 24 h from the dump
+  binlogs in ROW format for 30 days). Since 2026-09-23 the writer key cannot delete; there is **no
+  second-region copy** (a Jeddah copy is blocked by the tenancy's `ksa-data-residency` quota — owner
+  decision, BACKUP-AND-RESTORE §6). RPO ≤ 1 h for binlog-covered changes, ≤ 24 h from the dump
   alone; RTO is whatever the drill prints (7–8 s for the dump) plus the replay and the human steps;
   local encrypted copy 2 days, bucket 90 days (**placeholder pending legal**); `backup:verify` alerts
   admins in-app when either heartbeat is stale (the binlog half needs the container deployed from
@@ -483,7 +485,7 @@ CBAHI. State on 2026-09-03:
   hospital's legal/DPO confirms it. Never invent a legal citation, retention period or entity name.
 - **Known compliance-relevant facts:** US-based SMTP relay for outbound mail (a transfer question);
   in-Kingdom hosting, backups and audit archive; a 90-day backup retention placeholder;
-  `APP_KEY` escrowed by the owner; SSH IP allow-list deferred by the owner.
+  `APP_KEY` escrowed by the owner; SSH restricted to the owner's workstation address since 2026-09-23.
 - **Readiness scoring:** two runs on **2026-09-03**. Morning, after the remediation: **BLOCKED
   58/100** (emphasis 70; two CI/CD process Criticals), up from 27/37 on 2026-09-02 —
   [`evidence/prod-ready-2026-09-03.md`](laravel/docs/compliance/evidence/prod-ready-2026-09-03.md).

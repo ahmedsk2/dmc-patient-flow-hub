@@ -321,14 +321,13 @@ resource "oci_identity_policy" "backup_writers_policy" {
   name           = "dmc-backup-writers-policy"
   description    = "Least-privilege: manage objects only in ${var.backup_bucket_name}, only for the backup-writers group."
   statements = [
-    "Allow group ${oci_identity_group.backup_writers.name} to manage objects in compartment id ${var.oci_compartment_id} where target.bucket.name = '${var.backup_bucket_name}'",
+    "Allow group ${oci_identity_group.backup_writers.name} to manage objects in compartment id ${var.oci_compartment_id} where all {target.bucket.name = '${var.backup_bucket_name}', any {request.permission = 'OBJECT_CREATE', request.permission = 'OBJECT_OVERWRITE', request.permission = 'OBJECT_INSPECT', request.permission = 'OBJECT_READ'}}",
     "Allow group ${oci_identity_group.backup_writers.name} to read buckets in compartment id ${var.oci_compartment_id} where target.bucket.name = '${var.backup_bucket_name}'",
   ]
-  # TODO: verify OCI policy-language syntax (the `where target.bucket.name = '...'` variable
-  # form, and whether "manage objects" is the right verb+resource-type pairing for PUT+HEAD+GET
-  # without also granting delete) against current OCI IAM policy reference docs before first
-  # plan — no policy statement text is quoted anywhere in the repo (infra/README.md item 6); this
-  # is a best-effort least-privilege pattern, not a captured fact.
+  # The create/overwrite/inspect/read form (no OBJECT_DELETE) is the live policy since 2026-09-23 —
+  # applied to the real dmc-audit-writers-policy and proven: backups, the heartbeat overwrite, the
+  # binlog shipper, restore downloads, listings and the app's audit shipping all work, and a DELETE is
+  # refused. See infra/README.md "Live state observed 2026-09-23".
 }
 
 resource "oci_identity_policy" "audit_writers_policy" {
@@ -336,7 +335,7 @@ resource "oci_identity_policy" "audit_writers_policy" {
   name           = "dmc-audit-writers-policy"
   description    = "Least-privilege: manage objects only in ${var.audit_bucket_name}, only for the audit-writers group."
   statements = [
-    "Allow group ${oci_identity_group.audit_writers.name} to manage objects in compartment id ${var.oci_compartment_id} where target.bucket.name = '${var.audit_bucket_name}'",
+    "Allow group ${oci_identity_group.audit_writers.name} to manage objects in compartment id ${var.oci_compartment_id} where all {target.bucket.name = '${var.audit_bucket_name}', any {request.permission = 'OBJECT_CREATE', request.permission = 'OBJECT_OVERWRITE', request.permission = 'OBJECT_INSPECT', request.permission = 'OBJECT_READ'}}",
     "Allow group ${oci_identity_group.audit_writers.name} to read buckets in compartment id ${var.oci_compartment_id} where target.bucket.name = '${var.audit_bucket_name}'",
   ]
 }

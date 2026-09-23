@@ -255,6 +255,21 @@
    (16 checks now) guard it. **Production runs `4bd5bba`** (merge of PR #33, release `v2026.09.23.3`,
    attestations verified), deployed after a pre-deploy dump; the live session cookie has no
    Expires / Max-Age, smoke 16/16, `/health` ok, audit chain intact.
+   **2026-09-23 night, operations (owner: "do these for now"):** SSH restricted to the owner's
+   workstation; the host patched (38 packages incl. Docker) and rebooted — all 31 containers of every
+   app came back, DMC smoke 16/16; the monthly restore drill and the quarterly point-in-time rehearsal
+   run (both pass); the **16 September outage explained** from OCI's own records (Oracle stopped and
+   later restored the server — an infrastructure failure, not ours); the backup key can no longer
+   delete; the **Jeddah backup copy was blocked** by the tenancy's own residency quota
+   (`ksa-data-residency` zeroes storage outside `me-riyadh-1`, Jeddah included) — an owner decision,
+   nothing replicates yet; the **cutover reload rehearsed** on a copy of
+   production (29 s, MFA and settings kept) and the **application half of a server loss rehearsed**
+   (≈ 7 min to a serving app) — the two rehearsals found three procedure defects (database sessions
+   not cleared by the reload runbook; an empty database can never pass the first deploy's health
+   check; an undocumented Nixpacks setting production needs), all fixed in the runbooks. Still open
+   from the list: the second-region copy (owner decision on the quota), instance-principal auth (an
+   engineering change, see REMAINING-WORK), and the workstation exports (listed for the owner to
+   delete).
    **Still open and all owner / infrastructure decisions, not code:** enable deploy-on-green
    (declined so far — "I don't want to autodeploy"), pick a log sink and set `LOG_STACK`
    (OBS-01/03/04/05), a second backup region + instance principal (DATA-02, CFG-10), SLOs and an

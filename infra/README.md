@@ -190,3 +190,29 @@ specified here because no such backend is documented anywhere in the repo, and l
 live clinical system's infrastructure is not an acceptable long-term choice. `versions.tf` leaves
 the `backend` block absent (local state) with a comment marking this as the first thing to fix
 before real adoption.
+
+## Live state observed 2026-09-23 (read off OCI, for whoever adopts this code)
+
+The Terraform above was written from the docs and has never been planned. Reading the live tenancy on
+2026-09-23 showed where it differs — reconcile these before the first `plan`, or it will try to
+"fix" production:
+
+- **IAM:** one group, `dmc-audit-writers`, with one service user and one policy
+  (`dmc-audit-writers-policy`) covering **both** buckets — not two separate writer groups. Its object
+  statements are the create/overwrite/inspect/read form above (no delete, since 2026-09-23), plus
+  `Allow service objectstorage-me-riyadh-1 to manage object-family in tenancy` (lifecycle needs it;
+  replication would too).
+- **`dmc-db-backups`:** expiry is an **object lifecycle policy** (`expire-db-backups-after-90-days`,
+  DELETE after 90 days), not a bucket retention rule — the retention-rule block here would make objects
+  undeletable. Versioning disabled. No replication (see the quota below).
+- **Tenancy quota policy `ksa-data-residency`** (2026-08-08, not modelled here): zero quotas for every
+  data-bearing service (compute, block and object storage, databases, …) `where request.region !=
+  me-riyadh-1`. It is the reason a second-region copy failed on 2026-09-23: `me-jeddah-1` was subscribed
+  and an empty private bucket `dmc-db-backups-jed` created there, but writes are refused with
+  `StorageQuotaExceeded`. Model it before any `plan`, and do not loosen it without the owner's decision.
+- **`dmc-audit-log`:** has a **7-year retention rule** (`audit-worm-7y`, write-once) and suspended
+  versioning — the code here says "no retention rule".
+- **Network:** SSH on the security list is limited to the owner's workstation address (/32, since
+  2026-09-23 — supply it through `ssh_allowed_cidrs`, never commit it); 80/443 from Cloudflare's ranges
+  only; the VNIC also carries a network security group that admits 443 only from another app's load
+  balancer on the same host.
