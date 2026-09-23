@@ -41,8 +41,9 @@ unmeasured number is quoted, and every drill is logged in §8.
   file, and the Coolify/OCI configuration.
 - Retention is **90 days** off-box and 2 days locally, both `[NEEDS LEGAL CONFIRMATION]`.
 - Two drills are logged for 2026-09-03 (8 s and 7 s). The second notes `audit:verify` cannot run
-  against the scratch database, which the drill drops on exit. A second in-Kingdom backup region
-  remains open (DATA-02).
+  against the scratch database, which the drill drops on exit. **Update 2026-09-24:** no second
+  backup region, by owner decision — Riyadh only, plus an owner-kept local copy of the encrypted
+  objects (DATA-02 closed by decision; BACKUP-AND-RESTORE §6).
 
 ## References
 

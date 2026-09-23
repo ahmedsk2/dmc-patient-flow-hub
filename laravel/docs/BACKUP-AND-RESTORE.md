@@ -538,16 +538,47 @@ overwrite, read and list — but not delete** (IAM policy `dmc-audit-writers-pol
 2026-09-23 and proven with a refused DELETE); expiry is the bucket's own 90-day lifecycle rule. A
 stolen key can add junk but cannot wipe the backups.
 
-**Second-region copy — attempted 2026-09-23, blocked by the tenancy's own residency control.** The
-plan was to replicate `dmc-db-backups` to a bucket in **`me-jeddah-1`** (the other Saudi OCI region,
-still in-Kingdom). The tenancy was subscribed to `me-jeddah-1` (OCI subscriptions cannot be undone) and
-an empty, private bucket `dmc-db-backups-jed` was created there, but seeding it failed with
-`StorageQuotaExceeded`: the tenancy quota policy **`ksa-data-residency`** (created 2026-08-08) sets
-every data-bearing service's quota to zero `where request.region != me-riyadh-1` — Jeddah included —
-and its own description says to lift it only by a deliberate decision. **No replication policy was
-created; there is no second copy today.** Enabling it is an owner decision: amend that quota to allow
-object storage in `me-jeddah-1` only (and record it), then seed and switch on replication; or keep
-the quota and delete the empty bucket.
+**No second cloud region — owner decision, 2026-09-24.** Backups stay in **`me-riyadh-1` only**; the
+owner keeps an additional local copy (below). History: a copy to **`me-jeddah-1`** (the other Saudi
+OCI region) was attempted on 2026-09-23 and refused with `StorageQuotaExceeded` by the tenancy quota
+policy **`ksa-data-residency`** (2026-08-08), which zeroes every data-bearing service `where
+request.region != me-riyadh-1`. The quota stays. The empty bucket `dmc-db-backups-jed` was deleted on
+2026-09-24; the `me-jeddah-1` subscription remains (OCI cannot remove a region subscription) and holds
+nothing. Verified the same day, read-only: no replication policy on `dmc-db-backups` or
+`dmc-audit-log`, no cross-region replica or cross-region backup of the host's boot volume.
+
+**The owner's local copy.** The owner already runs a daily sync of the `coolify-backups` bucket (below)
+to their workstation, so the local copy of DMC data today is Coolify's **unencrypted** dumps. The
+recommended form for DMC is the encrypted objects of this pipeline, copied exactly as stored
+(`*.sql.gz.enc`, `binlogs/…*.gz.enc`) and never decrypted on the workstation. With the owner's own OCI
+CLI profile, this fetches only what is new since the last run:
+
+```bash
+oci os object bulk-download -bn dmc-db-backups --prefix db-backups/dmc_demo/ --download-dir <local folder> --no-overwrite
+```
+
+A copy is restorable only together with the backup key and `APP_KEY` (§3), so keep those apart from
+it — a copy stored next to its key is plaintext to whoever takes the disk — and keep the workstation's
+disk encrypted (Windows device encryption / BitLocker). The bucket's 90-day expiry does not reach the
+local copy: prune it by hand to the same retention (a placeholder pending legal, above).
+
+**Coolify's own database backups (found 2026-09-24).** Independently of this runbook, Coolify's
+scheduled backup of the shared MySQL container writes a daily **plain-SQL** dump of `dmc_demo` (among
+other databases) to the private in-Kingdom bucket `coolify-backups` (66 `dmc_demo` dumps from
+2026-07-19 to 2026-09-23, ≈ 1.3 GB). They are not client-side encrypted (OCI's at-rest encryption
+only), the bucket has **no lifecycle expiry** (only a 14-day retention rule, which blocks deletion for
+14 days and expires nothing), and the owner mirrors the bucket to their workstation daily. They are a
+usable extra recovery source — a plain `mysql < dump` — but they sit outside this runbook's encryption
+and 90-day retention. Whether to drop `dmc_demo` from that job or add an expiry is an owner decision
+(REMAINING-WORK); the job and bucket are shared with the other apps on the host.
+
+**OCI boot-volume backups (found 2026-09-24).** Separately from everything above, OCI backs up the
+host's **entire boot volume** — the whole disk, so the MySQL data of DMC *and of every other app on the
+host* — under the volume backup policy `weekly-4` (weekly incremental, kept 4 weeks, no destination
+region, so Riyadh only), and a manual full backup `manual-full-20260719-1911` (2026-07-19) has **no
+expiry**. They are a coarse extra recovery path (bring back the whole server as it was on that day;
+nothing in this runbook depends on it) and a copy of patient data that counts in the inventory; the
+manual one's retention is an owner decision (REMAINING-WORK).
 
 **Measured bucket volume (2026-09-22, `db-backup.py`/`binlog-ship.py`'s own log lines on the
 host — hourly rotation has been running since 2026-09-04, §10.2).** Nightly dumps run about

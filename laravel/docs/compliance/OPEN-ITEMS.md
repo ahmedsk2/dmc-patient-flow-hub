@@ -103,96 +103,96 @@ Every bracketed marker below must be resolved by the hospital's legal / data-pro
 | 56 | [PLACEHOLDER — processor to state what deletion is possible on the account] | C1 \| The **daily** clinical database \| Legacy PHP app, **SiteGround shared hosting, United States** \| Operator… |
 | 60 | [VERIFY — SiteGround backup scope, retention and deletion on request] | C5 \| Whatever SiteGround retains of the daily database \| **United States**, inside SiteGround's platform \| Sit… |
 | 62 | [VERIFY] | C7 \| The `dmc-im.com` mailbox \| SiteGround, **United States** \| Operator company \| Mailbox policy [VERIFY] (§2… |
-| 72 | [NEEDS LEGAL CONFIRMATION] | asserted anywhere in this document** [NEEDS LEGAL CONFIRMATION]. |
-| 76 | [VERIFY which trigger the regulation uses; special rules for minors or deceased patients] | `patients`, `admissions`, `admission_diagnoses`, `consultations`, `consultation_followups`, `handovers`, `hand… |
-| 76 | [NEEDS LEGAL CONFIRMATION] | `patients`, `admissions`, `admission_diagnoses`, `consultations`, `consultation_followups`, `handovers`, `hand… |
-| 76 | [VERIFY whether the hub is part of the medical record] | `patients`, `admissions`, `admission_diagnoses`, `consultations`, `consultation_followups`, `handovers`, `hand… |
-| 76 | [PLACEHOLDER — DPO + clinical owner] | `patients`, `admissions`, `admission_diagnoses`, `consultations`, `consultation_followups`, `handovers`, `hand… |
-| 77 | [PLACEHOLDER — processor; cutover date] | The **same clinical records** in the legacy daily database \| **Legacy daily (C1)** — SiteGround, **United Stat… |
-| 89 | [VERIFY the six-year figure against any sector requirement for access-log retention] | `audit_log` rows (local database) \| `created_at` \| **Six years** (`settings.audit_retention_years`, default si… |
-| 90 | [VERIFY configured] | Audit archive NDJSON objects (WORM bucket) \| Object creation \| **Seven years** (bucket retention lock) \| Immut… |
-| 91 | [VERIFY] | **Why seven off-box vs six local** \| \| The archive must outlive the local rows by a margin so that (a) a local… |
-| 92 | [VERIFY] | Pre-chain audit rows (NULL `row_hash`) \| — \| As above \| Present until backfilled [VERIFY] \| Backfill, then nor… |
-| 94 | [PLACEHOLDER] | Non-patient `notifications` (`audit.integrity_failure`, `security.failed_logins`, consultation/handover bell r… |
-| 100 | [VERIFY sufficient against the clinical-record and audit periods — a backup only needs to cover recovery, not retention, because the live database and the WORM archive are the retention copies] | Automated encrypted off-box backups \| **Laravel (C4)** — in-Kingdom OCI bucket `dmc-db-backups` \| Backup creat… |
-| 101 | [VERIFY] | Whatever SiteGround retains of the **daily** database \| **Legacy (C5)** — SiteGround, **United States** \| Prov… |
-| 102 | [PLACEHOLDER] | Manual pre-deploy dumps `~/pre-deploy-*.sql.gz` \| Laravel host (C6) \| Creation (DEPLOY-LARAVEL.md §7) \| **Prop… |
-| 102 | [VERIFY] | Manual pre-deploy dumps `~/pre-deploy-*.sql.gz` \| Laravel host (C6) \| Creation (DEPLOY-LARAVEL.md §7) \| **Prop… |
-| 103 | [PLACEHOLDER] | Incident dumps / OCI volume snapshots named `INC-…` \| Laravel (C6) \| Incident closure \| For the duration of th… |
-| 104 | [PLACEHOLDER — date] | Legacy database dumps and exports \| **C6** — operator workstations and the OCI host under `/home/ubuntu/migrat… |
-| 104 | [VERIFY local copies destroyed] | Legacy database dumps and exports \| **C6** — operator workstations and the OCI host under `/home/ubuntu/migrat… |
-| 105 | [NEEDS LEGAL CONFIRMATION] | The legacy application's own database \| **Legacy daily (C1)** — SiteGround, **United States**; still the live … |
-| 105 | [PLACEHOLDER — cutover date] | The legacy application's own database \| **Legacy daily (C1)** — SiteGround, **United States**; still the live … |
-| 116 | [VERIFY path on the live host] | Sessions (`storage/framework/sessions/*` files; `sessions` table if the driver is `database`) \| Last activity … |
-| 117 | [PLACEHOLDER] | `trusted_devices` \| `expires_at` (fixed window `settings.mfa_trusted_device_hours`, default twenty-four hours;… |
-| 118 | [VERIFY] | `pending_registrations` \| `expires_at` (**thirty minutes** after creation) \| Delete at expiry \| The controller… |
-| 128 | [PLACEHOLDER — joiner/leaver procedure covering both systems] | in one leaves the other open [PLACEHOLDER — joiner/leaver procedure covering both systems]. |
-| 133 | [PLACEHOLDER — HR feed] | Account after departure \| HR leaving date [PLACEHOLDER — HR feed] \| **Immediately:** set `active = 0` (Control… |
-| 133 | [PLACEHOLDER — proposed ninety days] | Account after departure \| HR leaving date [PLACEHOLDER — HR feed] \| **Immediately:** set `active = 0` (Control… |
-| 133 | [NEEDS LEGAL CONFIRMATION — employment-record retention rules] | Account after departure \| HR leaving date [PLACEHOLDER — HR feed] \| **Immediately:** set `active = 0` (Control… |
-| 141 | [VERIFY — legacy log and export inventory] | [VERIFY — legacy log and export inventory]. Note also that exports and printed sheets exist in |
-| 148 | [PLACEHOLDER; VERIFY no sector minimum for security logs] | Application log `storage/logs/laravel-YYYY-MM-DD.log` \| File date \| `daily` channel with `LOG_DAILY_DAYS` (**d… |
-| 148 | [VERIFY live value] | Application log `storage/logs/laravel-YYYY-MM-DD.log` \| File date \| `daily` channel with `LOG_DAILY_DAYS` (**d… |
-| 149 | [VERIFY `max-size`/`max-file` on the live daemon] | Container stdout/stderr logs (Docker json-file) \| — \| Docker default is unbounded [VERIFY `max-size`/`max-file… |
-| 152 | [PLACEHOLDER] | Registry exports (CSV/XLSX) on staff devices — **Laravel** \| Download \| **Proposed: delete within thirty days … |
-| 153 | [PLACEHOLDER] | Audit-log exports, statistics exports, report PDFs — **Laravel** \| Download \| As above [PLACEHOLDER] \| No rule… |
-| 154 | [PLACEHOLDER] | Exports and printed output from the **legacy daily system** \| Download / printing \| As above [PLACEHOLDER] \| N… |
-| 155 | [VERIFY] | Monthly report PDF (aggregate) \| Sent on the first of the month at 06:00 \| At recipients' mailboxes per the ho… |
-| 155 | [VERIFY relay retention] | Monthly report PDF (aggregate) \| Sent on the first of the month at 06:00 \| At recipients' mailboxes per the ho… |
-| 156 | [VERIFY live value] | Queued job payloads (`jobs` table) carrying the PDF \| Job completion \| `.env.example` sets `QUEUE_CONNECTION=s… |
-| 157 | [PLACEHOLDER — clinical rule] | Printed handover / service sheets \| Printing \| **End of shift or when superseded, whichever is first** [PLACEH… |
-| 188 | [NEEDS LEGAL CONFIRMATION] | 1 \| Obtain the clinical-record retention period and trigger from legal \| [NEEDS LEGAL CONFIRMATION] \| [PLACEHO… |
-| 188 | [PLACEHOLDER — DPO] | 1 \| Obtain the clinical-record retention period and trigger from legal \| [NEEDS LEGAL CONFIRMATION] \| [PLACEHO… |
-| 188 | [PLACEHOLDER] | 1 \| Obtain the clinical-record retention period and trigger from legal \| [NEEDS LEGAL CONFIRMATION] \| [PLACEHO… |
-| 189 | [PLACEHOLDER — DPO + clinical owner] | 2 \| Decide delete-vs-anonymise for expired clinical rows \| Open \| [PLACEHOLDER — DPO + clinical owner] \| [PLAC… |
-| 189 | [PLACEHOLDER] | 2 \| Decide delete-vs-anonymise for expired clinical rows \| Open \| [PLACEHOLDER — DPO + clinical owner] \| [PLAC… |
-| 190 | [PLACEHOLDER] | 3 \| Build `records:prune` (dry-run default, `--confirm`, audited, refuses when the period is unset) or the ano… |
-| 190 | [PLACEHOLDER] | 3 \| Build `records:prune` (dry-run default, `--confirm`, audited, refuses when the period is unset) or the ano… |
-| 191 | [PLACEHOLDER] | 4 \| Schedule `audit:prune` **dry-run** monthly with notification; document the quarterly operator run \| GAP \| … |
-| 191 | [PLACEHOLDER] | 4 \| Schedule `audit:prune` **dry-run** monthly with notification; document the quarterly operator run \| GAP \| … |
-| 192 | [VERIFY] | 5 \| Backfill pre-chain audit hashes \| [VERIFY] \| [PLACEHOLDER] \| [PLACEHOLDER] |
-| 192 | [PLACEHOLDER] | 5 \| Backfill pre-chain audit hashes \| [VERIFY] \| [PLACEHOLDER] \| [PLACEHOLDER] |
-| 192 | [PLACEHOLDER] | 5 \| Backfill pre-chain audit hashes \| [VERIFY] \| [PLACEHOLDER] \| [PLACEHOLDER] |
-| 193 | [VERIFY] | 6 \| Confirm WORM bucket lifecycle expires objects after the seven-year lock \| [VERIFY] \| [PLACEHOLDER] \| [PLAC… |
-| 193 | [PLACEHOLDER] | 6 \| Confirm WORM bucket lifecycle expires objects after the seven-year lock \| [VERIFY] \| [PLACEHOLDER] \| [PLAC… |
-| 193 | [PLACEHOLDER] | 6 \| Confirm WORM bucket lifecycle expires objects after the seven-year lock \| [VERIFY] \| [PLACEHOLDER] \| [PLAC… |
-| 194 | [PLACEHOLDER] | 7 \| Backups: ninety-day lifecycle rule; encrypt; stale alert; restore test \| **Done for the Laravel copy** (ni… |
-| 194 | [PLACEHOLDER] | 7 \| Backups: ninety-day lifecycle rule; encrypt; stale alert; restore test \| **Done for the Laravel copy** (ni… |
-| 195 | [PLACEHOLDER] | 8 \| Encrypt-at-creation + off-box + seven-day delete for manual pre-deploy dumps \| GAP \| [PLACEHOLDER] \| [PLAC… |
-| 195 | [PLACEHOLDER] | 8 \| Encrypt-at-creation + off-box + seven-day delete for manual pre-deploy dumps \| GAP \| [PLACEHOLDER] \| [PLAC… |
-| 196 | [PLACEHOLDER] | 9 \| Inventory and destroy legacy dumps (CONFIRMED-FACTS D1, incl. the plaintext dump and key files on the OCI … |
-| 196 | [PLACEHOLDER] | 9 \| Inventory and destroy legacy dumps (CONFIRMED-FACTS D1, incl. the plaintext dump and key files on the OCI … |
-| 197 | [PLACEHOLDER — owner + DPO] | 9a \| **Decide and record what happens to the legacy daily database (C1) and to SiteGround-held backups (C5)** … |
-| 197 | [PLACEHOLDER] | 9a \| **Decide and record what happens to the legacy daily database (C1) and to SiteGround-held backups (C5)** … |
-| 198 | [PLACEHOLDER — IT lead] | 9b \| Obtain SiteGround's backup scope, retention and deletion terms; cover them in the transfer safeguard \| GA… |
-| 198 | [PLACEHOLDER] | 9b \| Obtain SiteGround's backup scope, retention and deletion terms; cover them in the transfer safeguard \| GA… |
-| 199 | [PLACEHOLDER — DPO + owner] | 9c \| **Sign the controller–processor contract** so these periods bind the operator company (IR Art. 17 minimum… |
-| 199 | [PLACEHOLDER] | 9c \| **Sign the controller–processor contract** so these periods bind the operator company (IR Art. 17 minimum… |
-| 200 | [PLACEHOLDER] | 10 \| Nightly sweeps: expired sessions (file driver), `pending_registrations`, `trusted_devices` (after ninety … |
-| 200 | [PLACEHOLDER] | 10 \| Nightly sweeps: expired sessions (file driver), `pending_registrations`, `trusted_devices` (after ninety … |
-| 201 | [VERIFY live values] | 11 \| Set `LOG_CHANNEL=daily`, `LOG_DAILY_DAYS` per the agreed period; Docker log rotation \| [VERIFY live value… |
-| 201 | [PLACEHOLDER] | 11 \| Set `LOG_CHANNEL=daily`, `LOG_DAILY_DAYS` per the agreed period; Docker log rotation \| [VERIFY live value… |
-| 201 | [PLACEHOLDER] | 11 \| Set `LOG_CHANNEL=daily`, `LOG_DAILY_DAYS` per the agreed period; Docker log rotation \| [VERIFY live value… |
-| 202 | [PLACEHOLDER — HR / System owner] | 12 \| Departure checklist + quarterly access review, **covering both systems' account sets** \| GAP \| [PLACEHOLD… |
-| 202 | [PLACEHOLDER] | 12 \| Departure checklist + quarterly access review, **covering both systems' account sets** \| GAP \| [PLACEHOLD… |
-| 203 | [PLACEHOLDER] | 13 \| Staff rule for exports and printed sheets; add classification labels to exports \| **Labels done on the La… |
-| 203 | [PLACEHOLDER] | 13 \| Staff rule for exports and printed sheets; add classification labels to exports \| **Labels done on the La… |
-| 204 | [PLACEHOLDER — processor] | 14 \| Inventory the legacy schema, logs and exports on SiteGround so this schedule can be applied to C1/C5 at a… |
-| 204 | [PLACEHOLDER] | 14 \| Inventory the legacy schema, logs and exports on SiteGround so this schedule can be applied to C1/C5 at a… |
-| 213 | [VERIFY binlog configuration] | reused, and in the binary log / redo log if enabled [VERIFY binlog configuration]. For sensitive |
-| 227 | [VERIFY] | destruction where available [VERIFY]). Confirm no copies exist in home-directory backups, editor |
-| 234 | [VERIFY the key-management setup for the backup bucket and the audit archive] | form of erasure [VERIFY the key-management setup for the backup bucket and the audit archive]. |
-| 242 | [PLACEHOLDER — obtain and file] | **Cloudflare** (edge logs). None of these has a signed DPA on file [PLACEHOLDER — obtain and file]. |
-| 261 | [NEEDS LEGAL CONFIRMATION] | hold: the health-care regulation's record-keeping period [NEEDS LEGAL CONFIRMATION] (a legal |
-| 262 | [VERIFY ARTICLE] | obligation — the exception the law recognises [VERIFY ARTICLE]), and statistical/quality |
-| 264 | [VERIFY ARTICLE — statistics/research provision and whether it requires anonymisation] | [VERIFY ARTICLE — statistics/research provision and whether it requires anonymisation]. |
-| 270 | [VERIFY] | DPO should confirm whether that residual identifier must also be hashed [VERIFY]). |
-| 278 | [VERIFY any sector rule for access-log retention in health-care] | and period [VERIFY any sector rule for access-log retention in health-care]. |
-| 288 | [PLACEHOLDER — cutover date; destruction certificate] | migration dump [PLACEHOLDER — cutover date; destruction certificate]. |
-| 296 | [PLACEHOLDER] | annually. Next review: [PLACEHOLDER]. |
-| 302 | [PLACEHOLDER] | 2026-09-03 \| 0.1 \| Initial draft \| [PLACEHOLDER] |
-| 303 | [PLACEHOLDER] | 2026-09-03 \| 0.1 \| Reworked to the confirmed framing: two-system principle and controller/processor split (§1.… |
-| 304 | [PLACEHOLDER] | 2026-09-03 \| 0.1 \| Reconciled §2.6 and checklist item 13 with CONFIRMED-FACTS C12/C13 as re-verified: every La… |
+| 74 | [NEEDS LEGAL CONFIRMATION] | asserted anywhere in this document** [NEEDS LEGAL CONFIRMATION]. |
+| 78 | [VERIFY which trigger the regulation uses; special rules for minors or deceased patients] | `patients`, `admissions`, `admission_diagnoses`, `consultations`, `consultation_followups`, `handovers`, `hand… |
+| 78 | [NEEDS LEGAL CONFIRMATION] | `patients`, `admissions`, `admission_diagnoses`, `consultations`, `consultation_followups`, `handovers`, `hand… |
+| 78 | [VERIFY whether the hub is part of the medical record] | `patients`, `admissions`, `admission_diagnoses`, `consultations`, `consultation_followups`, `handovers`, `hand… |
+| 78 | [PLACEHOLDER — DPO + clinical owner] | `patients`, `admissions`, `admission_diagnoses`, `consultations`, `consultation_followups`, `handovers`, `hand… |
+| 79 | [PLACEHOLDER — processor; cutover date] | The **same clinical records** in the legacy daily database \| **Legacy daily (C1)** — SiteGround, **United Stat… |
+| 91 | [VERIFY the six-year figure against any sector requirement for access-log retention] | `audit_log` rows (local database) \| `created_at` \| **Six years** (`settings.audit_retention_years`, default si… |
+| 92 | [VERIFY configured] | Audit archive NDJSON objects (WORM bucket) \| Object creation \| **Seven years** (bucket retention lock) \| Immut… |
+| 93 | [VERIFY] | **Why seven off-box vs six local** \| \| The archive must outlive the local rows by a margin so that (a) a local… |
+| 94 | [VERIFY] | Pre-chain audit rows (NULL `row_hash`) \| — \| As above \| Present until backfilled [VERIFY] \| Backfill, then nor… |
+| 96 | [PLACEHOLDER] | Non-patient `notifications` (`audit.integrity_failure`, `security.failed_logins`, consultation/handover bell r… |
+| 102 | [VERIFY sufficient against the clinical-record and audit periods — a backup only needs to cover recovery, not retention, because the live database and the WORM archive are the retention copies] | Automated encrypted off-box backups \| **Laravel (C4)** — in-Kingdom OCI bucket `dmc-db-backups` \| Backup creat… |
+| 105 | [VERIFY] | Whatever SiteGround retains of the **daily** database \| **Legacy (C5)** — SiteGround, **United States** \| Prov… |
+| 106 | [PLACEHOLDER] | Manual pre-deploy dumps `~/pre-deploy-*.sql.gz` \| Laravel host (C6) \| Creation (DEPLOY-LARAVEL.md §7) \| **Prop… |
+| 106 | [VERIFY] | Manual pre-deploy dumps `~/pre-deploy-*.sql.gz` \| Laravel host (C6) \| Creation (DEPLOY-LARAVEL.md §7) \| **Prop… |
+| 107 | [PLACEHOLDER] | Incident dumps / OCI volume snapshots named `INC-…` \| Laravel (C6) \| Incident closure \| For the duration of th… |
+| 108 | [PLACEHOLDER — date] | Legacy database dumps and exports \| **C6** — operator workstations and the OCI host under `/home/ubuntu/migrat… |
+| 108 | [VERIFY local copies destroyed] | Legacy database dumps and exports \| **C6** — operator workstations and the OCI host under `/home/ubuntu/migrat… |
+| 109 | [NEEDS LEGAL CONFIRMATION] | The legacy application's own database \| **Legacy daily (C1)** — SiteGround, **United States**; still the live … |
+| 109 | [PLACEHOLDER — cutover date] | The legacy application's own database \| **Legacy daily (C1)** — SiteGround, **United States**; still the live … |
+| 120 | [VERIFY path on the live host] | Sessions (`storage/framework/sessions/*` files; `sessions` table if the driver is `database`) \| Last activity … |
+| 121 | [PLACEHOLDER] | `trusted_devices` \| `expires_at` (fixed window `settings.mfa_trusted_device_hours`, default twenty-four hours;… |
+| 122 | [VERIFY] | `pending_registrations` \| `expires_at` (**thirty minutes** after creation) \| Delete at expiry \| The controller… |
+| 132 | [PLACEHOLDER — joiner/leaver procedure covering both systems] | in one leaves the other open [PLACEHOLDER — joiner/leaver procedure covering both systems]. |
+| 137 | [PLACEHOLDER — HR feed] | Account after departure \| HR leaving date [PLACEHOLDER — HR feed] \| **Immediately:** set `active = 0` (Control… |
+| 137 | [PLACEHOLDER — proposed ninety days] | Account after departure \| HR leaving date [PLACEHOLDER — HR feed] \| **Immediately:** set `active = 0` (Control… |
+| 137 | [NEEDS LEGAL CONFIRMATION — employment-record retention rules] | Account after departure \| HR leaving date [PLACEHOLDER — HR feed] \| **Immediately:** set `active = 0` (Control… |
+| 145 | [VERIFY — legacy log and export inventory] | [VERIFY — legacy log and export inventory]. Note also that exports and printed sheets exist in |
+| 152 | [PLACEHOLDER; VERIFY no sector minimum for security logs] | Application log `storage/logs/laravel-YYYY-MM-DD.log` \| File date \| `daily` channel with `LOG_DAILY_DAYS` (**d… |
+| 152 | [VERIFY live value] | Application log `storage/logs/laravel-YYYY-MM-DD.log` \| File date \| `daily` channel with `LOG_DAILY_DAYS` (**d… |
+| 153 | [VERIFY `max-size`/`max-file` on the live daemon] | Container stdout/stderr logs (Docker json-file) \| — \| Docker default is unbounded [VERIFY `max-size`/`max-file… |
+| 156 | [PLACEHOLDER] | Registry exports (CSV/XLSX) on staff devices — **Laravel** \| Download \| **Proposed: delete within thirty days … |
+| 157 | [PLACEHOLDER] | Audit-log exports, statistics exports, report PDFs — **Laravel** \| Download \| As above [PLACEHOLDER] \| No rule… |
+| 158 | [PLACEHOLDER] | Exports and printed output from the **legacy daily system** \| Download / printing \| As above [PLACEHOLDER] \| N… |
+| 159 | [VERIFY] | Monthly report PDF (aggregate) \| Sent on the first of the month at 06:00 \| At recipients' mailboxes per the ho… |
+| 159 | [VERIFY relay retention] | Monthly report PDF (aggregate) \| Sent on the first of the month at 06:00 \| At recipients' mailboxes per the ho… |
+| 160 | [VERIFY live value] | Queued job payloads (`jobs` table) carrying the PDF \| Job completion \| `.env.example` sets `QUEUE_CONNECTION=s… |
+| 161 | [PLACEHOLDER — clinical rule] | Printed handover / service sheets \| Printing \| **End of shift or when superseded, whichever is first** [PLACEH… |
+| 192 | [NEEDS LEGAL CONFIRMATION] | 1 \| Obtain the clinical-record retention period and trigger from legal \| [NEEDS LEGAL CONFIRMATION] \| [PLACEHO… |
+| 192 | [PLACEHOLDER — DPO] | 1 \| Obtain the clinical-record retention period and trigger from legal \| [NEEDS LEGAL CONFIRMATION] \| [PLACEHO… |
+| 192 | [PLACEHOLDER] | 1 \| Obtain the clinical-record retention period and trigger from legal \| [NEEDS LEGAL CONFIRMATION] \| [PLACEHO… |
+| 193 | [PLACEHOLDER — DPO + clinical owner] | 2 \| Decide delete-vs-anonymise for expired clinical rows \| Open \| [PLACEHOLDER — DPO + clinical owner] \| [PLAC… |
+| 193 | [PLACEHOLDER] | 2 \| Decide delete-vs-anonymise for expired clinical rows \| Open \| [PLACEHOLDER — DPO + clinical owner] \| [PLAC… |
+| 194 | [PLACEHOLDER] | 3 \| Build `records:prune` (dry-run default, `--confirm`, audited, refuses when the period is unset) or the ano… |
+| 194 | [PLACEHOLDER] | 3 \| Build `records:prune` (dry-run default, `--confirm`, audited, refuses when the period is unset) or the ano… |
+| 195 | [PLACEHOLDER] | 4 \| Schedule `audit:prune` **dry-run** monthly with notification; document the quarterly operator run \| GAP \| … |
+| 195 | [PLACEHOLDER] | 4 \| Schedule `audit:prune` **dry-run** monthly with notification; document the quarterly operator run \| GAP \| … |
+| 196 | [VERIFY] | 5 \| Backfill pre-chain audit hashes \| [VERIFY] \| [PLACEHOLDER] \| [PLACEHOLDER] |
+| 196 | [PLACEHOLDER] | 5 \| Backfill pre-chain audit hashes \| [VERIFY] \| [PLACEHOLDER] \| [PLACEHOLDER] |
+| 196 | [PLACEHOLDER] | 5 \| Backfill pre-chain audit hashes \| [VERIFY] \| [PLACEHOLDER] \| [PLACEHOLDER] |
+| 197 | [VERIFY] | 6 \| Confirm WORM bucket lifecycle expires objects after the seven-year lock \| [VERIFY] \| [PLACEHOLDER] \| [PLAC… |
+| 197 | [PLACEHOLDER] | 6 \| Confirm WORM bucket lifecycle expires objects after the seven-year lock \| [VERIFY] \| [PLACEHOLDER] \| [PLAC… |
+| 197 | [PLACEHOLDER] | 6 \| Confirm WORM bucket lifecycle expires objects after the seven-year lock \| [VERIFY] \| [PLACEHOLDER] \| [PLAC… |
+| 198 | [PLACEHOLDER] | 7 \| Backups: ninety-day lifecycle rule; encrypt; stale alert; restore test \| **Done for the Laravel copy** (ni… |
+| 198 | [PLACEHOLDER] | 7 \| Backups: ninety-day lifecycle rule; encrypt; stale alert; restore test \| **Done for the Laravel copy** (ni… |
+| 199 | [PLACEHOLDER] | 8 \| Encrypt-at-creation + off-box + seven-day delete for manual pre-deploy dumps \| GAP \| [PLACEHOLDER] \| [PLAC… |
+| 199 | [PLACEHOLDER] | 8 \| Encrypt-at-creation + off-box + seven-day delete for manual pre-deploy dumps \| GAP \| [PLACEHOLDER] \| [PLAC… |
+| 200 | [PLACEHOLDER] | 9 \| Inventory and destroy legacy dumps (CONFIRMED-FACTS D1, incl. the plaintext dump and key files on the OCI … |
+| 200 | [PLACEHOLDER] | 9 \| Inventory and destroy legacy dumps (CONFIRMED-FACTS D1, incl. the plaintext dump and key files on the OCI … |
+| 201 | [PLACEHOLDER — owner + DPO] | 9a \| **Decide and record what happens to the legacy daily database (C1) and to SiteGround-held backups (C5)** … |
+| 201 | [PLACEHOLDER] | 9a \| **Decide and record what happens to the legacy daily database (C1) and to SiteGround-held backups (C5)** … |
+| 202 | [PLACEHOLDER — IT lead] | 9b \| Obtain SiteGround's backup scope, retention and deletion terms; cover them in the transfer safeguard \| GA… |
+| 202 | [PLACEHOLDER] | 9b \| Obtain SiteGround's backup scope, retention and deletion terms; cover them in the transfer safeguard \| GA… |
+| 203 | [PLACEHOLDER — DPO + owner] | 9c \| **Sign the controller–processor contract** so these periods bind the operator company (IR Art. 17 minimum… |
+| 203 | [PLACEHOLDER] | 9c \| **Sign the controller–processor contract** so these periods bind the operator company (IR Art. 17 minimum… |
+| 204 | [PLACEHOLDER] | 10 \| Nightly sweeps: expired sessions (file driver), `pending_registrations`, `trusted_devices` (after ninety … |
+| 204 | [PLACEHOLDER] | 10 \| Nightly sweeps: expired sessions (file driver), `pending_registrations`, `trusted_devices` (after ninety … |
+| 205 | [VERIFY live values] | 11 \| Set `LOG_CHANNEL=daily`, `LOG_DAILY_DAYS` per the agreed period; Docker log rotation \| [VERIFY live value… |
+| 205 | [PLACEHOLDER] | 11 \| Set `LOG_CHANNEL=daily`, `LOG_DAILY_DAYS` per the agreed period; Docker log rotation \| [VERIFY live value… |
+| 205 | [PLACEHOLDER] | 11 \| Set `LOG_CHANNEL=daily`, `LOG_DAILY_DAYS` per the agreed period; Docker log rotation \| [VERIFY live value… |
+| 206 | [PLACEHOLDER — HR / System owner] | 12 \| Departure checklist + quarterly access review, **covering both systems' account sets** \| GAP \| [PLACEHOLD… |
+| 206 | [PLACEHOLDER] | 12 \| Departure checklist + quarterly access review, **covering both systems' account sets** \| GAP \| [PLACEHOLD… |
+| 207 | [PLACEHOLDER] | 13 \| Staff rule for exports and printed sheets; add classification labels to exports \| **Labels done on the La… |
+| 207 | [PLACEHOLDER] | 13 \| Staff rule for exports and printed sheets; add classification labels to exports \| **Labels done on the La… |
+| 208 | [PLACEHOLDER — processor] | 14 \| Inventory the legacy schema, logs and exports on SiteGround so this schedule can be applied to C1/C5 at a… |
+| 208 | [PLACEHOLDER] | 14 \| Inventory the legacy schema, logs and exports on SiteGround so this schedule can be applied to C1/C5 at a… |
+| 217 | [VERIFY binlog configuration] | reused, and in the binary log / redo log if enabled [VERIFY binlog configuration]. For sensitive |
+| 231 | [VERIFY] | destruction where available [VERIFY]). Confirm no copies exist in home-directory backups, editor |
+| 238 | [VERIFY the key-management setup for the backup bucket and the audit archive] | form of erasure [VERIFY the key-management setup for the backup bucket and the audit archive]. |
+| 246 | [PLACEHOLDER — obtain and file] | **Cloudflare** (edge logs). None of these has a signed DPA on file [PLACEHOLDER — obtain and file]. |
+| 265 | [NEEDS LEGAL CONFIRMATION] | hold: the health-care regulation's record-keeping period [NEEDS LEGAL CONFIRMATION] (a legal |
+| 266 | [VERIFY ARTICLE] | obligation — the exception the law recognises [VERIFY ARTICLE]), and statistical/quality |
+| 268 | [VERIFY ARTICLE — statistics/research provision and whether it requires anonymisation] | [VERIFY ARTICLE — statistics/research provision and whether it requires anonymisation]. |
+| 274 | [VERIFY] | DPO should confirm whether that residual identifier must also be hashed [VERIFY]). |
+| 282 | [VERIFY any sector rule for access-log retention in health-care] | and period [VERIFY any sector rule for access-log retention in health-care]. |
+| 292 | [PLACEHOLDER — cutover date; destruction certificate] | migration dump [PLACEHOLDER — cutover date; destruction certificate]. |
+| 300 | [PLACEHOLDER] | annually. Next review: [PLACEHOLDER]. |
+| 306 | [PLACEHOLDER] | 2026-09-03 \| 0.1 \| Initial draft \| [PLACEHOLDER] |
+| 307 | [PLACEHOLDER] | 2026-09-03 \| 0.1 \| Reworked to the confirmed framing: two-system principle and controller/processor split (§1.… |
+| 308 | [PLACEHOLDER] | 2026-09-03 \| 0.1 \| Reconciled §2.6 and checklist item 13 with CONFIRMED-FACTS C12/C13 as re-verified: every La… |
 
 ## `DPA-AND-TRANSFERS.md` — 47 items
 
