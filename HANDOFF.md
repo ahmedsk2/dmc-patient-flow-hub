@@ -148,7 +148,8 @@
    [`evidence/prod-ready-2026-09-03-closeout.md`](laravel/docs/compliance/evidence/prod-ready-2026-09-03-closeout.md).
    Remaining Highs, all owner/infra: SEC-11 + CICD-11 (a second reviewer — waiver candidate with one
    maintainer), OPS-02/03 (on-call + paging), CICD-08 (auto rollback; deploys stay manual by
-   decision) and the separate RES-12 drain step, DATA-02 (off-region backup copy) + CFG-10 (OCI
+   decision) and the separate RES-12 drain step, DATA-02 (off-region backup copy — **closed
+   2026-09-24 by owner decision: Riyadh only**, plus an owner-kept local copy) + CFG-10 (OCI
    instance principal) + OBS-03/04 (error/metrics sink) — all need an OCI IAM step, CICD-05
    (SBOM/attestations), I18N-02 (accepted: never pin the MySQL session time zone). Deploy-on-green stays OFF by owner decision — the owner's stated reason (2026-09-03): "I don't
    want to autodeploy, to make sure nothing goes wrong on production" (recorded here so ADR 0005 has
@@ -261,18 +262,26 @@
    run (both pass); the **16 September outage explained** from OCI's own records (Oracle stopped and
    later restored the server — an infrastructure failure, not ours); the backup key can no longer
    delete; the **Jeddah backup copy was blocked** by the tenancy's own residency quota
-   (`ksa-data-residency` zeroes storage outside `me-riyadh-1`, Jeddah included) — an owner decision,
-   nothing replicates yet; the **cutover reload rehearsed** on a copy of
+   (`ksa-data-residency` zeroes storage outside `me-riyadh-1`, Jeddah included) — and on 2026-09-24
+   the owner **chose Riyadh only** (plus a local copy they keep); the empty Jeddah bucket was deleted;
+   the **cutover reload rehearsed** on a copy of
    production (29 s, MFA and settings kept) and the **application half of a server loss rehearsed**
    (≈ 7 min to a serving app) — the two rehearsals found three procedure defects (database sessions
    not cleared by the reload runbook; an empty database can never pass the first deploy's health
    check; an undocumented Nixpacks setting production needs), all fixed in the runbooks. Still open
-   from the list: the second-region copy (owner decision on the quota), instance-principal auth (an
-   engineering change, see REMAINING-WORK), and the workstation exports (listed for the owner to
-   delete).
+   from the list: instance-principal auth (an engineering change, see REMAINING-WORK).
+   **2026-09-24 (owner: "stay in Riyadh … forget about Jeddah"; "you may delete the files"):** backups
+   stay Riyadh-only (DATA-02 closed by decision; the empty Jeddah bucket deleted). A read-only sweep of
+   the owner's workstation (Google Drive excluded, as asked) moved **38 DMC files** to the Recycle Bin
+   with a hashed inventory (`laravel/docs/compliance/evidence/workstation-phi-cleanup-2026-09-24.md`);
+   emptying the bin is the owner's. It also found, and left for the owner: real-data databases in the
+   laptop's WAMP, and the owner's daily local mirror of the `coolify-backups` bucket — which revealed
+   that **Coolify's own backup writes unencrypted daily dumps of `dmc_demo` with no expiry**. Checking
+   OCI for cross-region copies found none, but did surface the host's weekly boot-volume backups and
+   a manual full one from 2026-07-19 with no expiry. All three are owner decisions in REMAINING-WORK.
    **Still open and all owner / infrastructure decisions, not code:** enable deploy-on-green
    (declined so far — "I don't want to autodeploy"), pick a log sink and set `LOG_STACK`
-   (OBS-01/03/04/05), a second backup region + instance principal (DATA-02, CFG-10), SLOs and an
+   (OBS-01/03/04/05), instance principal (CFG-10), SLOs and an
    on-call/paging channel (OPS-02/03, REL-01..05), repo private before go-live, the legacy daily site, contracts / DPO /
    names / counsel decisions (CMP-03/06 and item 2 above).
 

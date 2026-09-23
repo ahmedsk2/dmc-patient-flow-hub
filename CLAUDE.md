@@ -317,9 +317,12 @@ Each flow names its controller; per-endpoint database effects are in DATABASE-AN
 - **Backups and point-in-time recovery:** nightly (02:15 host time) encrypted off-box dump to the
   in-Kingdom bucket `dmc-db-backups`, plus **hourly encrypted binlog shipping** to the same bucket
   (`scripts/backup/binlog-ship.py`, host cron at minute 40, installed 2026-09-03; MySQL 8.4 keeps
-  binlogs in ROW format for 30 days). Since 2026-09-23 the writer key cannot delete; there is **no
-  second-region copy** (a Jeddah copy is blocked by the tenancy's `ksa-data-residency` quota — owner
-  decision, BACKUP-AND-RESTORE §6). RPO ≤ 1 h for binlog-covered changes, ≤ 24 h from the dump
+  binlogs in ROW format for 30 days). Since 2026-09-23 the writer key cannot delete. **Riyadh only,
+  by owner decision (2026-09-24)**: no second cloud region (the tenancy's `ksa-data-residency` quota
+  blocks storage elsewhere and stays); the owner keeps a local copy. Outside this pipeline, **Coolify's
+  own daily backup also dumps `dmc_demo` unencrypted to the bucket `coolify-backups` with no expiry**
+  (owner decision pending), and OCI backs up the whole host disk weekly (4 weeks) — BACKUP-AND-RESTORE
+  §6. RPO ≤ 1 h for binlog-covered changes, ≤ 24 h from the dump
   alone; RTO is whatever the drill prints (7–8 s for the dump) plus the replay and the human steps;
   local encrypted copy 2 days, bucket 90 days (**placeholder pending legal**); `backup:verify` alerts
   admins in-app when either heartbeat is stale (the binlog half needs the container deployed from

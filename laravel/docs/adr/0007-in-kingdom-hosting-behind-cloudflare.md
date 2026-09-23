@@ -40,8 +40,11 @@ Run the Laravel application entirely in-Kingdom and put the edge in front of it:
   fate is an owner item; the plan is cutover.
 - The OCI host also runs unrelated databases (`endorsement`, `qch`) — a shared multi-project host,
   relevant to isolation in the classification scheme (B7).
-- One host, one environment: no staging, no second region, no automatic failover; a second
-  in-Kingdom backup region remains open (DATA-02/04).
+- One host, one environment: no staging, no second region, no automatic failover. **Update
+  2026-09-24:** a second backup region was declined by the owner — backups stay in `me-riyadh-1`, the
+  owner keeps an extra local copy of the encrypted objects, and the tenancy's `ksa-data-residency`
+  quota (zero data-bearing capacity outside `me-riyadh-1`) stays (DATA-02 closed by decision;
+  BACKUP-AND-RESTORE §6).
 
 ## References
 

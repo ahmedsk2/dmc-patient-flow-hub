@@ -207,9 +207,19 @@ The Terraform above was written from the docs and has never been planned. Readin
   undeletable. Versioning disabled. No replication (see the quota below).
 - **Tenancy quota policy `ksa-data-residency`** (2026-08-08, not modelled here): zero quotas for every
   data-bearing service (compute, block and object storage, databases, …) `where request.region !=
-  me-riyadh-1`. It is the reason a second-region copy failed on 2026-09-23: `me-jeddah-1` was subscribed
-  and an empty private bucket `dmc-db-backups-jed` created there, but writes are refused with
-  `StorageQuotaExceeded`. Model it before any `plan`, and do not loosen it without the owner's decision.
+  me-riyadh-1`. It is the reason a second-region copy failed on 2026-09-23 (`StorageQuotaExceeded`);
+  on 2026-09-24 the owner decided to **stay Riyadh-only**, and the empty test bucket was deleted. The
+  tenancy remains **subscribed to `me-jeddah-1`** (OCI cannot remove a subscription) with nothing in it.
+  The quota is tenancy-wide — it covers every project on this tenancy — and its description cites an
+  "ADR-0004" that is not this repository's ADR 0004. Model it before any `plan`, and do not loosen it
+  without the owner's decision.
+- **`coolify-backups` (not modelled here):** Coolify's own backup destination for every app on the
+  host. Its scheduled backup of the shared MySQL writes plain-SQL daily dumps of selected databases —
+  `dmc_demo` among them — with **no lifecycle policy** (a 14-day retention rule only), versioning
+  disabled, private.
+- **Compute backups (not modelled here):** the host's boot volume is under the volume backup policy
+  `weekly-4` (weekly incremental, 4-week retention, no destination region) and has a manual full
+  backup from 2026-07-19 with no expiry — whole-disk copies of every app on the host.
 - **`dmc-audit-log`:** has a **7-year retention rule** (`audit-worm-7y`, write-once) and suspended
   versioning — the code here says "no retention rule".
 - **Network:** SSH on the security list is limited to the owner's workstation address (/32, since

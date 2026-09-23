@@ -44,11 +44,18 @@ biggest live risk** (the original un-hardened build, on US hosting).
   compliance action in every audit pass. *(A0/A5, G12, CMP-03)*
 - [ ] **Appoint a DPO.** The DPO charter and the privacy notices still carry `[DPO NAME]` placeholders.
   *(A6, G9, CMP-06; `laravel/docs/compliance/DPO.md`)*
-- [ ] **Destroy or encrypt the old patient-data exports kept on a personal workstation**, and keep an
-  inventory of what was destroyed. The files were located and listed for the owner on 2026-09-23
-  (legacy dumps and CSV exports in the Downloads folder, plus possibly-related research files in a
-  cloud-synced folder); deleting them is the owner's. (The copies on the production host were shredded and re-checked
-  2026-09-22.) *(D1, G8, DATA-14)*
+- [ ] **Empty your Recycle Bin — the last step of the workstation clean-up.** On 2026-09-24, on your
+  instruction, 38 DMC files (the legacy dumps and exports, the local Laravel export, saved app pages,
+  report renders and work files) were moved to the Recycle Bin, with an inventory of names, sizes,
+  dates and SHA-256 hashes in `laravel/docs/compliance/evidence/workstation-phi-cleanup-2026-09-24.md`.
+  Emptying the bin is the permanent step, and it also removes an older copy of the Laravel export
+  sitting there since June; then write the date into that file. Google Drive was left untouched, as you asked.
+  (The copies on the production host were shredded and re-checked 2026-09-22.) *(D1, G8, DATA-14)*
+- [ ] **Drop the real-data databases in WAMP on your laptop** — `dmc_laravel`, `dmc_prod` and `dmc`
+  (together ≈ 170 MB) hold imports of the real legacy data, which CLAUDE.md says local development
+  must never use; local work now runs on the Docker test database with demo data. Drop them in
+  phpMyAdmin (or `DROP DATABASE`) — a permanent step, so it is yours. The `dmc_test*` databases are
+  demo data and can stay.
 - [ ] **Make the GitHub repository private** before go-live (decided earlier; still public). *(B8, G10)*
 
 ## B. Owner — decisions and console work
@@ -65,12 +72,31 @@ biggest live risk** (the original un-hardened build, on US hosting).
   *(OPS-02/03, REL-01..05)*
 - [ ] **Pick a log / error-tracking / metrics service.** The code side is ready (`LOG_STACK`); container
   logs are lost on every redeploy until then. *(OBS-01/03/04/05)*
-- [ ] **Second-region backup copy — your decision.** Tried 2026-09-23 with **me-jeddah-1** (the other
-  Saudi region): the region is subscribed and an empty private bucket exists there, but copying was
-  refused by the tenancy's own data-residency quota (`ksa-data-residency`, set up 2026-08-08), which
-  blocks storage in every region except Riyadh — Jeddah included. Choose: **allow object storage in
-  Jeddah only** (then I seed it and switch replication on), or **keep Riyadh-only** (then the empty
-  bucket is deleted and the gap stays accepted). *(DATA-02)*
+- [x] **Second-region backup copy — decided 2026-09-24: Riyadh only.** Your call: backups stay in
+  `me-riyadh-1`, and you keep an extra local copy yourself. The Jeddah attempt (2026-09-23) was refused
+  by the tenancy's own residency quota (`ksa-data-residency`, which stays as it is); its empty bucket
+  was deleted 2026-09-24. The Jeddah region subscription itself cannot be removed in OCI — it stays,
+  empty, and the quota keeps it unusable. *(DATA-02 — closed by decision)*
+- [ ] **Your local backup copy — it already exists, but DMC's part of it is unencrypted.** Your daily
+  sync of the `coolify-backups` bucket to your computer includes Coolify's own daily dumps of the
+  production DMC database — plain SQL, 66 of them since 2026-07-19 (≈ 1.3 GB). Either turn on
+  Windows disk encryption on that computer (Settings → Privacy & security → Device encryption, or
+  BitLocker), or keep the DMC part as the already-encrypted `.enc` backups instead (the command is in
+  `laravel/docs/BACKUP-AND-RESTORE.md` §6) and stop mirroring the plain dumps. Either way, keep the
+  backup key and `APP_KEY` apart from the copy: without them it cannot be restored, and stored beside
+  it they make it readable to whoever takes the disk.
+- [ ] **Coolify's own backups of the DMC database are unencrypted and never expire** (found
+  2026-09-24). Besides the encrypted DMC backups, Coolify's scheduled backup of the shared MySQL
+  writes a plain daily dump of `dmc_demo` to the private Riyadh bucket `coolify-backups`, with no
+  expiry rule — so every day's patient data since 2026-07-19 is kept indefinitely, outside the
+  90-day retention the DMC backups follow. Choose: take `dmc_demo` out of that Coolify backup (the
+  encrypted pipeline already covers it), or add a lifecycle expiry to the bucket. That bucket and
+  backup job are shared with your other apps, so I will not change them without your go-ahead.
+- [ ] **Decide on OCI's whole-disk backups** (found 2026-09-24). OCI backs up the server's entire disk —
+  every app's data, not only DMC's — weekly, keeping 4 weeks, all in Riyadh; and a **manual full copy
+  from 2026-07-19 has no expiry**, so it keeps a July snapshot of every app's patient data indefinitely.
+  Keep it (say why) or delete it in the OCI console (Block Storage → Boot Volume Backups). It is shared
+  with the other apps on the server, so it is your call, not a DMC-only one.
 - [x] **Backup key can no longer delete** — done 2026-09-23: it can create, overwrite, read and list
   only, so a stolen key cannot wipe the backups (proven with a refused delete). *(DATA-02)*
 - [ ] **Instance-principal auth instead of the static key** — not done, and not a console switch: the
