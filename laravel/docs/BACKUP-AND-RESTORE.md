@@ -547,15 +547,17 @@ request.region != me-riyadh-1`. The quota stays. The empty bucket `dmc-db-backup
 nothing. Verified the same day, read-only: no replication policy on `dmc-db-backups` or
 `dmc-audit-log`, no cross-region replica or cross-region backup of the host's boot volume.
 
-**The owner's local copy.** The owner runs a daily sync of the `coolify-backups` bucket (below) to
-their workstation; for DMC it holds only Coolify's past **unencrypted** dumps (to 2026-09-23), since
-`dmc_demo` left that job on 2026-09-24. The recommended form for DMC is the encrypted objects of this
-pipeline, copied exactly as stored
-(`*.sql.gz.enc`, `binlogs/…*.gz.enc`) and never decrypted on the workstation. With the owner's own OCI
-CLI profile, this fetches only what is new since the last run:
+**The owner's local copy.** Since 2026-09-24 the owner's daily workstation sync also pulls **this
+pipeline's encrypted objects** (`*.sql.gz.enc`, `binlogs/…*.gz.enc`), copied exactly as stored and never
+decrypted there. It fetches only new objects, skips the `LATEST.json` heartbeats, keeps each file for
+90 days by the date in its **name** (the bucket's lifecycle period — so the local copy stays
+independent: a wiped bucket deletes nothing locally), and refuses to run while the backup key is on the
+same machine. Seeded 2026-09-24: 510 objects, 264 MB, all identical in name and size to the bucket.
+(The same sync also mirrors `coolify-backups`, below, which holds Coolify's past **unencrypted** DMC
+dumps up to 2026-09-23.) The core of it, with the owner's own OCI CLI profile:
 
 ```bash
-oci os object bulk-download -bn dmc-db-backups --prefix db-backups/dmc_demo/ --download-dir <local folder> --no-overwrite
+oci os object bulk-download -bn dmc-db-backups --prefix db-backups/dmc_demo/ --exclude '*LATEST.json' --download-dir <local folder> --no-overwrite
 ```
 
 A copy is restorable only together with the backup key and `APP_KEY` (§3), so keep those apart from
