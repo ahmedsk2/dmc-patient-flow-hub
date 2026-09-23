@@ -3,7 +3,8 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 
 /**
  * Phase 4 — Item 3: read-only Security panel. Three tables built from the audit log + users —
- * failed-login clusters, first-seen IPs, and MFA-noncompliant users (while enforcement is on).
+ * failed-login clusters, first-seen IPs, and MFA-noncompliant active users (MFA is mandatory for
+ * everyone since 2026-07-11 — see EnsureMfaEnrolled — so this list is not gated by mfaEnforcement).
  * Account lockdown is done from the Control Panel (set the user inactive).
  */
 defineProps({
@@ -11,6 +12,9 @@ defineProps({
     firstSeenIps: { type: Array, default: () => [] },
     mfaNonCompliant: { type: Array, default: () => [] },
     mfaEnforcement: { type: Number, default: 0 },
+    // 2026-09-23 walkthrough: MFA is mandatory for every active user regardless of mfaEnforcement
+    // (the setting is inert — see EnsureMfaEnrolled); default true matches that reality.
+    mfaMandatory: { type: Boolean, default: true },
     notifyThreshold: { type: Number, default: 0 },
 });
 
@@ -83,7 +87,7 @@ const td = 'px-5 py-3 text-sm text-ink-700';
         <section>
             <h2 class="mb-2 font-bold text-ink-800">
                 MFA non-compliant <span class="nums text-ink-400">({{ mfaNonCompliant.length }})</span>
-                <span class="ml-2 text-xs font-normal text-ink-400">enforcement: {{ enforcementLabel(mfaEnforcement) }}</span>
+                <span class="ml-2 text-xs font-normal text-ink-400">{{ mfaMandatory ? 'two-factor is mandatory for every active user' : `enforcement: ${enforcementLabel(mfaEnforcement)}` }}</span>
             </h2>
             <div :class="card">
                 <table class="w-full">
@@ -94,7 +98,7 @@ const td = 'px-5 py-3 text-sm text-ink-700';
                         <tr v-for="u in mfaNonCompliant" :key="u.id">
                             <td :class="td">{{ u.username }}</td><td :class="td">{{ u.name }}</td><td :class="td">{{ u.role_label }}</td>
                         </tr>
-                        <tr v-if="!mfaNonCompliant.length"><td :class="[td, 'text-ink-300']" colspan="3">{{ mfaEnforcement > 0 ? 'All in-scope users are enrolled.' : 'MFA enforcement is off — nothing to flag.' }}</td></tr>
+                        <tr v-if="!mfaNonCompliant.length"><td :class="[td, 'text-ink-300']" colspan="3">All active users are enrolled.</td></tr>
                     </tbody>
                 </table>
             </div>

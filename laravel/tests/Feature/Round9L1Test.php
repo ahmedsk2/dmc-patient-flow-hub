@@ -479,7 +479,9 @@ class Round9L1Test extends TestCase
             'medical_discharge_date' => now()->toDateString(), 'outcome' => 'Alive',
             'transfer_type' => 'discharge from ward']);
 
-        // pass the step-up gate (Item 4) so the controller's admin-only check is what denies (403)
+        // Walkthrough fix (2026-09-23): ->middleware(['admin', 'stepup']) means the admin gate denies
+        // a non-admin before step-up is consulted; the step-up window is supplied anyway to prove
+        // that's not what's carrying the denial (see AdminRouteOrderingTest for the no-session case).
         $this->actingAs($manager)->withSession(['stepup.verified_at' => now()->getTimestamp()])
             ->post("/admissions/{$a->id}/reverse-discharge")->assertForbidden();
 

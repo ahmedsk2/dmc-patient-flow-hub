@@ -65,7 +65,18 @@ const entityHref = (row) => {
 
 const expanded = reactive(new Set());
 const toggle = (id) => { expanded.has(id) ? expanded.delete(id) : expanded.add(id); };
-const pretty = (details) => JSON.stringify(details ?? {}, null, 2);
+// A handful of detail keys carry CIPHERTEXT, not text (e.g. ConsultationsController::reverseSignoff
+// stores the cleared response note re-encrypted under `note_encrypted` rather than in the clear —
+// see CLAUDE.md §9: an encrypted column's content must never sit in a log payload, and a raw base64
+// blob dumped into this pane would also read as broken/garbled text). Swap those values for a plain
+// placeholder before stringifying so the viewer never renders ciphertext as if it were readable
+// content; every other key (incl. the harmless `note_length` marker) prints exactly as stored.
+const REDACTED_DETAIL_KEYS = new Set(['note_encrypted']);
+const pretty = (details) => JSON.stringify(
+    Object.fromEntries(Object.entries(details ?? {}).map(([k, v]) =>
+        [k, REDACTED_DETAIL_KEYS.has(k) && v !== null ? '[encrypted note]' : v])),
+    null, 2,
+);
 </script>
 
 <template>

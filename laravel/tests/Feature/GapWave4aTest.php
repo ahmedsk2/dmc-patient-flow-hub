@@ -245,7 +245,9 @@ class GapWave4aTest extends TestCase
         $cons = $this->user(['can_manage' => 1, 'can_modify' => 1]);   // even a fully-capable consultant
         $a = $this->admission(['consultant_id' => $cons->id]);
 
-        // pass the step-up gate (Item 4) so the controller's admin-only check is what denies (403)
+        // Walkthrough fix (2026-09-23): ->middleware(['admin', 'stepup']) means the admin gate denies
+        // a non-admin before step-up is consulted; the step-up window is supplied anyway to prove
+        // that's not what's carrying the denial (see AdminRouteOrderingTest for the no-session case).
         $this->actingAs($cons)
             ->withSession(['stepup.verified_at' => now()->getTimestamp()])
             ->delete("/admissions/{$a->id}")->assertForbidden();

@@ -328,12 +328,22 @@ class ControlController extends Controller
         // account inside the window would silently restore a second-factor skip on a browser the
         // admin believes they cut off. (Role changes deliberately do NOT revoke: that is a
         // capability change, not a credential change.) No extra audit row — user.update covers it.
+        //
+        // 2026-09-23 walkthrough fix — MAJOR: deactivation blocked FUTURE logins (AuthController
+        // filters active=1) but left an ALREADY-established session live indefinitely — nothing in
+        // the auth chain re-checked `active` per request. End every session row now, mirroring
+        // resetMfa() below; SessionTimeout also re-checks `active` per request as defence in depth
+        // for any path that flips it outside this controller.
+        $sessionsEnded = null;
         if (! $data['active']) {
             TrustedDevice::revokeAllFor($user->id);
+            $sessionsEnded = DB::table('sessions')->where('user_id', $user->id)->delete();
         }
         $diff = AuditDiff::diff($before, $user->fresh()->only($fields), ['password']);
         // Phase 4 — Item 4: flag the step-up on a role-escalation update (admin grant)
-        Audit::log('user.update', 'user', (string) $user->id, $diff + ($escalated ? $this->stepUpDetail() : []));
+        Audit::log('user.update', 'user', (string) $user->id,
+            $diff + ($escalated ? $this->stepUpDetail() : [])
+            + ($sessionsEnded !== null ? ['sessions_ended' => $sessionsEnded] : []));
 
         return back()->with('flash', ['type' => 'success', 'message' => "Updated {$user->username}."]);
     }
@@ -354,12 +364,18 @@ class ControlController extends Controller
                 'message' => "{$user->username} still has active patients — reassign or discharge them first."]);
         }
 
-        Audit::log('user.delete', 'user', (string) $user->id,
-            ['username' => $user->username, 'name' => $user->full_name ?: $user->name, 'role' => (int) $user->role]
-            + $this->stepUpDetail());
         // Same reasoning as deactivation: the delete is SOFT and restorable from /trashed, so a live
         // waiver would come back with the account. Revoke before deleting. (user.delete audits it.)
+        // 2026-09-23 walkthrough fix — same MAJOR defect as deactivation: a soft-deleted user's
+        // existing session survived the delete. End every session row before the audit write so its
+        // detail records what actually happened.
         TrustedDevice::revokeAllFor($user->id);
+        $sessionsEnded = DB::table('sessions')->where('user_id', $user->id)->delete();
+
+        Audit::log('user.delete', 'user', (string) $user->id,
+            ['username' => $user->username, 'name' => $user->full_name ?: $user->name, 'role' => (int) $user->role,
+                'sessions_ended' => $sessionsEnded]
+            + $this->stepUpDetail());
         $user->delete();   // SoftDeletes — attribution survives; recover via /trashed
 
         return back()->with('flash', ['type' => 'success', 'message' => "Deleted {$user->username}."]);

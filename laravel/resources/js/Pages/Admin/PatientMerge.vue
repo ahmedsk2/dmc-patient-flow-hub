@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { xsrf } from '@/lib/ui.js';
+import PatientPicker from '@/Components/PatientPicker.vue';
 
 /**
  * Phase 4 — Item 9: admin patient-merge / MRN-dedup tooling. A two-panel interface: pick a SOURCE
@@ -222,65 +223,3 @@ const btn = 'rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opac
         </section>
     </AppLayout>
 </template>
-
-<script>
-/**
- * Inline source/target picker — a debounced /api/patients/search typeahead. Defined as a local
- * component (options API export) so the page stays one file; the merge page is the only consumer.
- */
-export default {
-    components: {
-        PatientPicker: {
-            props: {
-                label: { type: String, required: true },
-                tone: { type: String, default: 'brand' },
-                picked: { type: Object, default: null },
-            },
-            emits: ['pick'],
-            data: () => ({ query: '', results: [], timer: null }),
-            methods: {
-                onInput() {
-                    clearTimeout(this.timer);
-                    const q = this.query.trim();
-                    if (q.length < 2) { this.results = []; return; }
-                    this.timer = setTimeout(async () => {
-                        // SPC-TM-011 (Wave 1): the name/MRN term rides the POST body, never a URL
-                        const res = await fetch('/api/patients/search', {
-                            method: 'POST',
-                            headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf() },
-                            body: JSON.stringify({ q }),
-                        });
-                        this.results = res.ok ? await res.json() : [];
-                    }, 250);
-                },
-                choose(p) { this.$emit('pick', p); this.query = ''; this.results = []; },
-            },
-            template: `
-                <section class="overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line p-5">
-                    <p class="mb-2 text-xs font-semibold uppercase tracking-wide"
-                       :class="tone === 'danger' ? 'text-on-danger' : 'text-brand-700'">{{ label }}</p>
-                    <div class="relative">
-                        <input v-model="query" @input="onInput" role="combobox" aria-autocomplete="list"
-                            :aria-expanded="results.length > 0" autocomplete="off"
-                            class="w-full rounded-xl border border-ink-200 bg-card px-3.5 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
-                            placeholder="Search MRN or name (≥2 chars)…" />
-                        <ul v-if="results.length" role="listbox"
-                            class="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-line bg-card py-1 shadow-lg">
-                            <li v-for="p in results" :key="p.id" role="option"
-                                @mousedown.prevent="choose(p)"
-                                class="flex cursor-pointer items-center justify-between px-3 py-1.5 text-sm hover:bg-brand-50">
-                                <span><span class="nums font-semibold text-brand-700">{{ p.mrn }}</span> · {{ p.name || '—' }}</span>
-                                <span v-if="p.open_admissions_count > 0" class="ml-2 rounded-full bg-tint-warning px-2 py-0.5 text-xs font-semibold text-on-warning">open</span>
-                            </li>
-                        </ul>
-                    </div>
-                    <div v-if="picked" class="mt-3 rounded-xl bg-ink-50 px-3.5 py-2.5 text-sm">
-                        Selected: <span class="nums font-semibold">{{ picked.mrn }}</span> · {{ picked.name || '—' }}
-                        <span class="text-ink-400">#{{ picked.id }}</span>
-                    </div>
-                </section>
-            `,
-        },
-    },
-};
-</script>

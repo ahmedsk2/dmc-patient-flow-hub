@@ -30,6 +30,16 @@ class AuditController extends Controller
         'report.pdf.governance', 'audit.export.csv', 'audit.export.xlsx',
     ];
 
+    /**
+     * A handful of `details` keys carry CIPHERTEXT, not text — e.g.
+     * ConsultationsController::reverseSignoff stores the cleared response note re-encrypted under
+     * `note_encrypted` rather than in the clear (CLAUDE.md §9: an encrypted column's content must
+     * never sit in a log payload). The interactive viewer (Audit/Index.vue) redacts it before
+     * display; this list is reused by writeExport() below so a downloaded CSV/XLSX — which a human
+     * may open directly — never shows a raw base64 blob as if it were readable text either.
+     */
+    private const REDACTED_DETAIL_KEYS = ['note_encrypted'];
+
     public function index(AuditFilterRequest $request): Response
     {
         $logs = $this->filtered($request)
@@ -177,6 +187,18 @@ class AuditController extends Controller
         return preg_match('/^[=+\-@]/', (string) ($v ?? '')) ? "'".$v : $v;
     }
 
+    /** Swap REDACTED_DETAIL_KEYS values for a placeholder — see that constant's docblock. */
+    private function redactedDetails(array $details): array
+    {
+        foreach (self::REDACTED_DETAIL_KEYS as $key) {
+            if (array_key_exists($key, $details) && $details[$key] !== null) {
+                $details[$key] = '[encrypted note]';
+            }
+        }
+
+        return $details;
+    }
+
     /**
      * Header + rows through $write — shared by CSV and XLSX so they can never drift. Audit columns
      * carry no PHI directly (PHI lives in details JSON, exported as the raw JSON string for
@@ -195,7 +217,7 @@ class AuditController extends Controller
                     $row->action,
                     $row->entity_type,
                     $row->entity_id,
-                    $row->details === null ? '' : json_encode($row->details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    $row->details === null ? '' : json_encode($this->redactedDetails($row->details), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                     $row->ip,
                 ]);
             }

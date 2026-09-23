@@ -92,12 +92,21 @@ class ConsultationsController extends Controller
             ->when($consultantId, fn ($q, $id) => $q->where('consultant_id', $id))
             ->when($filters['search'] ?? null, fn ($q, $s) => $q->where(fn ($w) => $w->where('patient_name', 'like', "%{$s}%")->orWhere('mrn', 'like', "%{$s}%")));
 
+        // Legacy drift belt (2026-09-23 walkthrough): legacy:import writes signoff_date without
+        // status, so a re-imported closed consult can carry status IN (new,active,ongoing) AND a
+        // non-NULL signoff_date. A sign-off date wins: such a row is filed under Signed off here —
+        // never in an open tab or count — which is the same rule ConsultationDashboardController::
+        // openQuery(), the handover sheet and the Registry apply, so no two screens disagree.
+        $effectiveStatus = fn (Consultation $c) => $c->signoff_date !== null ? Consultation::STATUS_SIGNED_OFF : $c->status;
+
         // resolved ONCE for the whole page: every row's can_modify is this user's verdict
         $viewer = Auth::user();
 
         $consultations = $filtered()
             ->with(['consultant:id,full_name,name', 'enteredBy:id,full_name,name'])
-            ->where('status', $status)
+            ->when($status === Consultation::STATUS_SIGNED_OFF,
+                fn ($q) => $q->where(fn ($w) => $w->where('status', Consultation::STATUS_SIGNED_OFF)->orWhereNotNull('signoff_date')),
+                fn ($q) => $q->where('status', $status)->whereNull('signoff_date'))
             ->orderByDesc('id')
             ->paginate(15)
             ->withQueryString()
@@ -120,7 +129,7 @@ class ConsultationsController extends Controller
                 'entered_by_id' => $c->entered_by,
                 'date' => optional($c->consultation_date)->toDateString(),
                 'signoff' => optional($c->signoff_date)->toDateString(),
-                'status' => $c->status,
+                'status' => $effectiveStatus($c),
                 'open_days' => self::openDays($c),
                 // The workspace cannot mirror canModifyConsultation on its own — the shared auth
                 // payload carries only the four capability flags and no specialty — so the verdict
@@ -139,7 +148,10 @@ class ConsultationsController extends Controller
                 'other' => $c->other_indication,
             ]);
 
-        $counts = $filtered()->selectRaw('status, COUNT(*) as c')->groupBy('status')->pluck('c', 'status');
+        // bucketed by the SAME effective status as the rows above (a sign-off date files it under signed_off)
+        $counts = $filtered()
+            ->selectRaw('CASE WHEN signoff_date IS NOT NULL THEN ? ELSE status END AS effective_status, COUNT(*) AS c', [Consultation::STATUS_SIGNED_OFF])
+            ->groupBy('effective_status')->pluck('c', 'effective_status');
 
         return Inertia::render('Consultations/Index', [
             'consultations' => $consultations,
@@ -157,9 +169,12 @@ class ConsultationsController extends Controller
                 // which are headline "of all open work" figures and stay unfiltered by search/mine
                 // on purpose — they answer "how am I doing overall", not "what does this view show".
                 'total' => (int) $counts->sum(),
-                // personal counter for consultant-role viewers (K1-13): own OPEN out of all open
-                'mine_open' => $scoped()->open()->where('consultant_id', Auth::id())->count(),
-                'open' => $scoped()->open()->count(),
+                // personal counter for consultant-role viewers (K1-13): own OPEN out of all open.
+                // whereNull(signoff_date) is the same drift belt as the tabs above and
+                // ConsultationDashboardController::openQuery() — open() alone (status <> signed_off)
+                // still counts a legacy-drifted row that carries a non-NULL signoff_date.
+                'mine_open' => $scoped()->open()->whereNull('signoff_date')->where('consultant_id', Auth::id())->count(),
+                'open' => $scoped()->open()->whereNull('signoff_date')->count(),
             ],
             // Wave 2b: "Today's follow-up" — the ACTIVE set the viewer can see, with per-row
             // "already ticked today" and the exact seen/total pair behind "Seen X of Y today".
@@ -525,10 +540,29 @@ class ConsultationsController extends Controller
         if (! $consultation->signoff_date->isToday()) {
             return back()->with('flash', ['type' => 'error', 'message' => 'Only same-day sign-offs can be reversed.']);
         }
+        // DATA-06 / CLAUDE.md §9: response_note is encrypted at rest (EncryptedNarrative); the
+        // model cast above has already decrypted it to plaintext for the update() below. That
+        // plaintext must never reach audit_log.details — the audit trail is hash-chained, shipped
+        // hourly to the off-box bucket and exportable (AuditController::export), none of which are
+        // places for a clinical narrative in the clear. The forensic intent ("what was cleared") is
+        // preserved without the plaintext by re-encrypting it under the app's OWN encrypter
+        // (Crypt::encryptString, keyed by APP_KEY — same root of trust as the column, decryptable by
+        // anyone who could already read response_note) plus a harmless `note_length` marker, so an
+        // investigator can see THAT a note existed and how long it was without ever reading it here.
+        // KNOWN, ACCEPTED LIMITATION (not covered by docs/ENCRYPTION-AT-REST.md §4's rotation loop,
+        // which only re-encrypts the four narrative *columns*): audit_log is append-only/hash-chained
+        // and must NEVER be updated (CLAUDE.md §2), so this ciphertext can never be rewritten under a
+        // new key. If APP_KEY is ever rotated and the retired key later dropped from
+        // APP_PREVIOUS_KEYS, any note_encrypted value written before the rotation becomes permanently
+        // undecryptable — a direct consequence of "audit rows are immutable" plus "keys eventually
+        // retire", not an oversight. Operators: keep every retired key in escrow indefinitely if
+        // these values must stay recoverable (§3 already requires escrowing keys with backups taken
+        // under them, for the same reason).
         $was = [
             'disposition' => $consultation->response_disposition,
             'followup_needed' => $consultation->response_followup_needed,
-            'note' => $consultation->response_note,
+            'note_encrypted' => $consultation->response_note !== null ? Crypt::encryptString($consultation->response_note) : null,
+            'note_length' => $consultation->response_note !== null ? mb_strlen($consultation->response_note) : 0,
             'signed_off_by' => $consultation->signed_off_by,
             'signed_off_at' => optional($consultation->signed_off_at)->toDateTimeString(),
             'to' => Consultation::STATUS_ONGOING,
@@ -646,7 +680,7 @@ class ConsultationsController extends Controller
      */
     private static function openDays(Consultation $c): ?int
     {
-        if ($c->status === Consultation::STATUS_SIGNED_OFF) {
+        if ($c->status === Consultation::STATUS_SIGNED_OFF || $c->signoff_date !== null) {
             return null;
         }
         $start = $c->requested_at ?? $c->consultation_date;

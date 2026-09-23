@@ -11,7 +11,11 @@ import { guardSubmit } from '@/lib/ui.js';
 
 const { ask } = useConfirm();
 
-const props = defineProps({ settings: Object, users: { type: Array, default: () => [] }, roles: Object, counts: Object, specialties: Array, reasons: Array, settingHistory: Array, reportRecipients: { type: Array, default: () => [] }, system: { type: Object, default: () => ({}) }, timezones: { type: Array, default: () => [] } });
+const props = defineProps({ settings: Object, users: { type: Array, default: () => [] }, roles: Object, counts: Object, specialties: Array, reasons: Array, settingHistory: Array, reportRecipients: { type: Array, default: () => [] }, system: { type: Object, default: () => ({}) }, timezones: { type: Array, default: () => [] },
+    // 2026-09-23 walkthrough: MFA is mandatory for everyone regardless of mfa_enforcement (the
+    // setting is inert — see EnsureMfaEnrolled); the caption below reads off this prop instead of
+    // hardcoding the claim so the copy can't drift from ControlController's own comment.
+    mfaMandatory: { type: Boolean, default: false } });
 
 const fieldLabels = {
     min_hospitalist: 'Min hospitalist census', max_hospitalist: 'Max hospitalist census',
@@ -23,7 +27,7 @@ const fieldLabels = {
     alert_readmit_rate_pct: 'Readmission-rate alert (%)', alert_deaths_delta_pct: 'Mortality-rise alert (%)',
     idle_timeout_minutes: 'Idle session timeout (min)', abs_timeout_minutes: 'Absolute session cap (min)',
     failed_login_notify_threshold: 'Failed-login alert threshold', dq_los_multiplier: 'Data-quality LOS multiplier',
-    mfa_trusted_device_hours: 'Trusted-device window (hours)',
+    mfa_trusted_device_hours: 'Trusted-device window (hours)', log_record_opens: 'Record/handover-open logging',
 };
 
 const tab = ref('overview');
@@ -56,6 +60,9 @@ const sForm = useForm({
     dq_los_multiplier: props.settings.dq_los_multiplier ?? 2,
     // Trusted device (2026-07-19) — hours a browser may skip the TOTP code for; 0 = feature off.
     mfa_trusted_device_hours: props.settings.mfa_trusted_device_hours ?? 24,
+    // Break-glass (2026-09-23 walkthrough): log every record/handover OPEN, not just writes — already
+    // enforced server-side (AdmissionsController, HandoverController) but had no UI control until now.
+    log_record_opens: props.settings.log_record_opens ?? false,
     // Consultation ledger cutover gate — see ControlController::updateSettings().
     consultations_source_of_truth: props.settings.consultations_source_of_truth ?? false,
 });
@@ -211,6 +218,7 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
                         <option :value="1">Required for administrators</option>
                         <option :value="2">Required for everyone</option>
                     </select>
+                    <span class="mt-1 block text-xs text-ink-400">{{ mfaMandatory ? 'Two-factor authentication is mandatory for every user regardless of this setting — it has no effect on enrolment.' : 'Users below the selected level are not required to enrol in two-factor authentication.' }}</span>
                 </label>
             </div>
 
@@ -233,6 +241,7 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
                 <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Failed-login alert threshold</span><input v-model="sForm.failed_login_notify_threshold" type="number" min="0" max="50" :class="field" /><span class="mt-1 block text-xs text-ink-400">Notify admins after this many failed logins for one account in 10 minutes; 0 disables it.</span></label>
                 <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Data-quality LOS multiplier</span><input v-model="sForm.dq_los_multiplier" type="number" min="1" max="10" :class="field" /><span class="mt-1 block text-xs text-ink-400">Flag active non-long-term episodes with LOS &gt; Long&nbsp;LOS × this (default 2).</span></label>
                 <label class="block sm:col-span-2"><span class="mb-1 block text-sm font-semibold text-ink-700">Trusted-device window (hours)</span><input v-model="sForm.mfa_trusted_device_hours" type="number" min="0" max="720" :class="field" /><span class="mt-1 block text-xs text-ink-400">0 turns the trusted-device option off. Changing this does not shorten windows already granted.</span></label>
+                <label class="block sm:col-span-2"><span class="mb-1 flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" v-model="sForm.log_record_opens" class="rounded text-brand-600" /> Log every record and handover open</span><span class="mt-1 block text-xs text-ink-400">Records an audit entry every time a patient record or handover is opened, not just when it's changed — a break-glass access trail. Off by default; can generate a high volume of audit rows.</span></label>
             </div>
 
             <!-- Consultation ledger cutover gate -->

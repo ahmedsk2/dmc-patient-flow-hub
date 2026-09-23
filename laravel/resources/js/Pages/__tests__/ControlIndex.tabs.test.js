@@ -49,6 +49,10 @@ const props = {
 };
 
 const mountPage = () => mount(ControlIndex, { props });
+// merges into `props.settings` / overrides top-level props — used by the 2026-09-23 walkthrough
+// tests below (log_record_opens checkbox, mfaMandatory caption) without disturbing the other specs.
+const mountPageWith = (overrides = {}, settingsOverrides = {}) =>
+    mount(ControlIndex, { props: { ...props, ...overrides, settings: { ...props.settings, ...settingsOverrides } } });
 
 beforeEach(() => { put.mockClear(); post.mockClear(); deleteFn.mockClear(); ask.mockReset(); });
 
@@ -108,6 +112,59 @@ describe('Control/Index — double-submit guard (Item 5)', () => {
         await w.vm.$nextTick();
         const btn = w.findAll('button').find((b) => b.text() === 'Save settings');
         expect(btn.attributes('disabled')).toBeDefined();
+    });
+});
+
+// 2026-09-23 walkthrough (A): settings.log_record_opens was fully enforced server-side but had no
+// control anywhere in Control -> Settings, so it could never be switched on. These prove the checkbox
+// renders from the prop and is wired two-way into the same sForm that PUTs /control/settings.
+describe('Control/Index — break-glass record-open logging checkbox (walkthrough A)', () => {
+    const findCheckbox = (w) => w.findAll('label').find((l) => l.text().includes('Log every record and handover open')).find('input[type="checkbox"]');
+
+    it('renders UNCHECKED when settings.log_record_opens is absent (off by default)', () => {
+        const w = mountPageWith();
+        expect(findCheckbox(w).element.checked).toBe(false);
+        expect(w.vm.sForm.log_record_opens).toBe(false);
+    });
+
+    it('renders CHECKED from settings.log_record_opens = true', () => {
+        const w = mountPageWith({}, { log_record_opens: true });
+        expect(findCheckbox(w).element.checked).toBe(true);
+        expect(w.vm.sForm.log_record_opens).toBe(true);
+    });
+
+    it('checking the box flips sForm.log_record_opens, which saveSettings PUTs to /control/settings', async () => {
+        const w = mountPageWith();
+        await findCheckbox(w).setValue(true);
+        expect(w.vm.sForm.log_record_opens).toBe(true);
+        w.vm.saveSettings();
+        expect(put).toHaveBeenCalledWith('/control/settings', expect.objectContaining({ preserveScroll: true }));
+        // the mocked useForm's `put` submits the SAME reactive sForm the checkbox is bound to — so a
+        // real (unmocked) Inertia form.put() at this point would include log_record_opens: true.
+        expect(w.vm.sForm.log_record_opens).toBe(true);
+    });
+
+    it('unchecking flips it back to false', async () => {
+        const w = mountPageWith({}, { log_record_opens: true });
+        await findCheckbox(w).setValue(false);
+        expect(w.vm.sForm.log_record_opens).toBe(false);
+    });
+});
+
+// 2026-09-23 walkthrough (B): the two-factor enforcement select had no caption, unlike every sibling
+// field, even though MFA is mandatory for everyone regardless of the selected level.
+describe('Control/Index — two-factor enforcement caption (walkthrough B)', () => {
+    it('states MFA is mandatory regardless of the setting when mfaMandatory is true', () => {
+        const w = mountPageWith({ mfaMandatory: true });
+        const label = w.findAll('label').find((l) => l.text().includes('Two-factor enforcement'));
+        expect(label.text()).toContain('mandatory for every user regardless of this setting');
+    });
+
+    it('falls back to a level-scoped caption when mfaMandatory is false', () => {
+        const w = mountPageWith({ mfaMandatory: false });
+        const label = w.findAll('label').find((l) => l.text().includes('Two-factor enforcement'));
+        expect(label.text()).not.toContain('mandatory for every user regardless of this setting');
+        expect(label.text()).toContain('not required to enrol');
     });
 });
 

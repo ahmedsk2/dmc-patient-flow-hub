@@ -1,8 +1,8 @@
 # HANDOFF — current state, and what remains
 
 > Single ground-truth orientation for the next review session. Read this first (with `CLAUDE.md`).
-> Last updated 2026-09-22 (deploy + restore drill + first point-in-time-recovery rehearsal + the engineering
-> batch); CI green.
+> Last updated 2026-09-23 (a role-by-role walkthrough of every function on a local copy, and the eight
+> fixes it prompted); CI green.
 >
 > **The working checklist of everything still open, by who acts, is [`REMAINING-WORK.md`](REMAINING-WORK.md).**
 > Tick items there as they close; this file keeps the narrative.
@@ -56,8 +56,8 @@
 - **Login:** a trust-badge row of six **truthful** claims (encrypted in transit / at rest, MFA,
   in-Kingdom hosting, backups, privacy-notice link). No framework badges until certificates exist.
 - **Docs:** pruned of dev scaffolding; PDPL paper-trail drafts in `laravel/docs/compliance/`.
-- **Gate baselines (2026-09-22, after the engineering batch):** PHPUnit 1004 (+91 in the `pdf` group), PHP statement
-  coverage 88.1 % at the last CI measurement (floor 83), Vitest 792 on vitest 5 (floors 72/66/62/48 lines/statements/branches/
+- **Gate baselines (2026-09-23, after the walkthrough fixes):** PHPUnit 1044 (+92 in the `pdf` group), PHP statement
+  coverage 88.1 % at the last CI measurement (floor 83), Vitest 820 on vitest 5 (floors 72/66/62/48 lines/statements/branches/
   functions — re-baselined 2026-09-22 for the new coverage engine, then raised the same day by the
   IcdTypeahead + ActivityPanel specs), ESLint zero warnings, Pint clean.
 
@@ -202,8 +202,8 @@
    downloads, a race-safe duplicate-admission guard (the brand-new-MRN case used to be a 500), COOP/CORP,
    a clock-skew check in `/health`, a daily expired-row prune, a read-only retention report, the nightly
    dump recording its binlog position, and a whole-server-loss runbook (unrehearsed). The full list and
-   what it left open are in [`REMAINING-WORK.md`](REMAINING-WORK.md) §F. **Not deployed yet** — and the
-   host copy of `db-backup.py` must be reinstalled when it is. Also found that day: the host was down
+   what it left open are in [`REMAINING-WORK.md`](REMAINING-WORK.md) §F. Deployed 2026-09-22 with the next
+   item (production `379ef29`); the host copy of `db-backup.py` was reinstalled the same day. Also found that day: the host was down
    for ~13 h on 2026-09-16 (02:55–16:00 UTC, abrupt stop, nobody paged) — cause to be checked in the OCI
    console (§B there).
    **2026-09-22, the four approved items + a whole-server-loss rehearsal:** the style policy dropped
@@ -215,6 +215,20 @@
    had no inventory once the shipper's state file died with the host (`db-backup.py --list-objects`
    now provides one), and that listing was truncated by a 64 KB body cap — all fixed. The application
    half (deploy platform, image rebuild, DNS) is still unrehearsed and is what a real RTO hinges on.
+   **2026-09-23, role walkthrough (owner: "use the website using all the user roles and walk through
+   all the functions"; then "fix all and deploy after"):** a technical dry run of `UAT-TEST-PLAN.md` on
+   a **local copy with fake demo data** — eight walkthrough accounts (every role and capability
+   variant), signed in through a local-only link so no password was ever typed, each state change
+   checked in the database, on screen and in the statistics, plus a route-by-route authorization sweep
+   and an independent recomputation of every dashboard and statistics figure (28/28 matched). 190 rows:
+   180 pass. It found **eight real defects** — the worst: the patient-merge pickers rendered **nothing**
+   in the built app (a runtime template string that only the test build could compile), and
+   deactivating or deleting a user left their open sessions working. All eight are fixed with
+   regression tests and re-verified live; details and the doc corrections (Observer scope, resident
+   Can-Manage, Active List scope) in
+   [`evidence/uat-dry-run-2026-09-23.md`](laravel/docs/compliance/evidence/uat-dry-run-2026-09-23.md).
+   This is **not** the clinical UAT sign-off — the cutover item in `REMAINING-WORK.md` still needs the
+   owner and clinicians on the real system.
    **Still open and all owner / infrastructure decisions, not code:** enable deploy-on-green
    (declined so far — "I don't want to autodeploy"), pick a log sink and set `LOG_STACK`
    (OBS-01/03/04/05), a second backup region + instance principal (DATA-02, CFG-10), SLOs and an

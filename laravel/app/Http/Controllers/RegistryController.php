@@ -393,6 +393,11 @@ class RegistryController extends Controller
                 'location' => $c->current_location, 'from' => $c->consultation_from, 'to' => $c->to_service,
                 'consultant' => $c->consultant?->full_name ?? $c->consultant?->name ?? '—',
                 'date' => optional($c->consultation_date)->toDateString(), 'signoff' => optional($c->signoff_date)->toDateString(),
+                // one of the FOUR ledger states (Consultation::STATUS_*) — without this the page had
+                // no way to tell new/ongoing apart and painted every non-signed-off row "Active".
+                // A sign-off date wins over an open status: the legacy drift belt, the same rule as
+                // the `signed_only` filter above and ConsultationDashboardController::openQuery().
+                'status' => $c->signoff_date !== null ? Consultation::STATUS_SIGNED_OFF : $c->status,
                 'reasons' => collect($c->indication ?? [])->map(fn ($id) => $reasons[$id] ?? null)->filter()->values(),
             ]);
     }

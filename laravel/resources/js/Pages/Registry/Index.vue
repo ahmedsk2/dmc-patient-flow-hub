@@ -160,6 +160,21 @@ const modes = [['admissions', 'Admissions'], ['consultations', 'Consultations'],
 const outcomeRail = (o) => o === 'Dead' ? 'rail-danger' : o === 'Alive' ? 'rail-success' : 'rail-neutral';
 const consultRail = (signoff) => signoff ? 'rail-success' : 'rail-info';
 
+// Same 4-state vocabulary + tone as Consultations/Index.vue's STATUS_TABS/STATUS_BADGE (kept as a
+// small local copy rather than a shared import — this page renders far fewer status details than
+// the workspace and pulling in the workspace's full STATUS_TABS/duty/move-title machinery here
+// would be dead weight). A status this page does not recognise is drift, shown neutrally rather
+// than silently painted "Active" the way an absent status used to be.
+const CONSULT_STATUS_LABEL = { new: 'New', active: 'Active', ongoing: 'Ongoing', signed_off: 'Signed off' };
+const CONSULT_STATUS_BADGE = {
+    new: 'bg-tint-info text-on-info',
+    active: 'bg-tint-accent text-on-accent',
+    ongoing: 'bg-tint-warning text-on-warning',
+    signed_off: 'bg-tint-success text-on-success',
+};
+const consultStatusLabel = (s) => CONSULT_STATUS_LABEL[s] ?? 'Unknown';
+const consultStatusBadge = (s) => CONSULT_STATUS_BADGE[s] ?? 'bg-ink-100 text-ink-500';
+
 // Density toggle — Comfortable/Compact row padding (app.css's density-comfortable/-compact +
 // row-pad, the SAME mechanism the board's own density toggle is slated to migrate onto). Persisted
 // per-browser under its OWN key so Registry's preference doesn't collide with the board's.
@@ -325,7 +340,7 @@ const toggleExpand = (id) => {
                         <td class="row-pad px-3"><span v-for="r in c.reasons" :key="r" class="me-1 inline-block rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">{{ r }}</span></td>
                         <td class="row-pad px-3 text-ink-600">{{ c.consultant }}</td>
                         <td class="nums row-pad px-3 text-ink-500">{{ c.date || '—' }}</td>
-                        <td class="row-pad px-5"><span v-if="c.signoff" class="rounded-full bg-tint-success px-2.5 py-0.5 text-xs font-semibold text-on-success">Signed {{ c.signoff }}</span><span v-else class="rounded-full bg-tint-accent px-2.5 py-0.5 text-xs font-semibold text-on-accent">Active</span></td>
+                        <td class="row-pad px-5"><span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="consultStatusBadge(c.status)">{{ consultStatusLabel(c.status) }}<template v-if="c.status === 'signed_off' && c.signoff"> {{ c.signoff }}</template></span></td>
                     </tr>
                     <tr v-if="!results.data.length"><td colspan="7" class="px-5 py-10 text-center text-ink-400">{{ hasSearched ? 'No consultations match the current filters.' : 'No consultations match.' }}</td></tr>
                 </tbody>
