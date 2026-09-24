@@ -157,6 +157,7 @@ If any of these fail, stop and report — deeper testing is pointless until they
 | Add a new admission | ✓ | ✓ (if Can Add) | ✓ (if Can Add) | ✓ (if Can Add) | ✗ | | |
 | Assign a patient to a consultant | ✓ | ✓ (if Can Assign) | ✓ (if Can Assign) | ✗ | ✗ | | |
 | "Assign to me" | ✓ | — | ✓ | — | ✗ | | |
+| Hand own patient to a colleague (no Can Assign) | ✓ | ✗ | ✓ (own active patient only) | ✗ | ✗ | | since 2026-09-24 |
 | Modify a patient's details | ✓ | ✓ (if Can Modify) | ✓ (if Can Modify) | ✓ (if Can Modify) | ✗ | | |
 | Transfer / discharge a patient | ✓ | ✗ | ✓ (own patient **or** Can Manage) | ✓ (if Can Manage) | ✗ | | |
 | Reverse a discharge (same-day undo) | ✓ (step-up) | ✗ | ✗ | ✗ | ✗ | | |
@@ -192,6 +193,7 @@ If any of these fail, stop and report — deeper testing is pointless until they
 | ADM-07 | On a queued (unassigned) patient, use **Modify** to correct a field | Edit saves | | |
 | ADM-08 | **Assign** a queued patient to a consultant (with Can Assign) | Moves off the queue onto that consultant's active list | | |
 | ADM-09 | **Assign to me** as a consultant | Patient assigned to you | | |
+| ADM-09b | As a consultant **without** Can Assign, open your own patient's card → **Hand this patient to a colleague**, pick another consultant, update the handover, save | The patient moves to them; they get a notification and a handover to read and sign; choosing yourself or another consultant's patient is refused | | |
 | ADM-10 | Run the **auto-assign / shuffle** (balancing) | Unassigned patients are distributed across consultants; result looks balanced; no error/debug text on screen | | |
 | ADM-11 | **Bulk change-consultant**: reassign several patients from consultant A to B | All selected patients move; any whose handover was not updated today raise a persistent **"incomplete handover"** reminder (a soft gate — the move is never blocked) | | |
 | ADM-12 | Newly-assigned patient shows the **"New"** badge | Badge present until the patient is discharged or reassigned (a managed flag, not a 24-hour timer); a quiet administrative move with "Mark as new" unticked shows no badge | | |

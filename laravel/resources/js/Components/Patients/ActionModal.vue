@@ -55,6 +55,9 @@ const props = defineProps({
     specialties: { type: Array, default: () => [] },
     externalServices: { type: Array, default: () => [] },
     today: { type: String, required: true },
+    // Consultant hand-off (owner decision 2026-09-24): the viewer is this patient's own consultant with
+    // no Assign capability. The board computes it (it knows the viewer); User::canHandOffAdmission gates.
+    handOff: { type: Boolean, default: false },
 });
 const emit = defineEmits(['saved', 'close']);
 
@@ -200,6 +203,7 @@ const specConsultants = computed(() => consultantOptions(props.consultants, { sp
 // single-assign modal: on-service only too, but keep the CURRENT assignee selectable even when
 // they just went off service (so the prefilled selection isn't silently dropped) — J1-15a
 const assignConsultants = computed(() => consultantOptions(props.consultants, { keepId: props.patient?.consultant_id }));
+
 // SearchableSelect renders o.name verbatim — precompute the "(off service)" suffix here rather
 // than teaching the component about it (assignConsultants can include the kept off-service one).
 const assignConsultantsLabelled = computed(() =>
@@ -264,6 +268,8 @@ defineExpose({
         <template v-if="patient">
             <ErrorSummary :errors="modeErrors" />
             <form v-if="mode === 'assign'" @submit.prevent="changingConsultant ? submitWithHandoverGuard(submitAssign, aForm) : submitAssign()" class="space-y-4">
+                <p v-if="handOff" data-hand-off-note class="flex items-center gap-1 text-sm text-ink-600">Hand your patient to a colleague: pick the consultant taking over.
+                    <InfoTip label="Handing over your patient" text="The patient moves to them now. They are notified and asked to read and sign your handover — update it below." /></p>
                 <div><label :for="fid('consultant_id')" class="sr-only">Consultant</label><SearchableSelect :id="fid('consultant_id')" v-model="aForm.consultant_id" title="On-service consultants only" :aria-describedby="aForm.errors.consultant_id ? fid('consultant_id') + '-err' : undefined" input-class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" placeholder="Select consultant…" :options="assignConsultantsLabelled" /><p v-if="aForm.errors.consultant_id" :id="fid('consultant_id') + '-err'" class="mt-1 text-xs text-on-danger">{{ aForm.errors.consultant_id }}</p></div>
                 <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="aForm.mark_new" class="rounded text-brand-700" /> Mark as new patient <span class="text-xs text-ink-400">(uncheck for a quiet administrative move — no “New” badge)</span><InfoTip label="Mark as new patient" text="Checked sets the board's New badge and clears it only on discharge or reassignment — it is not a 24-hour timer." /></label>
                 <!-- proactive handover panel (HC-T6): appears the moment the picked consultant differs
@@ -376,7 +382,7 @@ defineExpose({
                     <!-- #13 (role/UX review 2026-09-24): this is the only capability-free way to hand a
                          patient to a named colleague, including a same-team hand-off — it always closes
                          the episode and opens a new one, which a plain consultant may not expect. -->
-                    <div><label :for="fid('specialty_id')" class="mb-1 flex items-center gap-1 text-sm font-semibold text-ink-700">Receiving specialty <InfoTip label="Internal specialty transfer" text="Closes this episode and opens a new one under the chosen consultant — even for a same-team hand-off." /></label>
+                    <div><label :for="fid('specialty_id')" class="mb-1 flex items-center gap-1 text-sm font-semibold text-ink-700">Receiving specialty <InfoTip label="Internal specialty transfer" text="Closes this episode and opens a new one. Consultants handing their own patient to a colleague can use the card's reassign button instead." /></label>
                         <select :id="fid('specialty_id')" v-model="tForm.specialty_id" :aria-describedby="tForm.errors.specialty_id ? fid('specialty_id') + '-err' : undefined" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select specialty…</option><option v-for="s in specialties" :key="s.id" :value="s.id">{{ s.name }}</option></select>
                         <p v-if="tForm.errors.specialty_id" :id="fid('specialty_id') + '-err'" class="mt-1 text-xs text-on-danger">{{ tForm.errors.specialty_id }}</p></div>
                     <div><label :for="fid('consultant_id')" class="mb-1 block text-sm font-semibold text-ink-700">Receiving consultant <span class="font-normal text-ink-400">(on-service only)</span></label>

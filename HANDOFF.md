@@ -304,6 +304,11 @@
    (`dmc_demo-2026-09-24T111757Z`); no migrations; smoke 16/16 with the served bundle matching the
    manifest, `/health` ok, audit chain intact (912 rows), no error-level log lines after the swap, the
    new MRN-lookup route live, and the sign-in page's JavaScript no longer carries the removed figures.
+   Then the owner decided the open #13 question ("yes consultant can do that"): a **consultant may hand
+   their own active patient to another active consultant** without Can-assign — through the existing
+   assign action (`User::canHandOffAdmission`), so the handover signature, the receiver's notification,
+   the same-day reminder and the audit row (`via: consultant_hand_off`) all apply; registrars/residents
+   who self-assigned don't get it. Reviewed adversarially (authorization + regression), 10 new tests.
    **Still open and all owner / infrastructure decisions, not code:** enable deploy-on-green
    (declined so far — "I don't want to autodeploy"), pick a log sink and set `LOG_STACK`
    (OBS-01/03/04/05), instance principal (CFG-10), SLOs and an

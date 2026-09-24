@@ -135,4 +135,29 @@ describe('PatientCard', () => {
         expect(w.find('[title="Reassign consultant"]').exists()).toBe(false);
         expect(w.find('[title="Modify details"]').exists()).toBe(true);
     });
+
+    // Consultant hand-off (owner decision 2026-09-24): a consultant without the Assign capability may hand
+    // their OWN active patient to a colleague; the button mirrors User::canHandOffAdmission.
+    describe('consultant hand-off button', () => {
+        const consultant = { id: 7, role: 3, is_admin: false, can: { assign: false, manage: false, modify: false } };
+
+        it("shows on the consultant's own active patient, labelled as a hand-off, and opens the assign dialog", async () => {
+            setUser(consultant);
+            const p = patient({ consultant_id: 7 });
+            const w = mountCard(p);
+            const btn = w.get('[title="Hand this patient to a colleague"]');
+            expect(btn.attributes('aria-label')).toBe('Hand this patient to a colleague');
+            await btn.trigger('click');
+            expect(w.emitted('open-modal')[0]).toEqual(['assign', p]);
+        });
+
+        it("is absent on another consultant's patient, on a discharged patient, and for non-consultant owners", () => {
+            setUser(consultant);
+            const handOffBtn = (w) => w.find('[aria-label="Hand this patient to a colleague"], [aria-label="Reassign consultant"]');
+            expect(handOffBtn(mountCard(patient({ consultant_id: 8 }))).exists()).toBe(false);
+            expect(handOffBtn(mountCard(patient({ consultant_id: 7, discharged: true }))).exists()).toBe(false);
+            setUser({ ...consultant, role: 4 });   // a Resident who self-assigned: not granted
+            expect(handOffBtn(mountCard(patient({ consultant_id: 7 }))).exists()).toBe(false);
+        });
+    });
 });

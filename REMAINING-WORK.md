@@ -59,11 +59,11 @@ biggest live risk** (the original un-hardened build, on US hosting).
 
 ## B. Owner — decisions and console work
 
-- [ ] **A same-team hand-off for a plain consultant?** (found by the 2026-09-24 role/UX review, #13.)
-  Today a consultant without the Can-assign capability can only pass their own patient to a named
-  colleague through *Transfer → internal specialty*, which closes the episode and opens a new one (its
-  message and "!" now say so). Giving the primary consultant a direct "hand to a colleague" action would
-  be a **permission change** — your decision; nothing was changed.
+- [x] **A same-team hand-off for a consultant** — decided 2026-09-24 ("yes consultant can do that"): a
+  consultant can now hand their own active patient to another active consultant from the patient card,
+  without the Can-assign capability. The episode stays open, and the usual safeguards apply: the
+  colleague is notified and must read and sign the handover, and a reminder is raised if the handover
+  wasn't updated that day. Registrars/residents who self-assigned don't get it. (#13)
 
 - [x] **Explain the 2026-09-16 outage** — investigated 2026-09-23 in the OCI audit trail and metrics.
   **Oracle stopped the server itself** (02:56 UTC, no user or API caller — service-side Compute calls

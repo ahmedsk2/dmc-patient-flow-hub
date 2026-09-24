@@ -229,8 +229,11 @@ Active ICU by `current_location`; Medically discharged ("still in") = `medical_d
 - **Per-action by capability.** `can_add` admits; `can_assign` assigns to a chosen consultant,
   shuffles, bulk-reassigns; `can_manage` transfers/discharges any patient; `can_modify` edits patient
   details; `can_coordinate_consultations` coordinates the ledger. The **primary consultant** may
-  manage their own admission without `can_manage` (`User::canManageAdmission`). Assign-to-me is open
-  to any clinical role, never Observer.
+  manage their own admission without `can_manage` (`User::canManageAdmission`). A **consultant** may
+  also hand their own active patient to another active consultant without `can_assign` (owner decision
+  2026-09-24, `User::canHandOffAdmission`) — through the same assign action, so the handover signature,
+  the receiver's notification, the same-day reminder and the audit row all apply; a Registrar/Resident
+  who self-assigned does not get this. Assign-to-me is open to any clinical role, never Observer.
 - **Enforced server-side** in controllers and FormRequests, not just by hidden buttons. Capability
   grants are broad by owner decision (e.g. Residents with Can-Manage); do not "tidy" them.
 - **Auth lifecycle:** mandatory TOTP MFA for every user (challenge expires after 5 minutes, 8
@@ -410,8 +413,8 @@ the same gates must be run locally per RELEASE-CHECKLIST.md. Since 2026-09-03 th
 PR (no path filter), plus a blocking Pint gate and Vitest coverage thresholds. The legacy `ci.yml` is
 a separate pipeline; never merge them.
 
-**Baselines (2026-09-24, after the role/UX review fixes):** PHPUnit 1125 tests (+92 in the `pdf` group), PHP
-statement coverage 88.1 % at the last CI measurement (floor 83), Vitest 940 on vitest 5 (floors lines 72, statements 66,
+**Baselines (2026-09-24, after the role/UX review fixes and the consultant hand-off):** PHPUnit 1135 tests (+92 in the `pdf` group), PHP
+statement coverage 88.1 % at the last CI measurement (floor 83), Vitest 943 on vitest 5 (floors lines 72, statements 66,
 branches 62, functions 48 — re-baselined 2026-09-22 because vitest 5's AST-aware coverage counts
 different units than vitest 3, then raised the same day; see the history in `vitest.config.js`),
 ESLint zero warnings, Pint clean.

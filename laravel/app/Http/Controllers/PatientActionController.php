@@ -411,13 +411,21 @@ class PatientActionController extends Controller
     public function assign(Request $request, Admission $admission): RedirectResponse
     {
         $u = Auth::user();
-        if ($u->isObserver() || ! ($u->isAdmin() || $u->can_assign)) {
+        $viaCapability = ! $u->isObserver() && ($u->isAdmin() || $u->can_assign);
+        // Consultant hand-off (owner decision 2026-09-24): the patient's own consultant may hand this
+        // active patient to a colleague without the Assign capability. Same action, same safeguards
+        // (handover signature, receiver notification, same-day reminder, audit) — see
+        // User::canHandOffAdmission for the exact scope.
+        $handOff = ! $viaCapability && $u->canHandOffAdmission($admission);
+        if (! $viaCapability && ! $handOff) {
             throw new AccessDeniedHttpException('You do not have the Assign capability.');
         }
         $data = $request->validate([
             // an assignment target must be an ACTIVE CONSULTANT — a bare exists:users,id let an API
             // caller point an unassigned patient at an inactive or non-consultant account (N1-7)
-            'consultant_id' => ['required', self::activeConsultantRule()],
+            'consultant_id' => array_merge(['required', self::activeConsultantRule()],
+                // a hand-off must go to someone else — "handing" to yourself is a no-op
+                $handOff ? [Rule::notIn([(int) $u->id])] : []),
             'mark_new' => ['nullable', 'boolean'],
             'acknowledged' => ['sometimes', 'boolean'],
         ], [
@@ -425,6 +433,7 @@ class PatientActionController extends Controller
             // is invalid") never named the real rule — e.g. picking a Resident silently failed with no
             // clue why. Name it.
             'consultant_id.exists' => 'Only an active consultant can be assigned this patient — the selected user is not eligible.',
+            'consultant_id.not_in' => 'This patient is already yours — choose the colleague you are handing them to.',
         ]);
         // mark_new=false (legacy "New Patient?" unchecked) = quiet administrative assignment:
         // the new-assignment fields are left UNTOUCHED, preserving any existing assigned_at
@@ -454,7 +463,8 @@ class PatientActionController extends Controller
             return $sig;
         });
         Audit::log('admission.assign', 'admission', (string) $admission->id, ['consultant_id' => $data['consultant_id'], 'mark_new' => $markNew]
-            + ($sig ? ['handover_signature_id' => $sig->id] : []));
+            + ($sig ? ['handover_signature_id' => $sig->id] : [])
+            + ($handOff ? ['via' => 'consultant_hand_off'] : []));
         $this->bustDashboardCache();
 
         if ($gated && ! Handover::updatedToday($admission->id)) {
@@ -467,7 +477,9 @@ class PatientActionController extends Controller
             );
         }
 
-        return back()->with('flash', ['type' => 'success', 'message' => 'Consultant assigned.']);
+        return back()->with('flash', ['type' => 'success', 'message' => $handOff
+            ? 'Patient handed to '.$this->consultantName((int) $data['consultant_id']).' — they will be asked to read and sign the handover.'
+            : 'Consultant assigned.']);
     }
 
     /**
