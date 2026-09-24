@@ -88,11 +88,13 @@ DMC-relevant items that are databases or the owner's own backups, so not "loose 
    production data, last loaded 2026-08-20), `dmc_prod` (≈ 17 MB, the legacy source for that import)
    and `dmc` (≈ 52 MB, created 2026-06-08, most likely an early import of a legacy dump). They are
    contrary to CLAUDE.md §10 ("local dev must never point at production data"); local development now
-   uses the Docker test database with demo data. Dropping them is the owner's step (permanent).
+   uses the Docker test database with demo data. **Dropped by the owner on 2026-09-24** (follow-up
+   below).
 2. **The owner's daily local mirror of the OCI bucket `coolify-backups`**, which includes Coolify's
    own **unencrypted** daily dumps of the production `dmc_demo` database (66 dumps from 2026-07-19,
    ≈ 1.3 GB) alongside other apps' backups. (Later the same night `dmc_demo` was taken out of that
-   Coolify job, so no new DMC dumps reach the mirror; the 66 remain.) This is the owner's local backup; it should sit on an
+   Coolify job, so no new DMC dumps reach the mirror. The owner then deleted 53 of the 66 from the
+   bucket and their laptop copies were recycled — follow-up below.) This is the owner's local backup; it should sit on an
    encrypted disk or be replaced by the encrypted DMC backups (BACKUP-AND-RESTORE §6).
 3. Local WAMP and Docker **test** databases (`dmc_test*`, `dmc_test_legacy`, the `dmc-test-mysql`
    container) — demo/test data only.
@@ -105,3 +107,73 @@ were reported to the owner directly, not listed in this public repository.
 
 Volume shadow copies (need administrator rights); the contents of Docker Desktop's virtual disks and
 of mail-client stores; Claude Code's own session transcripts (not examined for fragments).
+
+## Follow-up, same day (2026-09-24)
+
+- **Local WAMP databases dropped by the owner.** `dmc_laravel`, `dmc_prod` and `dmc` were dropped by
+  the owner in phpMyAdmin; verified by Claude Code the same day: their folders no longer exist in
+  WAMP's MySQL data directory, and only the `dmc_test*` / `dmc_test_legacy` demo databases remain.
+- **Coolify's old DMC dumps.** The owner deleted **53 of the 66** unencrypted `dmc_demo` dumps from
+  the bucket `coolify-backups`; the 13 newest (2026-09-10 → 2026-09-23) were refused by the bucket's
+  locked 14-day retention rule (`RetentionRuleViolation`) and become deletable on 2026-10-07 03:00 UTC.
+  Verified afterwards: 13 remain in the bucket.
+- **The laptop's copies of those 53** (in the owner's `coolify-backups` mirror) were hashed and moved
+  to the Recycle Bin by Claude Code — 53 files, 1,042,441,366 bytes. They are destroyed when the
+  owner empties the bin: `[DATE EMPTIED]`. The mirror's other 13 stay while their bucket originals do
+  (the sync re-downloads whatever the bucket holds).
+
+| # | File | Bytes | Last modified (laptop) | SHA-256 |
+|---|---|---:|---|---|
+| 1 | `mysql-dump-dmc_demo-1784488352.dmp` | 19,543,493 | 2026-09-23 21:51 | `ebff75fa79c65ba8a7143f4a282e39e8e4d634a3e154e5fc1ed458f25ef87f37` |
+| 2 | `mysql-dump-dmc_demo-1784516406.dmp` | 19,543,493 | 2026-09-23 21:52 | `580c3a03b5f11189cefe8500722732e38377404e5efdb8acef3b4be1f78c694c` |
+| 3 | `mysql-dump-dmc_demo-1784602806.dmp` | 19,543,493 | 2026-09-23 21:52 | `813e17805e14f75de2e28088c0c685f57cc4b9b5ce8a1f1b21088424ed2c2644` |
+| 4 | `mysql-dump-dmc_demo-1784689207.dmp` | 19,543,493 | 2026-09-23 21:52 | `09b2e57cc1e24b7165177d5a77b406c08cc95a4ae77e5929ed1f6986e076ca33` |
+| 5 | `mysql-dump-dmc_demo-1784775607.dmp` | 19,543,493 | 2026-09-23 21:52 | `716a70a014b868887456db7c7332dace40ec019d2ab2320a86995081aec27120` |
+| 6 | `mysql-dump-dmc_demo-1784862006.dmp` | 19,543,493 | 2026-09-23 21:51 | `29da13413c792e6e17bd16a47087c59d357bbda07b4ab8a402fe49ab681512d0` |
+| 7 | `mysql-dump-dmc_demo-1784948405.dmp` | 19,543,493 | 2026-09-23 21:51 | `ccaa981c12aea82f96a127e11b4b76da52fb1fc7dfdf99c6eaa5d1dfeb0e0cbe` |
+| 8 | `mysql-dump-dmc_demo-1785034806.dmp` | 19,543,493 | 2026-09-23 21:52 | `0ffcf29238e5b706668cff6207cf0129bccfe0e0d8c9fb77caabcfa013ee3eec` |
+| 9 | `mysql-dump-dmc_demo-1785121206.dmp` | 19,543,493 | 2026-09-23 21:52 | `214a9e0d5cc5384f98529d4ec7b530c00384945234fa40eafee05e0a3b8144d3` |
+| 10 | `mysql-dump-dmc_demo-1785207606.dmp` | 19,543,742 | 2026-09-23 21:51 | `9744f46472390a4ce01e6fbfbd183ffaff707e1ec2dbfadfedef4bb3d4938f2d` |
+| 11 | `mysql-dump-dmc_demo-1785294007.dmp` | 19,543,742 | 2026-09-23 21:51 | `85cc6432a0f5768dbbdcee7d8c628a4a2c7b2d24dc6342e6882f4e6fe4a43c2e` |
+| 12 | `mysql-dump-dmc_demo-1785380407.dmp` | 19,543,742 | 2026-09-23 21:52 | `11e7ab5de7bc72018235de37e418e3ec24749a83b9537d48cbeebb027973b69b` |
+| 13 | `mysql-dump-dmc_demo-1785466806.dmp` | 19,543,742 | 2026-09-23 21:52 | `1e9bcef1eb17e1502e1bd41e4ad2fb6b7649d8f38b0bcee8f8057adceb8eec94` |
+| 14 | `mysql-dump-dmc_demo-1785553207.dmp` | 19,543,742 | 2026-09-23 21:51 | `88e0d5fb8fe493fb783323bb3d292691973bf9aeaf3586af1b68bab2ea453ab3` |
+| 15 | `mysql-dump-dmc_demo-1785639607.dmp` | 19,543,742 | 2026-09-23 21:52 | `3737baf7a76b31d5252bcc2990600331b80a9bcb05f010a08d115fbbb663d32d` |
+| 16 | `mysql-dump-dmc_demo-1785726007.dmp` | 19,543,742 | 2026-09-23 21:52 | `70088c5dda287fa747e1ce559181458453c0b3e2c063c9be8eca390cbc1fc8b9` |
+| 17 | `mysql-dump-dmc_demo-1785812406.dmp` | 19,543,742 | 2026-09-23 21:52 | `9f1506cb57dee0f3cd96206373f273aa5135ed44ffacca237b74e99346ab99ac` |
+| 18 | `mysql-dump-dmc_demo-1785898808.dmp` | 19,543,742 | 2026-09-23 21:52 | `492b0503e1cc4a60af83f4d677a9e090d43288e428d5e196ffa95837c4a4e067` |
+| 19 | `mysql-dump-dmc_demo-1785985207.dmp` | 19,543,742 | 2026-09-23 21:52 | `34289f9354dedf1cff5f8f3e6a49e41786d4de629539b0748bb5ae85df1f1234` |
+| 20 | `mysql-dump-dmc_demo-1786071607.dmp` | 19,543,742 | 2026-09-23 21:52 | `8a4c490d37e643a34c052ada85ea316fc763f6d7ba95ca54ceca5873cea91712` |
+| 21 | `mysql-dump-dmc_demo-1786158007.dmp` | 19,543,742 | 2026-09-23 21:52 | `1efa25c8b26d6684f4fdefbfa1ba4171e1cc991f53b92c6e74e440a8bd2d569a` |
+| 22 | `mysql-dump-dmc_demo-1786244407.dmp` | 19,543,742 | 2026-09-23 21:52 | `934516295eb4238027e6995a15e43eff212959fd974fc78f587249ffb6746ba3` |
+| 23 | `mysql-dump-dmc_demo-1786330806.dmp` | 19,543,742 | 2026-09-23 21:52 | `0bf3cbd1ce6eb509b677bd81978af6b2c0a38153c966bd0d7065c6e4bdd35faf` |
+| 24 | `mysql-dump-dmc_demo-1786417207.dmp` | 19,543,742 | 2026-09-23 21:52 | `a48cd6c28b342372fe5fa15e44c735e283a1867985001b70f3fb6d74c3033f0a` |
+| 25 | `mysql-dump-dmc_demo-1786503607.dmp` | 19,543,742 | 2026-09-23 21:52 | `b360759a863e758feee2d680ecd0ecd359f1606be55540d055354eb4cc5d3fe3` |
+| 26 | `mysql-dump-dmc_demo-1786590006.dmp` | 19,543,742 | 2026-09-23 21:52 | `174d76d1b96124bc20bd91fd973b3f3a90e6674fc418ec72dca05802976e283f` |
+| 27 | `mysql-dump-dmc_demo-1786676406.dmp` | 19,543,742 | 2026-09-23 21:52 | `06013aa819ce929a5a099232190784fba7047c881b20b7ccaea1881affe244cc` |
+| 28 | `mysql-dump-dmc_demo-1786762807.dmp` | 19,543,742 | 2026-09-23 21:52 | `c9448cd525668cbb610bc8a6eeac6647d73c2d9da07571269907a41fbef29180` |
+| 29 | `mysql-dump-dmc_demo-1786849206.dmp` | 19,543,742 | 2026-09-23 21:52 | `c20d1e0a5e43fe599df854f58ab382fce4c0b4518042ff6467bdec49117b9f42` |
+| 30 | `mysql-dump-dmc_demo-1786935606.dmp` | 19,543,742 | 2026-09-23 21:52 | `8f5d66ef5df025cc02a8324ff3ec2264ecf8b09baa828e3ef80d7d18eda6f1bd` |
+| 31 | `mysql-dump-dmc_demo-1787022006.dmp` | 19,543,742 | 2026-09-23 21:52 | `b98c42c070f9fdc69b172580aba72315c100ed28f6341291edea0f43c3601890` |
+| 32 | `mysql-dump-dmc_demo-1787108407.dmp` | 19,543,742 | 2026-09-23 21:52 | `52bc4e17fa5c2624752f0f4f8f4422e1e9c2f60869f667e1b3be3c6164d6e5ed` |
+| 33 | `mysql-dump-dmc_demo-1787194806.dmp` | 19,551,453 | 2026-09-23 21:52 | `af80423f41b37e41b606036ea35a25f7549a2e982cc8bf1d9235da974e1e9cc0` |
+| 34 | `mysql-dump-dmc_demo-1787281207.dmp` | 19,897,460 | 2026-09-23 21:52 | `b710dd31dc41e5cf788d89d1e48bc13f9383a83e3a6291c6d4b56ae23dad99de` |
+| 35 | `mysql-dump-dmc_demo-1787367606.dmp` | 19,905,417 | 2026-09-23 21:53 | `34aa715aad25748d8118916fe480c47b163e9365996ed91b0e7905a30bd7c98e` |
+| 36 | `mysql-dump-dmc_demo-1787454006.dmp` | 19,653,896 | 2026-09-23 21:52 | `06e965e8e7272b371801059abba59ef9f96fc87634577b3871af1bbd2a2075a2` |
+| 37 | `mysql-dump-dmc_demo-1787540406.dmp` | 19,662,351 | 2026-09-23 21:52 | `d22759e3aa12a003697eb3a1b2b64bcfc5f01609b4202401cfeb148a0d87f5de` |
+| 38 | `mysql-dump-dmc_demo-1787626806.dmp` | 19,670,297 | 2026-09-23 21:52 | `9d43ac47eaaf718ba07a15d0e14bfb4d6ec65df0672614aa487ad95b09c4da00` |
+| 39 | `mysql-dump-dmc_demo-1787713207.dmp` | 19,678,245 | 2026-09-23 21:53 | `3e4db8d66e38872222e6c491a38aa4eb8b67b517a1d16d41ec73cf399ab38ee9` |
+| 40 | `mysql-dump-dmc_demo-1787799606.dmp` | 19,686,193 | 2026-09-23 21:52 | `c599a6c6c4eb535fbcb323edc3aafb3eff16ef95135bacf26e3e15e9f74f04c8` |
+| 41 | `mysql-dump-dmc_demo-1787886006.dmp` | 19,694,141 | 2026-09-23 21:53 | `932f297b022294574ae8087a178a13c1d7b3d06056d317b109e70433c71e0091` |
+| 42 | `mysql-dump-dmc_demo-1787972407.dmp` | 19,702,091 | 2026-09-23 21:53 | `2440b9cd0cb6da8a025af17dcdc0934040d4c22e6a19348998b4f05002ed7eec` |
+| 43 | `mysql-dump-dmc_demo-1788058807.dmp` | 19,710,041 | 2026-09-23 21:52 | `c068e7f10b0640e38bbc1238c059ef895f54f56ca49f89f4db5092e8ffc3150e` |
+| 44 | `mysql-dump-dmc_demo-1788145207.dmp` | 19,717,991 | 2026-09-23 21:53 | `4cb6b5626b1b2352e96be3537dd9ae5217db0701039981380c96c8ee35876014` |
+| 45 | `mysql-dump-dmc_demo-1788231606.dmp` | 19,725,941 | 2026-09-23 21:53 | `cbcb4ab41da54f68964ad2148aa08fd78348041c6418854cf6f9e2887b33e23f` |
+| 46 | `mysql-dump-dmc_demo-1788318006.dmp` | 19,733,891 | 2026-09-23 21:53 | `1b23b0f4517a929e2f036cb20061bd79e42772e0ad7aed35c2a38e41150d0f2d` |
+| 47 | `mysql-dump-dmc_demo-1788404407.dmp` | 19,742,303 | 2026-09-23 21:53 | `45fe5b44f2d56bea32c3267f0654c6543c6e1ba46594159a7a0d485b0950fb4f` |
+| 48 | `mysql-dump-dmc_demo-1788490806.dmp` | 20,196,008 | 2026-09-23 21:53 | `694ed4bde571a54b00539b98ea80b93e1178cdc959e16c38f341514c0c405483` |
+| 49 | `mysql-dump-dmc_demo-1788577206.dmp` | 20,214,281 | 2026-09-23 21:53 | `c90488314c2a566119f3537f56661d02647fe2d61b1e2ebe6588aefa9a2355c9` |
+| 50 | `mysql-dump-dmc_demo-1788663606.dmp` | 20,199,144 | 2026-09-23 21:53 | `19274dd909beb98ebdf922ef4965853ab41bf7449bea57260a47a3311ac23f44` |
+| 51 | `mysql-dump-dmc_demo-1788750007.dmp` | 20,241,721 | 2026-09-23 21:53 | `190cbfc404468c56d06cdfe1f1026480bc2e03e1a014dd51b962a6e38b4086b0` |
+| 52 | `mysql-dump-dmc_demo-1788836406.dmp` | 20,217,652 | 2026-09-23 21:53 | `2583351a4aa5af2246b08d4982b5d5b928f23db19d2cd1a46f4121550d4b7f46` |
+| 53 | `mysql-dump-dmc_demo-1788922806.dmp` | 20,243,346 | 2026-09-23 21:53 | `1a124ada10d54d76b22792bf70e47f2d5efda6cdc26d3db8247ffa1505365906` |

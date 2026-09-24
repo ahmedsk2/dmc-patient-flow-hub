@@ -215,7 +215,7 @@ The Terraform above was written from the docs and has never been planned. Readin
   without the owner's decision.
 - **`coolify-backups` (not modelled here):** Coolify's own backup destination for every app on the
   host. Its scheduled backup of the shared MySQL writes plain-SQL daily dumps of selected databases —
-  `dmc_demo` was among them until 2026-09-24, when it was taken out (66 old dumps remain) — with **no
+  `dmc_demo` was among them until 2026-09-24, when it was taken out (53 of its 66 old dumps deleted the same day; 13 locked until 2026-10-07) — with **no
   lifecycle policy** (a 14-day retention rule only), versioning disabled, private.
 - **Compute backups (not modelled here):** the host's boot volume is under the volume backup policy
   `weekly-4` (weekly incremental, 4-week retention, no destination region) and has a manual full

@@ -321,8 +321,8 @@ Each flow names its controller; per-endpoint database effects are in DATABASE-AN
   by owner decision (2026-09-24)**: no second cloud region (the tenancy's `ksa-data-residency` quota
   blocks storage elsewhere and stays); the owner keeps a local copy. **This pipeline is the only
   backup of `dmc_demo`**: Coolify's own daily backup of the shared MySQL used to dump it unencrypted to
-  `coolify-backups` and was stopped from doing so on 2026-09-24 (66 old dumps remain there, owner's to
-  delete); OCI also backs up the whole host disk weekly (4 weeks) — BACKUP-AND-RESTORE §6. RPO ≤ 1 h for binlog-covered changes, ≤ 24 h from the dump
+  `coolify-backups` and was stopped from doing so on 2026-09-24 (53 of its 66 old dumps deleted the same
+  day; the last 13 are locked by the bucket's 14-day rule until 2026-10-07); OCI also backs up the whole host disk weekly (4 weeks) — BACKUP-AND-RESTORE §6. RPO ≤ 1 h for binlog-covered changes, ≤ 24 h from the dump
   alone; RTO is whatever the drill prints (7–8 s for the dump) plus the replay and the human steps;
   local encrypted copy 2 days, bucket 90 days (**placeholder pending legal**); `backup:verify` alerts
   admins in-app when either heartbeat is stale (the binlog half needs the container deployed from
