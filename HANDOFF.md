@@ -278,7 +278,8 @@
    laptop's WAMP, and the owner's daily local mirror of the `coolify-backups` bucket — which revealed
    that **Coolify's own backup writes unencrypted daily dumps of `dmc_demo` with no expiry**. Checking
    OCI for cross-region copies found none, but did surface the host's weekly boot-volume backups and
-   a manual full one from 2026-07-19 with no expiry. All three are owner decisions in REMAINING-WORK.
+   a manual full one from 2026-07-19 with no expiry — which the owner deleted the same day (verified
+   `TERMINATED`; the weekly ones stay). The rest are owner decisions in REMAINING-WORK.
    Same night, on the owner's instruction, **`dmc_demo` was taken out of Coolify's backup job** (it now
    dumps only `default`; one setting, nothing restarted) — the encrypted DMC pipeline is the only
    backup of the DMC database. The owner then deleted 53 of the 66 old Coolify dumps from the bucket

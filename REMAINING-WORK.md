@@ -99,11 +99,10 @@ biggest live risk** (the original un-hardened build, on US hosting).
   path):
   `C:/tools/oci-cli/Scripts/oci.exe os object bulk-delete -bn coolify-backups --prefix "data/coolify/backups/databases/root-team-0/shared-mysql-u8ha9zwdgekz9djnjt1ndisf/mysql-dump-dmc_demo-"`.
   The 7 copies on the server age out by Coolify's own local "keep 14" rule within about two weeks.
-- [ ] **Decide on OCI's whole-disk backups** (found 2026-09-24). OCI backs up the server's entire disk —
-  every app's data, not only DMC's — weekly, keeping 4 weeks, all in Riyadh; and a **manual full copy
-  from 2026-07-19 has no expiry**, so it keeps a July snapshot of every app's patient data indefinitely.
-  Keep it (say why) or delete it in the OCI console (Block Storage → Boot Volume Backups). It is shared
-  with the other apps on the server, so it is your call, not a DMC-only one.
+- [x] **Decide on OCI's whole-disk backups** — decided 2026-09-24: the **manual full copy of
+  2026-07-19** (no expiry — a July snapshot of every app's data, kept indefinitely) was **deleted by
+  you** the same day; verified: OCI shows it `TERMINATED`. The weekly whole-disk backups stay (kept 4
+  weeks, Riyadh only) — four were available that day, the newest from 2026-09-19.
 - [x] **Backup key can no longer delete** — done 2026-09-23: it can create, overwrite, read and list
   only, so a stolen key cannot wipe the backups (proven with a refused delete). *(DATA-02)*
 - [ ] **Instance-principal auth instead of the static key** — not done, and not a console switch: the
