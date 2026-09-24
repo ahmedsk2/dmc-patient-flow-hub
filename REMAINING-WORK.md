@@ -52,11 +52,9 @@ biggest live risk** (the original un-hardened build, on US hosting).
   untouched, as you asked. (The copies on the production host were shredded and re-checked
   2026-09-22.) Still on the laptop: the WAMP databases and the old Coolify dumps (items below).
   *(D1, G8, DATA-14)*
-- [ ] **Drop the real-data databases in WAMP on your laptop** — `dmc_laravel`, `dmc_prod` and `dmc`
-  (together ≈ 170 MB) hold imports of the real legacy data, which CLAUDE.md says local development
-  must never use; local work now runs on the Docker test database with demo data. Drop them in
-  phpMyAdmin (or `DROP DATABASE`) — a permanent step, so it is yours. The `dmc_test*` databases are
-  demo data and can stay.
+- [x] **Drop the real-data databases in WAMP on your laptop** — done 2026-09-24: you dropped
+  `dmc_laravel`, `dmc_prod` and `dmc` (≈ 170 MB of real legacy data); verified the same day, their
+  folders are gone from WAMP's data directory. Only the `dmc_test*` demo databases remain.
 - [ ] **Make the GitHub repository private** before go-live (decided earlier; still public). *(B8, G10)*
 
 ## B. Owner — decisions and console work
@@ -84,24 +82,24 @@ biggest live risk** (the original un-hardened build, on US hosting).
   outlives a wiped bucket instead of mirroring it), and refuses to run while the backup key is on the
   same machine. Seeded the same night: 510 files, 264 MB, every one identical in name and size to the
   bucket and every one encrypted. Keep the backup key and `APP_KEY` off that computer.
-- [ ] **Your laptop still holds 66 old, unencrypted Coolify dumps of the DMC database** (from the
-  `coolify-backups` mirror, 2026-07-19 → 2026-09-23). They leave by themselves: once you delete them
-  from the bucket (item below), your sync stops refreshing them and its own 30-day clean-up removes
-  them. Until then, Windows disk encryption on that computer (Settings → Privacy & security → Device
-  encryption, or BitLocker) is what protects them.
+- [ ] **Empty your Recycle Bin again, and the last 13 laptop copies.** On 2026-09-24 the 53 laptop
+  copies of the Coolify dumps you had just deleted from the bucket were moved to the Recycle Bin
+  (1.04 GB, hashed first — evidence file below); emptying the bin destroys them. The other 13 stay in
+  your mirror while their bucket originals are locked (next item); once those are deleted, your sync
+  stops refreshing them and its own 30-day clean-up removes them — or ask me to recycle them then.
+  Until then, Windows disk encryption on that computer is what protects them.
 - [x] **Take `dmc_demo` out of Coolify's own backup job** — done 2026-09-24 on your instruction: the
   shared MySQL's scheduled Coolify backup now dumps only `default`; the DMC database is backed up only
   by its own encrypted pipeline (nightly dump + hourly binlogs, both checked healthy the same night).
   One setting changed, nothing restarted; rollback = set the job's databases back to
   `default,dmc_demo`.
-- [ ] **The old unencrypted Coolify dumps of the DMC database are still there — deleting them is
-  yours.** (1) **66 in the `coolify-backups` bucket** (2026-07-19 → 2026-09-23, ≈ 1.3 GB, names
-  `…/shared-mysql-…/mysql-dump-dmc_demo-*.dmp`). Coolify's own "keep 14 on S3" setting has evidently
-  not been removing them, and the bucket has no expiry, so they stay until deleted — in the OCI
-  console, or with a lifecycle rule on that prefix. (2) **7 on the server** under Coolify's backup
-  folder (2026-09-17 → 09-23): Coolify's local "keep 14" rule has been working and will age them out
-  within about two weeks. (3) **The same 66 in your laptop's mirror** of that bucket; your sync adds
-  no new DMC dumps from now on.
+- [ ] **Delete the last 13 old Coolify dumps from the bucket on or after 2026-10-07 03:00 UTC.** On
+  2026-09-24 you deleted 53 of the 66 unencrypted `dmc_demo` dumps from `coolify-backups`; the 13
+  newest (2026-09-10 → 09-23) were refused by the bucket's locked 14-day retention rule and become
+  deletable on 2026-10-07. Run the same command then (the `oci` on your PATH is broken — use the full
+  path):
+  `C:/tools/oci-cli/Scripts/oci.exe os object bulk-delete -bn coolify-backups --prefix "data/coolify/backups/databases/root-team-0/shared-mysql-u8ha9zwdgekz9djnjt1ndisf/mysql-dump-dmc_demo-"`.
+  The 7 copies on the server age out by Coolify's own local "keep 14" rule within about two weeks.
 - [ ] **Decide on OCI's whole-disk backups** (found 2026-09-24). OCI backs up the server's entire disk —
   every app's data, not only DMC's — weekly, keeping 4 weeks, all in Riyadh; and a **manual full copy
   from 2026-07-19 has no expiry**, so it keeps a July snapshot of every app's patient data indefinitely.

@@ -572,8 +572,9 @@ day, taken out of the job: it now dumps only `default`, so **this runbook's encr
 only backup of the DMC database** (rollback: set the job's databases back to `default,dmc_demo` in
 Coolify → the shared MySQL → Backups). What the job left behind, all unencrypted (OCI at-rest
 encryption only): **66 dumps in the bucket** (2026-07-19 → 2026-09-23, ≈ 1.3 GB), which Coolify's
-"keep 14 on S3" setting has not been pruning and the bucket (no lifecycle expiry; a 14-day retention
-rule only blocks early deletion) will keep until someone deletes them — an owner step; **7 on the host**
+"keep 14 on S3" setting had not been pruning — the owner deleted 53 of them on 2026-09-24; the 13
+newest are held by the bucket's locked 14-day retention rule and become deletable on 2026-10-07
+(REMAINING-WORK); **7 on the host**
 under `/data/coolify/backups/databases/…/shared-mysql-…/`, which Coolify's local "keep 14" rule ages out
 within about two weeks; and the owner's workstation mirror of the bucket.
 
