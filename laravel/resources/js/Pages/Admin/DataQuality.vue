@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import InfoTip from '@/Components/InfoTip.vue';
 
 /**
  * Phase 4 — Item 6: admin data-quality dashboard. Five collapsible canary cards, each with a row
@@ -102,11 +103,22 @@ const badge = (n) => `nums rounded-full px-2 py-0.5 text-xs font-bold ${n > 0 ? 
 
             <!-- Q4 orphan codes -->
             <section :class="card">
-                <button class="flex w-full items-center gap-3 px-5 py-3 text-left" @click="toggle('orphanDx')">
-                    <span class="font-bold text-ink-800">Unknown ICD-10 codes (active episodes)</span>
-                    <span :class="badge(orphanDx.length)">{{ orphanDx.length }}</span>
-                    <span class="ml-auto text-ink-300">{{ open.orphanDx ? '−' : '+' }}</span>
-                </button>
+                <div class="flex w-full items-center gap-3 px-5 py-3">
+                    <!-- InfoTip is itself a <button>, so it sits OUTSIDE the toggle button below — a
+                         <button> nested inside another <button> is invalid HTML and browsers close the
+                         outer one early, breaking the row. -->
+                    <button class="flex flex-1 items-center gap-3 text-left" @click="toggle('orphanDx')">
+                        <span class="font-bold text-ink-800">Unknown ICD-10 codes (active episodes)</span>
+                        <span :class="badge(orphanDx.length)">{{ orphanDx.length }}</span>
+                    </button>
+                    <InfoTip label="Unknown ICD-10 codes" text="Recorded before ICD-10 validation was enforced (mainly historical imports). The full list, including discharged episodes, is on the Orphan Diagnoses page (linked below)." />
+                    <button class="text-ink-300" @click="toggle('orphanDx')" :aria-label="open.orphanDx ? 'Collapse' : 'Expand'" :aria-expanded="open.orphanDx ? 'true' : 'false'">{{ open.orphanDx ? '−' : '+' }}</button>
+                </div>
+                <!-- reviewer fix, 2026-09-24: no nav entry links here today (not owned by this page), so
+                     give the page a real link instead of a tooltip claiming a nav path that doesn't exist -->
+                <p v-show="open.orphanDx" class="border-t border-line px-5 py-2 text-xs">
+                    <Link href="/admin/orphan-diagnoses" class="text-brand-700 hover:underline">See the full list, including discharged episodes, on the Orphan Diagnoses page →</Link>
+                </p>
                 <table v-show="open.orphanDx" class="w-full border-t border-line">
                     <thead><tr><th :class="th">MRN</th><th :class="th">Patient</th><th :class="th">Code</th></tr></thead>
                     <tbody class="divide-y divide-line">
@@ -121,11 +133,14 @@ const badge = (n) => `nums rounded-full px-2 py-0.5 text-xs font-bold ${n > 0 ? 
 
             <!-- Q5 double open -->
             <section :class="card">
-                <button class="flex w-full items-center gap-3 px-5 py-3 text-left" @click="toggle('doubleOpen')">
-                    <span class="font-bold text-ink-800">Patients with &gt;1 open episode</span>
-                    <span :class="badge(doubleOpen.length)">{{ doubleOpen.length }}</span>
-                    <span class="ml-auto text-ink-300">{{ open.doubleOpen ? '−' : '+' }}</span>
-                </button>
+                <div class="flex w-full items-center gap-3 px-5 py-3">
+                    <button class="flex flex-1 items-center gap-3 text-left" @click="toggle('doubleOpen')">
+                        <span class="font-bold text-ink-800">Patients with &gt;1 open episode</span>
+                        <span :class="badge(doubleOpen.length)">{{ doubleOpen.length }}</span>
+                    </button>
+                    <InfoTip label="Patients with more than one open episode" text="Should never happen — two admission rows are simultaneously active for one patient. Discharge, transfer, or delete the wrong one manually." />
+                    <button class="text-ink-300" @click="toggle('doubleOpen')" :aria-label="open.doubleOpen ? 'Collapse' : 'Expand'" :aria-expanded="open.doubleOpen ? 'true' : 'false'">{{ open.doubleOpen ? '−' : '+' }}</button>
+                </div>
                 <table v-show="open.doubleOpen" class="w-full border-t border-line">
                     <thead><tr><th :class="th">MRN</th><th :class="th">Patient</th><th :class="th">Open episodes</th></tr></thead>
                     <tbody class="divide-y divide-line">

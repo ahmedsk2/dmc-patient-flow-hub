@@ -109,6 +109,9 @@
             </table>
 
             <div class="chart-title">Daily Overview: Admission | Discharge | Consultations</div>
+            @if ($m['partial'] ?? false)
+                <div style="text-align: center; font-size: 8px; color: #5b6a6e; margin-top: -2px;">Data through {{ $asOf }} — {{ $m['name'] }} is still in progress; later days aren't charted yet.</div>
+            @endif
             {!! ReportSvg::groupedBar($m['days']['labels'], $daily, 750, 290, false) !!}
         </div>
     </div>

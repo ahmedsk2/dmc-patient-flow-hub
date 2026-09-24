@@ -3,9 +3,14 @@ import { ref, computed } from 'vue';
 import { Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
-const props = defineProps({ year: Number, month: Number, monthName: String, days: Array, totals: Object, generatedAt: String, availableYears: Array });
+const props = defineProps({ year: Number, month: Number, monthName: String, days: Array, totals: Object, asOf: String, generatedAt: String, availableYears: Array });
 const year = ref(props.year);
 const month = ref(props.month);
+// UX-review #10: a day after today has no data yet — it used to render as a flat 0, indistinguishable
+// from a real zero-activity day. The controller marks those rows `future` and leaves their counts
+// null; the table shows "—" for them and this note explains why once at least one row is future.
+const hasFutureDays = computed(() => (props.days || []).some((d) => d.future));
+const cell = (v) => (v === null ? '—' : v);
 const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const change = () => router.get('/reports/monthly', { year: year.value, month: month.value }, { preserveState: true });
 const print = () => window.print();
@@ -51,6 +56,8 @@ const generateAsync = () => router.get('/reports/monthly/pdf', { year: year.valu
                     <div class="nums text-xl font-bold text-brand-700">{{ kpi[1] }}</div>
                 </div>
             </div>
+            <!-- UX-review #10: only shown when this month is still in progress (some rows are future) -->
+            <p v-if="hasFutureDays" class="mb-3 text-xs font-medium text-ink-400">Data through {{ asOf }} — later rows haven't happened yet.</p>
 
             <table class="w-full border-collapse text-sm">
                 <thead><tr class="bg-navy-900 text-left text-xs font-semibold uppercase tracking-wide text-white print:bg-ink-100 print:text-ink-700">
@@ -60,10 +67,10 @@ const generateAsync = () => router.get('/reports/monthly/pdf', { year: year.valu
                     <!-- weekend = Friday/Saturday (D4 — Saudi work week), matching the report weekend-discharge metric -->
                     <tr v-for="(d, i) in days" :key="d.day" :class="['Fri','Sat'].includes(d.weekday) ? 'bg-accent-300/15' : (i % 2 ? 'bg-app/60 print:bg-card' : '')">
                         <td class="border-b border-line px-3 py-1 font-medium text-ink-700">{{ d.weekday }} {{ d.day }}</td>
-                        <td class="nums border-b border-line px-3 py-1 text-right">{{ d.admissions }}</td>
-                        <td class="nums border-b border-line px-3 py-1 text-right">{{ d.discharges }}</td>
-                        <td class="nums border-b border-line px-3 py-1 text-right">{{ d.icu }}</td>
-                        <td class="nums border-b border-line px-3 py-1 text-right">{{ d.deaths }}</td>
+                        <td class="nums border-b border-line px-3 py-1 text-right" :class="d.future && 'text-ink-300'">{{ cell(d.admissions) }}</td>
+                        <td class="nums border-b border-line px-3 py-1 text-right" :class="d.future && 'text-ink-300'">{{ cell(d.discharges) }}</td>
+                        <td class="nums border-b border-line px-3 py-1 text-right" :class="d.future && 'text-ink-300'">{{ cell(d.icu) }}</td>
+                        <td class="nums border-b border-line px-3 py-1 text-right" :class="d.future && 'text-ink-300'">{{ cell(d.deaths) }}</td>
                     </tr>
                     <tr class="bg-brand-50 font-bold text-brand-800">
                         <td class="px-3 py-2">Total</td>

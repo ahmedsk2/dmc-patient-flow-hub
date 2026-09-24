@@ -124,7 +124,7 @@ hides case mistakes that Linux CI catches; the Inertia config is published to po
 - Authenticated group: `auth → session.timeout → email.verify → mfa.enroll → pwd`. Every user must
   have a verified email, an enrolled TOTP authenticator and a password younger than three months
   (NULL counts as expired) before any clinical page renders.
-- `admin` group inside it: registry, statistics, reports, recent activity, import, control panel,
+- `admin` group inside it: registry, statistics, reports, import, control panel,
   audit viewer, trash, security page, data quality, patient merge, style guide.
 - `stepup` (fresh password re-check, `throttle:stepup`) on: reverse discharge, delete admission,
   Control → System save and test email, delete user, patient merge.
@@ -221,9 +221,11 @@ Active ICU by `current_location`; Medically discharged ("still in") = `medical_d
 ## 7. Roles, capabilities and authorization
 
 - **Page access by role.** Clinical pages: Admin, Registrar, Consultant, Resident. **Observer is
-  read-only, and only on the patients board, the active list and handovers** — it cannot open the New
-  Admissions queue or any consultations page (legacy parity, `denyObservers()`; verified by the
-  2026-09-23 role walkthrough). Admin-only: everything in the `admin` route group (§5).
+  read-only, and only on the patients board, the active list and handovers** — plus the dashboard and
+  the Recent Activity view, which every signed-in clinical role can read (Recent's undo actions stay
+  admin-only inside the reverse controllers; `routes/web.php` comment at `recent.index`). It cannot open
+  the New Admissions queue or any consultations page (legacy parity, `denyObservers()`; verified by the
+  2026-09-23 and 2026-09-24 role walkthroughs). Admin-only: everything in the `admin` route group (§5).
 - **Per-action by capability.** `can_add` admits; `can_assign` assigns to a chosen consultant,
   shuffles, bulk-reassigns; `can_manage` transfers/discharges any patient; `can_modify` edits patient
   details; `can_coordinate_consultations` coordinates the ledger. The **primary consultant** may
@@ -276,7 +278,8 @@ Each flow names its controller; per-endpoint database effects are in DATABASE-AN
    `report_recipients`. Every number's formula and caveats: `docs/DASHBOARD-AND-STATISTICS-METRICS.md`.
    Conventions: active = `discharge_date IS NULL`; LOS = `DATEDIFF` in whole days; mortality counts
    `outcome='Dead'`; readmission = same patient within `readmission_window_days` of a real discharge.
-8. **Recent activity** (`RecentController`, admin): yesterday + today; undo discharge / undo sign-off.
+8. **Recent activity** (`RecentController`): yesterday + today, readable by every clinical role incl. Observer;
+   undo discharge / undo sign-off are admin-only, enforced in the reverse controllers.
 9. **Administration** (`ControlController` and friends): settings, users, roles, capabilities,
    specialties, indications, runtime SMTP/timezone, MFA reset, password-reset mail, bulk historical
    import with preview (`ImportController`), patient merge, data-quality review, trash, audit viewer,
@@ -407,8 +410,8 @@ the same gates must be run locally per RELEASE-CHECKLIST.md. Since 2026-09-03 th
 PR (no path filter), plus a blocking Pint gate and Vitest coverage thresholds. The legacy `ci.yml` is
 a separate pipeline; never merge them.
 
-**Baselines (2026-09-23, after the second UAT pass):** PHPUnit 1057 tests (+92 in the `pdf` group), PHP
-statement coverage 88.1 % at the last CI measurement (floor 83), Vitest 824 on vitest 5 (floors lines 72, statements 66,
+**Baselines (2026-09-24, after the role/UX review fixes):** PHPUnit 1125 tests (+92 in the `pdf` group), PHP
+statement coverage 88.1 % at the last CI measurement (floor 83), Vitest 940 on vitest 5 (floors lines 72, statements 66,
 branches 62, functions 48 — re-baselined 2026-09-22 because vitest 5's AST-aware coverage counts
 different units than vitest 3, then raised the same day; see the history in `vitest.config.js`),
 ESLint zero warnings, Pint clean.
@@ -441,6 +444,13 @@ redirects the test. Run the isolated suite on a throwaway database to avoid race
   Never write `*/` inside a comment in `app.css` (it ends the block and breaks cold builds; the Vite
   cache masks it once).
 - **Publish vendor configs whose defaults embed paths** (Inertia's page directory).
+- **"!" info marks:** anything a first-time user might not understand gets `Components/InfoTip.vue` —
+  `<InfoTip label="What it explains" text="Plain words, about 25 max" />` right after the label (owner
+  request, 2026-09-24 role/UX review). The text must match the code and the docs
+  (DATABASE-AND-BEHAVIOR.md, DASHBOARD-AND-STATISTICS-METRICS.md) — never invent a clinical, legal or
+  numeric fact. It is a real button (hover, focus, tap to pin, Escape), teleported to `<body>`, hidden in
+  print. Don't nest it inside another interactive element (`<a>`/`<button>`). Event names that are also
+  Tailwind utilities (the viewport-size event, "blur" in comments) must be de-spelled.
 - **No runtime `template:` strings in app code.** The production bundle is Vue's runtime-only build
   (no template compiler; CSP forbids `'unsafe-eval'` anyway), so such a component renders as an empty
   comment in production while Vitest, whose Vue has the compiler, passes. Use a `.vue` file;

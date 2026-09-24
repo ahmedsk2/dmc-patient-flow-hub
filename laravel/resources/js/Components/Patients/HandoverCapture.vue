@@ -1,6 +1,17 @@
 <script setup>
 import { computed } from 'vue';
+import InfoTip from '@/Components/InfoTip.vue';
 import { CHECKPOINT_FIELDS, CODE_STATUS_OPTIONS, withCheckpointDefaults } from '@/lib/handover.js';
+
+// #23-adjacent (2026-09-24 role/UX review): in `density="compact"` the checkpoint buttons show only
+// the SHORT label (f.short) — "VTE" and "D/C ready" read as unexplained abbreviations there (the
+// other three short labels are already plain English). Map keyed by field key so the template can
+// look up a tooltip without a chain of v-if branches; fields with no entry get none.
+const COMPACT_CHECKPOINT_HELP = {
+    vte_completed: 'VTE prophylaxis addressed.',
+    ready_for_discharge: "Ready for discharge — clinically ready to leave, pending logistics. 'D/C' means discharge here, not discontinue.",
+};
+const CODE_STATUS_HELP = 'Full = full resuscitation. DNR = do-not-resuscitate. DNI = do-not-intubate.';
 
 /**
  * HandoverCapture — the ONE handover editor used at every point of care transfer.
@@ -42,14 +53,18 @@ const aria = (suffix) => (props.label ? `${suffix} for ${props.label}` : suffix)
 
         <!-- compact: the chips ARE the control -->
         <div v-if="density === 'compact'" class="mb-2 flex flex-wrap items-center gap-1.5">
-            <button v-for="f in CHECKPOINT_FIELDS" :key="f.key" type="button" data-cp-toggle
-                    :aria-pressed="cp[f.key]" :aria-label="aria(f.label)" @click="toggle(f.key)"
-                    class="rounded-full px-2.5 py-1 text-[11px] font-semibold transition"
-                    :class="cp[f.key] ? 'bg-brand-100 text-brand-700' : 'border border-ink-200 text-ink-500 hover:bg-ink-50'">
-                {{ cp[f.key] ? '✓ ' : '' }}{{ f.short }}
-            </button>
+            <template v-for="f in CHECKPOINT_FIELDS" :key="f.key">
+                <button type="button" data-cp-toggle
+                        :aria-pressed="cp[f.key]" :aria-label="aria(f.label)" @click="toggle(f.key)"
+                        class="rounded-full px-2.5 py-1 text-[11px] font-semibold transition"
+                        :class="cp[f.key] ? 'bg-brand-100 text-brand-700' : 'border border-ink-200 text-ink-500 hover:bg-ink-50'">
+                    {{ cp[f.key] ? '✓ ' : '' }}{{ f.short }}
+                </button>
+                <InfoTip v-if="COMPACT_CHECKPOINT_HELP[f.key]" :label="aria(f.short)" :text="COMPACT_CHECKPOINT_HELP[f.key]" />
+            </template>
             <label class="ml-1 flex items-center gap-1 text-[11px] text-ink-500">
                 <span class="sr-only">{{ aria('Code status') }}</span>Code
+                <InfoTip :label="aria('Code status')" :text="CODE_STATUS_HELP" />
                 <select :value="cp.code_status ?? ''" @change="setCode($event.target.value)"
                         class="rounded-lg border border-ink-200 px-2 py-1 text-[11px] outline-none focus:border-brand-500">
                     <option v-for="o in CODE_STATUS_OPTIONS" :key="String(o.value)" :value="o.value ?? ''">{{ o.label }}</option>
@@ -64,6 +79,7 @@ const aria = (suffix) => (props.label ? `${suffix} for ${props.label}` : suffix)
                 {{ f.label }}
             </label>
             <label class="flex items-center gap-2">Code status
+                <InfoTip :label="aria('Code status')" :text="CODE_STATUS_HELP" />
                 <select :value="cp.code_status ?? ''" @change="setCode($event.target.value)" :aria-label="aria('Code status')"
                         class="rounded-lg border border-ink-200 px-2 py-1 text-xs outline-none focus:border-brand-500">
                     <option v-for="o in CODE_STATUS_OPTIONS" :key="String(o.value)" :value="o.value ?? ''">{{ o.label }}</option>

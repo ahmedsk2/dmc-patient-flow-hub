@@ -66,3 +66,28 @@ describe('ActiveList — print classification label (DATA-CLASSIFICATION.md §4)
         expect(text).toContain('سري — بيانات مرضى');
     });
 });
+
+// #35 / info marks (role/UX review 2026-09-24): the "Patient count per consultant" summary table
+// carries the same Old/New InfoTip marks as the board's identical table, plus a purely-decorative
+// scroll hint for phone width. Only rendered when groups.length && selected === 'all' (the table is
+// dropped for a single-consultant printout, see the earlier describe block).
+describe('ActiveList — Old/New column InfoTips + scroll hint (#35 / info marks)', () => {
+    it('carries an InfoTip on both the Old and New column headers, with the managed-flag wording', () => {
+        const w = mountList();
+        const oldTip = w.find('button[aria-label="More information: Old column"]');
+        const newTip = w.find('button[aria-label="More information: New column"]');
+        expect(oldTip.exists()).toBe(true);
+        expect(newTip.exists()).toBe(true);
+    });
+
+    it('renders the decorative right-edge scroll hint next to the summary table', () => {
+        expect(mountList().find('[data-testid="scroll-hint"]').attributes('aria-hidden')).toBe('true');
+    });
+
+    it('drops both the InfoTips and the scroll hint once a single consultant is selected (table is gone)', async () => {
+        const w = mountList();
+        await w.find('select').setValue(5);
+        expect(w.find('button[aria-label="More information: Old column"]').exists()).toBe(false);
+        expect(w.find('[data-testid="scroll-hint"]').exists()).toBe(false);
+    });
+});

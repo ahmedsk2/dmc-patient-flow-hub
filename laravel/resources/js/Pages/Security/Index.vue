@@ -1,5 +1,6 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
+import InfoTip from '@/Components/InfoTip.vue';
 
 /**
  * Phase 4 — Item 3: read-only Security panel. Three tables built from the audit log + users —
@@ -41,7 +42,7 @@ const td = 'px-5 py-3 text-sm text-ink-700';
 
         <!-- Failed-login clusters -->
         <section class="mb-6">
-            <h2 class="mb-2 font-bold text-ink-800">Failed logins (last 24h) <span class="nums text-ink-400">({{ failedClusters.length }})</span></h2>
+            <h2 class="mb-2 flex items-center gap-1.5 font-bold text-ink-800">Failed logins (last 24h) <span class="nums text-ink-400">({{ failedClusters.length }})</span><InfoTip label="Failed logins" text="Failed sign-in attempts for one account from one IP address, grouped over the last 24 hours. Red badge at 5 or more attempts." /></h2>
             <div :class="card">
                 <table class="w-full">
                     <thead><tr class="border-b border-line">
@@ -63,7 +64,7 @@ const td = 'px-5 py-3 text-sm text-ink-700';
 
         <!-- First-seen IPs -->
         <section class="mb-6">
-            <h2 class="mb-2 font-bold text-ink-800">First-seen IPs <span class="nums text-ink-400">({{ firstSeenIps.length }})</span></h2>
+            <h2 class="mb-2 flex items-center gap-1.5 font-bold text-ink-800">First-seen IPs <span class="nums text-ink-400">({{ firstSeenIps.length }})</span><InfoTip label="First-seen IPs" text="A sign-in or failed attempt from an IP not seen before for that account — approximate, since the audit trail only goes back to deployment." /></h2>
             <div :class="card">
                 <table class="w-full">
                     <thead><tr class="border-b border-line">

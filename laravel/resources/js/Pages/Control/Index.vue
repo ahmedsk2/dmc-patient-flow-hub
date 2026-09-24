@@ -1,8 +1,9 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, nextTick } from 'vue';
 import { router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BaseModal from '@/Components/BaseModal.vue';
+import InfoTip from '@/Components/InfoTip.vue';
 import SearchableSelect from '@/Components/SearchableSelect.vue';
 import Tabs from '@/Components/Tabs.vue';
 import { useConfirm } from '@/composables/useConfirm';
@@ -147,6 +148,44 @@ const submitSpec = guardSubmit(specForm, () => specForm.post('/control/specialti
 const reasonForm = useForm({ name: '' });
 const submitReason = guardSubmit(reasonForm, () => reasonForm.post('/control/reasons', { preserveScroll: true, onSuccess: () => reasonForm.reset() }));
 
+// #2 (2026-09-24 role/UX review): rename/delete for both reference lists — previously add-only, so
+// a typo was permanent and two identical rows could coexist forever. One inline-edit pointer + form
+// per list (mirrors editUser's rename pattern); delete is confirmed then refused server-side while
+// the row is still referenced (the flash message says where).
+// review fix (2026-09-24): the rename input sits lexically inside the `<li v-for>`, so Vue collects
+// its ref into an ARRAY (one element, since only the editing row's v-if is ever true) rather than
+// binding the element directly — verified empirically with a throwaway component mount. Take the
+// first entry either way so this doesn't silently break if Vue's ref-in-v-for behaviour changes.
+const focusFirst = (elOrArr) => (Array.isArray(elOrArr) ? elOrArr[0] : elOrArr)?.focus();
+
+const specEditing = ref(null);
+const specRenameForm = useForm({ name: '' });
+const specRenameInputEl = ref(null);
+const startRenameSpec = (s) => {
+    specEditing.value = s.id; specRenameForm.clearErrors(); specRenameForm.name = s.name;
+    nextTick(() => focusFirst(specRenameInputEl.value));
+};
+const cancelRenameSpec = () => { specEditing.value = null; specRenameForm.clearErrors(); };
+const saveRenameSpec = (s) => specRenameForm.put(`/control/specialties/${s.id}`, { preserveScroll: true, onSuccess: () => { specEditing.value = null; } });
+const deleteSpec = async (s) => {
+    if (await ask('Delete specialty', `Delete "${s.name}"? Only allowed while no user or consultation references it — you'll see a clear error otherwise.`, 'danger'))
+        router.delete(`/control/specialties/${s.id}`, { preserveScroll: true });
+};
+
+const reasonEditing = ref(null);
+const reasonRenameForm = useForm({ name: '' });
+const reasonRenameInputEl = ref(null);
+const startRenameReason = (r) => {
+    reasonEditing.value = r.id; reasonRenameForm.clearErrors(); reasonRenameForm.name = r.name;
+    nextTick(() => focusFirst(reasonRenameInputEl.value));
+};
+const cancelRenameReason = () => { reasonEditing.value = null; reasonRenameForm.clearErrors(); };
+const saveRenameReason = (r) => reasonRenameForm.put(`/control/reasons/${r.id}`, { preserveScroll: true, onSuccess: () => { reasonEditing.value = null; } });
+const deleteReason = async (r) => {
+    if (await ask('Delete indication', `Delete "${r.name}"? Only allowed while no consultation references it — you'll see a clear error otherwise.`, 'danger'))
+        router.delete(`/control/reasons/${r.id}`, { preserveScroll: true });
+};
+
 // §3.3: monthly-report email recipients
 const recipientForm = useForm({ email: '' });
 const submitRecipient = guardSubmit(recipientForm, () => recipientForm.post('/control/report-recipients', { preserveScroll: true, onSuccess: () => recipientForm.reset() }));
@@ -170,6 +209,8 @@ const countCards = [
 ];
 const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20';
 const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'bg-brand-100 text-brand-700' : 'bg-ink-100 text-ink-500';
+// #18: the registration date shown under a pending self-registration's "Awaiting activation" badge.
+const registeredWhen = (iso) => (iso ? iso.slice(0, 10) : '—');
 </script>
 
 <template>
@@ -203,14 +244,14 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
             <h3 class="mb-1 font-bold text-ink-800">Operational thresholds</h3>
             <p class="mb-5 text-sm text-ink-400">Drive the shuffle/assignment balance and LOS bands across the app.</p>
             <div class="grid gap-4 sm:grid-cols-2">
-                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Min hospitalist census</span><input v-model="sForm.min_hospitalist" type="number" :class="field" /></label>
-                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Max hospitalist census</span><input v-model="sForm.max_hospitalist" type="number" :class="field" /></label>
-                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Min subspecialty</span><input v-model="sForm.min_subs" type="number" :class="field" /></label>
-                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Max subspecialty</span><input v-model="sForm.max_subs" type="number" :class="field" /></label>
-                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Short LOS (days)</span><input v-model="sForm.short_los" type="number" :class="field" /></label>
-                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Long LOS (days)</span><input v-model="sForm.long_los" type="number" :class="field" /></label>
+                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Min hospitalist census</span><input v-model="sForm.min_hospitalist" type="number" :class="field" /><span class="mt-1 block text-xs text-ink-400">Shuffle fills each on-service Hospitalist consultant to at least this many patients first, before moving to the next round.</span></label>
+                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Max hospitalist census</span><input v-model="sForm.max_hospitalist" type="number" :class="field" /><span class="mt-1 block text-xs text-ink-400">Shuffle won't push an on-service Hospitalist's caseload above this until every other option is exhausted.</span></label>
+                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Min subspecialty</span><input v-model="sForm.min_subs" type="number" :class="field" /><span class="mt-1 block text-xs text-ink-400">Same minimum, for on-service Subspecialty consultants.</span></label>
+                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Max subspecialty</span><input v-model="sForm.max_subs" type="number" :class="field" /><span class="mt-1 block text-xs text-ink-400">Same maximum, for on-service Subspecialty consultants.</span></label>
+                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Short LOS (days)</span><input v-model="sForm.short_los" type="number" :class="[field, { 'border-danger-500': sForm.errors.short_los }]" /><span v-if="sForm.errors.short_los" class="mt-1 block text-xs text-on-danger">{{ sForm.errors.short_los }}</span><span v-else class="mt-1 block text-xs text-ink-400">Episodes at or under this many days show "short" on the board and registry. Must be less than Long LOS.</span></label>
+                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Long LOS (days)</span><input v-model="sForm.long_los" type="number" :class="[field, { 'border-danger-500': sForm.errors.long_los }]" /><span v-if="sForm.errors.long_los" class="mt-1 block text-xs text-on-danger">{{ sForm.errors.long_los }}</span><span v-else class="mt-1 block text-xs text-ink-400">Episodes over this many days show "long" and count toward the Long-Stay % statistic. Must be greater than Short LOS.</span></label>
                 <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Licensed ward beds</span><input v-model="sForm.ward_beds" type="number" min="1" :class="field" /><span class="mt-1 block text-xs text-ink-400">Denominator for dashboard Bed Occupancy (non-ICU). Set to your real count.</span></label>
-                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Licensed ICU beds</span><input v-model="sForm.icu_beds" type="number" min="0" :class="field" /></label>
+                <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Licensed ICU beds</span><input v-model="sForm.icu_beds" type="number" min="0" :class="field" /><span class="mt-1 block text-xs text-ink-400">Denominator for the ICU occupancy figure on the Dashboard. Set to your real ICU bed count.</span></label>
                 <label class="block sm:col-span-2"><span class="mb-1 block text-sm font-semibold text-ink-700">Readmission window (days)</span><input v-model="sForm.readmission_window_days" type="number" min="0" max="30" :class="field" /><span class="mt-1 block text-xs text-ink-400">A new admission within this many days of a prior real discharge counts as a readmission (default 3 = the 72-hour rule). Drives the stats KPI, the board badge, and the registry filter.</span></label>
                 <label class="block sm:col-span-2"><span class="mb-1 block text-sm font-semibold text-ink-700">Two-factor enforcement</span>
                     <select v-model.number="sForm.mfa_enforcement" :class="field">
@@ -275,6 +316,9 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
 
         <!-- Users -->
         <div v-show="active === 'users'">
+            <!-- #31: no "Add user" button by design — staff self-register (email + authenticator),
+                 then land here inactive ("Awaiting activation", #18) for an admin to switch on. -->
+            <p class="mb-3 text-sm text-ink-400">New staff create their own account at Sign up (email + authenticator); activate it here once it appears as "Awaiting activation".</p>
             <!-- instant filters — all client-side over every user (search + role/status/service/capability) -->
             <div class="mb-3 flex flex-wrap items-center gap-2">
                 <div class="relative">
@@ -322,7 +366,10 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
                                     </div>
                                 </td>
                                 <td class="px-3 py-3"><span v-if="u.on_service" class="rounded-full bg-brand-100 px-2.5 py-0.5 text-xs font-semibold text-brand-700">On</span><span v-else class="text-xs text-ink-300">—</span></td>
-                                <td class="px-3 py-3"><span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="u.active ? 'bg-tint-success text-on-success' : 'bg-ink-100 text-ink-400'">{{ u.active ? 'Active' : 'Disabled' }}</span></td>
+                                <td class="px-3 py-3">
+                                    <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="u.active ? 'bg-tint-success text-on-success' : u.pending_registration ? 'bg-tint-accent text-on-accent' : 'bg-ink-100 text-ink-400'">{{ u.active ? 'Active' : (u.pending_registration ? 'Awaiting activation' : 'Disabled') }}</span>
+                                    <div v-if="u.pending_registration" class="mt-0.5 text-[11px] text-ink-400">Registered {{ registeredWhen(u.registered_at) }}</div>
+                                </td>
                                 <td class="px-5 py-3 text-right"><button @click="editUser(u)" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50">Edit</button></td>
                             </tr>
                             <tr v-if="!sortedUsers.length"><td colspan="6" class="px-5 py-10 text-center text-ink-400">No users match these filters.</td></tr>
@@ -380,16 +427,48 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
         <!-- Reference data -->
         <div v-show="active === 'reference'" class="grid gap-5 lg:grid-cols-2">
             <div class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
-                <h3 class="mb-3 font-bold text-ink-800">Specialties</h3>
-                <div class="mb-4 flex max-h-48 flex-wrap gap-2 overflow-auto"><span v-for="s in specialties" :key="s.id" class="rounded-full px-3 py-1 text-sm" :class="s.is_external ? 'bg-tint-accent text-on-accent' : 'bg-app text-ink-600'">{{ s.name }}<span v-if="s.is_external" class="ml-1 text-[10px] font-semibold uppercase">ext</span></span></div>
+                <h3 class="mb-1 flex items-center gap-1.5 font-bold text-ink-800">Specialties<InfoTip label="Specialties" text="Renaming updates every dropdown immediately. Delete is refused while any user or consultation still references the entry." /></h3>
+                <p class="mb-3 text-xs text-ink-400">Check spelling before adding — a duplicate name is rejected, but fixing a typo afterward still needs Rename below.</p>
+                <ul v-if="specialties.length" class="mb-4 max-h-56 divide-y divide-line overflow-auto rounded-xl ring-1 ring-line">
+                    <li v-for="s in specialties" :key="s.id" class="flex items-center gap-2 px-3 py-2 text-sm">
+                        <template v-if="specEditing === s.id">
+                            <input ref="specRenameInputEl" v-model="specRenameForm.name" :class="[field, 'py-1']" aria-label="Rename specialty" @keyup.enter="saveRenameSpec(s)" @keyup.esc="cancelRenameSpec" />
+                            <button :disabled="specRenameForm.processing || !specRenameForm.name" @click="saveRenameSpec(s)" class="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-50">Save</button>
+                            <button @click="cancelRenameSpec" class="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-ink-500 hover:bg-ink-50">Cancel</button>
+                        </template>
+                        <template v-else>
+                            <span class="min-w-0 flex-1 truncate text-ink-700">{{ s.name }}<span v-if="s.is_external" class="ml-1.5 rounded-full bg-tint-accent px-1.5 py-0.5 text-[10px] font-semibold uppercase text-on-accent">ext</span></span>
+                            <button @click="startRenameSpec(s)" class="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-ink-500 hover:bg-ink-50">Rename</button>
+                            <button @click="deleteSpec(s)" class="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-on-danger hover:bg-tint-danger">Delete</button>
+                        </template>
+                    </li>
+                </ul>
+                <p v-if="specRenameForm.errors.name" class="mb-2 text-xs text-on-danger">{{ specRenameForm.errors.name }}</p>
                 <form @submit.prevent="submitSpec" class="flex gap-2"><input v-model="specForm.name" :class="field" placeholder="New specialty" /><button :disabled="specForm.processing || !specForm.name" class="rounded-xl bg-brand-solid px-4 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Add</button></form>
+                <p v-if="specForm.errors.name" class="mt-1 text-xs text-on-danger">{{ specForm.errors.name }}</p>
                 <label class="mt-2 flex items-center gap-2 text-xs text-ink-500"><input type="checkbox" v-model="specForm.is_subspecialty" class="rounded text-brand-700" /> Subspecialty (uncheck for hospitalist)</label>
                 <label class="mt-1 flex items-center gap-2 text-xs text-ink-500"><input type="checkbox" v-model="specForm.is_external" class="rounded text-brand-700" /> External / allied service (transfer-out target only — not an internal specialty)</label>
             </div>
             <div class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
-                <h3 class="mb-3 font-bold text-ink-800">Consultation indications</h3>
-                <div class="mb-4 flex max-h-48 flex-wrap gap-2 overflow-auto"><span v-for="r in reasons" :key="r.id" class="rounded-full bg-app px-3 py-1 text-sm text-ink-600">{{ r.name }}</span></div>
+                <h3 class="mb-1 flex items-center gap-1.5 font-bold text-ink-800">Consultation indications<InfoTip label="Consultation indications" text="Renaming updates every past and future consult that used this reason. Delete is refused while any consultation still carries it." /></h3>
+                <p class="mb-3 text-xs text-ink-400">Check spelling before adding — a duplicate name is rejected, but fixing a typo afterward still needs Rename below.</p>
+                <ul v-if="reasons.length" class="mb-4 max-h-56 divide-y divide-line overflow-auto rounded-xl ring-1 ring-line">
+                    <li v-for="r in reasons" :key="r.id" class="flex items-center gap-2 px-3 py-2 text-sm">
+                        <template v-if="reasonEditing === r.id">
+                            <input ref="reasonRenameInputEl" v-model="reasonRenameForm.name" :class="[field, 'py-1']" aria-label="Rename indication" @keyup.enter="saveRenameReason(r)" @keyup.esc="cancelRenameReason" />
+                            <button :disabled="reasonRenameForm.processing || !reasonRenameForm.name" @click="saveRenameReason(r)" class="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-50">Save</button>
+                            <button @click="cancelRenameReason" class="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-ink-500 hover:bg-ink-50">Cancel</button>
+                        </template>
+                        <template v-else>
+                            <span class="min-w-0 flex-1 truncate text-ink-700">{{ r.name }}</span>
+                            <button @click="startRenameReason(r)" class="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-ink-500 hover:bg-ink-50">Rename</button>
+                            <button @click="deleteReason(r)" class="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-on-danger hover:bg-tint-danger">Delete</button>
+                        </template>
+                    </li>
+                </ul>
+                <p v-if="reasonRenameForm.errors.name" class="mb-2 text-xs text-on-danger">{{ reasonRenameForm.errors.name }}</p>
                 <form @submit.prevent="submitReason" class="flex gap-2"><input v-model="reasonForm.name" :class="field" placeholder="New indication" /><button :disabled="reasonForm.processing || !reasonForm.name" class="rounded-xl bg-brand-solid px-4 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">Add</button></form>
+                <p v-if="reasonForm.errors.name" class="mt-1 text-xs text-on-danger">{{ reasonForm.errors.name }}</p>
             </div>
 
             <!-- §3.3: monthly-report email recipients -->
@@ -437,17 +516,17 @@ const roleTone = (r) => r === 0 ? 'bg-tint-danger text-on-danger' : r === 3 ? 'b
                     </label>
                     <div class="flex items-center gap-4">
                         <label class="flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" v-model="uForm.active" class="rounded text-brand-700" /> Active</label>
-                        <label class="flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" v-model="uForm.on_service" class="rounded text-brand-700" /> On service</label>
+                        <label class="flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" v-model="uForm.on_service" class="rounded text-brand-700" /> On service<InfoTip label="On service" text="Included in the automatic Shuffle assignment pool for new unassigned patients." /></label>
                     </div>
                     <label v-if="uForm.role === 3" class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Specialty</span>
                         <SearchableSelect v-model="uForm.specialty_id" :input-class="field" placeholder="—" :options="specialties.filter((x) => !x.is_external)" />
                     </label>
                     <div class="grid grid-cols-2 gap-2">
-                        <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_assign" class="rounded text-brand-700" /> Can assign</label>
-                        <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_add" class="rounded text-brand-700" /> Can add</label>
-                        <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_manage" class="rounded text-brand-700" /> Can manage</label>
-                        <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_modify" class="rounded text-brand-700" /> Can modify</label>
-                        <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_coordinate_consultations" class="rounded text-brand-700" /> Can coordinate consults</label>
+                        <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_assign" class="rounded text-brand-700" /> Can assign<InfoTip label="Can assign" text="Assign a patient to a chosen consultant, run Shuffle auto-assignment, and bulk-reassign a consultant's patients." /></label>
+                        <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_add" class="rounded text-brand-700" /> Can add<InfoTip label="Can add" text="Admit new patients." /></label>
+                        <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_manage" class="rounded text-brand-700" /> Can manage<InfoTip label="Can manage" text="Transfer or discharge any patient, not just their own. The primary consultant can already do this for their own patients without this flag." /></label>
+                        <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_modify" class="rounded text-brand-700" /> Can modify<InfoTip label="Can modify" text="Edit a patient's demographic and admission details." /></label>
+                        <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="uForm.can_coordinate_consultations" class="rounded text-brand-700" /> Can coordinate consults<InfoTip label="Can coordinate consults" text="Book, view and edit consultations for any specialty, not just their own. Sign-off still stays with the receiving consultant." /></label>
                     </div>
                 </div>
                 <div class="mt-6 flex items-center justify-end gap-2">

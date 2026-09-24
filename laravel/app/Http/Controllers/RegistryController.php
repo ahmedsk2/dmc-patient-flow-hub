@@ -290,6 +290,23 @@ class RegistryController extends Controller
         'Transfer from ICU' => 'Back from ICU',
     ];
 
+    /**
+     * UX-review #9 (2026-09-24): an internal Ward→ICU close and a genuine external transfer both
+     * write transfer_type='other transfer' (PatientActionController::transferLocation /
+     * transferExternal) — the row-level badge used to read "Out-dept transfer" for both, which
+     * reads as if the patient left the department on an in-unit ICU move. Disambiguated here from
+     * EXISTING data (discharge_to, already written on every close) — no schema/stored-value change,
+     * so no count anywhere (Statistics, exports, audit) is affected, only this display label.
+     */
+    private function transferLabel(Admission $a): ?string
+    {
+        if ($a->transfer_type === 'other transfer' && $a->discharge_to === 'Intensive Care (ICU)') {
+            return 'Transferred to ICU';
+        }
+
+        return self::TRANSFER_LABELS[$a->transfer_type] ?? null;
+    }
+
     private function admissionResults(Request $request)
     {
         $page = $this->admissionQuery($request)->paginate(20)->withQueryString();
@@ -334,7 +351,7 @@ class RegistryController extends Controller
             'medical_discharge_date' => optional($a->medical_discharge_date)->toDateString(),
             'discharge_to' => $a->discharge_to,
             'delay_reason' => $a->delay_reason,
-            'transfer_label' => self::TRANSFER_LABELS[$a->transfer_type] ?? null,
+            'transfer_label' => $this->transferLabel($a),
             // badges
             'is_tb' => $tbIds->has($a->id),
             'is_readmission' => $readmitIds->has($a->id),

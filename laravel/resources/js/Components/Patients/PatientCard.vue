@@ -75,7 +75,7 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
                 <input v-if="bedEditing" v-model="bedDraft" v-focus maxlength="64"
                     aria-label="Bed" class="w-14 rounded border border-ink-200 bg-card px-1 py-0 text-[11px] font-semibold text-ink-700 outline-none focus:border-brand-500"
                     @blur="saveBed" @keydown.enter.prevent="$event.target.blur()" @keydown.esc.prevent="cancelBed" />
-                <button v-else-if="!isObserver && !patient.discharged" type="button" @click="startBed" title="Edit bed" aria-label="Edit bed"
+                <button v-else-if="!isObserver && !patient.discharged" type="button" @click="startBed" title="Click to edit the bed number" aria-label="Click to edit the bed number"
                     class="rounded underline decoration-dotted underline-offset-2 hover:opacity-75">{{ patient.bed || '—' }}</button>
                 <template v-else>{{ patient.bed || '—' }}</template>
             </span>
@@ -97,7 +97,11 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
                  TB=danger(red infection alert — NOT success-green), Disch-still-in=neutral "in progress". -->
             <div class="mt-1.5 flex flex-wrap gap-1">
                 <PatientFlags :patient="patient" :readmit-window="readmitWindow" variant="badge" />
-                <Link v-if="patient.sign_pending" href="/handovers" title="Handover awaiting your signature" class="rounded-full bg-brand-100 px-1.5 py-0.5 text-[10px] font-semibold text-brand-700 hover:bg-brand-200">Sign pending</Link>
+                <!-- #24 (role/UX review 2026-09-24): the note this refers to lives on the PRIOR, now-
+                     discharged episode after a consultant-to-consultant move, so the card's own
+                     handover field can look empty while this pill is the only signal — spell out
+                     what it means and what to do about it. -->
+                <Link v-if="patient.sign_pending" href="/handovers" title="A handover note was written before this patient was transferred to you. Open Handovers to read and sign it." class="rounded-full bg-brand-100 px-1.5 py-0.5 text-[10px] font-semibold text-brand-700 hover:bg-brand-200">Sign pending</Link>
                 <button v-if="patient.dx_count" type="button" @click="toggleDx" :aria-expanded="dxOpen"
                     :aria-label="`${patient.dx_count} diagnoses — ${dxOpen ? 'hide' : 'show'} names`"
                     class="rounded-full px-1.5 py-0.5 text-[10px] font-semibold transition"

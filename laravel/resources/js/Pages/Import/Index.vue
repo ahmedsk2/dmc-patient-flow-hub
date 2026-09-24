@@ -2,6 +2,9 @@
 import { ref, computed, watch } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { useConfirm } from '@/composables/useConfirm';
+
+const { ask } = useConfirm();
 
 const props = defineProps({ columns: Array, preview: Object, rows: String });
 
@@ -32,7 +35,15 @@ const serialize = () => [
         .map(csvCell).join(',')),
 ].join('\n');
 
-const doImport = () => {
+// #19 (2026-09-24 role/UX review): committing used to have no confirmation at all, unlike every
+// other high-impact admin action — a single click could write a large batch of real admission rows.
+// The count is the best estimate available client-side: for a full (non-truncated) preview, how
+// many of the shown rows still read OK (edits since Preview aren't re-validated until Confirm);
+// for a truncated (>200-row) preview, the server's own last-known valid count.
+const importCount = computed(() => (editable.value ? editRows.value.filter((r) => r.ok).length : (props.preview?.valid ?? 0)));
+const doImport = async () => {
+    const n = importCount.value;
+    if (!(await ask('Confirm bulk import', `Write ${n} admission row(s) to the database now? Invalid rows are skipped automatically; this cannot be bulk-undone afterward.`, 'danger'))) return;
     if (editable.value) form.rows = serialize();
     form.post('/import', { preserveScroll: true, onSuccess: () => form.reset('rows') });
 };

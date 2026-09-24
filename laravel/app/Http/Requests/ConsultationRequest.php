@@ -17,6 +17,17 @@ use Illuminate\Validation\Validator;
  */
 class ConsultationRequest extends FormRequest
 {
+    /**
+     * The own-specialty-rule refusal wording (ownSpecialtyRule() below) — the SINGLE source of
+     * truth for these two sentences. ConsultationsController::index() reuses them verbatim for the
+     * upfront page notice (role-UX review #4, 2026-09-24): the rule itself was always correct and
+     * server-enforced, but nothing told a restricted user about it before they filled in the whole
+     * form. Never fork this wording — a second copy is how the notice and the actual refusal drift.
+     */
+    public const NO_SPECIALTY_MESSAGE = 'Your account is not attached to a specialty, so it cannot book a consultation into a team. Ask an administrator to set your specialty or to grant you the consultation-coordinator capability.';
+
+    public const OWN_SPECIALTY_ONLY_MESSAGE = 'You may only book consultations for your own specialty. Ask a consultation coordinator to book this one.';
+
     public function authorize(): bool
     {
         return ! $this->user()->isObserver();
@@ -160,12 +171,12 @@ class ConsultationRequest extends FormRequest
                 return;   // external / free-text service — unowned
             }
             if ($user->specialty_id === null) {
-                $fail('Your account is not attached to a specialty, so it cannot book a consultation into a team. Ask an administrator to set your specialty or to grant you the consultation-coordinator capability.');
+                $fail(self::NO_SPECIALTY_MESSAGE);
 
                 return;
             }
             if ((int) $user->specialty_id !== $targetId) {
-                $fail('You may only book consultations for your own specialty. Ask a consultation coordinator to book this one.');
+                $fail(self::OWN_SPECIALTY_ONLY_MESSAGE);
             }
         }];
     }

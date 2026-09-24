@@ -17,14 +17,22 @@ import { ref, computed, watch, useId } from 'vue';
 // full-colour variant. `mono` is for callers that set an appropriate `color` themselves.
 const props = defineProps({ mono: { type: Boolean, default: false } });
 
-const failed = ref(false);
+// 2026-09-24 role/UX review #5: neither /images/ehc-logo.svg nor -mono.svg has ever been committed
+// (BRAND_README.md §1.3), so probing for them 404'd on EVERY page, for EVERY user, forever — pure
+// console noise, since the vector recreation below renders instantly regardless. OFF by default:
+// the recreation renders straight away and no network request is ever issued. Flip this to `true`
+// only once an official asset has actually been dropped into public/images/ per BRAND_README.md
+// §1.5 — and update that file's "Fallback behaviour" section in the same change.
+const USE_OFFICIAL_ASSET = false;
+
+const failed = ref(!USE_OFFICIAL_ASSET);
 const src = computed(() => (props.mono ? '/images/ehc-logo-mono.svg' : '/images/ehc-logo.svg'));
 // Re-arm the <img> whenever the URL changes: a different file may exist even if the other 404'd.
 // Watching `src` (not `props.mono`) states the actual invariant, and survives a future variant prop.
 // Trade-off: if BOTH assets 404 and a caller toggles the variant at runtime, each flip re-issues the
 // request, since 404s are not reliably negatively cached. Accepted — `mono` is static at every call
-// site.
-watch(src, () => { failed.value = false; });
+// site. Only meaningful while USE_OFFICIAL_ASSET is on — otherwise `failed` must stay `true`.
+watch(src, () => { if (USE_OFFICIAL_ASSET) failed.value = false; });
 
 // Scoped per instance: Login.vue mounts two EhcLogo at once (`hidden lg:flex` + `lg:hidden`, both in
 // the DOM), and duplicate `id`s are invalid HTML — `url(#id)` would bind whichever came first.
@@ -34,7 +42,7 @@ const petals = [0, 72, 144, 216, 288];
 </script>
 
 <template>
-    <img v-if="!failed" :src="src" alt="Eastern Health Cluster" @error="failed = true" />
+    <img v-if="USE_OFFICIAL_ASSET && !failed" :src="src" alt="Eastern Health Cluster" @error="failed = true" />
     <svg v-else viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Eastern Health Cluster">
         <defs v-if="!mono">
             <linearGradient :id="gradId" x1="0" y1="0" x2="0" y2="1">

@@ -3,6 +3,7 @@ import { ref, computed, watch, nextTick } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import BaseModal from '@/Components/BaseModal.vue';
 import IdentityChip from '@/Components/IdentityChip.vue';
+import InfoTip from '@/Components/InfoTip.vue';
 import SearchableSelect from '@/Components/SearchableSelect.vue';
 import HandoverCapture from '@/Components/Patients/HandoverCapture.vue';
 import { useHandover } from '@/composables/useHandover';
@@ -50,8 +51,13 @@ const rForm = useForm({ from_consultant_id: '', to_consultant_id: '', mark_new: 
 const onServiceConsultants = computed(() => consultantOptions(props.consultants, { onServiceOnly: true }));
 
 // group-header 'Change consultant' opens the modal PRE-FILLED with from=this consultant (J2-11);
-// the toolbar button opens it blank
-const openModal = (fromId = '') => { rForm.from_consultant_id = fromId; rForm.to_consultant_id = ''; };
+// the toolbar button opens it blank.
+//
+// #20 (role/UX review 2026-09-24): `.defaults()` re-anchors Inertia's own dirty baseline to what was
+// JUST prefilled here — without it, opening from a group header (fromId non-empty) diverged from
+// rForm's empty constructor default and `rForm.isDirty` read true before the user touched anything,
+// so Cancel raised a false "Discard changes?" warning on an untouched dialog.
+const openModal = (fromId = '') => { rForm.from_consultant_id = fromId; rForm.to_consultant_id = ''; rForm.defaults(); };
 
 // preflight: lists the consultant's patients with per-patient CHECKBOXES (all checked by default —
 // uncheck to leave someone behind). A stale SELECTED handover no longer blocks Confirm (soft gate,
@@ -144,8 +150,11 @@ defineExpose({
     <BaseModal :open="open" title="Reassign a consultant's patients" subtitle="Moves the selected active patients from one consultant to another." size="wide" tall field-first :closable="false" :dirty="modalDirty" @close="close">
         <form @submit.prevent="confirmThenSubmit" class="space-y-4">
             <div><label class="mb-1 block text-sm font-semibold text-ink-700">From</label><SearchableSelect v-model="rForm.from_consultant_id" input-class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" placeholder="Select…" :options="consultants" /></div>
-            <div><label class="mb-1 block text-sm font-semibold text-ink-700">To <span class="font-normal text-ink-400">(on-service only)</span></label><SearchableSelect v-model="rForm.to_consultant_id" title="On-service consultants only" input-class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" placeholder="Select…" :options="onServiceConsultants" /></div>
-            <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="rForm.mark_new" class="rounded text-brand-700" /> Mark as new patients <span class="text-xs text-ink-400">(uncheck to keep their current “New” status)</span></label>
+            <!-- #40 (role/UX review 2026-09-24): the dropdown already only offers on-service
+                 consultants, but a server-side rejection (a stale list, or a direct API call) had
+                 nowhere to render — every sibling field in ActionModal.vue shows its own error. -->
+            <div><label class="mb-1 block text-sm font-semibold text-ink-700">To <span class="font-normal text-ink-400">(on-service only)</span></label><SearchableSelect v-model="rForm.to_consultant_id" title="On-service consultants only" :aria-describedby="rForm.errors.to_consultant_id ? 'reassign-to-consultant-err' : undefined" input-class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" placeholder="Select…" :options="onServiceConsultants" /><p v-if="rForm.errors.to_consultant_id" id="reassign-to-consultant-err" class="mt-1 text-xs text-on-danger">{{ rForm.errors.to_consultant_id }}</p></div>
+            <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="rForm.mark_new" class="rounded text-brand-700" /> Mark as new patients <span class="text-xs text-ink-400">(uncheck to keep their current “New” status)</span><InfoTip label="Mark as new patients" text="Checked sets the board's New badge on every moved patient; it clears only on discharge or reassignment, not after 24 hours." /></label>
 
             <!-- preflight: pick WHO moves (all checked by default); every SELECTED patient
                  needs a handover updated TODAY before the move unlocks -->

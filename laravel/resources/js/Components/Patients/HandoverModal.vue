@@ -1,8 +1,9 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import BaseModal from '@/Components/BaseModal.vue';
 import CheckpointChips from '@/Components/Patients/CheckpointChips.vue';
+import InfoTip from '@/Components/InfoTip.vue';
 import { useHandover } from '@/composables/useHandover';
 import { defaultCheckpoints, withCheckpointDefaults } from '@/lib/handover.js';
 
@@ -65,6 +66,15 @@ const submitHandover = () => hForm.post(`/admissions/${props.patient.id}/handove
     preserveScroll: true, preserveState: true, onSuccess: () => emit('saved'),
 });
 
+// #23-adjacent (2026-09-24 review): the read-view chips (CheckpointChips, owned by group g2 — not
+// edited here) show abbreviated labels like "VTE" and "D/C ready" with no expansion. Since this
+// modal reuses that component as-is, the explanation lives here instead, right after it.
+const hasCheckpointChips = computed(() => {
+    const cp = data.value?.checkpoints;
+
+    return Boolean(cp && (cp.vte_completed || cp.ready_for_discharge || cp.high_risk || cp.needs_workup || cp.workup_pending || cp.code_status));
+});
+
 defineExpose({ data, hForm, editing, histOpen, submitHandover });
 </script>
 
@@ -86,6 +96,7 @@ defineExpose({ data, hForm, editing, histOpen, submitHandover });
                         <label class="flex items-center gap-2"><input type="checkbox" v-model="hForm.checkpoints.needs_workup" class="rounded text-brand-700" /> Needs more workup</label>
                         <label class="flex items-center gap-2"><input type="checkbox" v-model="hForm.checkpoints.workup_pending" class="rounded text-brand-700" /> Workup pending</label>
                         <label class="flex items-center gap-2">Code status
+                            <InfoTip label="Code status" text="Full = full resuscitation. DNR = do-not-resuscitate. DNI = do-not-intubate." />
                             <select v-model="hForm.checkpoints.code_status" aria-label="Code status" class="rounded-lg border border-ink-200 px-2 py-1 text-xs outline-none focus:border-brand-500">
                                 <option :value="null">None</option>
                                 <option value="full">Full</option>
@@ -102,7 +113,10 @@ defineExpose({ data, hForm, editing, histOpen, submitHandover });
                     </div>
                 </template>
                 <template v-else>
-                    <CheckpointChips :checkpoints="data?.checkpoints" class="mb-2" />
+                    <div class="mb-2 flex flex-wrap items-center gap-2">
+                        <CheckpointChips :checkpoints="data?.checkpoints" />
+                        <InfoTip v-if="hasCheckpointChips" label="Checkpoints" text="VTE = VTE prophylaxis addressed. D/C ready = ready for discharge, pending logistics. DNR = do-not-resuscitate. DNI = do-not-intubate." />
+                    </div>
                     <p class="whitespace-pre-wrap rounded-xl bg-app/70 px-3 py-2.5 text-sm leading-relaxed text-ink-700">{{ data.body || 'No handover text recorded.' }}</p>
                     <div class="mt-3 flex items-center justify-between">
                         <button v-if="data.revisions?.length" type="button" @click="histOpen = !histOpen" :aria-expanded="histOpen" class="text-xs font-semibold text-brand-700 hover:underline">{{ histOpen ? 'Hide history' : `History (${data.revisions.length})` }}</button>

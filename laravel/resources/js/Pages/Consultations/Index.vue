@@ -4,6 +4,7 @@ import { router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BaseModal from '@/Components/BaseModal.vue';
 import ErrorSummary from '@/Components/ErrorSummary.vue';
+import InfoTip from '@/Components/InfoTip.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
 import { localToday, vFocus, guardSubmit, formatDate, xsrf } from '@/lib/ui.js';
@@ -17,7 +18,7 @@ const { ask } = useConfirm();
 // .errors onto per-instance field ids (useId()-scoped) with aria-describedby wired to the
 // existing field-level messages. Submit handlers are wrapped in guardSubmit() (Item 5).
 
-const props = defineProps({ consultations: Object, filters: Object, stats: Object, reasons: Array, consultants: Array, specialties: Array, worklist: { type: Object, default: () => ({ date: '', seen: 0, total: 0, items: [] }) } });
+const props = defineProps({ consultations: Object, filters: Object, stats: Object, reasons: Array, consultants: Array, specialties: Array, worklist: { type: Object, default: () => ({ date: '', seen: 0, total: 0, items: [] }) }, canBookAnyTeam: { type: Boolean, default: true }, bookableToServices: { type: Array, default: () => [] }, bookingNotice: { type: String, default: null } });
 const page = usePage();
 const me = computed(() => page.props.auth.user);
 // Observers (role 5) are read-only everywhere, and the read-only guarantee is never bought with a
@@ -309,13 +310,17 @@ const submitEdit = guardSubmit(eForm, () => eForm.put(`/consultations/${editing.
 // ON-SERVICE consultants (a previously chosen consultant stays selectable); if none match,
 // fall back to the full list with a note. External / free-text services have NO receiving
 // consultant (legacy stored none) — the select is disabled and cleared.
-const isInternalService = (toService) => {
+// Shared name resolver: an INTERNAL specialty whose name matches (case/whitespace-insensitive) —
+// null for external / free-text / unmatched. The one place this lookup happens, reused by the
+// consultant-list narrowing below AND by the edit-notice gate (eNoticeApplies) so the two can
+// never disagree about what a typed value resolves to.
+const resolveInternalSpecialty = (toService) => {
     const wanted = String(toService || '').trim().toLowerCase();
-    return !!(wanted && props.specialties.find((s) => !s.is_external && s.name.trim().toLowerCase() === wanted));
+    return (wanted && props.specialties.find((s) => !s.is_external && s.name.trim().toLowerCase() === wanted)) || null;
 };
+const isInternalService = (toService) => !!resolveInternalSpecialty(toService);
 const consultantPick = (toService, currentId) => {
-    const wanted = String(toService || '').trim().toLowerCase();
-    const spec = wanted && props.specialties.find((s) => !s.is_external && s.name.trim().toLowerCase() === wanted);
+    const spec = resolveInternalSpecialty(toService);
     if (!spec) return { list: props.consultants, fallback: false };
     const list = props.consultants.filter((c) => c.specialty_id === spec.id && c.on_service);
     if (!list.length) return { list: props.consultants, fallback: true };
@@ -326,6 +331,31 @@ const cPick = computed(() => consultantPick(cForm.to_service, cForm.consultant_i
 const ePick = computed(() => consultantPick(eForm.to_service, eForm.consultant_id));
 const cInternal = computed(() => isInternalService(cForm.to_service));
 const eInternal = computed(() => isInternalService(eForm.to_service));
+// role-UX review #4: the own-specialty booking rule (ConsultationRequest::ownSpecialtyRule) was
+// always server-enforced, but the "To service" datalist used to offer every specialty regardless,
+// and the refusal only appeared after the whole form was submitted. bookableToServices is already
+// filtered to what THIS viewer may actually book into (their own specialty, or everything for an
+// admin/coordinator — ConsultationsController::index computes the same predicate the request
+// validates). bookingNotice (server-supplied, same wording as the eventual 422) is non-null only
+// for a restricted viewer, so it doubles as "should I show a warning at all".
+const toServiceOptions = computed(() => (props.canBookAnyTeam ? props.specialties : props.bookableToServices));
+const toServiceInfoText = computed(() => props.bookingNotice
+    || 'You may book a consult into any team. An ordinary clinical account without the coordinator capability is limited to its own specialty.');
+// role-UX review #4 fix-up (adversarial pass, 2026-09-24): the EDIT-form notice must fire only when
+// the NEW value would actually be refused by ConsultationRequest::ownSpecialtyRule, not merely
+// whenever the field is touched. Per that rule, changing to_service to (a) the viewer's OWN
+// specialty or (b) any external/free-text/unmatched service always saves; only routing to a
+// DIFFERENT internal specialty the viewer doesn't belong to fails. Showing "ask a coordinator" on
+// case (a) — the single most common self-service correction, re-routing a mis-filed consult back to
+// one's own team — was a false alarm. bookableToServices is already exactly the set ownSpecialtyRule
+// allows THIS viewer to book into, so membership in it (by id) is the same test the request runs;
+// reused here rather than re-derived, per resolveInternalSpecialty above.
+const eNoticeApplies = computed(() => {
+    if (!props.bookingNotice || eForm.to_service === editing.value?.to) return false;
+    const spec = resolveInternalSpecialty(eForm.to_service);
+    if (!spec) return false; // external / free-text / unmatched — unowned, always allowed
+    return !props.bookableToServices.some((s) => s.id === spec.id);
+});
 watch(cInternal, (v) => { if (!v) cForm.consultant_id = ''; });
 watch(eInternal, (v) => { if (!v) eForm.consultant_id = ''; });
 // W0: this used to promise a permanent, irreversible deletion. It is a SOFT delete — the row keeps
@@ -394,12 +424,15 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                  plain buttons; aria-pressed states the same thing truthfully and matches the house
                  pattern for server-backed filters (Patients board density / layout). Each button's
                  accessible name keeps the count OUT of the label and spells the obligation. -->
-            <div role="group" aria-label="Filter consultations by status" class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line">
-                <button v-for="s in STATUS_TABS" :key="s.id" data-status-tab type="button" :aria-pressed="status === s.id"
-                    :aria-label="tabAria(s)" :title="statusTitle(s.id)" @click="setStatus(s.id)"
-                    class="rounded-lg px-3 py-1.5 text-sm font-semibold transition" :class="status === s.id ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">
-                    {{ s.tab }} <span class="nums ms-1">{{ stats[s.id] ?? 0 }}</span>
-                </button>
+            <div class="flex items-center gap-1">
+                <div role="group" aria-label="Filter consultations by status" class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line">
+                    <button v-for="s in STATUS_TABS" :key="s.id" data-status-tab type="button" :aria-pressed="status === s.id"
+                        :aria-label="tabAria(s)" :title="statusTitle(s.id)" @click="setStatus(s.id)"
+                        class="rounded-lg px-3 py-1.5 text-sm font-semibold transition" :class="status === s.id ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">
+                        {{ s.tab }} <span class="nums ms-1">{{ stats[s.id] ?? 0 }}</span>
+                    </button>
+                </div>
+                <InfoTip label="Consultation status" text="New = not yet reviewed. Active = a daily follow-up is owed. Ongoing = on the books, no daily follow-up owed. Signed off = closed." />
             </div>
             <button v-if="isConsultant" @click="toggleMine" class="rounded-xl px-3 py-2 text-sm font-semibold shadow-sm ring-1 transition" :class="scope === 'mine' ? 'bg-accent-500 text-white ring-accent-500' : 'bg-card text-ink-500 ring-line hover:bg-ink-50'">My consultations</button>
             <button v-if="canAdd" @click="openAdd" class="inline-flex items-center gap-2 rounded-xl bg-brand-solid px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-solid-hover">
@@ -436,6 +469,11 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
             </ul>
             <span class="sr-only" aria-live="polite" aria-atomic="true">Seen {{ wlSeen }} of {{ wl.total }} today</span>
         </section>
+
+        <!-- Shared across both modals regardless of which is open (BaseModal unmounts its slot on
+             close, so a datalist declared inside one modal only isn't there for the other). Options
+             are already narrowed server-side to what THIS viewer may actually book into. -->
+        <datalist id="svc-list-to"><option v-for="s in toServiceOptions" :key="s.id" :value="s.name" /></datalist>
 
         <!-- a refused status move (403 / illegal transition) says so here instead of vanishing -->
         <div v-if="moveError" data-move-error role="alert" class="mb-3 rounded-xl bg-tint-danger px-4 py-2 text-sm font-semibold text-on-danger">{{ moveError }}</div>
@@ -530,7 +568,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                         <div><label :for="efid('current_location')" class="mb-1 block text-sm font-semibold text-ink-700">Location</label><select :id="efid('current_location')" v-model="eForm.current_location" :class="field"><option>Ward</option><option>ICU</option><option>ER</option></select></div>
                         <div><label :for="efid('consultation_date')" class="mb-1 block text-sm font-semibold text-ink-700">Date</label><input :id="efid('consultation_date')" v-model="eForm.consultation_date" type="date" :max="today" :class="field" /></div>
                         <div><label :for="efid('consultation_from')" class="mb-1 block text-sm font-semibold text-ink-700">From service <span class="text-danger-500">*</span></label><input :id="efid('consultation_from')" v-model="eForm.consultation_from" list="svc-list" :aria-describedby="eForm.errors.consultation_from ? efid('consultation_from') + '-err' : undefined" :class="[field, eForm.errors.consultation_from && 'border-danger-500']" /><p v-if="eForm.errors.consultation_from" :id="efid('consultation_from') + '-err'" class="mt-1 text-xs text-on-danger">{{ eForm.errors.consultation_from }}</p></div>
-                        <div><label :for="efid('to_service')" class="mb-1 block text-sm font-semibold text-ink-700">To service <span class="text-danger-500">*</span></label><input :id="efid('to_service')" v-model="eForm.to_service" list="svc-list" :aria-describedby="eForm.errors.to_service ? efid('to_service') + '-err' : undefined" :class="[field, eForm.errors.to_service && 'border-danger-500']" /><p v-if="eForm.errors.to_service" :id="efid('to_service') + '-err'" class="mt-1 text-xs text-on-danger">{{ eForm.errors.to_service }}</p></div>
+                        <div><label :for="efid('to_service')" class="mb-1 flex items-center gap-1 text-sm font-semibold text-ink-700">To service <span class="text-danger-500">*</span> <InfoTip label="To service" :text="toServiceInfoText" /></label><input :id="efid('to_service')" v-model="eForm.to_service" list="svc-list-to" :aria-describedby="eForm.errors.to_service ? efid('to_service') + '-err' : undefined" :class="[field, eForm.errors.to_service && 'border-danger-500']" /><p v-if="eForm.errors.to_service" :id="efid('to_service') + '-err'" class="mt-1 text-xs text-on-danger">{{ eForm.errors.to_service }}</p><p v-if="eNoticeApplies" data-test="edit-booking-notice" class="mt-1 text-xs font-semibold text-on-warning">{{ bookingNotice }}</p></div>
                         <div class="sm:col-span-2"><label :for="efid('consultant_id')" class="mb-1 block text-sm font-semibold text-ink-700">Receiving consultant <span v-if="eInternal" class="text-danger-500">*</span></label><select :id="efid('consultant_id')" v-model="eForm.consultant_id" :disabled="!eInternal" :aria-describedby="eForm.errors.consultant_id ? efid('consultant_id') + '-err' : undefined" :class="[field, 'disabled:bg-ink-50', eForm.errors.consultant_id && 'border-danger-500']"><option value="">Select consultant…</option><option v-for="c in ePick.list" :key="c.id" :value="c.id">{{ c.name }}</option></select>
                             <p v-if="!eInternal" class="mt-1 text-xs text-ink-400">External / free-text service — no internal consultant is recorded.</p>
                             <p v-else-if="ePick.fallback" class="mt-1 text-xs text-on-warning">No on-service consultants for this specialty — showing all.</p>
@@ -585,7 +623,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                         <div><label :for="cfid('current_location')" class="mb-1 block text-sm font-semibold text-ink-700">Location</label><select :id="cfid('current_location')" v-model="cForm.current_location" :class="field"><option>Ward</option><option>ICU</option><option>ER</option></select></div>
                         <div><label :for="cfid('consultation_date')" class="mb-1 block text-sm font-semibold text-ink-700">Date <span class="text-danger-500">*</span></label><input :id="cfid('consultation_date')" v-model="cForm.consultation_date" type="date" :max="today" :class="field" /></div>
                         <div><label :for="cfid('consultation_from')" class="mb-1 block text-sm font-semibold text-ink-700">From service <span class="text-danger-500">*</span></label><input :id="cfid('consultation_from')" v-model="cForm.consultation_from" list="svc-list" :aria-describedby="cForm.errors.consultation_from ? cfid('consultation_from') + '-err' : undefined" :class="[field, cForm.errors.consultation_from && 'border-danger-500']" placeholder="Referring service" /><p v-if="cForm.errors.consultation_from" :id="cfid('consultation_from') + '-err'" class="mt-1 text-xs text-on-danger">{{ cForm.errors.consultation_from }}</p></div>
-                        <div><label :for="cfid('to_service')" class="mb-1 block text-sm font-semibold text-ink-700">To service <span class="text-danger-500">*</span></label><input :id="cfid('to_service')" v-model="cForm.to_service" list="svc-list" :aria-describedby="cForm.errors.to_service ? cfid('to_service') + '-err' : undefined" :class="[field, cForm.errors.to_service && 'border-danger-500']" placeholder="Consulted service" /><p v-if="cForm.errors.to_service" :id="cfid('to_service') + '-err'" class="mt-1 text-xs text-on-danger">{{ cForm.errors.to_service }}</p></div>
+                        <div><label :for="cfid('to_service')" class="mb-1 flex items-center gap-1 text-sm font-semibold text-ink-700">To service <span class="text-danger-500">*</span> <InfoTip label="To service" :text="toServiceInfoText" /></label><input :id="cfid('to_service')" v-model="cForm.to_service" list="svc-list-to" :aria-describedby="cForm.errors.to_service ? cfid('to_service') + '-err' : undefined" :class="[field, cForm.errors.to_service && 'border-danger-500']" placeholder="Consulted service" /><p v-if="cForm.errors.to_service" :id="cfid('to_service') + '-err'" class="mt-1 text-xs text-on-danger">{{ cForm.errors.to_service }}</p><p v-if="bookingNotice" data-test="booking-notice" class="mt-1 text-xs font-semibold text-on-warning">{{ bookingNotice }}</p></div>
                         <datalist id="svc-list"><option v-for="s in specialties" :key="s.id" :value="s.name" /></datalist>
                         <div class="sm:col-span-2"><label :for="cfid('consultant_id')" class="mb-1 block text-sm font-semibold text-ink-700">Receiving consultant <span v-if="cInternal" class="text-danger-500">*</span></label><select :id="cfid('consultant_id')" v-model="cForm.consultant_id" :disabled="!cInternal" :aria-describedby="cForm.errors.consultant_id ? cfid('consultant_id') + '-err' : undefined" :class="[field, 'disabled:bg-ink-50', cForm.errors.consultant_id && 'border-danger-500']"><option value="">Select consultant…</option><option v-for="c in cPick.list" :key="c.id" :value="c.id">{{ c.name }}</option></select>
                             <p v-if="!cInternal" class="mt-1 text-xs text-ink-400">External / free-text service — no internal consultant is recorded.</p>
@@ -632,7 +670,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                         Follow-up still needed
                     </label>
                     <div>
-                        <label :for="sfid('response_note')" class="mb-1 block text-sm font-semibold text-ink-700">Note</label>
+                        <label :for="sfid('response_note')" class="mb-1 flex items-center gap-1 text-sm font-semibold text-ink-700">Note <InfoTip label="Response note" text="Working note only — the full clinical note stays in the hospital's main record system (HIS), not here." /></label>
                         <textarea :id="sfid('response_note')" v-model="sForm.response_note" rows="3" maxlength="2000" :aria-describedby="sForm.errors.response_note ? sfid('response_note') + '-err' : undefined" :class="[field, sForm.errors.response_note && 'border-danger-500']" placeholder="Working note — the clinical note stays in the HIS"></textarea>
                         <p v-if="sForm.errors.response_note" :id="sfid('response_note') + '-err'" class="mt-1 text-xs text-on-danger">{{ sForm.errors.response_note }}</p>
                     </div>

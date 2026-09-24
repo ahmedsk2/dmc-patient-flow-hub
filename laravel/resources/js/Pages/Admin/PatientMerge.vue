@@ -4,6 +4,10 @@ import { useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { xsrf } from '@/lib/ui.js';
 import PatientPicker from '@/Components/PatientPicker.vue';
+import InfoTip from '@/Components/InfoTip.vue';
+import { useConfirm } from '@/composables/useConfirm';
+
+const { ask } = useConfirm();
 
 /**
  * Phase 4 — Item 9: admin patient-merge / MRN-dedup tooling. A two-panel interface: pick a SOURCE
@@ -74,13 +78,15 @@ const buildOverrides = () => {
     return out;
 };
 
-const confirmMerge = () => {
+// #11 (2026-09-24 role/UX review): every other destructive action in the app uses the themed
+// ConfirmDialog (see useConfirm) — merge was the one holdout still on the browser's native
+// window.confirm(), unstyled and unlike everything around it.
+const confirmMerge = async () => {
     if (!preview.value) return;
-    const msg = `Merge patient #${preview.value.source.id} (${preview.value.source.mrn}) into `
-        + `#${preview.value.target.id} (${preview.value.target.mrn})?\n\n`
+    const body = `#${preview.value.source.id} (${preview.value.source.mrn}) will retire, moving `
         + `${preview.value.source.admissions} admission(s) and ${preview.value.source.consultations} consultation(s) `
-        + `will move to the target, and the source will be retired (recoverable from Recently Deleted).`;
-    if (!window.confirm(msg)) return;
+        + `onto #${preview.value.target.id} (${preview.value.target.mrn}). The source stays recoverable from Recently Deleted.`;
+    if (!(await ask(`Merge into #${preview.value.target.id}?`, body, 'danger'))) return;
 
     form.source_id = preview.value.source.id;
     form.target_id = preview.value.target.id;
@@ -163,7 +169,7 @@ const btn = 'rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opac
 
             <!-- canonical demographics: per-field source/target choice -->
             <div class="mt-6">
-                <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">Canonical demographics</p>
+                <p class="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-400">Canonical demographics<InfoTip label="Canonical demographics" text="Target wins by default for every field. Pick Source only for a field where the target's value is actually wrong." /></p>
                 <div class="overflow-hidden rounded-xl ring-1 ring-line">
                     <table class="w-full">
                         <thead><tr class="border-b border-line bg-ink-50">

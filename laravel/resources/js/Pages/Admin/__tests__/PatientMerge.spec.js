@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mount, flushPromises } from '@vue/test-utils';
 
 /**
  * Admin → Patient Merge — regression spec for the 2026-09-23 walkthrough defect: the two
@@ -14,15 +14,22 @@ import { mount } from '@vue/test-utils';
  * PatientPicker is intentionally NOT mocked below: mocking it would hide the exact defect this
  * spec exists to catch.
  */
+const { post, ask } = vi.hoisted(() => ({ post: vi.fn(), ask: vi.fn() }));
 vi.mock('@inertiajs/vue3', () => ({
-    useForm: (obj) => ({ ...obj, post: vi.fn(), errors: {}, processing: false }),
+    useForm: (obj) => ({ ...obj, post, errors: {}, processing: false }),
 }));
+// #11 (2026-09-24 role/UX review): the final merge confirmation used to be the browser's native
+// window.confirm() — the one holdout among the app's destructive actions. Mocking useConfirm lets
+// the specs below drive that decision deterministically instead of stubbing window.confirm.
+vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => ({ ask }) }));
 vi.mock('@/Layouts/AppLayout.vue', () => ({ default: { name: 'AppLayout', props: ['title', 'breadcrumbs'], template: '<div><slot /></div>' } }));
 
 import PatientMerge from '@/Pages/Admin/PatientMerge.vue';
 import PatientPicker from '@/Components/PatientPicker.vue';
 
 const mountPage = (possibleDuplicates = []) => mount(PatientMerge, { props: { possibleDuplicates } });
+
+beforeEach(() => { post.mockClear(); ask.mockReset(); });
 
 describe('PatientMerge — patient pickers actually render', () => {
     it('renders both pickers as real, labelled combobox inputs (not empty comment nodes)', () => {
@@ -51,5 +58,46 @@ describe('PatientMerge — patient pickers actually render', () => {
         const w = mountPage([{ id1: 1, mrn1: '111', name1: 'A', id2: 2, mrn2: '222', name2: 'B', reason: 'normalized-mrn' }]);
         expect(w.text()).toContain('111');
         expect(w.text()).toContain('222');
+    });
+});
+
+// #11 (2026-09-24 role/UX review): the final merge confirmation used window.confirm() while every
+// other destructive action in the app (delete user, discharge, MFA reset…) uses the themed,
+// accessible ConfirmDialog via useConfirm(). confirmMerge() must now go through `ask`.
+describe('PatientMerge — themed confirm on merge (Problem #11)', () => {
+    const setPreview = (w) => {
+        w.vm.preview = {
+            source: { id: 1, mrn: '111', name: 'A', admissions: 2, consultations: 1, has_open_admission: false },
+            target: { id: 2, mrn: '222', name: 'B', admissions: 0, consultations: 0, has_open_admission: false },
+        };
+    };
+
+    it('asks via the themed dialog (danger tone) naming both patients, and posts only once confirmed', async () => {
+        const w = mountPage();
+        setPreview(w);
+        ask.mockResolvedValue(true);
+
+        await w.vm.confirmMerge();
+        await flushPromises();
+
+        expect(ask).toHaveBeenCalledTimes(1);
+        const [title, body, tone] = ask.mock.calls[0];
+        expect(title).toContain('#2');
+        expect(body).toContain('#1 (111)');
+        expect(body).toContain('#2 (222)');
+        expect(tone).toBe('danger');
+        expect(post).toHaveBeenCalledWith('/admin/patient-merge', expect.objectContaining({ preserveScroll: true }));
+    });
+
+    it('declining the themed confirm does not post the merge', async () => {
+        const w = mountPage();
+        setPreview(w);
+        ask.mockResolvedValue(false);
+
+        await w.vm.confirmMerge();
+        await flushPromises();
+
+        expect(ask).toHaveBeenCalledTimes(1);
+        expect(post).not.toHaveBeenCalled();
     });
 });

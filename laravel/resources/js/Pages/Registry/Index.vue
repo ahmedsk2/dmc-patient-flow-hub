@@ -2,6 +2,7 @@
 import { ref, reactive, computed, watch, onMounted, useId } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import InfoTip from '@/Components/InfoTip.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
 import SearchableSelect from '@/Components/SearchableSelect.vue';
 import ActivityPanel from '@/Components/ActivityPanel.vue';
@@ -229,7 +230,7 @@ const toggleExpand = (id) => {
                     <label class="flex items-center gap-1 text-xs text-ink-500"><input type="radio" value="and" v-model="f.dx_match" /> all</label>
                 </div>
                 <div class="flex flex-wrap items-center gap-4">
-                    <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.longterm" class="rounded text-brand-700" /> Long-term</label>
+                    <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.longterm" class="rounded text-brand-700" /> Long-term<InfoTip label="Long-term filter" text="Matches a flag staff set manually — not calculated from length of stay." /></label>
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.discharged" class="rounded text-brand-700" /> Discharged only</label>
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.tb" class="rounded text-brand-700" /> TB</label>
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.readmit72" class="rounded text-brand-700" /> {{ options.readmitWindow ?? 3 }}-day readmissions</label>
@@ -406,10 +407,10 @@ const toggleExpand = (id) => {
                                     <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Discharged by</dt><dd class="mt-0.5 text-ink-700">{{ r.discharged_by || '—' }}</dd></div>
                                     <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Admitted from</dt><dd class="mt-0.5 text-ink-700">{{ r.admitted_from || '—' }}</dd></div>
                                     <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Discharged to</dt><dd class="mt-0.5 text-ink-700">{{ r.discharge_to || '—' }}</dd></div>
-                                    <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Clinical discharge</dt><dd class="nums mt-0.5 text-ink-700">{{ formatDate(r.medical_discharge_date) || '—' }}</dd></div>
-                                    <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Physical discharge</dt><dd class="nums mt-0.5 text-ink-700">{{ formatDate(r.discharge_date) || '—' }}</dd></div>
+                                    <div><dt class="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink-400">Clinical discharge<InfoTip label="Clinical discharge date" text="Medically cleared to leave (phase 1). The bed may still be occupied until physical discharge." /></dt><dd class="nums mt-0.5 text-ink-700">{{ formatDate(r.medical_discharge_date) || '—' }}</dd></div>
+                                    <div><dt class="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink-400">Physical discharge<InfoTip label="Physical discharge date" text="The bed/file actually closed (phase 2) — what the LOS and every discharge count are measured to." /></dt><dd class="nums mt-0.5 text-ink-700">{{ formatDate(r.discharge_date) || '—' }}</dd></div>
                                     <div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Delay reason</dt><dd class="mt-0.5 text-ink-700">{{ r.delay_reason || '—' }}</dd></div>
-                                    <div v-if="r.transfer_label"><dt class="text-xs font-semibold uppercase tracking-wide text-ink-400">Transfer</dt><dd class="mt-0.5"><span class="rounded-full bg-tint-info px-2.5 py-0.5 text-xs font-semibold text-on-info">{{ r.transfer_label }}</span></dd></div>
+                                    <div v-if="r.transfer_label"><dt class="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink-400">Transfer<InfoTip label="Transfer label" text="How the episode closed: intra-dept = another IM consultant; out-dept = left the department; the ICU labels are ward↔ICU moves, not a discharge." /></dt><dd class="mt-0.5"><span class="rounded-full bg-tint-info px-2.5 py-0.5 text-xs font-semibold text-on-info">{{ r.transfer_label }}</span></dd></div>
                                 </dl>
                             </td>
                         </tr>

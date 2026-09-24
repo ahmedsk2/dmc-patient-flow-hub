@@ -4,6 +4,7 @@ import { Link, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AdminBandCard from '@/Components/AdminBandCard.vue';
 import OccupancyTracker from '@/Components/OccupancyTracker.vue';
+import InfoTip from '@/Components/InfoTip.vue';
 import ChartFigure from '@/Components/ChartFigure.vue';
 import Sparkline from '@/Components/Sparkline.vue';
 import { useChartTheme } from '@/composables/useChartTheme';
@@ -59,10 +60,21 @@ const bandIcons = {
 };
 const adminBandCards = computed(() => props.adminBand ? [
     { label: 'Data Quality Issues', count: props.adminBand.dqIssues ?? 0, href: '/data-quality', iconPath: bandIcons.quality, urgent: true },
-    { label: 'Security Anomalies', count: props.adminBand.securityAnomalies ?? 0, href: '/security', iconPath: bandIcons.security, urgent: true },
+    // #29 — verified against DashboardController::index(): the count is 24h failed-login clusters
+    // (distinct account+IP pairs) PLUS active users with no MFA enrolled. It does NOT include the
+    // Security page's third section (first-seen IPs) — the tile is narrower than "anomalies" sounds.
+    { label: 'Security Anomalies', count: props.adminBand.securityAnomalies ?? 0, href: '/security', iconPath: bandIcons.security, urgent: true,
+        tooltip: '24h failed-login clusters plus active accounts without MFA enrolled — usually unused accounts, not active threats. Open Security for detail.' },
     { label: 'Recently Deleted', count: props.adminBand.recentlyDeleted ?? 0, href: '/trashed', iconPath: bandIcons.trash, urgent: false },
-    { label: 'Pending Handovers', count: props.adminBand.pendingHandovers ?? 0, href: '/handovers', iconPath: bandIcons.handover, urgent: false },
-    { label: 'Handover Due (unit)', count: props.adminBand.handoverDueUnit ?? 0, href: '/patients?needs_handover=1', iconPath: bandIcons.handover, urgent: true },
+    // #14 — verified against HandoverSignature::scopePending(): unsigned, unvoided signatures,
+    // created only on a consultant-to-consultant move.
+    { label: 'Pending Handovers', count: props.adminBand.pendingHandovers ?? 0, href: '/handovers', iconPath: bandIcons.handover, urgent: false,
+        tooltip: 'Patients recently handed to a new consultant whose signature is still outstanding.' },
+    // #14 — verified against Admission::scopeHandoverPending(): active admissions carrying an
+    // unresolved handover.incomplete reminder, raised only when a reassignment moved the patient
+    // and the note was not current that day (HANDOVER-COMPLIANCE.md §4) — not every stale note.
+    { label: 'Handover Due (unit)', count: props.adminBand.handoverDueUnit ?? 0, href: '/patients?needs_handover=1', iconPath: bandIcons.handover, urgent: true,
+        tooltip: 'Active patients reassigned to a new consultant whose handover note was not current that day, and still isn’t.' },
 ] : []);
 
 // ── Drill-through (Item 3) ───────────────────────────────────────────────────────────────────
@@ -122,7 +134,10 @@ const myUnitCards = computed(() => props.myUnit ? [
     ['ICU', props.myUnit.icu, 'bg-tint-danger/30', '/patients?location=ICU'],
     ['Boarding', props.myUnit.boarding, 'bg-tint-warning/30', '/patients?view=boarding'],
     ['Handover due', props.myUnit.handoverDue, 'bg-tint-warning/30', '/patients?needs_handover=1'],
-    ['New (24h)', props.myUnit.new, 'bg-tint-info/30', null],
+    // 2026-09-24 review #28: this counted `is_new_assignment = 1` (the managed assign/handover/
+    // shuffle flag), never a rolling 24-hour window — "(24h)" was a wrong claim in the visible
+    // label itself, not just in the doc. Renamed to match the corrected "New" column elsewhere.
+    ['New', props.myUnit.new, 'bg-tint-info/30', null],
     ['Consults', props.myUnit.myConsults, 'bg-accent-300/20', '/consultations'],
 ] : []);
 
@@ -152,6 +167,12 @@ const underloaded = computed(() => (props.perConsultant || []).filter((c) =>
     c.c < (c.specialty_id === 1 ? props.loadBands.minHosp : props.loadBands.minSubs)).length);
 const canShuffle = computed(() => auth.value?.role !== 5 && (auth.value?.is_admin || auth.value?.can?.assign));
 
+// #7 — Observer (role 5) is the only role the ledger flatly refuses: ConsultationsController::index()
+// throws a 403 for isObserver() before anything else runs. Every other role reaches a real (possibly
+// narrower) scoped view, so only Observer loses the link; everyone else keeps it plus the InfoTip
+// below explaining the scope.
+const canOpenConsultations = computed(() => auth.value?.role !== 5);
+
 const boardSections = computed(() => {
     const bucket = (c) => c.on_service && c.specialty_id === 1 ? 'hosp' : c.on_service ? 'subs' : 'off';
     return [
@@ -172,8 +193,14 @@ const kpiCards = computed(() => [
     { label: 'Active Census', value: props.kpis.census, sub: `${props.kpis.ward} ward · ${props.kpis.icu} ICU`, icon: 'bed', tone: 'brand', href: '/patients', polarity: 'neutral' },
     { label: 'Admissions Today', value: props.kpis.admissionsToday, sub: 'vs 7d avg', icon: 'in', tone: 'blue', deltaKey: 'admissions', polarity: 'neutral', spark: props.trend.admissions },
     { label: 'Discharges Today', value: props.kpis.dischargesToday, sub: 'vs 7d avg · non-ICU', icon: 'out', tone: 'teal', deltaKey: 'discharges', polarity: 'good', spark: props.trend.discharges, href: '/recent' },
-    { label: 'Active Consultations', value: props.kpis.activeConsults, sub: 'awaiting sign-off', icon: 'chat', tone: 'gold', href: '/consultations', polarity: 'neutral', spark: props.consults.new },
-    { label: 'Bed Occupancy', value: props.kpis.occupancy + '%', sub: `of ${props.kpis.wardBeds} ward beds · vs 1w ago`, icon: 'gauge', tone: 'teal', deltaKey: 'occupancy', polarity: 'bad' },
+    // #7 — link dropped for Observer (mirrors the server 403); InfoTip clarifies the count is
+    // unit-wide even though the ledger a click opens may show fewer rows (Consultation::scopeVisibleTo).
+    { label: 'Active Consultations', value: props.kpis.activeConsults, sub: 'awaiting sign-off', icon: 'chat', tone: 'gold', href: canOpenConsultations.value ? '/consultations' : null, polarity: 'neutral', spark: props.consults.new,
+        tip: 'Unit-wide total — the consultations you can open on the ledger may be fewer, based on your specialty.' },
+    // #15 — verified against DashboardController::index(): occupancy = active ward ÷ settings.ward_beds,
+    // uncapped, so an unset/low bed count reads well over 100% even at a normal census.
+    { label: 'Bed Occupancy', value: props.kpis.occupancy + '%', sub: `of ${props.kpis.wardBeds} ward beds · vs 1w ago`, icon: 'gauge', tone: 'teal', deltaKey: 'occupancy', polarity: 'bad',
+        tip: 'Calculated against the ward bed count set in Control → Settings — a low or unset count can read over 100% at a safe census.' },
     { label: 'Avg LOS (month)', value: props.kpis.avgLosMonth, sub: 'days · non-ICU discharges', icon: 'clock', tone: 'navy', polarity: 'bad' },
     { label: 'Mortality (Month)', value: props.kpis.deathsMonth, sub: 'this calendar month · vs prior month', icon: 'trendDown', tone: 'red', deltaKey: 'deathsMonth', polarity: 'bad' },
     { label: 'Boarding', value: props.boardingCount, sub: 'medically cleared · bed still occupied', icon: 'boarding', tone: 'warning', href: '/patients?view=boarding', polarity: 'bad' },
@@ -359,7 +386,7 @@ onUnmounted(() => clearInterval(autoRefresh));
             <h2 class="font-display mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-400">Administrative</h2>
             <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <AdminBandCard v-for="card in adminBandCards" :key="card.href"
-                    :label="card.label" :count="card.count" :href="card.href" :icon-path="card.iconPath" :urgent="card.urgent" />
+                    :label="card.label" :count="card.count" :href="card.href" :icon-path="card.iconPath" :urgent="card.urgent" :tooltip="card.tooltip" />
             </div>
         </section>
 
@@ -432,33 +459,43 @@ onUnmounted(() => clearInterval(autoRefresh));
         <!-- 8 KPI cards: 4-across on desktop (two even rows) so each card has room for its label +
              icon tile + numeral + spark; 8-across packed them to ~130px and the label ran under the icon. -->
         <div data-tour="dashboard-hero" class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-            <!-- W4 triad: label → big tabular numeral → (delta chip + inline sparkline) row, brand icon tile kept -->
-            <component :is="c.href ? 'button' : 'div'" v-for="c in kpiCards" :key="c.label" type="button"
-                :data-kpi="c.label"
-                @click="c.href && goHref(c.href)"
-                class="relative w-full overflow-hidden rounded-2xl bg-card p-5 text-start shadow-card-lg ring-1 transition"
-                :class="c.tone === 'warning' ? 'ring-warning-300/60' : 'ring-brand-200/60'">
-                <div class="flex items-start justify-between gap-3">
-                    <div class="min-w-0 flex-1">
-                        <p class="text-xs font-semibold uppercase tracking-wide text-ink-400">{{ c.label }}</p>
-                        <p class="font-display nums mt-2 truncate text-3xl font-extrabold" :class="c.tone === 'warning' ? 'text-on-warning' : 'text-ink-900'">{{ c.value }}</p>
-                        <p class="mt-1 text-xs text-ink-400">{{ c.sub }}</p>
-                        <!-- triad row 3: delta chip + inline sparkline. Colour is a graphic hue on the spark
-                             (text-brand-600 → currentColor); meaning on the chip is arrow + number, not colour. -->
-                        <div v-if="chip(c) || c.spark?.length" class="mt-2 flex items-center gap-2">
-                            <span v-if="chip(c)" class="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-bold" :class="chip(c).cls">{{ chip(c).label }}</span>
-                            <div v-if="c.spark?.length" class="min-w-0 flex-1">
-                                <Sparkline :data="c.spark" :aria-label="`${c.label}, recent trend`" class="text-brand-700" />
+            <!-- W4 triad: label → big tabular numeral → (delta chip + inline sparkline) row, brand icon tile kept.
+                 Outer wrapper is `relative` so a tile's InfoTip (a real <button>) can sit in the corner as a
+                 SIBLING of the tile's own button, not nested inside it — a tile with `href` renders as
+                 <button>, and a <button> inside a <button> is invalid HTML/a11y (2026-09-24 review §5). -->
+            <div v-for="c in kpiCards" :key="c.label" class="relative">
+                <component :is="c.href ? 'button' : 'div'" type="button"
+                    :data-kpi="c.label"
+                    @click="c.href && goHref(c.href)"
+                    class="relative w-full overflow-hidden rounded-2xl bg-card p-5 text-start shadow-card-lg ring-1 transition"
+                    :class="c.tone === 'warning' ? 'ring-warning-300/60' : 'ring-brand-200/60'">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0 flex-1">
+                            <p class="text-xs font-semibold uppercase tracking-wide text-ink-400">{{ c.label }}</p>
+                            <p class="font-display nums mt-2 truncate text-3xl font-extrabold" :class="c.tone === 'warning' ? 'text-on-warning' : 'text-ink-900'">{{ c.value }}</p>
+                            <p class="mt-1 text-xs text-ink-400">{{ c.sub }}</p>
+                            <!-- triad row 3: delta chip + inline sparkline. Colour is a graphic hue on the spark
+                                 (text-brand-600 → currentColor); meaning on the chip is arrow + number, not colour. -->
+                            <div v-if="chip(c) || c.spark?.length" class="mt-2 flex items-center gap-2">
+                                <span v-if="chip(c)" class="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-bold" :class="chip(c).cls">{{ chip(c).label }}</span>
+                                <div v-if="c.spark?.length" class="min-w-0 flex-1">
+                                    <Sparkline :data="c.spark" :aria-label="`${c.label}, recent trend`" class="text-brand-700" />
+                                </div>
                             </div>
                         </div>
+                        <div class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br text-white shadow-lg" :class="toneClass[c.tone]">
+                            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" :d="kpiIcons[c.icon]" /></svg>
+                        </div>
                     </div>
-                    <div class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br text-white shadow-lg" :class="toneClass[c.tone]">
-                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" :d="kpiIcons[c.icon]" /></svg>
-                    </div>
-                </div>
-                <div class="pointer-events-none absolute -bottom-6 -right-4 h-20 w-20 rounded-full bg-gradient-to-br opacity-10" :class="toneClass[c.tone]"></div>
-                <span v-if="c.href" class="pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-transparent transition hover:ring-brand-400"></span>
-            </component>
+                    <div class="pointer-events-none absolute -bottom-6 -right-4 h-20 w-20 rounded-full bg-gradient-to-br opacity-10" :class="toneClass[c.tone]"></div>
+                    <span v-if="c.href" class="pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-transparent transition hover:ring-brand-400"></span>
+                </component>
+                <!-- Sits just outside the card's own top-right corner (negative offset) so it never
+                     overlaps the icon tile, which is inset by the card's own p-5 padding. -->
+                <span v-if="c.tip" class="absolute -top-1.5 end-2.5 z-10">
+                    <InfoTip :label="c.label" :text="c.tip" />
+                </span>
+            </div>
         </div>
 
         <!-- Boarding worklist (Item 1): ranked longest-boarding first, links to the board view -->
@@ -516,7 +553,9 @@ onUnmounted(() => clearInterval(autoRefresh));
             </div>
             <!-- Bed occupancy — segmented tracker (W4, replaces the radialBar gauge). PRIMARY tier (hero). -->
             <div class="rounded-2xl bg-card p-5 shadow-card-lg ring-1 ring-brand-200/60">
-                <h2 class="mb-3 font-bold text-ink-800">Bed Occupancy</h2>
+                <h2 class="mb-3 flex items-center gap-1.5 font-bold text-ink-800">Bed Occupancy
+                    <InfoTip label="Bed Occupancy" text="Calculated against the ward/ICU bed counts set in Control → Settings — a low or unset count can read over 100% at a safe census." />
+                </h2>
                 <OccupancyTracker :units="occUnits" :thresholds="occThresholds" />
             </div>
         </div>
@@ -547,7 +586,9 @@ onUnmounted(() => clearInterval(autoRefresh));
             <!-- legacy census donut title carries the headline + TB count over the DONUT'S OWN
                  population (assigned non-ICU — dashboard/1.php:151-154), not the all-active KPI (M1/5) -->
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-                <h2 class="mb-2 font-semibold text-ink-700">Current patients: <span class="nums">{{ donutTotal }}</span> <span class="font-normal text-ink-400">(incl. {{ donutTb }} TB)</span></h2>
+                <h2 class="mb-2 flex items-center gap-1.5 font-semibold text-ink-700">Current patients: <span class="nums">{{ donutTotal }}</span> <span class="font-normal text-ink-400">(incl. {{ donutTb }} TB)</span>
+                    <InfoTip label="Current patients" text="Excludes ICU patients and anyone not yet assigned a consultant — see New Admissions for those." />
+                </h2>
                 <ChartFigure title="Current patients by service" caption="Assigned non-ICU census by service line (Hospitalist, Sub-specialty, Long-term)." :columns="['Service', 'Patients']" :rows="mixRows">
                     <ChartCanvas role="img" v-if="hasMix" type="doughnut" :height="260" :data="donutData" :options="donutOptions" :plugins="donutPlugins" :aria-label="`Donut chart: assigned non-ICU census by service — ${donutTotal} patients including ${donutTb} TB`" />
                     <p v-else class="grid h-[260px] place-items-center text-sm text-ink-400">No data for this period.</p>
@@ -559,7 +600,9 @@ onUnmounted(() => clearInterval(autoRefresh));
             <!-- per consultant — load-fairness bands (Item 6) + drill-through (Item 3) -->
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <div class="mb-1 flex items-center justify-between">
-                    <h2 class="font-semibold text-ink-700">Active Load by Consultant</h2>
+                    <h2 class="flex items-center gap-1.5 font-semibold text-ink-700">Active Load by Consultant
+                        <InfoTip label="Active Load by Consultant" text="'Below min' / 'over max' compare each consultant's active caseload to the pool range set in Control → Settings; Shuffle balances within it." />
+                    </h2>
                     <span class="text-[11px] text-ink-400">band = min–max census</span>
                 </div>
                 <div class="space-y-3">
@@ -636,7 +679,10 @@ onUnmounted(() => clearInterval(autoRefresh));
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead><tr class="border-b border-line text-start text-xs font-semibold uppercase tracking-wide text-ink-400">
-                        <th scope="col" class="px-5 py-2.5">Consultant</th><th scope="col" class="px-3 py-2.5 text-center">Old</th><th scope="col" class="px-3 py-2.5 text-center">New</th><th scope="col" class="px-3 py-2.5 text-center">Active</th><th scope="col" class="px-3 py-2.5 text-center">Ward</th><th scope="col" class="px-3 py-2.5 text-center">ICU</th><th scope="col" class="px-3 py-2.5 text-center">TB</th>
+                        <th scope="col" class="px-5 py-2.5">Consultant</th>
+                        <th scope="col" class="px-3 py-2.5 text-center"><span class="inline-flex items-center justify-center gap-1">Old<InfoTip label="Old column" text="Active patients not currently flagged 'New' — the opposite of New, not an age or record-age count." /></span></th>
+                        <th scope="col" class="px-3 py-2.5 text-center"><span class="inline-flex items-center justify-center gap-1">New<InfoTip label="New column" text="Set when assigned, handed over, or shuffled; cleared on discharge or reassignment — not a 24-hour timer." /></span></th>
+                        <th scope="col" class="px-3 py-2.5 text-center">Active</th><th scope="col" class="px-3 py-2.5 text-center">Ward</th><th scope="col" class="px-3 py-2.5 text-center">ICU</th><th scope="col" class="px-3 py-2.5 text-center">TB</th>
                     </tr></thead>
                     <tbody class="divide-y divide-line">
                         <template v-for="sec in boardSections" :key="sec.key">

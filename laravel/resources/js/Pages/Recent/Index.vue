@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import InfoTip from '@/Components/InfoTip.vue';
 import { useConfirm } from '@/composables/useConfirm';
 
 const { ask } = useConfirm();
@@ -16,6 +17,14 @@ const isAdmin = computed(() => !!usePage().props.auth?.user?.is_admin);
 const tab = ref('discharges');
 const undoDischarge = async (d) => { if (await ask('Reverse discharge', `Reverse the discharge for ${d.name} (MRN ${d.mrn}) — the patient returns to the active board.`, 'danger')) router.post(`/admissions/${d.id}/reverse-discharge`, {}, { preserveScroll: true }); };
 const undoSignoff = async (s) => { if (await ask('Reverse sign-off', `Reverse the sign-off for ${s.name} (MRN ${s.mrn}) — the consultation returns to ongoing (no daily follow-up commitment), and the recorded response (disposition, follow-up flag, note) is discarded.`, 'danger')) router.post(`/consultations/${s.id}/reverse-signoff`, {}, { preserveScroll: true }); };
+
+// review fix-up: the tip must describe whichever list is on screen, not always "Discharges"
+// (a user on the Sign-offs tab was seeing the discharge explanation) — tracks `tab` instead of
+// a single fixed InfoTip.
+const tipLabel = computed(() => tab.value === 'discharges' ? 'What Discharges counts' : 'What Sign-offs counts');
+const tipText = computed(() => tab.value === 'discharges'
+    ? "Real discharges only — left care entirely, ward or ICU. A ward↔ICU move or an internal handover isn't counted here, but Statistics/Dashboard count some of those closes as discharges too, so totals can differ."
+    : 'A consultation the consulted service closed out (signed off) in this window — not a patient discharge; the patient may still be admitted or under another team\'s care.');
 
 // discharges grouped per consultant like the legacy "Dr X Patient List" sections (J1-8);
 // rows arrive ordered by discharge date — groups keep first-appearance order
@@ -42,6 +51,7 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
                 <button @click="tab = 'discharges'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="tab === 'discharges' ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">Discharges ({{ discharges.length }})</button>
                 <button @click="tab = 'signoffs'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="tab === 'signoffs' ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">Sign-offs ({{ signoffs.length }})</button>
             </div>
+            <InfoTip :label="tipLabel" :text="tipText" />
             <span class="text-sm text-ink-400">yesterday + today (since {{ since }}) · undo is admin-only, same-day only</span>
         </div>
 

@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import ChartCanvas from '@/Components/ChartCanvas.vue';
+import InfoTip from '@/Components/InfoTip.vue';
 import { useChartTheme } from '@/composables/useChartTheme';
 import { useReducedMotion, chartAnimations } from '@/composables/useReducedMotion';
 import { areaGradient } from '@/lib/chartjs';
@@ -33,7 +34,7 @@ const donutDatalabel = computed(() => ({
     },
 }));
 
-const props = defineProps({ range: Object, kpis: Object, monthly: Object, los: Object, topDx: Array, reasons: Object, perConsultant: Array, sourceMix: Array, kpiGrid: Array, interval: String, truncated: Boolean, destinations: Object, destByConsultant: Array, readmitWindow: Number, consultants: Array, physician: Object, compareData: Object });
+const props = defineProps({ range: Object, kpis: Object, monthly: Object, los: Object, topDx: Array, reasons: Object, perConsultant: Array, sourceMix: Array, kpiGrid: Array, interval: String, truncated: Boolean, destinations: Object, destByConsultant: Array, readmitWindow: Number, consultants: Array, physician: Object, compareData: Object, rangeSwapped: Boolean });
 
 const from = ref(props.range.from);
 const to = ref(props.range.to);
@@ -79,14 +80,18 @@ watch(() => props.destByConsultant, (list) => {
 // not colour.
 
 const kpiCards = computed(() => [
-    { label: 'Admissions', value: props.kpis.admissions, tone: 'brand' },
+    { label: 'Admissions', value: props.kpis.admissions, tone: 'brand',
+        info: 'Ward (non-ICU) admissions in this range only — ICU admissions are the separate card.' },
     { label: 'Discharges', value: props.kpis.discharges, tone: 'info' },
     { label: 'ICU admissions', value: props.kpis.icuAdmissions, tone: 'danger' },
-    { label: 'Mortality', value: props.kpis.deaths, sub: props.kpis.mortalityRate + '%', tone: 'ink' },
-    { label: 'Avg LOS', value: props.kpis.avgLos, sub: 'days', tone: 'accent' },
+    { label: 'Mortality', value: props.kpis.deaths, sub: props.kpis.mortalityRate + '%', tone: 'ink',
+        info: 'Deaths (ward and ICU) as a % of ward discharges in this range — deaths aren’t split by location, but discharges are ward-only.' },
+    { label: 'Avg LOS', value: props.kpis.avgLos, sub: 'days', tone: 'accent',
+        info: 'Average days from admission to discharge, ward discharges only, in this range.' },
     { label: 'Consultations', value: props.kpis.consultations, tone: 'brand' },
     { label: 'Sign-offs', value: props.kpis.signoffs, tone: 'info' },
-    { label: `≤${props.readmitWindow ?? 3}d readmits`, value: props.kpis.readmissions, tone: 'danger' },
+    { label: `≤${props.readmitWindow ?? 3}d readmits`, value: props.kpis.readmissions, tone: 'danger',
+        info: 'A new admission for the same patient within the readmission window of a real discharge — transfers don’t count.' },
 ]);
 const toneClass = (t) => ({
     brand: 'text-brand-700', info: 'text-info-500', danger: 'text-on-danger', accent: 'text-on-accent', ink: 'text-ink-700',
@@ -230,6 +235,18 @@ const topDxData = computed(() => ({ labels: props.topDx.map((d) => d.label), ...
 const topDxOptions = computed(() => barOptions({ gridColor: gridColor.value, axisColor: axisColor.value, animation: anim.value, horizontal: true }));
 const reasonsData = computed(() => ({ labels: props.reasons.labels, ...barData('Consultations', props.reasons.data, series.value.accent) }));
 const reasonsOptions = computed(() => barOptions({ gridColor: gridColor.value, axisColor: axisColor.value, animation: anim.value, horizontal: true }));
+
+// UX-review #39: every chart used to share one identical, generic aria-label ("Statistics chart
+// (data also shown in the period table below)") — a screen-reader user could not tell one chart
+// from another. Each now gets its own accessible name/description of what it actually shows.
+const intervalWord = computed(() => (interval.value === 'day' ? 'Daily' : interval.value === 'quarter' ? 'Quarterly' : 'Monthly'));
+const mainChartLabel = computed(() => `${intervalWord.value} admissions, discharges, mortality, consultations and sign-offs trend, ${props.range.from} to ${props.range.to}`);
+const losChartLabel = 'Length of stay distribution — discharges grouped into LOS-day bands';
+const sourceMixLabel = 'Admission source breakdown for this range';
+const destChartLabel = computed(() => `Discharge destinations donut — ${destChoice.value || 'all consultants'}`);
+const topDxLabel = 'Top diagnoses by admission count in this range';
+const reasonsLabel = 'Consultation indications by reason in this range';
+const consChartLabel = computed(() => `By consultant — ${consModes.value.find((m) => m[0] === consMode.value)?.[1] ?? ''}`);
 </script>
 
 <template>
@@ -245,7 +262,7 @@ const reasonsOptions = computed(() => barOptions({ gridColor: gridColor.value, a
                 <input v-model="from" type="date" class="rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" />
             </div>
             <div>
-                <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-400">To</label>
+                <label class="mb-1 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink-400">To<InfoTip label="From/To dates" text="If the start date is after the end date, they're swapped automatically." /></label>
                 <input v-model="to" type="date" class="rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" />
             </div>
             <div class="flex items-end gap-1">
@@ -270,6 +287,14 @@ const reasonsOptions = computed(() => barOptions({ gridColor: gridColor.value, a
             <span class="ml-auto text-sm text-ink-400">{{ range.from }} → {{ range.to }}</span>
         </div>
 
+        <!-- UX-review #41: the server silently swaps a From-after-To range before running any query
+             (the figures were always right) — this says so, instead of leaving the viewer to notice
+             the top-right range label disagrees with what they typed. -->
+        <div v-if="rangeSwapped" class="mb-5 flex items-start gap-2 rounded-xl bg-tint-warning px-4 py-3 text-sm font-medium text-on-warning ring-1 ring-warning-500/20" role="alert">
+            <svg class="mt-0.5 h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
+            <span>Your From/To dates were entered in reverse order, so they were swapped automatically — showing {{ range.from }} → {{ range.to }}.</span>
+        </div>
+
         <!-- day-interval cap notice -->
         <div v-if="truncated" class="mb-5 flex items-start gap-2 rounded-xl bg-tint-warning px-4 py-3 text-sm font-medium text-on-warning ring-1 ring-warning-500/20" role="alert">
             <svg class="mt-0.5 h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
@@ -279,7 +304,7 @@ const reasonsOptions = computed(() => barOptions({ gridColor: gridColor.value, a
         <!-- KPIs -->
         <div class="mb-2 grid grid-cols-2 gap-4 sm:grid-cols-4 xl:grid-cols-8">
             <div v-for="k in kpiCards" :key="k.label" class="rounded-2xl bg-card p-4 shadow-card ring-1 ring-line">
-                <div class="text-xs font-semibold uppercase tracking-wide text-ink-400">{{ k.label }}</div>
+                <div class="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink-400">{{ k.label }}<InfoTip v-if="k.info" :label="k.label" :text="k.info" /></div>
                 <div class="mt-1 flex items-baseline gap-1">
                     <span class="font-display nums text-2xl font-bold" :class="toneClass(k.tone)">{{ k.value }}</span>
                     <span v-if="k.sub" class="text-xs text-ink-400">{{ k.sub }}</span>
@@ -299,16 +324,16 @@ const reasonsOptions = computed(() => barOptions({ gridColor: gridColor.value, a
         <div class="grid gap-5 lg:grid-cols-2">
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line lg:col-span-2">
                 <h3 class="mb-3 font-bold text-ink-800">{{ interval === 'day' ? 'Daily' : interval === 'quarter' ? 'Quarterly' : 'Monthly' }} admissions, discharges, mortality & consultations <span v-if="interval === 'day'" class="text-xs font-normal text-on-warning">(Fri/Sat ticks in amber)</span></h3>
-                <ChartCanvas role="img" aria-label="Statistics chart (data also shown in the period table below)" type="line" :height="300" :data="monthlyData" :options="monthlyOptions" />
+                <ChartCanvas role="img" :aria-label="mainChartLabel" type="line" :height="300" :data="monthlyData" :options="monthlyOptions" />
             </div>
 
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h3 class="mb-3 font-bold text-ink-800">Length of stay distribution</h3>
-                <ChartCanvas role="img" aria-label="Statistics chart (data also shown in the period table below)" type="bar" :height="280" :data="losData" :options="losOptions" />
+                <ChartCanvas role="img" :aria-label="losChartLabel" type="bar" :height="280" :data="losData" :options="losOptions" />
             </div>
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h3 class="mb-3 font-bold text-ink-800">Admission source</h3>
-                <ChartCanvas role="img" aria-label="Statistics chart (data also shown in the period table below)" type="doughnut" :height="280" :data="sourceMixData" :options="sourceMixOptions" />
+                <ChartCanvas role="img" :aria-label="sourceMixLabel" type="doughnut" :height="280" :data="sourceMixData" :options="sourceMixOptions" />
             </div>
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <div class="mb-3 flex items-center justify-between gap-2">
@@ -318,17 +343,17 @@ const reasonsOptions = computed(() => barOptions({ gridColor: gridColor.value, a
                         <option v-for="c in destByConsultant" :key="c.name" :value="c.name">{{ c.name }}</option>
                     </select>
                 </div>
-                <ChartCanvas role="img" aria-label="Statistics chart (data also shown in the period table below)" v-if="destDonut.data.some((v) => v > 0)" type="doughnut" :height="280" :data="destDonutData" :options="destDonutOptions" />
+                <ChartCanvas role="img" :aria-label="destChartLabel" v-if="destDonut.data.some((v) => v > 0)" type="doughnut" :height="280" :data="destDonutData" :options="destDonutOptions" />
                 <p v-else class="py-10 text-center text-sm text-ink-300">{{ destChoice ? 'No discharges for this consultant in range.' : 'No discharges in range.' }}</p>
             </div>
 
             <div class="print-break-before rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h3 class="mb-3 font-bold text-ink-800">Top diagnoses</h3>
-                <ChartCanvas role="img" aria-label="Statistics chart (data also shown in the period table below)" type="bar" :height="320" :data="topDxData" :options="topDxOptions" />
+                <ChartCanvas role="img" :aria-label="topDxLabel" type="bar" :height="320" :data="topDxData" :options="topDxOptions" />
             </div>
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <h3 class="mb-3 font-bold text-ink-800">Consultation indications</h3>
-                <ChartCanvas role="img" aria-label="Statistics chart (data also shown in the period table below)" type="bar" :height="320" :data="reasonsData" :options="reasonsOptions" />
+                <ChartCanvas role="img" :aria-label="reasonsLabel" type="bar" :height="320" :data="reasonsData" :options="reasonsOptions" />
             </div>
 
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line lg:col-span-2">
@@ -338,7 +363,7 @@ const reasonsOptions = computed(() => barOptions({ gridColor: gridColor.value, a
                         <button v-for="m in consModes" :key="m[0]" @click="consMode = m[0]" class="rounded-lg px-3 py-1.5 text-xs font-semibold transition" :class="consMode === m[0] ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">{{ m[1] }}</button>
                     </div>
                 </div>
-                <ChartCanvas role="img" aria-label="Statistics chart (data also shown in the period table below)" type="bar" :height="consHeight" :data="consData" :options="consOptions" />
+                <ChartCanvas role="img" :aria-label="consChartLabel" type="bar" :height="consHeight" :data="consData" :options="consOptions" />
             </div>
 
             <!-- per-physician drill-down -->
@@ -364,14 +389,14 @@ const reasonsOptions = computed(() => barOptions({ gridColor: gridColor.value, a
                     </a>
                     <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                         <div>
-                            <h4 class="mb-2 text-sm font-semibold text-ink-600">Discharge destinations</h4>
+                            <h4 class="mb-2 flex items-center gap-1 text-sm font-semibold text-ink-600">Discharge destinations<InfoTip label="Discharge destinations" text="'Out-dept transfer' also covers an internal ward→ICU move, not only a transfer out of Internal Medicine." /></h4>
                             <ChartCanvas v-if="physHasDischarges" role="img" :aria-label="`Discharge destinations for ${physician.name}`" type="doughnut" :height="260" :data="physDonutData" :options="donutOpts" />
                             <p v-else class="py-10 text-center text-sm text-ink-300">No closed episodes in range.</p>
                         </div>
                         <!-- legacy charts.php 'Discharged to' donut: Home / Other Facility / LAMA /
                              Absconded / Mortuary / Transfer over non-ICU closed episodes (J2-4) -->
                         <div>
-                            <h4 class="mb-2 text-sm font-semibold text-ink-600">Discharged to</h4>
+                            <h4 class="mb-2 flex items-center gap-1 text-sm font-semibold text-ink-600">Discharged to<InfoTip label="Discharged to" text="'Transfer' also covers an internal ward→ICU move, not only a transfer out of Internal Medicine — Home/Other Facility/LAMA/Absconded/Mortuary are the only named slices." /></h4>
                             <ChartCanvas v-if="physHasDest" role="img" :aria-label="`Discharged-to destinations for ${physician.name}`" type="doughnut" :height="260" :data="physDestData" :options="donutOpts" />
                             <p v-else class="py-10 text-center text-sm text-ink-300">No non-ICU closed episodes in range.</p>
                         </div>
@@ -400,7 +425,7 @@ const reasonsOptions = computed(() => barOptions({ gridColor: gridColor.value, a
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
-                            <th scope="col" class="px-3 py-2">Period</th><th scope="col" class="px-3 py-2 text-right">Adm</th><th scope="col" class="px-3 py-2 text-right">Disch</th><th scope="col" class="px-3 py-2 text-right">ICU adm</th><th scope="col" class="px-3 py-2 text-right">→ICU</th><th scope="col" class="px-3 py-2 text-right">ICU mort</th><th scope="col" class="px-3 py-2 text-right">Ward mort</th><th scope="col" class="px-3 py-2 text-right">Readm</th><th scope="col" class="px-3 py-2 text-right">Consults</th><th scope="col" class="px-3 py-2 text-right">Sign-offs</th><th scope="col" class="px-3 py-2 text-right">Avg LOS</th>
+                            <th scope="col" class="px-3 py-2">Period</th><th scope="col" class="px-3 py-2 text-right">Adm</th><th scope="col" class="px-3 py-2 text-right">Disch</th><th scope="col" class="px-3 py-2 text-right"><span class="inline-flex items-center gap-1">ICU adm<InfoTip label="ICU adm" text="Admitted directly to ICU." /></span></th><th scope="col" class="px-3 py-2 text-right"><span class="inline-flex items-center gap-1">→ICU<InfoTip label="→ICU" text="A ward discharge whose destination was ICU — a transfer out, not admitted-to-ICU." /></span></th><th scope="col" class="px-3 py-2 text-right">ICU mort</th><th scope="col" class="px-3 py-2 text-right">Ward mort</th><th scope="col" class="px-3 py-2 text-right">Readm</th><th scope="col" class="px-3 py-2 text-right">Consults</th><th scope="col" class="px-3 py-2 text-right">Sign-offs</th><th scope="col" class="px-3 py-2 text-right">Avg LOS</th>
                         </tr></thead>
                         <tbody class="divide-y divide-line">
                             <tr v-for="r in kpiGrid" :key="r.label" class="hover:bg-brand-50/40">

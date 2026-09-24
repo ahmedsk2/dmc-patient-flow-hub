@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { Link, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import CheckpointChips from '@/Components/Patients/CheckpointChips.vue';
+import InfoTip from '@/Components/InfoTip.vue';
 import { useConfirm } from '@/composables/useConfirm';
 
 const { ask } = useConfirm();
@@ -26,11 +27,18 @@ const fmt = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { day: '2-di
 const open = ref(null);
 const toggle = (id) => (open.value = open.value === id ? null : id);
 
-const sign = (s) => router.post(`/handovers/${s.id}/sign`, {}, { preserveScroll: true });
+// #12 (2026-09-24 role/UX review): a blind Sign used to succeed with no confirmation, unlike
+// "Sign all" beside it. Both now confirm through the same themed dialog and both send an explicit
+// `acknowledged` flag — HandoverController::sign()/signMany() refuse a request missing it, so the
+// acknowledgement is enforced server-side too, not just by this dialog.
+const sign = async (s) => {
+    if (await ask('Sign handover', `Signing confirms you have read ${s.patient}'s handover above and accept their care. Open the row first if you haven't reviewed it yet.`, 'neutral'))
+        router.post(`/handovers/${s.id}/sign`, { acknowledged: true }, { preserveScroll: true });
+};
 const signAll = async () => {
     if (!props.awaiting.length) return;
     if (await ask('Sign all handovers', `Sign all ${props.awaiting.length} pending handover(s). Make sure you have reviewed each one.`, 'neutral'))
-        router.post('/handovers/sign-many', { ids: props.awaiting.map((s) => s.id) }, { preserveScroll: true });
+        router.post('/handovers/sign-many', { ids: props.awaiting.map((s) => s.id), acknowledged: true }, { preserveScroll: true });
 };
 
 // outgoing tab — inline editor per row; the receiver sees the latest text at sign time
@@ -67,7 +75,7 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
             <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
-                    <th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Bed</th><th scope="col" class="px-3 py-3">From</th><th scope="col" class="px-3 py-3">Required</th><th scope="col" class="px-5 py-3 text-right">Sign</th>
+                    <th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">Bed</th><th scope="col" class="px-3 py-3">From</th><th scope="col" class="px-3 py-3">Required</th><th scope="col" class="px-5 py-3 text-right"><span class="inline-flex items-center gap-1 justify-end">Sign<InfoTip label="Sign" text="Signing confirms you've read this patient's handover note and accept their care." /></span></th>
                 </tr></thead>
                 <tbody class="divide-y divide-line">
                     <template v-for="s in awaiting" :key="s.id">
@@ -109,7 +117,7 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
             <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
-                    <th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">To</th><th scope="col" class="px-3 py-3">Handed over</th><th scope="col" class="px-3 py-3">Status</th><th scope="col" class="px-5 py-3">Handover text</th>
+                    <th scope="col" class="px-5 py-3">Patient</th><th scope="col" class="px-3 py-3">To</th><th scope="col" class="px-3 py-3">Handed over</th><th scope="col" class="px-3 py-3"><span class="inline-flex items-center gap-1">Status<InfoTip label="Status" text="Awaiting signature: the receiving consultant hasn't yet confirmed they read this handover." /></span></th><th scope="col" class="px-5 py-3">Handover text</th>
                 </tr></thead>
                 <tbody class="divide-y divide-line">
                     <tr v-for="s in outgoing" :key="s.id" class="align-top hover:bg-brand-50/40">
@@ -157,7 +165,12 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
                         <td class="px-3 py-3 text-ink-600">Dr. {{ s.consultant }}</td>
                         <td class="nums px-3 py-3 text-ink-500" :title="fmt(s.last_updated)">{{ relTime(s.last_updated) }}</td>
                         <td class="px-5 py-3 text-right">
-                            <Link :href="`/patients?highlight=${s.admission_id}`" class="rounded-lg bg-brand-solid px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-solid-hover">Write</Link>
+                            <!-- #32 (2026-09-24 review): hidden for a viewer who could never actually
+                                 write this handover (mirrors the server-side rule in
+                                 HandoverController::save() / index()'s `can_write`, computed from
+                                 User::canManageAdmission — Observer is always false). -->
+                            <Link v-if="s.can_write" :href="`/patients?highlight=${s.admission_id}`" class="rounded-lg bg-brand-solid px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-solid-hover">Write</Link>
+                            <span v-else class="text-xs text-ink-400">—</span>
                         </td>
                     </tr>
                     <tr v-if="!needsHandover.length"><td colspan="5" class="px-5 py-10 text-center text-ink-400">No patients are missing a handover today.</td></tr>

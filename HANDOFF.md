@@ -289,6 +289,17 @@
    Then, also on instruction, the owner's daily workstation sync gained a DMC part: it keeps a local
    copy of the **encrypted** DMC backups (new objects only, 90 days by file date, refuses while the
    backup key is on that machine) — seeded with 510 objects, all verified against the bucket.
+   **2026-09-24, role/UX review (owner: "run the website using all accounts … functions, statistical
+   reflections, UI and UX … suggest ! marks", then "fix all and add the ! marks, remove the login
+   stats"):** 10 testers used a local copy as every role (report:
+   `laravel/docs/ROLE-UX-REVIEW-2026-09-24.md`); permissions held everywhere and every statistic
+   reconciled. The fixes branch adds the "!" info-mark component (`Components/InfoTip.vue`, 64 marks
+   across the app), fixes the confirmed problems (readmission identity overwrite now prefilled +
+   confirmed, duplicate specialty/indication names refused + rename/delete, Short < Long LOS enforced,
+   the consultation "To service" rule shown up front, Long-term kept on transfer, handover Sign needs an
+   explicit acknowledgement, themed confirms for merge/import, …) and removes the unconfirmed
+   "22 hospitals / 3,400 beds" figures from the sign-in page. Gates green locally (PHPUnit 1125 + 92 pdf,
+   Vitest 940, lint, build reproducible, allow-list 705, contrast). **Not deployed** until the owner says.
    **Still open and all owner / infrastructure decisions, not code:** enable deploy-on-green
    (declined so far — "I don't want to autodeploy"), pick a log sink and set `LOG_STACK`
    (OBS-01/03/04/05), instance principal (CFG-10), SLOs and an

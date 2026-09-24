@@ -330,6 +330,10 @@ class PatientActionController extends Controller
             'mark_new' => ['nullable', 'boolean'],
             'admission_ids' => ['nullable', 'array'],
             'admission_ids.*' => ['integer'],
+        ], [
+            // #40 (role/UX review 2026-09-24): name the real rule instead of the generic "is invalid".
+            'to_consultant_id.exists' => 'Only an active consultant can receive these patients — the selected user is not eligible.',
+            'to_consultant_id.different' => 'Choose a different consultant to receive these patients.',
         ]);
         // mark_new=false (legacy "New Patient?" unchecked) = quiet administrative move:
         // the new-assignment fields are left UNTOUCHED, preserving any existing assigned_at
@@ -416,6 +420,11 @@ class PatientActionController extends Controller
             'consultant_id' => ['required', self::activeConsultantRule()],
             'mark_new' => ['nullable', 'boolean'],
             'acknowledged' => ['sometimes', 'boolean'],
+        ], [
+            // #40 (role/UX review 2026-09-24): the bare Laravel default ("The selected consultant id
+            // is invalid") never named the real rule — e.g. picking a Resident silently failed with no
+            // clue why. Name it.
+            'consultant_id.exists' => 'Only an active consultant can be assigned this patient — the selected user is not eligible.',
         ]);
         // mark_new=false (legacy "New Patient?" unchecked) = quiet administrative assignment:
         // the new-assignment fields are left UNTOUCHED, preserving any existing assigned_at
@@ -734,6 +743,9 @@ class PatientActionController extends Controller
             // the receiving consultant must be an ACTIVE consultant (N1-7)
             'consultant_id' => ['required', self::activeConsultantRule()],
             'acknowledged' => ['sometimes', 'boolean'],
+        ], [
+            // #40 (role/UX review 2026-09-24): name the real rule instead of the generic "is invalid".
+            'consultant_id.exists' => 'Only an active consultant can receive this patient — the selected user is not eligible.',
         ]);
         $specialty = Specialty::findOrFail($data['specialty_id']);
 
@@ -772,6 +784,10 @@ class PatientActionController extends Controller
                 'is_new_assignment' => true,
                 'assigned_on' => now()->toDateString(),
                 'assigned_at' => now(),
+                // #6 (role/UX review 2026-09-24): Long-term is a manually-set flag, not a computed
+                // one — a transfer is a continuation of the same stay, not a reason to lose it. Every
+                // Admission::create() below that reopens an episode carries it the same way.
+                'is_longterm' => $admission->is_longterm,
             ]);
 
             // carry the diagnoses forward
@@ -816,7 +832,16 @@ class PatientActionController extends Controller
             );
         }
 
-        return back()->with('flash', ['type' => 'success', 'message' => "Patient transferred to {$specialty->name}."]);
+        // #13 (role/UX review 2026-09-24): the old message ("Patient transferred to {specialty}")
+        // read the same whether the receiving consultant was a different team or the SAME team's
+        // colleague — a plain same-team hand-off has no dedicated action, so Transfer is used for it
+        // too (see the decisions log). Name who actually received the patient and say plainly what
+        // happened to the episode, so the message is accurate either way.
+        $receivingName = $this->consultantName((int) $data['consultant_id']);
+        $who = $receivingName ? "Dr. {$receivingName} ({$specialty->name})" : $specialty->name;
+
+        return back()->with('flash', ['type' => 'success',
+            'message' => "Transferred to {$who} — this episode was closed and a new one opened under the receiving consultant."]);
     }
 
     /**
@@ -862,6 +887,7 @@ class PatientActionController extends Controller
                 'is_new_assignment' => false,
                 'assigned_on' => now()->toDateString(),
                 'assigned_at' => null,
+                'is_longterm' => $admission->is_longterm,   // #6 — carried, not reset, on every reopen
             ]);
 
             // carry the diagnoses forward
@@ -913,6 +939,7 @@ class PatientActionController extends Controller
                 'current_location' => $data['target'],
                 'consultant_id' => $admission->consultant_id,
                 'admitted_by' => Auth::id(),
+                'is_longterm' => $admission->is_longterm,   // #6 — carried, not reset, on every reopen
             ]);
 
             // carry the diagnoses forward
@@ -970,6 +997,7 @@ class PatientActionController extends Controller
                 'assigned_on' => null,
                 'assigned_at' => null,
                 'admitted_by' => Auth::id(),
+                'is_longterm' => $admission->is_longterm,   // #6 — carried, not reset, on every reopen
             ]);
 
             // carry the diagnoses forward

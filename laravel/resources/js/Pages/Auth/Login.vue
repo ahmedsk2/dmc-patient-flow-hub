@@ -31,11 +31,6 @@ const flash = computed(() => usePage().props.flash);
             <div>
                 <h1 class="text-4xl font-extrabold leading-tight">Care, coordinated.</h1>
                 <p class="mt-4 max-w-md text-navy-200">Admissions, consultations, and live ward intelligence — one calm, modern command center for the Internal Medicine unit.</p>
-                <div class="mt-8 flex gap-6 text-sm text-navy-300">
-                    <div><span class="block text-2xl font-bold text-brand-300">22</span>hospitals</div>
-                    <div><span class="block text-2xl font-bold text-brand-300">3,400</span>beds</div>
-                    <div><span class="block text-2xl font-bold text-accent-400">24/7</span>live</div>
-                </div>
                 <TrustBadges class="mt-10" />
             </div>
             <div class="text-sm text-navy-300">

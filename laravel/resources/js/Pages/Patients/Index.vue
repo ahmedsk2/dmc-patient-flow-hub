@@ -10,6 +10,7 @@ import ActionModal from '@/Components/Patients/ActionModal.vue';
 import ReassignModal from '@/Components/Patients/ReassignModal.vue';
 import HandoverModal from '@/Components/Patients/HandoverModal.vue';
 import FlowAlert from '@/Components/FlowAlert.vue';
+import InfoTip from '@/Components/InfoTip.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { usePatientEdit } from '@/composables/usePatientEdit';
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
@@ -22,7 +23,7 @@ const { ask } = useConfirm();
 // reloads/flashes on each child's `saved` emit. Each child owns its own useForm(s) + a11y via
 // BaseModal. The Modify modal still uses the canonical PatientForm + usePatientEdit here.
 
-const props = defineProps({ groups: Array, filters: Object, stats: Object, consultants: Array, specialties: Array, externalServices: Array, readmitWindow: Number, countries: Array, fallback: { type: Object, default: null }, highlight: { type: Number, default: null }, needsHandoverCount: { type: Number, default: 0 }, truncated: { type: Object, default: null } });
+const props = defineProps({ groups: Array, filters: Object, stats: Object, consultants: Array, specialties: Array, externalServices: Array, readmitWindow: Number, countries: Array, fallback: { type: Object, default: null }, highlight: { type: Number, default: null }, needsHandoverCount: { type: Number, default: 0 }, needsHandoverOwnScope: { type: Boolean, default: false }, truncated: { type: Object, default: null } });
 
 const page = usePage();
 const me = computed(() => page.props.auth.user);
@@ -246,10 +247,15 @@ const closeModify = () => guardModify(() => { editing.value = null; });
 <template>
     <AppLayout title="Active Patients">
         <!-- HC-T9: pinned "needs handover" banner — owner decision: NOT dismissible, clears only when
-             the personal count reaches zero. Always the viewer's OWN count (even for admins), so it
-             stays a personal nudge rather than a unit-wide alarm. -->
+             the count reaches zero. The count itself is own-only for a plain consultant and
+             unit-wide otherwise (server: seesOwnPatientsOnly() — same predicate as the board's
+             "Needs handover" chip). #34 (role/UX review 2026-09-24): the wording now matches — a
+             role that owns zero patients (Observer, a no-capability Resident/Registrar, an Admin)
+             was being told "N of YOUR patients" for what was really a unit-wide count. -->
         <FlowAlert v-if="needsHandoverCount > 0" tone="warning"
-                   :title="`${needsHandoverCount} of your patients have no handover today`" class="mb-4">
+                   :title="needsHandoverOwnScope
+                       ? `${needsHandoverCount} of your patients have no handover today`
+                       : `${needsHandoverCount} patient(s) on the unit have no handover today`" class="mb-4">
             <Link href="/patients?needs_handover=1" class="font-semibold underline">Show them</Link>
         </FlowAlert>
 
@@ -274,7 +280,11 @@ const closeModify = () => guardModify(() => { editing.value = null; });
         <!-- toolbar -->
         <div class="mb-4 flex flex-wrap items-center gap-2">
             <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Census <span class="nums ms-1 text-brand-700">{{ stats.total }}</span></span>
-            <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Ward (non-ICU) <span class="nums ms-1 text-brand-700">{{ stats.ward }}</span></span>
+            <!-- #21 (role/UX review 2026-09-24): this figure excludes patients still awaiting
+                 assignment (PatientsController::index — stats.ward is whereNotNull('consultant_id')),
+                 while the Dashboard's ward figure counts every active ward patient regardless of
+                 assignment — the two visibly disagree with no explanation on either page. -->
+            <span class="inline-flex items-center gap-1 rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Ward (non-ICU) <InfoTip label="Ward (non-ICU) count" text="Assigned ward patients only — excludes those still awaiting assignment. The Dashboard's ward figure includes them, so the two can differ." /><span class="nums ms-1 text-brand-700">{{ stats.ward }}</span></span>
             <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">ICU <span class="nums ms-1 text-on-danger">{{ stats.icu }}</span></span>
             <!-- observers don't get the queue link — the page behind it is clinical-role only (J2-12) -->
             <!-- W0-T3e. Was accent-300 at /30 behind accent-600 text, hovering to /50 — 2.99:1 (light)
@@ -303,7 +313,15 @@ const closeModify = () => guardModify(() => { editing.value = null; });
             </div>
             <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line">
                 <button v-for="l in ['Ward','ICU','ER']" :key="l" @click="setLocation(l)" class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="location === l ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">{{ l }}</button>
-                <button v-for="v in [['longterm','Long-term'],['tb','TB'],['boarding','Boarding']]" :key="v[0]" @click="setView(v[0])" class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="view === v[0] ? 'bg-accent-500 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ v[1] }}</button>
+                <!-- #26/#36 (role/UX review 2026-09-24): these three chip labels had no on-page
+                     explanation anywhere on the board — titles added, "Boarding" matching the
+                     Dashboard tile's own caption verbatim ("medically cleared · bed still occupied")
+                     so the same concept reads the same on both pages. -->
+                <button v-for="v in [
+                        ['longterm','Long-term','Manually flagged by staff — not calculated from length of stay.'],
+                        ['tb','TB','Tuberculosis — the admission has a diagnosis on the TB reference list.'],
+                        ['boarding','Boarding','Medically cleared · bed still occupied.'],
+                    ]" :key="v[0]" @click="setView(v[0])" :title="v[2]" class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="view === v[0] ? 'bg-accent-500 text-white' : 'text-ink-500 hover:bg-ink-50'">{{ v[1] }}</button>
                 <!-- HC-T9: "Needs handover" board chip — round-trips filters.needs_handover -->
                 <button @click="setNeedsHandover" class="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition" :class="needsHandover ? 'bg-tint-warning text-on-warning' : 'text-ink-500 hover:bg-ink-50'">Needs handover ({{ needsHandoverCount }})</button>
             </div>
@@ -333,7 +351,10 @@ const closeModify = () => guardModify(() => { editing.value = null; });
             <a href="/active-list" target="_blank" title="Print board" aria-label="Print board (opens in a new tab)" class="grid h-9 w-9 place-items-center rounded-xl bg-card text-ink-500 shadow-sm ring-1 ring-line transition hover:bg-ink-50">
                 <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.4 42.4 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.32 0H6.34m11.32 0 .55-6.171M6.34 18l-.55-6.171m0 0a42.4 42.4 0 0 1 12.42 0M5.79 11.829V6.75A2.25 2.25 0 0 1 8.04 4.5h7.92a2.25 2.25 0 0 1 2.25 2.25v5.079" /></svg>
             </a>
-            <button v-if="canAssign" @click="shuffle" title="Auto-assign unassigned" aria-label="Auto-assign unassigned" class="grid h-9 w-9 place-items-center rounded-xl bg-card text-ink-500 shadow-sm ring-1 ring-line transition hover:bg-ink-50">
+            <!-- Section 5 (role/UX review 2026-09-24): same clarification as the New Admissions
+                 queue's shuffle button — only On-Service consultants are eligible, which explains
+                 uneven results with no other explanation on the page. -->
+            <button v-if="canAssign" @click="shuffle" title="Auto-assign unassigned — only to consultants currently marked On-Service" aria-label="Auto-assign unassigned — only to consultants currently marked On-Service" class="grid h-9 w-9 place-items-center rounded-xl bg-card text-ink-500 shadow-sm ring-1 ring-line transition hover:bg-ink-50">
                 <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" /></svg>
             </button>
             <button v-if="canReassign && !isObserver" @click="openReassign()" title="Bulk reassign" aria-label="Bulk reassign" class="grid h-9 w-9 place-items-center rounded-xl bg-card text-ink-500 shadow-sm ring-1 ring-line transition hover:bg-ink-50">
@@ -365,11 +386,19 @@ const closeModify = () => guardModify(() => { editing.value = null; });
         <template v-else-if="viewMode === 'grouped'">
         <!-- summary: patients per consultant (data-tour anchor for the onboarding tour, Item 10) -->
         <div data-tour="board" class="mb-5 overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
+          <!-- #35 (role/UX review 2026-09-24): at phone width this table is wider than the viewport
+               and the native scrollbar is too faint to notice — a right-edge fade + chevron signals
+               "more columns this way". Purely decorative (aria-hidden); the table stays reachable by
+               touch-scroll or keyboard either way via the wrapping overflow-x-auto div. -->
+          <div class="relative">
           <div class="overflow-x-auto">
             <table class="min-w-[540px] w-full text-sm">
                 <thead>
                     <tr class="border-b border-line text-start text-xs font-semibold uppercase tracking-wide text-ink-400">
-                        <th scope="col" class="px-5 py-2.5">Consultant</th><th scope="col" class="px-3 py-2.5 text-center">Old</th><th scope="col" class="px-3 py-2.5 text-center">New</th><th scope="col" class="px-3 py-2.5 text-center">Active</th>
+                        <th scope="col" class="px-5 py-2.5">Consultant</th>
+                        <th scope="col" class="px-3 py-2.5 text-center"><span class="inline-flex items-center gap-0.5">Old<InfoTip label="Old column" text="Active patients not currently flagged New — the opposite of New, not an age/record-age count." /></span></th>
+                        <th scope="col" class="px-3 py-2.5 text-center"><span class="inline-flex items-center gap-0.5">New<InfoTip label="New column" text="Set when assigned, handed over, or shuffled; cleared on discharge or reassignment — not a 24-hour timer." /></span></th>
+                        <th scope="col" class="px-3 py-2.5 text-center">Active</th>
                         <th scope="col" class="px-3 py-2.5 text-center">Ward</th><th scope="col" class="px-3 py-2.5 text-center">ICU</th><th scope="col" class="px-3 py-2.5 text-center">TB</th>
                     </tr>
                 </thead>
@@ -390,6 +419,11 @@ const closeModify = () => guardModify(() => { editing.value = null; });
                     </template>
                 </tbody>
             </table>
+          </div>
+          <div data-testid="scroll-hint" class="pointer-events-none absolute inset-y-0 right-0 block w-10 bg-gradient-to-l from-card to-transparent sm:hidden" aria-hidden="true"></div>
+          <div class="pointer-events-none absolute inset-y-0 right-1 flex items-center sm:hidden" aria-hidden="true">
+              <svg class="h-4 w-4 text-ink-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+          </div>
           </div>
         </div>
 
