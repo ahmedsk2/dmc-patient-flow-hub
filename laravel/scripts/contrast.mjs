@@ -345,6 +345,20 @@ const DELTAS = [
     ['HOVER warning-600 vs warning-500', '#d58506', '#e69209', MIN_DE00_HOVER],
     ['HOVER success-700 vs success-600', '#166534', '#15803d', MIN_DE00_HOVER],
     ['HOVER danger-700 vs danger-600', '#9f2724', '#c1302d', MIN_DE00_HOVER],
+    // CHART: the 7th series colour (violet, 2026-09-24) must read as a DIFFERENT colour from every
+    // other chart series in both themes — a 7-slice donut shows all seven at once.
+    ['CHART violet vs primary', '#7c5cbf', '#009ca6', MIN_DE00_TEXT],
+    ['CHART violet vs accent', '#7c5cbf', '#d9a23c', MIN_DE00_TEXT],
+    ['CHART violet vs deep', '#7c5cbf', '#00565e', MIN_DE00_TEXT],
+    ['CHART violet vs info', '#7c5cbf', '#2f7fe0', MIN_DE00_TEXT],
+    ['CHART violet vs muted', '#7c5cbf', '#5b6a6e', MIN_DE00_TEXT],
+    ['CHART violet vs primary-soft', '#7c5cbf', '#38b4ba', MIN_DE00_TEXT],
+    ['CHART violet vs primary (dark)', '#b29be8', '#38b4ba', MIN_DE00_TEXT],
+    ['CHART violet vs accent (dark)', '#b29be8', '#e9bd63', MIN_DE00_TEXT],
+    ['CHART violet vs deep (dark)', '#b29be8', '#7fc7c4', MIN_DE00_TEXT],
+    ['CHART violet vs info (dark)', '#b29be8', '#6fa8ec', MIN_DE00_TEXT],
+    ['CHART violet vs muted (dark)', '#b29be8', '#8aa0a3', MIN_DE00_TEXT],
+    ['CHART violet vs primary-soft (dark)', '#b29be8', '#7accc9', MIN_DE00_TEXT],
 ];
 
 // Per-row WCAG target (W0-T3b). DEFAULT is the 4.5:1 NORMAL-TEXT bar. The old exit test was `r < 3`,

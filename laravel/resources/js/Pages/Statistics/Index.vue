@@ -198,11 +198,13 @@ const consHeight = computed(() => consMode.value === 'activity'
     : Math.max(340, props.perConsultant.length * 28 + 60));
 
 // drill-down (computed, like every prop-derived chart input — see note above)
-const donutColors = computed(() => [series.value.primary, series.value.accent, series.value.info, series.value.deep, series.value.primarySoft, series.value.muted]);
+// seven colours: the destination donuts have up to seven slices, and Chart.js loops a short colour
+// list — slice 7 would repeat slice 1's colour right next to it (2026-09-24).
+const donutColors = computed(() => [series.value.primary, series.value.accent, series.value.info, series.value.deep, series.value.primarySoft, series.value.muted, series.value.violet]);
 const donutOpts = computed(() => doughnutOptions({ axisColor: axisColor.value, animation: anim.value, datalabel: donutDatalabel.value }));
 const physDonutData = computed(() => ({ labels: props.physician?.destinations?.labels ?? [], ...doughnutData(props.physician?.destinations?.data ?? [], donutColors.value, strokeColor.value) }));
 const physHasDischarges = computed(() => (props.physician?.destinations?.data ?? []).some((v) => v > 0));
-// second donut (J2-4): legacy 'Discharged to' 6 buckets over the consultant's non-ICU closed episodes
+// second donut (J2-4): 'Discharged to' buckets over the consultant's non-ICU closed episodes (ICU split out 2026-09-24)
 const physDestData = computed(() => ({ labels: props.physician?.dischargedTo?.labels ?? [], ...doughnutData(props.physician?.dischargedTo?.data ?? [], donutColors.value, strokeColor.value) }));
 const physHasDest = computed(() => (props.physician?.dischargedTo?.data ?? []).some((v) => v > 0));
 const physNumbers = computed(() => props.physician ? [
@@ -389,14 +391,15 @@ const consChartLabel = computed(() => `By consultant — ${consModes.value.find(
                     </a>
                     <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                         <div>
-                            <h4 class="mb-2 flex items-center gap-1 text-sm font-semibold text-ink-600">Discharge destinations<InfoTip label="Discharge destinations" text="'Out-dept transfer' also covers an internal ward→ICU move, not only a transfer out of Internal Medicine." /></h4>
+                            <h4 class="mb-2 flex items-center gap-1 text-sm font-semibold text-ink-600">Discharge destinations<InfoTip label="Discharge destinations" text="This consultant's non-ICU episodes closed in the range, by transfer type. 'Transfer to ICU' is a move within the hospital; 'Out-dept transfer' left Internal Medicine. Closes with no recorded type aren't shown." /></h4>
                             <ChartCanvas v-if="physHasDischarges" role="img" :aria-label="`Discharge destinations for ${physician.name}`" type="doughnut" :height="260" :data="physDonutData" :options="donutOpts" />
                             <p v-else class="py-10 text-center text-sm text-ink-300">No closed episodes in range.</p>
                         </div>
                         <!-- legacy charts.php 'Discharged to' donut: Home / Other Facility / LAMA /
-                             Absconded / Mortuary / Transfer over non-ICU closed episodes (J2-4) -->
+                             Absconded / Mortuary / Transfer over non-ICU closed episodes (J2-4); since
+                             2026-09-24 moves to ICU have their own slice -->
                         <div>
-                            <h4 class="mb-2 flex items-center gap-1 text-sm font-semibold text-ink-600">Discharged to<InfoTip label="Discharged to" text="'Transfer' also covers an internal ward→ICU move, not only a transfer out of Internal Medicine — Home/Other Facility/LAMA/Absconded/Mortuary are the only named slices." /></h4>
+                            <h4 class="mb-2 flex items-center gap-1 text-sm font-semibold text-ink-600">Discharged to<InfoTip label="Discharged to" text="Where this consultant's non-ICU episodes in the range went. 'ICU' is a move to intensive care; 'Transfer' is everything else — another service or specialty, or not recorded." /></h4>
                             <ChartCanvas v-if="physHasDest" role="img" :aria-label="`Discharged-to destinations for ${physician.name}`" type="doughnut" :height="260" :data="physDestData" :options="donutOpts" />
                             <p v-else class="py-10 text-center text-sm text-ink-300">No non-ICU closed episodes in range.</p>
                         </div>

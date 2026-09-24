@@ -402,17 +402,29 @@ class StatisticsController extends Controller
         $signS = $this->seriesBy('consultations', 'signoff_date', $f, $t, $interval, $own);
 
         // legacy transfer-type buckets (charts.php): fixed order, zero-filled, NON-ICU like the
-        // legacy GROUP BY trans_discharge query (charts.php:57) — K1-6
-        $destMap = [
+        // legacy GROUP BY trans_discharge query (charts.php:57) — K1-6.
+        // 2026-09-24 (owner: "optimize this Statistics chart"): 'other transfer' is written both for a
+        // real transfer OUT of the department (discharge_to = the external service) and for an
+        // internal ward→ICU move (discharge_to = 'Intensive Care (ICU)' — PatientActionController's
+        // location transfer and the ICU external service). Legacy showed both as "Out-dept transfer";
+        // the ICU moves now get their own slice. Only the split changes — the donut's total and every
+        // other figure (transToIcu, discharges, the reconciled KPIs) are untouched.
+        $destLabels = ['Discharged', 'Intra-dept transfer', 'Transfer to ICU', 'Out-dept transfer', 'ICU discharge'];
+        $typeLabel = [
             'discharge from ward' => 'Discharged',
             'transfer to other speciality' => 'Intra-dept transfer',
             'other transfer' => 'Out-dept transfer',
             'discharge from ICU' => 'ICU discharge',
         ];
-        $byType = DB::table('admissions')->where('consultant_id', $consultantId)
-            ->whereBetween('discharge_date', [$f, $t])->whereIn('transfer_type', array_keys($destMap))
+        $rows = DB::table('admissions')->where('consultant_id', $consultantId)
+            ->whereBetween('discharge_date', [$f, $t])->whereIn('transfer_type', array_keys($typeLabel))
             ->whereRaw($this->nonIcu)->whereNull('deleted_at')
-            ->selectRaw('transfer_type tt, COUNT(*) c')->groupBy('tt')->pluck('c', 'tt')->all();
+            ->selectRaw("transfer_type tt, (transfer_type = 'other transfer' AND discharge_to = 'Intensive Care (ICU)') to_icu, COUNT(*) c")
+            ->groupBy('tt', 'to_icu')->get();
+        $destCounts = array_fill_keys($destLabels, 0);
+        foreach ($rows as $r) {
+            $destCounts[(int) $r->to_icu === 1 ? 'Transfer to ICU' : $typeLabel[$r->tt]] += (int) $r->c;
+        }
 
         // top-5 diagnoses over NON-ICU admissions, like legacy charts.php:922 — K1-6
         $topDx = DB::table('admission_diagnoses as ad')
@@ -428,21 +440,22 @@ class StatisticsController extends Controller
         $scoped = fn () => DB::table('admissions')->where('consultant_id', $consultantId)->whereNull('deleted_at');
         $consScoped = fn () => DB::table('consultations')->where('consultant_id', $consultantId)->whereNull('deleted_at');
 
-        // second donut (J2-4): legacy charts.php 'Discharged to' — the fixed 6 buckets over this
-        // consultant's NON-ICU closed episodes; anything outside the 5 named ones => 'Transfer'
+        // second donut (J2-4): legacy charts.php 'Discharged to' — fixed buckets over this
+        // consultant's NON-ICU closed episodes; anything outside the named ones => 'Transfer'.
+        // 2026-09-24: a move to ICU ('Intensive Care (ICU)') has its own 'ICU' slice instead of
+        // hiding inside 'Transfer' (legacy had 6 buckets; the total is unchanged).
         $named = ['Home', 'Other Facility', 'LAMA', 'Absconded', 'Mortuary'];
         $byDest = $scoped()->whereBetween('discharge_date', [$f, $t])->whereRaw($this->nonIcu)
             ->selectRaw("COALESCE(discharge_to, '') dst, COUNT(*) c")->groupBy('dst')->pluck('c', 'dst')->all();
-        $dischargedTo = array_fill_keys([...$named, 'Transfer'], 0);
+        $dischargedTo = array_fill_keys([...$named, 'ICU', 'Transfer'], 0);
         foreach ($byDest as $dst => $c) {
-            $dischargedTo[in_array($dst, $named, true) ? $dst : 'Transfer'] += (int) $c;
+            $dischargedTo[in_array($dst, $named, true) ? $dst : ($dst === 'Intensive Care (ICU)' ? 'ICU' : 'Transfer')] += (int) $c;
         }
 
         return [
             'id' => $consultantId,
             'name' => $u->full_name ?: $u->name,
-            'destinations' => ['labels' => array_values($destMap),
-                'data' => array_map(fn ($type) => (int) ($byType[$type] ?? 0), array_keys($destMap))],
+            'destinations' => ['labels' => $destLabels, 'data' => array_values($destCounts)],
             'dischargedTo' => ['labels' => array_keys($dischargedTo), 'data' => array_values($dischargedTo)],
             'topDx' => $topDx,
             // the reconciled headline formulas, scoped by consultant_id

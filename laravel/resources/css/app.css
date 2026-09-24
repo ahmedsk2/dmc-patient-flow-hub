@@ -296,6 +296,7 @@
     --chart-info: #2f7fe0;          /* blue */
     --chart-muted: #5b6a6e;         /* slate — muted context series */
     --chart-primary-soft: #38b4ba;  /* lighter teal — fills / gradient stop */
+    --chart-violet: #7c5cbf;        /* violet — 7th slice, so a 7-slice donut never repeats a colour (2026-09-24) */
 
     /* Signature hairline — brand teal at low alpha over the light surfaces. */
     --surface-hairline: rgb(0 156 166 / 0.16);
@@ -378,6 +379,7 @@
     --chart-info: #6fa8ec;
     --chart-muted: #8aa0a3;
     --chart-primary-soft: #7accc9;
+    --chart-violet: #b29be8;
 
     /* Card shadow reads as a darker, softer pool on a dark page. */
     --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -10px rgb(0 0 0 / 0.6);
