@@ -13,9 +13,10 @@ The owner asked to "fix all and add the ! marks, remove the login stats". Done o
   reports, recent activity, audit, control panel and admin pages, plus full-text hover labels on the
   checkpoint and status chips. Every text was checked against the code and the behaviour/metrics docs.
 - **Login page:** the "22 hospitals / 3,400 beds / 24/7 live" figures are removed.
-- **Problems in the table below:** #1–#12, #14–#26, #28–#41 fixed. #13 is fixed as far as it can be
-  without a permission change (accurate message and "!"; a direct hand-off action is an owner decision
-  in REMAINING-WORK). #27's differing defaults were kept on purpose (first assignment vs reassignment)
+- **Problems in the table below:** #1–#12, #14–#26, #28–#41 fixed. #13: the transfer message and "!" were
+  made accurate, and then (owner decision the same day: "yes consultant can do that") a consultant can
+  hand their own active patient to a colleague from the card, keeping the episode open, with the usual
+  signature, notification and same-day reminder. #27's differing defaults were kept on purpose (first assignment vs reassignment)
   and each is now explained. #8 and #9 were labelled and explained, not redefined (the statistics stay
   as reconciled). #42 is corrected in CLAUDE.md. #5 now renders the drawn logo without probing for the
   missing file.

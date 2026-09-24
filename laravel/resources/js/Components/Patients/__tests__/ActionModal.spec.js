@@ -768,3 +768,13 @@ describe('ActionModal — double-submit guard', () => {
         }
     });
 });
+
+// Consultant hand-off (owner decision 2026-09-24): the board passes handOff=true when the viewer is the
+// patient's own consultant without the Assign capability; the assign dialog then says what handing over does.
+describe('ActionModal — consultant hand-off note', () => {
+    it('shows the hand-off note in assign mode only when handOff is set', () => {
+        expect(mountWith('assign', patient, { handOff: true }).find('[data-hand-off-note]').exists()).toBe(true);
+        expect(mountWith('assign', patient).find('[data-hand-off-note]').exists()).toBe(false);
+        expect(mountWith('medical', patient, { handOff: true }).find('[data-hand-off-note]').exists()).toBe(false);
+    });
+});

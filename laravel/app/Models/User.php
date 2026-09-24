@@ -120,6 +120,24 @@ class User extends Authenticatable
     }
 
     /**
+     * Consultant hand-off (owner decision 2026-09-24, role/UX review #13): a CONSULTANT who is the
+     * current consultant of an ACTIVE episode may hand that one patient to another active consultant
+     * without the Assign capability — through the same assign action, so the handover signature, the
+     * receiver's notification and the same-day handover reminder all still apply. Narrower than
+     * canManageAdmission on purpose: a Registrar/Resident who self-assigned is the "primary" too, but
+     * the owner granted this to consultants only.
+     */
+    public function canHandOffAdmission(Admission $a): bool
+    {
+        return ! $this->isObserver()
+            && (int) $this->role === self::ROLE_CONSULTANT
+            && (bool) $this->active
+            && (int) $a->consultant_id === (int) $this->id
+            && $a->discharge_date === null
+            && ! $a->trashed();
+    }
+
+    /**
      * Consultation sign-off / edit is CONSULTANT-centric (the receiving consultant), but follows the
      * SAME observer-first / admin / can_manage / owner pattern as canManageAdmission. Delegated to by
      * ConsultationsController::signoff.

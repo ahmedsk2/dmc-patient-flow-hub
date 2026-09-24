@@ -28,6 +28,10 @@ const props = defineProps({ groups: Array, filters: Object, stats: Object, consu
 const page = usePage();
 const me = computed(() => page.props.auth.user);
 const canAssign = computed(() => me.value.role !== 5 && (me.value.is_admin || me.value.can.assign));   // observers never see assign controls
+// Consultant hand-off (owner decision 2026-09-24): the open assign dialog is a hand-off when the viewer is
+// a consultant without the Assign capability acting on their own patient (User::canHandOffAdmission).
+const actionIsHandOff = computed(() => !canAssign.value && me.value.role === 3 && !!actionPatient.value
+    && Number(actionPatient.value.consultant_id) === Number(me.value.id));
 const canReassign = computed(() => me.value.role !== 5 && (me.value.is_admin || me.value.can.assign || me.value.can.manage));
 const isObserver = computed(() => me.value.role === 5);
 // still needed here for the HandoverModal's can-manage gate (the board's per-card canManage now lives
@@ -527,7 +531,7 @@ const closeModify = () => guardModify(() => { editing.value = null; });
              useForms + the handover gate-then-retry; Index just opens it + reloads on `saved`. -->
         <ActionModal :open="!!modal" :mode="actionMode" :patient="actionPatient"
             :consultants="consultants" :specialties="specialties" :external-services="externalServices"
-            :today="today" @saved="onActionSaved" @close="closeModal" />
+            :today="today" :hand-off="actionIsHandOff" @saved="onActionSaved" @close="closeModal" />
 
         <!-- bulk reassign modal — owns the preflight gate + per-stale handover editors + subset submit -->
         <ReassignModal ref="reassignModal" :open="reassign" :consultants="consultants"
