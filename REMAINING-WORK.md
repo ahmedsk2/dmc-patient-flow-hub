@@ -82,9 +82,8 @@ biggest live risk** (the original un-hardened build, on US hosting).
   outlives a wiped bucket instead of mirroring it), and refuses to run while the backup key is on the
   same machine. Seeded the same night: 510 files, 264 MB, every one identical in name and size to the
   bucket and every one encrypted. Keep the backup key and `APP_KEY` off that computer.
-- [ ] **Empty your Recycle Bin again, and the last 13 laptop copies.** On 2026-09-24 the 53 laptop
-  copies of the Coolify dumps you had just deleted from the bucket were moved to the Recycle Bin
-  (1.04 GB, hashed first — evidence file below); emptying the bin destroys them. The other 13 stay in
+- [ ] **The last 13 laptop copies of the old Coolify dumps.** The other 53 were hashed, recycled and
+  **destroyed 2026-09-24** when you emptied the bin (verified; evidence file below). The 13 stay in
   your mirror while their bucket originals are locked (next item); once those are deleted, your sync
   stops refreshing them and its own 30-day clean-up removes them — or ask me to recycle them then.
   Until then, Windows disk encryption on that computer is what protects them.

@@ -283,8 +283,8 @@
    dumps only `default`; one setting, nothing restarted) — the encrypted DMC pipeline is the only
    backup of the DMC database. The owner then deleted 53 of the 66 old Coolify dumps from the bucket
    (the last 13 are locked by its 14-day rule until 2026-10-07) and dropped the three real-data WAMP
-   databases on the laptop (verified gone); the 53 matching laptop copies were recycled for the
-   owner to empty.
+   databases on the laptop (verified gone); the 53 matching laptop copies were recycled and
+   destroyed when the owner emptied the bin (verified).
    Then, also on instruction, the owner's daily workstation sync gained a DMC part: it keeps a local
    copy of the **encrypted** DMC backups (new objects only, 90 days by file date, refuses while the
    backup key is on that machine) — seeded with 510 objects, all verified against the bucket.
