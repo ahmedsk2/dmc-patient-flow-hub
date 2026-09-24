@@ -218,8 +218,8 @@ The Terraform above was written from the docs and has never been planned. Readin
   `dmc_demo` was among them until 2026-09-24, when it was taken out (53 of its 66 old dumps deleted the same day; 13 locked until 2026-10-07) — with **no
   lifecycle policy** (a 14-day retention rule only), versioning disabled, private.
 - **Compute backups (not modelled here):** the host's boot volume is under the volume backup policy
-  `weekly-4` (weekly incremental, 4-week retention, no destination region) and has a manual full
-  backup from 2026-07-19 with no expiry — whole-disk copies of every app on the host.
+  `weekly-4` (weekly incremental, 4-week retention, no destination region) — whole-disk copies of
+  every app on the host. (A manual full backup from 2026-07-19 with no expiry was deleted 2026-09-24.)
 - **`dmc-audit-log`:** has a **7-year retention rule** (`audit-worm-7y`, write-once) and suspended
   versioning — the code here says "no retention rule".
 - **Network:** SSH on the security list is limited to the owner's workstation address (/32, since

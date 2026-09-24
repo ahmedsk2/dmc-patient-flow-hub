@@ -581,10 +581,10 @@ within about two weeks; and the owner's workstation mirror of the bucket.
 **OCI boot-volume backups (found 2026-09-24).** Separately from everything above, OCI backs up the
 host's **entire boot volume** — the whole disk, so the MySQL data of DMC *and of every other app on the
 host* — under the volume backup policy `weekly-4` (weekly incremental, kept 4 weeks, no destination
-region, so Riyadh only), and a manual full backup `manual-full-20260719-1911` (2026-07-19) has **no
-expiry**. They are a coarse extra recovery path (bring back the whole server as it was on that day;
-nothing in this runbook depends on it) and a copy of patient data that counts in the inventory; the
-manual one's retention is an owner decision (REMAINING-WORK).
+region, so Riyadh only). They are a coarse extra recovery path (bring back the whole server as it was
+on that day; nothing in this runbook depends on it) and a copy of patient data that counts in the
+inventory, gone after four weeks. A manual full backup `manual-full-20260719-1911` (2026-07-19) that had
+**no expiry** was deleted by the owner on 2026-09-24 (verified `TERMINATED`).
 
 **Measured bucket volume (2026-09-22, `db-backup.py`/`binlog-ship.py`'s own log lines on the
 host — hourly rotation has been running since 2026-09-04, §10.2).** Nightly dumps run about
