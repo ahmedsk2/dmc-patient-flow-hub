@@ -198,8 +198,8 @@ class Round6K1Test extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->has('physician.topDx', 1)   // the ICU episode's sepsis dx is excluded
                 ->where('physician.topDx.0.label', 'Pneumonia, unspecified organism')
-                ->where('physician.destinations.labels', ['Discharged', 'Intra-dept transfer', 'Out-dept transfer', 'ICU discharge'])
-                ->where('physician.destinations.data', [1, 0, 0, 0]));   // ICU row excluded from the donut
+                ->where('physician.destinations.labels', ['Discharged', 'Intra-dept transfer', 'Transfer to ICU', 'Out-dept transfer', 'ICU discharge'])
+                ->where('physician.destinations.data', [1, 0, 0, 0, 0]));   // ICU row excluded from the donut
     }
 
     // ---- 7. physician readmissions require the SAME prior consultant ----------------------------

@@ -413,8 +413,8 @@ the same gates must be run locally per RELEASE-CHECKLIST.md. Since 2026-09-03 th
 PR (no path filter), plus a blocking Pint gate and Vitest coverage thresholds. The legacy `ci.yml` is
 a separate pipeline; never merge them.
 
-**Baselines (2026-09-24, after the role/UX review fixes and the consultant hand-off):** PHPUnit 1135 tests (+92 in the `pdf` group), PHP
-statement coverage 88.1 % at the last CI measurement (floor 83), Vitest 943 on vitest 5 (floors lines 72, statements 66,
+**Baselines (2026-09-24, after the role/UX review fixes, the consultant hand-off and the ICU donut split):** PHPUnit 1137 tests (+92 in the `pdf` group), PHP
+statement coverage 88.1 % at the last CI measurement (floor 83), Vitest 945 on vitest 5 (floors lines 72, statements 66,
 branches 62, functions 48 — re-baselined 2026-09-22 because vitest 5's AST-aware coverage counts
 different units than vitest 3, then raised the same day; see the history in `vitest.config.js`),
 ESLint zero warnings, Pint clean.

@@ -124,3 +124,39 @@ describe('Statistics/Index — KPI-card and column info marks', () => {
         expect(heading.find('button[data-infotip]').exists()).toBe(true);
     });
 });
+
+// 2026-09-24 (owner: "optimize this Statistics chart"): the physician donuts split a ward→ICU move out
+// of "Out-dept transfer" / "Transfer", so "Discharged to" now has SEVEN slices. Chart.js loops a short
+// colour list, which would give slice 7 the same colour as slice 1 right next to it — the page's donut
+// palette therefore carries seven colours.
+describe('Statistics/Index — seven-slice destination donuts get seven distinct colours', () => {
+    const physician = {
+        id: 1, name: 'Dr Split',
+        destinations: { labels: ['Discharged', 'Intra-dept transfer', 'Transfer to ICU', 'Out-dept transfer', 'ICU discharge'], data: [1, 1, 2, 2, 0] },
+        dischargedTo: { labels: ['Home', 'Other Facility', 'LAMA', 'Absconded', 'Mortuary', 'ICU', 'Transfer'], data: [1, 1, 1, 1, 1, 2, 3] },
+        topDx: [],
+        numbers: { admissions: 6, discharges: 10, transToIcu: 2, deaths: 0, avgLos: 3, readmissions: 0, consultations: 0, signoffs: 0 },
+    };
+
+    it('the Discharged-to donut has one distinct colour per slice, and the destinations donut too', () => {
+        const w = mountStats({ physician });
+        const charts = w.findAllComponents({ name: 'ChartCanvas' });
+        const byLabel = (needle) => charts.find((c) => String(c.attributes('aria-label') || '').includes(needle));
+        const dest = byLabel('Discharged-to destinations for Dr Split');
+        const types = byLabel('Discharge destinations for Dr Split');
+        expect(dest).toBeTruthy();
+        expect(types).toBeTruthy();
+        const destColours = dest.props('data').datasets[0].backgroundColor;
+        expect(dest.props('data').labels).toEqual(physician.dischargedTo.labels);
+        expect(destColours).toHaveLength(7);
+        expect(new Set(destColours).size).toBe(7);
+        expect(types.props('data').labels).toContain('Transfer to ICU');
+    });
+
+    it('the tooltips describe the new slices', () => {
+        const w = mountStats({ physician });
+        const tips = w.findAll('button[data-infotip]').map((b) => b.attributes('aria-label'));
+        expect(tips).toContain('More information: Discharge destinations');
+        expect(tips).toContain('More information: Discharged to');
+    });
+});

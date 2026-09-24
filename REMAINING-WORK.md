@@ -222,10 +222,11 @@ had a cross-cutting adversarial review (6 more real problems found and fixed, li
 
 ### Still open — engineering
 
-- [ ] *Optional, from the 2026-09-24 role/UX review:* the Statistics physician drill-down has two
-  destination donuts ("Discharge destinations" by `transfer_type`, "Discharged to" by `discharge_to`)
-  that still count a ward→ICU move as an out-of-department transfer — explained by "!" marks now; a
-  consistent split needs coordinated changes to StatisticsController and both charts.
+- [x] ~~Statistics physician drill-down counted a ward→ICU move as leaving the department~~ — **done
+  2026-09-24** (owner: "optimize this Statistics chart"): "Transfer to ICU" and "ICU" are their own slices
+  in the two donuts; totals and every KPI unchanged. The donut palette gained a 7th colour (violet, both
+  themes, guarded by the contrast gate) so a 7-slice donut never repeats a colour — which also fixes the
+  overall destinations donut, whose 7th slice had been reusing slice 1's colour.
 
 - [x] ~~Reinstall the host copy of `db-backup.py`~~ — **done 2026-09-22** with the deploy; the nightly
   dump now records its exact binlog position.

@@ -262,9 +262,10 @@ class GapWave4bTest extends TestCase
                 ->where('physician.numbers.deaths', 1)
                 ->where('physician.numbers.avgLos', 4.5)
                 ->where('physician.numbers.readmissions', 1)
-                // legacy destination buckets, fixed order
-                ->where('physician.destinations.labels', ['Discharged', 'Intra-dept transfer', 'Out-dept transfer', 'ICU discharge'])
-                ->where('physician.destinations.data', [1, 0, 1, 0])
+                // legacy destination buckets, fixed order — the fixture's 'other transfer' is a ward→ICU
+                // move, which has its own slice since 2026-09-24
+                ->where('physician.destinations.labels', ['Discharged', 'Intra-dept transfer', 'Transfer to ICU', 'Out-dept transfer', 'ICU discharge'])
+                ->where('physician.destinations.data', [1, 0, 1, 0, 0])
                 ->where('physician.topDx.0.label', 'Pneumonia, unspecified organism')
                 ->where('physician.topDx.0.value', 2)
                 ->where('physician.topDx.1.value', 1));

@@ -312,6 +312,11 @@
    Owner said deploy: **Production runs `28dab1b`** (merge of PR #45, release `v2026.09.24.2`), deployed
    2026-09-24 after a pre-deploy dump (`dmc_demo-2026-09-24T131952Z`); no migrations; smoke 16/16, `/health`
    ok, audit chain intact (914 rows), no error-level log lines after the swap.
+   Then (owner: "optimize this Statistics chart"): the physician drill-down's two destination donuts give
+   a ward→ICU move its own slice ("Transfer to ICU" / "ICU") instead of counting it as leaving the
+   department; totals and KPIs unchanged; a 7th chart colour (violet) so a 7-slice donut never repeats a
+   colour (also fixing the overall destinations donut). Documented as a deliberate deviation from legacy
+   charts.php in DASHBOARD-AND-STATISTICS-METRICS.md.
    **Still open and all owner / infrastructure decisions, not code:** enable deploy-on-green
    (declined so far — "I don't want to autodeploy"), pick a log sink and set `LOG_STACK`
    (OBS-01/03/04/05), instance principal (CFG-10), SLOs and an

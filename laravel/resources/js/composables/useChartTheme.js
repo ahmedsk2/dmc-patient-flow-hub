@@ -21,8 +21,9 @@ export function useChartTheme() {
     const SERIES_TOKENS = {
         primary: '--chart-primary', accent: '--chart-accent', deep: '--chart-deep',
         info: '--chart-info', muted: '--chart-muted', primarySoft: '--chart-primary-soft',
+        violet: '--chart-violet',   // 7th colour: a 7-slice donut must not reuse slice 1's colour next to it
     };
-    const series = ref({ primary: '#009ca6', accent: '#d9a23c', deep: '#00565e', info: '#2f7fe0', muted: '#5b6a6e', primarySoft: '#38b4ba' });
+    const series = ref({ primary: '#009ca6', accent: '#d9a23c', deep: '#00565e', info: '#2f7fe0', muted: '#5b6a6e', primarySoft: '#38b4ba', violet: '#7c5cbf' });
 
     const read = () => {
         if (typeof window === 'undefined') return;

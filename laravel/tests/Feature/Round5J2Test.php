@@ -185,7 +185,7 @@ class Round5J2Test extends TestCase
         $this->admission(['consultant_id' => $c->id, 'admit_date' => '2024-06-01',
             'discharge_date' => '2024-06-05', 'transfer_type' => 'discharge from ward',
             'discharge_to' => 'Home', 'outcome' => 'Alive']);
-        // ward episode closed by a transfer to ICU — counts transToIcu + the 'Transfer' bucket
+        // ward episode closed by a transfer to ICU — counts transToIcu + the 'ICU' bucket (its own slice since 2026-09-24)
         $this->admission(['consultant_id' => $c->id, 'admit_date' => '2024-06-02',
             'discharge_date' => '2024-06-06', 'transfer_type' => 'other transfer',
             'discharge_to' => 'Intensive Care (ICU)', 'outcome' => 'Alive']);
@@ -201,9 +201,9 @@ class Round5J2Test extends TestCase
                 ->where('physician.numbers.transToIcu', 1)
                 ->where('physician.numbers.consultations', 1)
                 ->where('physician.numbers.signoffs', 1)
-                // legacy charts.php 6-bucket 'Discharged to' donut, fixed order
-                ->where('physician.dischargedTo.labels', ['Home', 'Other Facility', 'LAMA', 'Absconded', 'Mortuary', 'Transfer'])
-                ->where('physician.dischargedTo.data', [1, 0, 0, 0, 0, 1]));
+                // 'Discharged to' donut, fixed order (legacy 6 buckets + ICU split out 2026-09-24)
+                ->where('physician.dischargedTo.labels', ['Home', 'Other Facility', 'LAMA', 'Absconded', 'Mortuary', 'ICU', 'Transfer'])
+                ->where('physician.dischargedTo.data', [1, 0, 0, 0, 0, 1, 0]));
     }
 
     // ---- 5. dashboard consult donut + census TB title ---------------------------------------------
