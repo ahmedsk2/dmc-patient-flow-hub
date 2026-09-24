@@ -251,6 +251,48 @@ class AdmissionsController extends Controller
         ]);
     }
 
+    /**
+     * MRN lookup for the admit form (role/UX review 2026-09-24, Problem #1 / Fix #1a). Tells the
+     * clinician BEFORE submit whether this MRN already belongs to a known patient — so the
+     * demographics prefill and, if they diverge from what's typed, the confirm-identity-update
+     * gate in StoreAdmissionRequest (Fix #1b) is never a silent surprise. Same authorization as
+     * the admit form itself; MRN travels in the POST body, never the URL (SPC-TM-011).
+     */
+    public function lookupMrn(Request $request): JsonResponse
+    {
+        $this->denyObservers();
+        $u = $request->user();
+        abort_unless($u->isAdmin() || $u->can_add, 403, 'Requires the Add capability.');
+
+        $data = $request->validate([
+            'mrn' => ['required', 'string', 'regex:/^\d{1,11}$/'],
+        ]);
+
+        $patient = Patient::where('mrn', $data['mrn'])->first();
+        if (! $patient) {
+            return response()->json(['found' => false]);
+        }
+
+        // PHI-read logging (§5 pattern, same gate as edit()'s record-open log): off by default,
+        // ON when the admin turns log_record_opens on in Control → Settings.
+        if (Setting::current()->log_record_opens) {
+            Audit::log('patient.lookup', 'patient', (string) $patient->id, ['mrn' => $patient->mrn]);
+        }
+
+        return response()->json([
+            'found' => true,
+            'patient' => [
+                'name' => $patient->name,
+                'age' => $patient->age,
+                'gender' => $patient->gender,
+                'nationality' => $patient->nationality,
+            ],
+            // surfaces StoreAdmissionRequest::withValidator()'s "already has an active admission"
+            // rejection BEFORE the clinician fills the whole form, not only on submit.
+            'has_active_episode' => Admission::whereNull('discharge_date')->where('patient_id', $patient->id)->exists(),
+        ]);
+    }
+
     /** ICD-10 typeahead for the diagnosis picker — relevance: code-prefix, name-prefix, substring. */
     public function icd10(Request $request): JsonResponse
     {

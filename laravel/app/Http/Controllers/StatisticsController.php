@@ -43,7 +43,12 @@ class StatisticsController extends Controller
         ]);
         $to = isset($data['to']) ? Carbon::parse($data['to']) : Carbon::today();
         $from = isset($data['from']) ? Carbon::parse($data['from']) : $to->copy()->startOfYear();
-        if ($from->gt($to)) {
+        // UX-review #41: a From-after-To range used to be swapped with no on-screen notice — the
+        // figures were always correct (the swap happened before every query ran), but the viewer
+        // had no way to tell their entered range had been corrected. $rangeSwapped rides along in
+        // the response so the page can say so; it never changes what is queried or counted.
+        $rangeSwapped = $from->gt($to);
+        if ($rangeSwapped) {
             [$from, $to] = [$to, $from];
         }
         $f = $from->toDateString();
@@ -282,6 +287,7 @@ class StatisticsController extends Controller
 
         return Inertia::render('Statistics/Index', [
             'range' => ['from' => $f, 'to' => $t],
+            'rangeSwapped' => $rangeSwapped,
             'kpis' => [
                 'admissions' => $admissions, 'discharges' => $discharges, 'deaths' => $deaths,
                 'mortalityRate' => $mortalityRate, 'icuAdmissions' => $icuAdmissions,

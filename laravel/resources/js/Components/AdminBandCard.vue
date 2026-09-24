@@ -24,6 +24,7 @@
 //     (4.39:1): it is a non-text graphic, which 1.4.11 holds to 3:1.
 // Ratios: scripts/contrast.mjs.
 import { Link } from '@inertiajs/vue3';
+import InfoTip from '@/Components/InfoTip.vue';
 
 defineProps({
     label: { type: String, required: true },
@@ -31,22 +32,41 @@ defineProps({
     href: { type: String, required: true },
     iconPath: { type: String, required: true },
     urgent: { type: Boolean, default: false },   // true → danger tint when count > 0
+    // 2026-09-24 role/UX review, §5 "Dashboard": optional plain-words explanation of what this
+    // count is, shown as an inline "!" mark next to the label. Omit it when the label alone is
+    // self-evident (e.g. Data Quality Issues, Recently Deleted).
+    tooltip: { type: String, default: '' },
 });
 </script>
 
 <template>
-    <Link :href="href"
-        class="flex items-center gap-3 rounded-2xl border px-4 py-3 shadow-sm transition hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-        :class="urgent && count > 0 ? 'border-danger-300/60 bg-tint-danger/60' : 'border-line bg-card'">
-        <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl"
-            :class="urgent && count > 0 ? 'bg-danger-100 text-danger-600' : 'bg-ink-100 text-ink-500'">
-            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" :d="iconPath" />
-            </svg>
+    <!-- 2026-09-24 review fix-up: outer wrapper is `relative` so the InfoTip (a real <button>) can
+         sit in the card's corner as a SIBLING of the card's own <Link> (renders as <a>), never
+         nested inside it — an <a>'s content model forbids an interactive-content descendant, and a
+         focusable <button> inside an <a> is invalid HTML/a11y (axe-core's nested-interactive rule).
+         Same restructuring as Dashboard.vue's KPI tiles, which pulled their InfoTip out of the tile's
+         own <button> the same way. -->
+    <div class="relative">
+        <Link :href="href"
+            class="flex items-center gap-3 rounded-2xl border px-4 py-3 shadow-sm transition hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            :class="urgent && count > 0 ? 'border-danger-300/60 bg-tint-danger/60' : 'border-line bg-card'">
+            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl"
+                :class="urgent && count > 0 ? 'bg-danger-100 text-danger-600' : 'bg-ink-100 text-ink-500'">
+                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" :d="iconPath" />
+                </svg>
+            </span>
+            <div class="min-w-0">
+                <p class="nums text-2xl font-bold leading-none" :class="urgent && count > 0 ? 'text-on-danger' : 'text-ink-900'">{{ count }}</p>
+                <p class="mt-1 truncate text-xs font-medium text-ink-500">{{ label }}</p>
+            </div>
+        </Link>
+        <!-- Sits just outside the card's own top-right corner, at the count's height rather than the
+             label's — same placement Dashboard.vue's KPI tiles use for the identical InfoTip pattern,
+             and no reserved padding is needed there either (Dashboard.vue's KPI label isn't padded
+             for it), since the label row sits below this corner, not under it. -->
+        <span v-if="tooltip" class="absolute -top-1.5 end-2.5 z-10">
+            <InfoTip :label="label" :text="tooltip" />
         </span>
-        <div class="min-w-0">
-            <p class="nums text-2xl font-bold leading-none" :class="urgent && count > 0 ? 'text-on-danger' : 'text-ink-900'">{{ count }}</p>
-            <p class="mt-1 truncate text-xs font-medium text-ink-500">{{ label }}</p>
-        </div>
-    </Link>
+    </div>
 </template>

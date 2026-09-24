@@ -509,16 +509,25 @@ class ReportsController extends Controller
         $icuByDay = $this->byDay('admit_date', $s, $e, "current_location = 'ICU'");
         $deathByDay = $this->byDay('discharge_date', $s, $e, "outcome = 'Dead'");
 
+        // UX-review #10: a day after today has no data yet, not zero activity — bound "today" from
+        // PHP (never the DB clock, I18N-02) so the screen can render "—" for those rows instead of a
+        // flat 0 that reads exactly like a real zero-activity day. Past/complete days are unaffected.
+        $today = Carbon::today();
         $days = [];
         for ($d = 1; $d <= $end->day; $d++) {
             $key = sprintf('%04d-%02d-%02d', $year, $month, $d);
+            // Carbon::createFromDate() keeps "now"'s time-of-day, not midnight — comparing that
+            // directly against Carbon::today() (midnight) would misflag today itself as future
+            // once the clock has ticked past 00:00. Compare the date strings instead.
+            $future = $key > $today->toDateString();
             $days[] = [
                 'day' => $d,
                 'weekday' => Carbon::createFromDate($year, $month, $d)->format('D'),
-                'admissions' => (int) ($admByDay[$key] ?? 0),
-                'discharges' => (int) ($disByDay[$key] ?? 0),
-                'icu' => (int) ($icuByDay[$key] ?? 0),
-                'deaths' => (int) ($deathByDay[$key] ?? 0),
+                'admissions' => $future ? null : (int) ($admByDay[$key] ?? 0),
+                'discharges' => $future ? null : (int) ($disByDay[$key] ?? 0),
+                'icu' => $future ? null : (int) ($icuByDay[$key] ?? 0),
+                'deaths' => $future ? null : (int) ($deathByDay[$key] ?? 0),
+                'future' => $future,
             ];
         }
 
@@ -533,6 +542,7 @@ class ReportsController extends Controller
                 'icu' => array_sum(array_column($days, 'icu')),
                 'deaths' => array_sum(array_column($days, 'deaths')),
             ],
+            'asOf' => $today->toDateString(),
             'generatedAt' => now()->format('D, d M Y · H:i'),
         ];
     }
@@ -604,8 +614,15 @@ class ReportsController extends Controller
             } // legacy rule: skip months not yet started
             $key = sprintf('%04d-%02d', $year, $m);
 
+            // census cards are only meaningful once the month has fully elapsed (legacy "Pending")
+            $monthDone = $first->copy()->endOfMonth()->toDateString() <= $today->toDateString();
+            // UX-review #10: the in-progress month used to chart every day of the month, so the
+            // still-to-come days sat at 0 indistinguishably from a real zero-activity day. Stop the
+            // daily-overview series at today for that one partial month instead — every fully-elapsed
+            // month is unaffected. "today" is bound from PHP, never the DB clock (I18N-02).
+            $lastDay = $monthDone ? $first->daysInMonth : min($first->daysInMonth, $today->day);
             $days = ['labels' => [], 'admissions' => [], 'discharges' => [], 'consultations' => [], 'signoffs' => []];
-            for ($d = 1; $d <= $first->daysInMonth; $d++) {
+            for ($d = 1; $d <= $lastDay; $d++) {
                 $dk = sprintf('%04d-%02d-%02d', $year, $m, $d);
                 $days['labels'][] = (string) $d;
                 $days['admissions'][] = (int) ($admByDay[$dk] ?? 0);
@@ -616,8 +633,6 @@ class ReportsController extends Controller
 
             $dis = (int) ($disByMonth[$key] ?? 0);
             $wknd = (int) ($weekendByMonth[$key] ?? 0);
-            // census cards are only meaningful once the month has fully elapsed (legacy "Pending")
-            $monthDone = $first->copy()->endOfMonth()->toDateString() <= $today->toDateString();
             $census = (int) ($censusByMonth[$key] ?? 0);
             $longStay = (int) ($censusLongByMonth[$key] ?? 0);
             $months[] = [
@@ -645,12 +660,16 @@ class ReportsController extends Controller
                 'consultantLos' => $consultants
                     ->map(fn ($u) => ['name' => $u->full_name ?: $u->name, 'value' => (float) ($cLosByMonth[$key][$u->id] ?? 0)])
                     ->values()->all(),
+                // UX-review #10: the one still-in-progress month's daily chart stops at today, not
+                // the end of the month — this flags it so the page can say so next to that chart.
+                'partial' => ! $monthDone,
             ];
         }
 
         return [
             'year' => $year,
             'months' => $months,
+            'asOf' => $today->toDateString(),
             'generatedAt' => now()->format('D, d M Y · H:i'),
         ];
     }

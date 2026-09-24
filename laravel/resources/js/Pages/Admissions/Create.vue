@@ -1,9 +1,11 @@
 <script setup>
-import { ref, useId } from 'vue';
+import { ref, computed, useId } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import IcdTypeahead from '@/Components/IcdTypeahead.vue';
-import { localToday } from '@/lib/ui.js';
+import InfoTip from '@/Components/InfoTip.vue';
+import FlowAlert from '@/Components/FlowAlert.vue';
+import { localToday, xsrf } from '@/lib/ui.js';
 
 defineProps({ consultants: Array, countries: Array, locations: Array, admitFrom: Array });
 
@@ -14,7 +16,7 @@ const fid = (name) => `admit-${uid}-${name}`;
 const form = useForm({
     mrn: '', name: '', age: '', gender: '', nationality: '',
     bed: '', admit_date: today, admitted_from: 'ER', current_location: 'Ward',
-    consultant_id: '', diagnoses: [],
+    consultant_id: '', diagnoses: [], confirm_identity_update: false,
 });
 
 // ICD-10 async picker
@@ -27,7 +29,84 @@ const removeDx = (code) => {
     form.diagnoses = form.diagnoses.filter((c) => c !== code);
 };
 
-const submit = () => form.post('/admissions');
+// Role/UX review 2026-09-24, Problem #1: MRN lookup — before this readmits a known patient, tell
+// the clinician who that MRN belongs to (prefilling the stored demographics) and whether they
+// already have an active episode, instead of letting a mistyped detail silently rename them for
+// every past and future visit (AdmissionsController::createAdmission()). POST /admissions/lookup-mrn,
+// MRN in the body — never the URL (SPC-TM-011).
+const mrnStatus = ref('idle');   // idle | loading | found | not_found | error
+const lookedUpPatient = ref(null);
+const hasActiveEpisode = ref(false);
+let mrnSeq = 0;
+let lastCheckedMrn = null;
+// Review fix-up (2026-09-24): the focus-out handler and submit()'s own `await lookupMrn()` call can
+// race — leaving the field kicks off a fetch, then a fast Enter/click submit used to see the MRN already
+// claimed by `lastCheckedMrn` and return immediately, without waiting for that fetch to settle, so
+// the confirm-identity checkbox could miss its first render. Track the in-flight promise so a
+// concurrent caller awaits the SAME request instead of short-circuiting on it.
+let inFlightMrn = null;
+let inFlightPromise = null;
+const lookupMrn = () => {
+    const mrn = form.mrn.trim();
+    if (mrn === lastCheckedMrn) {
+        // already checked (or being checked) this exact MRN — join the in-flight request if one
+        // is still running, otherwise there's nothing new to wait for
+        return mrn === inFlightMrn ? inFlightPromise : Promise.resolve();
+    }
+    lastCheckedMrn = mrn;
+    lookedUpPatient.value = null;
+    hasActiveEpisode.value = false;
+    if (!/^\d{1,11}$/.test(mrn)) { mrnStatus.value = 'idle'; return Promise.resolve(); }
+    const mine = ++mrnSeq;
+    mrnStatus.value = 'loading';
+    inFlightMrn = mrn;
+    inFlightPromise = (async () => {
+        try {
+            const r = await fetch('/admissions/lookup-mrn', {
+                method: 'POST',
+                headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf() },
+                body: JSON.stringify({ mrn }),
+            });
+            if (mine !== mrnSeq) return;
+            if (!r.ok) { mrnStatus.value = 'error'; return; }
+            const body = await r.json();
+            if (body.found) {
+                lookedUpPatient.value = body.patient;
+                hasActiveEpisode.value = !!body.has_active_episode;
+                mrnStatus.value = 'found';
+                // prefill from the stored record — the confirm-identity checkbox below only appears
+                // if the clinician then edits one of these away from what was just filled in
+                form.name = body.patient.name ?? form.name;
+                form.age = body.patient.age ?? form.age;
+                form.gender = body.patient.gender ?? form.gender;
+                form.nationality = body.patient.nationality ?? form.nationality;
+            } else {
+                mrnStatus.value = 'not_found';
+            }
+        } catch {
+            if (mine === mrnSeq) mrnStatus.value = 'error';
+        } finally {
+            if (inFlightMrn === mrn) { inFlightMrn = null; inFlightPromise = null; }
+        }
+    })();
+    return inFlightPromise;
+};
+
+const identityChanged = computed(() => {
+    const p = lookedUpPatient.value;
+    if (!p) return false;
+    return form.name.trim() !== (p.name || '').trim()
+        || String(form.age ?? '').trim() !== String(p.age ?? '')
+        || (form.gender || '') !== (p.gender || '')
+        || (form.nationality || '') !== (p.nationality || '');
+});
+
+const submit = async () => {
+    // Catches Enter-key submits that skip the MRN field's focus-out event, AND joins an
+    // already-in-flight focus-out lookup instead of racing past it (see lookupMrn() above).
+    await lookupMrn();
+    form.post('/admissions');
+};
 const field = 'w-full rounded-xl border border-ink-200 bg-card px-3.5 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20';
 </script>
 
@@ -41,9 +120,14 @@ const field = 'w-full rounded-xl border border-ink-200 bg-card px-3.5 py-2.5 tex
                 </h2>
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
-                        <label :for="fid('mrn')" class="mb-1 block text-sm font-semibold text-ink-700">MRN <span class="text-danger-500">*</span></label>
-                        <input :id="fid('mrn')" v-model="form.mrn" :aria-describedby="form.errors.mrn ? fid('mrn') + '-err' : undefined" :class="[field, form.errors.mrn && 'border-danger-500']" placeholder="Medical record number" inputmode="numeric" />
+                        <label :for="fid('mrn')" class="mb-1 flex items-center gap-1.5 text-sm font-semibold text-ink-700">MRN <span class="text-danger-500">*</span>
+                            <InfoTip label="MRN" text="If this MRN belongs to a known patient, their stored details fill in below — confirm before any change to them is saved." />
+                        </label>
+                        <input :id="fid('mrn')" v-model="form.mrn" @blur="lookupMrn" :aria-describedby="form.errors.mrn ? fid('mrn') + '-err' : undefined" :class="[field, form.errors.mrn && 'border-danger-500']" placeholder="Medical record number" inputmode="numeric" />
                         <p v-if="form.errors.mrn" :id="fid('mrn') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.mrn }}</p>
+                        <p v-if="mrnStatus === 'loading'" class="mt-1 text-xs text-ink-400">Checking MRN…</p>
+                        <p v-else-if="mrnStatus === 'found' && !hasActiveEpisode" class="mt-1 text-xs font-semibold text-brand-700">Existing patient — details filled from their record. Changing them updates this patient for all visits.</p>
+                        <p v-else-if="mrnStatus === 'found' && hasActiveEpisode" class="mt-1 text-xs font-semibold text-on-danger">This patient already has an active admission — submitting will be rejected until that episode is discharged.</p>
                     </div>
                     <div>
                         <label :for="fid('name')" class="mb-1 block text-sm font-semibold text-ink-700">Full name <span class="text-danger-500">*</span></label>
@@ -71,6 +155,13 @@ const field = 'w-full rounded-xl border border-ink-200 bg-card px-3.5 py-2.5 tex
                         <p v-if="form.errors.nationality" :id="fid('nationality') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.nationality }}</p>
                     </div>
                 </div>
+                <FlowAlert v-if="identityChanged || form.errors.confirm_identity_update" tone="warning" title="This changes an existing patient's record" class="mt-4">
+                    <label class="flex items-start gap-2">
+                        <input type="checkbox" v-model="form.confirm_identity_update" class="mt-0.5 rounded text-brand-700" />
+                        <span>MRN {{ form.mrn }} already belongs to {{ lookedUpPatient?.name || 'a known patient' }}. Confirm you want to update their stored details — this changes what's shown for every one of their visits, past and future.</span>
+                    </label>
+                    <p v-if="form.errors.confirm_identity_update" class="mt-1.5 font-semibold">{{ form.errors.confirm_identity_update }}</p>
+                </FlowAlert>
             </section>
 
             <!-- Admission -->

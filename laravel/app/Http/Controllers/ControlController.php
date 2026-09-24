@@ -28,6 +28,23 @@ class ControlController extends Controller
 {
     public function index(Request $request): Response
     {
+        // 2026-09-24 role/UX review #18: a pending self-registration (RegisterController::store —
+        // created inactive, awaiting admin activation) is indistinguishable from an admin-deactivated
+        // account, both showing a bare "Disabled" badge. Derive "still pending" from the audit trail
+        // rather than a new column: RegisterController stamps a 'user.self_register' row at creation,
+        // and because every self-registered account starts at active=false, the ONLY way an
+        // 'active' key can appear in a later 'user.update' diff (AuditDiff — see ControlController::
+        // updateUser) is a false→true flip, i.e. the account was activated at least once (even if an
+        // admin later deactivated it again). So "self-registered AND never touched" == "still pending".
+        $selfRegisteredIds = DB::table('audit_log')
+            ->where('action', 'user.self_register')->where('entity_type', 'user')
+            ->pluck('entity_id')->map(fn ($id) => (int) $id)->all();
+        $everTouchedActiveIds = DB::table('audit_log')
+            ->where('action', 'user.update')->where('entity_type', 'user')
+            ->whereRaw("JSON_CONTAINS_PATH(details, 'one', '$.active')")
+            ->pluck('entity_id')->map(fn ($id) => (int) $id)->all();
+        $pendingIds = array_flip(array_diff($selfRegisteredIds, $everTouchedActiveIds));
+
         // Ship ALL users (~323 rows — a small payload) so the Users tab filters + searches INSTANTLY
         // client-side: no server round-trip per keystroke, no pages to click past. See Control/Index.vue.
         $users = User::query()
@@ -39,6 +56,10 @@ class ControlController extends Controller
                 'on_service' => (bool) $u->on_service, 'specialty_id' => $u->specialty_id, 'mfa' => (bool) $u->mfa_enrolled_at,
                 'can' => ['assign' => (bool) $u->can_assign, 'add' => (bool) $u->can_add, 'manage' => (bool) $u->can_manage, 'modify' => (bool) $u->can_modify,
                     'coordinate' => (bool) $u->can_coordinate_consultations],
+                // #18: true only for a NEVER-YET-ACTIVATED self-registration, never for an
+                // admin-deactivated account — see the derivation above.
+                'pending_registration' => ! $u->active && isset($pendingIds[$u->id]),
+                'registered_at' => optional($u->created_at)->toIso8601String(),
             ]);
 
         $s = Setting::current();
@@ -89,8 +110,11 @@ class ControlController extends Controller
             'max_hospitalist' => ['required', 'integer', 'min:1', 'max:200'],
             'min_subs' => ['required', 'integer', 'min:0', 'max:100'],
             'max_subs' => ['required', 'integer', 'min:1', 'max:200'],
-            'short_los' => ['required', 'integer', 'min:1', 'max:60'],
-            'long_los' => ['required', 'integer', 'min:1', 'max:120'],
+            // #3 (2026-09-24 role/UX review): an inverted pair (e.g. short=20, long=11) used to save
+            // silently, corrupting the LOS colour-coding and the Long-Stay % statistic. `lt`/`gt`
+            // compare against the OTHER field in this same submission (Laravel cross-field rules).
+            'short_los' => ['required', 'integer', 'min:1', 'max:60', 'lt:long_los'],
+            'long_los' => ['required', 'integer', 'min:1', 'max:120', 'gt:short_los'],
             'ward_beds' => ['required', 'integer', 'min:1', 'max:2000'],
             'icu_beds' => ['required', 'integer', 'min:0', 'max:1000'],
             'readmission_window_days' => ['required', 'integer', 'min:0', 'max:30'],
@@ -118,6 +142,9 @@ class ControlController extends Controller
             'alert_boarding_max' => ['required', 'integer', 'min:0', 'max:100'],
             'alert_readmit_rate_pct' => ['required', 'integer', 'min:1', 'max:100'],
             'alert_deaths_delta_pct' => ['required', 'integer', 'min:10', 'max:500'],
+        ], [
+            'short_los.lt' => 'Short LOS must be less than Long LOS.',
+            'long_los.gt' => 'Long LOS must be greater than Short LOS.',
         ]);
         $settings = Setting::current();
 
@@ -410,27 +437,160 @@ class ControlController extends Controller
         return back()->with('flash', ['type' => 'success', 'message' => "Password-reset link sent to {$user->email}."]);
     }
 
+    /**
+     * Case-insensitive, trimmed uniqueness check for a reference-table name (#2, 2026-09-24 role/UX
+     * review) — "Nephrology" and " nephrology " must collide. $ignoreId excludes the row being
+     * renamed so a no-op rename doesn't reject itself.
+     */
+    private function nameTaken(string $table, string $name, ?int $ignoreId = null): bool
+    {
+        return DB::table($table)
+            ->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower(trim($name))])
+            // truthy check (not is_null) would skip id 0 — consultation_reasons' real "Other"
+            // sentinel row — and falsely reject renaming it to its own unchanged name (review fix).
+            ->when(! is_null($ignoreId), fn ($q) => $q->where('id', '<>', $ignoreId))
+            ->exists();
+    }
+
     public function addSpecialty(Request $request): RedirectResponse
     {
         $data = $request->validate(['name' => ['required', 'string', 'max:191'], 'is_subspecialty' => ['boolean'], 'is_external' => ['boolean']]);
+        // #2: block a duplicate at creation — previously two identical rows could exist with no
+        // edit/delete route to fix either one.
+        if ($this->nameTaken('specialties', $data['name'])) {
+            return back()->withErrors(['name' => 'A specialty with this name already exists.'])->withInput();
+        }
         Specialty::create([
-            'name' => $data['name'],
+            'name' => trim($data['name']),
             'is_subspecialty' => $request->boolean('is_subspecialty', true),
             'is_external' => $request->boolean('is_external', false),   // external/allied service = transfer-out target only
         ]);
         Audit::log('specialty.add', 'specialty', null,
-            ['name' => $data['name'], 'is_external' => $request->boolean('is_external', false)]);
+            ['name' => trim($data['name']), 'is_external' => $request->boolean('is_external', false)]);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Specialty added.']);
+    }
+
+    /**
+     * #2: rename a specialty (case-insensitive/trimmed uniqueness, audited before/after). Every
+     * dropdown reads the live row, so this updates every past label — the closed-episode
+     * `admissions.discharge_to` snapshot (a plain string, written at transfer time) is untouched by
+     * design, same as any other historical free-text field.
+     */
+    public function updateSpecialty(Request $request, Specialty $specialty): RedirectResponse
+    {
+        $data = $request->validate(['name' => ['required', 'string', 'max:191']]);
+        if ($this->nameTaken('specialties', $data['name'], $specialty->id)) {
+            return back()->withErrors(['name' => 'Another specialty already has this name.'])->withInput();
+        }
+        $before = $specialty->name;
+        $specialty->update(['name' => trim($data['name'])]);
+        Audit::log('specialty.rename', 'specialty', (string) $specialty->id, ['from' => $before, 'to' => $specialty->name]);
+
+        return back()->with('flash', ['type' => 'success', 'message' => 'Specialty renamed.']);
+    }
+
+    /**
+     * #2: delete a specialty — refused when it is still referenced anywhere. `users.specialty_id`
+     * carries no DB-level foreign key (extend_users_table never added ->constrained()), so this is
+     * an APPLICATION-level guard; `consultations.owning_specialty_id` does have a nullOnDelete FK,
+     * but the check still runs here so the admin gets a clear reason instead of a silently-orphaned
+     * consult. Both checks read straight from the tables (not the Eloquent models), which is
+     * deliberately soft-delete-BLIND: a trashed user/consultation can still be restored later, so a
+     * row only "not referenced" once nothing — live or trashed — points at it.
+     *
+     * Specialty id 1 additionally can never be deleted, referenced or not: ShuffleService,
+     * DashboardController's "Census by service" split and PatientsController's on-service ranking
+     * all hardcode literal id 1 as "the Hospitalist pool" (legacy parity), not by foreign key or the
+     * `is_subspecialty` flag. MySQL never reuses a freed auto-increment id, so once id 1 is deleted
+     * those three features would silently and permanently lose their Hospitalist pool with no error
+     * (review fix, 2026-09-24).
+     */
+    public function destroySpecialty(Specialty $specialty): RedirectResponse
+    {
+        if ($specialty->id === 1) {
+            return back()->with('flash', ['type' => 'error',
+                'message' => 'This specialty is used internally to identify the Hospitalist pool and cannot be deleted.']);
+        }
+        $usedByUsers = DB::table('users')->where('specialty_id', $specialty->id)->exists();
+        $usedByConsultations = DB::table('consultations')->where('owning_specialty_id', $specialty->id)->exists();
+        if ($usedByUsers || $usedByConsultations) {
+            $where = collect([
+                $usedByUsers ? 'at least one staff account' : null,
+                $usedByConsultations ? 'at least one consultation' : null,
+            ])->filter()->implode(' and ');
+
+            return back()->with('flash', ['type' => 'error',
+                'message' => "Cannot delete \"{$specialty->name}\" — it is still assigned to {$where}."]);
+        }
+        $name = $specialty->name;
+        Audit::log('specialty.delete', 'specialty', (string) $specialty->id, ['name' => $name]);
+        $specialty->delete();   // no soft-delete column on this table (never had one) — genuinely unused, safe to remove
+
+        return back()->with('flash', ['type' => 'success', 'message' => "Deleted specialty \"{$name}\"."]);
     }
 
     public function addReason(Request $request): RedirectResponse
     {
         $data = $request->validate(['name' => ['required', 'string', 'max:191']]);
-        ConsultationReason::create(['name' => $data['name']]);
-        Audit::log('reason.add', 'consultation_reason', null, ['name' => $data['name']]);
+        if ($this->nameTaken('consultation_reasons', $data['name'])) {
+            return back()->withErrors(['name' => 'An indication with this name already exists.'])->withInput();
+        }
+        ConsultationReason::create(['name' => trim($data['name'])]);
+        Audit::log('reason.add', 'consultation_reason', null, ['name' => trim($data['name'])]);
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Consultation indication added.']);
+    }
+
+    /**
+     * #2: rename a consultation indication (same uniqueness rule + audit as specialties). Id 0 is
+     * the real "Other" sentinel (DATABASE-AND-BEHAVIOR.md §consultation_reasons; hardcoded by id in
+     * ConsultationRequest::rules() to require `other_indication`, and by literal placeholder text
+     * "required when 'Other' is selected" in Consultations/Index.vue) — it is refused here so its
+     * label can never drift out of sync with that hardcoded text (review fix, 2026-09-24).
+     */
+    public function updateReason(Request $request, ConsultationReason $reason): RedirectResponse
+    {
+        if ($reason->id === 0) {
+            return back()->with('flash', ['type' => 'error', 'message' => '"Other" is a fixed system option and cannot be renamed.']);
+        }
+        $data = $request->validate(['name' => ['required', 'string', 'max:191']]);
+        if ($this->nameTaken('consultation_reasons', $data['name'], $reason->id)) {
+            return back()->withErrors(['name' => 'Another indication already has this name.'])->withInput();
+        }
+        $before = $reason->name;
+        $reason->update(['name' => trim($data['name'])]);
+        Audit::log('reason.rename', 'consultation_reason', (string) $reason->id, ['from' => $before, 'to' => $reason->name]);
+
+        return back()->with('flash', ['type' => 'success', 'message' => 'Indication renamed.']);
+    }
+
+    /**
+     * #2: delete a consultation indication — refused while any consultation still carries its id in
+     * `consultations.indication` (a JSON array of reason ids, no DB foreign key possible on a JSON
+     * column). `whereJsonContains` reads every consultation, trashed included (DB::table bypasses
+     * the model's soft-delete scope), same soft-delete-blind reasoning as destroySpecialty().
+     *
+     * Id 0 additionally can never be deleted, referenced or not: it is the real "Other" sentinel
+     * hardcoded by id in `ConsultationRequest::rules()` (requires `other_indication` free text when
+     * id 0 is picked) and documented in DATABASE-AND-BEHAVIOR.md. Once nothing currently references
+     * it, deleting it would silently remove the "Other" option from every future consult-booking
+     * form (review fix, 2026-09-24).
+     */
+    public function destroyReason(ConsultationReason $reason): RedirectResponse
+    {
+        if ($reason->id === 0) {
+            return back()->with('flash', ['type' => 'error', 'message' => '"Other" is a fixed system option and cannot be deleted.']);
+        }
+        if (DB::table('consultations')->whereJsonContains('indication', $reason->id)->exists()) {
+            return back()->with('flash', ['type' => 'error',
+                'message' => "Cannot delete \"{$reason->name}\" — it is still used by at least one consultation."]);
+        }
+        $name = $reason->name;
+        Audit::log('reason.delete', 'consultation_reason', (string) $reason->id, ['name' => $name]);
+        $reason->delete();
+
+        return back()->with('flash', ['type' => 'success', 'message' => "Deleted indication \"{$name}\"."]);
     }
 
     /** Phase 3 — §3.3: add a monthly-report email recipient. */

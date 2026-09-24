@@ -153,12 +153,34 @@ class ConsultationsController extends Controller
             ->selectRaw('CASE WHEN signoff_date IS NOT NULL THEN ? ELSE status END AS effective_status, COUNT(*) AS c', [Consultation::STATUS_SIGNED_OFF])
             ->groupBy('effective_status')->pluck('c', 'effective_status');
 
+        // role-UX review #4 (2026-09-24): the own-specialty booking rule (ConsultationRequest::
+        // ownSpecialtyRule) was always correct and server-enforced, but the "To service" datalist
+        // offered every specialty and the refusal only surfaced after the whole form was filled.
+        // These three props let the page say the rule UP FRONT instead: which specialties this
+        // viewer may actually book a consult into, and why the list is short when it is.
+        $canBookAnyTeam = $viewer->isAdmin() || $viewer->canCoordinateConsultations();
+        $allSpecialties = Specialty::orderBy('name')->get(['id', 'name', 'is_external']);
+        // A specialty's OWN name always resolves to its OWN id (resolveOwningSpecialtyId is a plain
+        // name match), so "may book into specialty S" reduces to exactly the predicate
+        // ownSpecialtyRule applies per row: privileged, or S is the viewer's own specialty. Free
+        // text that matches no specialty row stays bookable by anyone (the Unassigned bucket) —
+        // there is nothing to list for that, so it is not part of this enumerable set.
+        $bookableToServices = $canBookAnyTeam
+            ? $allSpecialties
+            : $allSpecialties->filter(fn (Specialty $s) => $viewer->specialty_id !== null && (int) $s->id === (int) $viewer->specialty_id)->values();
+        $bookingNotice = $canBookAnyTeam
+            ? null
+            : ($viewer->specialty_id === null ? ConsultationRequest::NO_SPECIALTY_MESSAGE : ConsultationRequest::OWN_SPECIALTY_ONLY_MESSAGE);
+
         return Inertia::render('Consultations/Index', [
             'consultations' => $consultations,
             'filters' => ['search' => $filters['search'] ?? '', 'status' => $status, 'scope' => $mine ? 'mine' : '', 'consultant_id' => $consultantId],
             // full objects (not just names): the form filters the consultant dropdown by
             // INTERNAL specialty when "to service" matches one
-            'specialties' => Specialty::orderBy('name')->get(['id', 'name', 'is_external']),
+            'specialties' => $allSpecialties,
+            'canBookAnyTeam' => $canBookAnyTeam,
+            'bookableToServices' => $bookableToServices,
+            'bookingNotice' => $bookingNotice,
             'stats' => [
                 Consultation::STATUS_NEW => (int) ($counts[Consultation::STATUS_NEW] ?? 0),
                 Consultation::STATUS_ACTIVE => (int) ($counts[Consultation::STATUS_ACTIVE] ?? 0),

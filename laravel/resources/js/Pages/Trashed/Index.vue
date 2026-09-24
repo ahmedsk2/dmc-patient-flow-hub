@@ -1,6 +1,7 @@
 <script setup>
 import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import InfoTip from '@/Components/InfoTip.vue';
 import { useConfirm } from '@/composables/useConfirm';
 
 /**
@@ -91,7 +92,7 @@ const btn = 'rounded-lg bg-brand-solid px-3 py-1.5 text-xs font-semibold text-wh
 
         <!-- Users -->
         <section>
-            <h2 class="mb-2 font-bold text-ink-800">Users <span class="nums text-ink-400">({{ users.length }})</span></h2>
+            <h2 class="mb-2 flex items-center gap-1.5 font-bold text-ink-800">Users <span class="nums text-ink-400">({{ users.length }})</span><InfoTip label="Restoring a user" text="Restores the account exactly as it was — one deactivated before deletion comes back still Disabled. Reactivate it separately in Control → Users." /></h2>
             <div :class="card">
                 <table class="w-full">
                     <thead><tr class="border-b border-line">

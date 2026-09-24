@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
-import { reactive, nextTick } from 'vue';
+import { reactive, nextTick, watch } from 'vue';
 
 // ActionModal owns the per-patient flow forms (assign / medical / complete / icu / transfer) that
 // used to live on Patients/Index. These assertions are RELOCATED from PatientsIndex.wave2.test.js
@@ -11,14 +11,30 @@ import { reactive, nextTick } from 'vue';
 const { posts } = vi.hoisted(() => ({ posts: [] }));
 vi.mock('@inertiajs/vue3', () => ({
     useForm: (obj) => {
+        // #20 (role/UX review 2026-09-24): a faithful-enough stand-in for Inertia's own isDirty —
+        // it tracks a `defaults` baseline (starting at the constructor's obj) and recomputes
+        // isDirty whenever a tracked field changes, exactly like the real thing. `.defaults()`
+        // (no-arg) re-anchors the baseline to the CURRENT values — that's the fix under test.
+        const keys = Object.keys(obj);
+        let defaults = { ...obj };
+        const recompute = () => { f.isDirty = keys.some((k) => JSON.stringify(f[k]) !== JSON.stringify(defaults[k])); };
         const f = reactive({
             ...obj,
             errors: {},
             processing: false,
+            isDirty: false,
             post: vi.fn((url, opts) => { posts.push({ url, form: f }); if (opts?.onSuccess) opts.onSuccess(); }),
             reset: vi.fn(),
             clearErrors: vi.fn(),
+            defaults: vi.fn((...args) => {
+                if (args.length === 0) defaults = Object.fromEntries(keys.map((k) => [k, f[k]]));
+                else if (args.length === 1 && args[0] && typeof args[0] === 'object') defaults = { ...defaults, ...args[0] };
+                else if (args.length === 2) defaults = { ...defaults, [args[0]]: args[1] };
+                recompute();
+                return f;
+            }),
         });
+        watch(keys.map((k) => () => f[k]), recompute, { flush: 'sync' });
         return f;
     },
 }));
@@ -56,6 +72,10 @@ const mountWith = (mode, p = patient, over = {}) => mount(ActionModal, {
         externalServices: ['Surgery'], today: '2026-06-14', ...over,
     },
 });
+// The Cancel button and an InfoTip "!" mark both carry `text-ink-500` — the InfoTips added by the
+// role/UX review (2026-09-24) mean `button.text-ink-500` is no longer unique. Select by its own text
+// instead of relying on a class it happens to share.
+const cancelBtn = (w) => w.findAll('button').find((b) => b.text() === 'Cancel');
 
 beforeEach(() => {
     posts.length = 0;
@@ -567,7 +587,7 @@ describe('ActionModal — unsaved-changes guard (Cancel button)', () => {
     it('clean form: Cancel closes immediately without asking', async () => {
         const w = mountWith('assign');
         expect(w.vm.modalDirty).toBe(false);
-        await w.find('button.text-ink-500').trigger('click');
+        await cancelBtn(w).trigger('click');
         expect(ask).not.toHaveBeenCalled();
         expect(w.emitted('close')).toBeTruthy();
     });
@@ -578,7 +598,7 @@ describe('ActionModal — unsaved-changes guard (Cancel button)', () => {
         w.vm.aForm.isDirty = true;
         await w.vm.$nextTick();
         expect(w.vm.modalDirty).toBe(true);
-        await w.find('button.text-ink-500').trigger('click');
+        await cancelBtn(w).trigger('click');
         expect(ask).toHaveBeenCalledTimes(1);
         expect(ask.mock.calls[0][2]).toBe('danger');
         expect(w.emitted('close')).toBeTruthy();
@@ -589,7 +609,7 @@ describe('ActionModal — unsaved-changes guard (Cancel button)', () => {
         const w = mountWith('assign');
         w.vm.aForm.isDirty = true;
         await w.vm.$nextTick();
-        await w.find('button.text-ink-500').trigger('click');
+        await cancelBtn(w).trigger('click');
         expect(ask).toHaveBeenCalledTimes(1);
         expect(w.emitted('close')).toBeFalsy();
     });
@@ -600,6 +620,98 @@ describe('ActionModal — unsaved-changes guard (Cancel button)', () => {
         w.vm.mdForm.isDirty = true;
         await w.vm.$nextTick();
         expect(w.vm.modalDirty).toBe(true);
+    });
+});
+
+// #20 (role/UX review 2026-09-24): cancelling an UNTOUCHED, PREFILLED dialog used to trigger a false
+// "Discard changes?" warning — the guard compared the just-prefilled values against the form's empty
+// constructor defaults instead of against what was actually loaded. Fixed by calling `.defaults()`
+// right after each mode's prefill, so the baseline is what the user actually sees on open.
+describe('ActionModal — false "Discard changes?" regression (#20)', () => {
+    it('Reassign (assign mode) on an already-assigned patient: prefilled but untouched reads clean, Cancel never asks', async () => {
+        const w = mountWith('assign');   // patient.consultant_id === 5 — prefills aForm.consultant_id to 5
+        expect(w.vm.aForm.consultant_id).toBe(5);
+        expect(w.vm.modalDirty).toBe(false);
+        await cancelBtn(w).trigger('click');
+        expect(ask).not.toHaveBeenCalled();
+        expect(w.emitted('close')).toBeTruthy();
+    });
+
+    it('Transfer on a patient currently in ICU: target prefills to "Ward" (diverging from the form\'s own "ICU" default) but reads clean', async () => {
+        const icuPatient = { ...patient, location: 'ICU' };
+        const w = mountWith('transfer', icuPatient);
+        expect(w.vm.tForm.target).toBe('Ward');
+        expect(w.vm.modalDirty).toBe(false);
+        await cancelBtn(w).trigger('click');
+        expect(ask).not.toHaveBeenCalled();
+    });
+
+    it('Complete discharge prefilled from a Dead phase-1 outcome reads clean, not dirty', async () => {
+        const deadPatient = { ...patient, outcome: 'Dead', discharge_to: 'Mortuary' };
+        const w = mountWith('complete', deadPatient);
+        expect(w.vm.cdForm.outcome).toBe('Dead');
+        expect(w.vm.modalDirty).toBe(false);
+    });
+
+    it('a genuine edit AFTER opening still marks the form dirty (the guard still works)', async () => {
+        const w = mountWith('assign');
+        expect(w.vm.modalDirty).toBe(false);
+        w.vm.aForm.consultant_id = 6;   // a real user change
+        await nextTick();
+        expect(w.vm.modalDirty).toBe(true);
+    });
+});
+
+// #13 (role/UX review 2026-09-24): an internal-specialty transfer is the only capability-free way to
+// hand a patient to a named colleague, including a same-team move — it always closes the episode and
+// opens a new one, which an InfoTip now says up front.
+describe('ActionModal — internal specialty transfer InfoTip (#13)', () => {
+    it('explains that the transfer closes this episode and opens a new one', async () => {
+        const w = mountWith('transfer');
+        w.vm.tForm.mode = 'specialty';
+        await nextTick();
+        const tip = w.find('button[aria-label="More information: Internal specialty transfer"]');
+        expect(tip.exists()).toBe(true);
+    });
+});
+
+// #25/#37 (role/UX review 2026-09-24): "System" (delay reason) and "LAMA" (discharge destination)
+// were unexplained; "Discharge to" and "Destination" named the SAME field two different ways across
+// the medical/complete forms in the same flow.
+describe('ActionModal — discharge wording (#25/#37)', () => {
+    it('medical-only: the delay-reason InfoTip explains Physical vs System', async () => {
+        const w = mountWith('medical');
+        const tip = w.find('button[aria-label="More information: Delay reason"]');
+        expect(tip.exists()).toBe(true);
+        expect(tip.attributes('aria-label')).toBe('More information: Delay reason');
+    });
+
+    it('medical (complete) and complete-discharge and ICU forms all say "Discharge to" (one term) and explain LAMA', async () => {
+        const md = mountWith('medical');
+        md.vm.mdForm.complete = true;
+        await md.vm.$nextTick();
+        expect(md.text()).toContain('Discharge to');
+        expect(md.text()).not.toContain('Destination');
+        expect(md.find('button[aria-label="More information: Discharge to"]').exists()).toBe(true);
+
+        const cd = mountWith('complete');
+        expect(cd.text()).toContain('Discharge to');
+        expect(cd.text()).not.toContain('Destination');   // #37 — was "Destination" here, renamed for consistency
+        expect(cd.find('button[aria-label="More information: Discharge to"]').exists()).toBe(true);
+
+        const icu = mountWith('icu');
+        expect(icu.find('button[aria-label="More information: Discharge to"]').exists()).toBe(true);
+    });
+});
+
+// #27 (role/UX review 2026-09-24): the board's assign dialog's "Mark as new patient" checkbox now
+// explains what ticking it actually does (verified against PatientActionController::assign /
+// PatientsController's is_new_assignment comment) rather than silently defaulting one way.
+describe('ActionModal — "Mark as new patient" InfoTip (#27)', () => {
+    it('assign mode explains the managed flag', () => {
+        const w = mountWith('assign');
+        const tip = w.find('button[aria-label="More information: Mark as new patient"]');
+        expect(tip.exists()).toBe(true);
     });
 });
 

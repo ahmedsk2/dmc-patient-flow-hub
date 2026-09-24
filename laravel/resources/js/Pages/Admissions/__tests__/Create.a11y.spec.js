@@ -27,6 +27,10 @@ vi.mock('@/Layouts/AppLayout.vue', () => ({
 // The ICD-10 typeahead owns its own labelling (covered elsewhere) and fetches over the network;
 // it is stubbed to an inert element so only THIS page's controls are under test.
 vi.mock('@/Components/IcdTypeahead.vue', () => ({ default: { name: 'IcdTypeahead', template: '<div></div>' } }));
+// InfoTip (role/UX review 2026-09-24) has its own dedicated a11y coverage
+// (Components/__tests__/InfoTip.spec.js) — stubbed here so its "!" text never pollutes an
+// adjoining <label>'s accessible name in the assertions below.
+vi.mock('@/Components/InfoTip.vue', () => ({ default: { name: 'InfoTip', props: ['text', 'label'], template: '<span></span>' } }));
 
 import Create from '@/Pages/Admissions/Create.vue';
 

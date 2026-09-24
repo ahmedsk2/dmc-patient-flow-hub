@@ -137,19 +137,39 @@ class HandoverController extends Controller
             // transfer-driven reminder (Admission::handoverPending), scoped by the SAME D1 own-only
             // predicate as the board (User::seesOwnPatientsOnly): own patients only for a plain
             // consultant, unit-wide for admin/registrar/resident/observer.
-            'needsHandover' => Admission::handoverPending()
-                ->when(Auth::user()->seesOwnPatientsOnly(), fn ($q) => $q->where('consultant_id', Auth::id()))
-                ->with(['patient:id,mrn,name', 'handover', 'consultant:id,name,full_name'])
-                ->orderBy('admit_date')->get()
-                ->map(fn ($a) => [
-                    'admission_id' => $a->id,
-                    'patient' => $a->patient?->name ?? 'Unknown',
-                    'mrn' => $a->patient?->mrn,
-                    'bed' => $a->bed,
-                    'consultant' => $a->consultant ? ($a->consultant->full_name ?: $a->consultant->name) : '—',
-                    'last_updated' => $a->handover?->updated_at?->toIso8601String(),
-                    'checkpoints' => $a->handover?->checkpoints,
-                ])->values(),
+            'needsHandover' => (function () use ($me) {
+                // #32 (2026-09-24 role/UX review, fix-up round): can_write below must match save()'s
+                // FULL grant — canManageAdmission() OR "still-pending outgoing consultant" ($isOutgoing
+                // in save()) — not just the first half. A Resident (not D1-scoped) who is the outgoing
+                // consultant of a still-pending signature on an admission that also shows up here (both
+                // raised by the same reassignment-without-a-fresh-handover event) really can write via
+                // save()'s $isOutgoing branch, so the row must not hide the link. Batched in one query
+                // rather than per-row to avoid an N+1.
+                $outgoingPendingAdmissionIds = HandoverSignature::where('from_consultant_id', $me)
+                    ->pending()->pluck('admission_id')->all();
+
+                return Admission::handoverPending()
+                    ->when(Auth::user()->seesOwnPatientsOnly(), fn ($q) => $q->where('consultant_id', $me))
+                    ->with(['patient:id,mrn,name', 'handover', 'consultant:id,name,full_name'])
+                    ->orderBy('admit_date')->get()
+                    ->map(fn ($a) => [
+                        'admission_id' => $a->id,
+                        'patient' => $a->patient?->name ?? 'Unknown',
+                        'mrn' => $a->patient?->mrn,
+                        'bed' => $a->bed,
+                        'consultant' => $a->consultant ? ($a->consultant->full_name ?: $a->consultant->name) : '—',
+                        'last_updated' => $a->handover?->updated_at?->toIso8601String(),
+                        'checkpoints' => $a->handover?->checkpoints,
+                        // #32: the inbox "Write" action leads to the board's handover editor, which is
+                        // gated by the SAME rule as HandoverController::save() — canManageAdmission() OR
+                        // the still-pending-outgoing-consultant grant. Ship it per-row so the client can
+                        // hide the link for a viewer who could never actually write it (e.g. Observer, or
+                        // a no-capability role looking at someone else's patient) — the server remains
+                        // the enforcement; this only avoids a dead-end button.
+                        'can_write' => Auth::user()->canManageAdmission($a)
+                            || in_array($a->id, $outgoingPendingAdmissionIds, true),
+                    ])->values();
+            })(),
         ]);
     }
 
@@ -178,12 +198,25 @@ class HandoverController extends Controller
             ])->values());
     }
 
-    /** POST /handovers/{signature}/sign — receiving consultant (or admin) acknowledges the handover. */
-    public function sign(HandoverSignature $signature)
+    /**
+     * POST /handovers/{signature}/sign — receiving consultant (or admin) acknowledges the handover.
+     *
+     * #12 (2026-09-24 role/UX review): a single-row Sign used to succeed with no confirmation and no
+     * server-side evidence the signer actually read the note — unlike "Sign all", which already
+     * confirmed client-side. The client now confirms on every sign (themed dialog, see
+     * Handovers/Index.vue) and sends an explicit `acknowledged` flag; a request missing it is refused
+     * here too, so the server — not just the UI — requires the acknowledgement. This does not change
+     * what gets bound: signRow() still re-binds to the CURRENT latest revision at signing time
+     * (HANDOVER-COMPLIANCE.md §2.3), i.e. whatever the signer had open when they acknowledged.
+     */
+    public function sign(Request $request, HandoverSignature $signature)
     {
         $u = Auth::user();
         if ($u->isObserver() || ! ($u->isAdmin() || (int) $signature->to_consultant_id === (int) $u->id)) {
             throw new AccessDeniedHttpException('Only the receiving consultant may sign.');
+        }
+        if (! $request->boolean('acknowledged')) {
+            return back()->with('flash', ['type' => 'error', 'message' => 'Confirm you have read the handover before signing.']);
         }
         if ($signature->voided_at) {
             return back()->with('flash', ['type' => 'error', 'message' => 'This handover request is no longer active.']);
@@ -196,7 +229,8 @@ class HandoverController extends Controller
         return back()->with('flash', ['type' => 'success', 'message' => 'Handover signed.']);
     }
 
-    /** POST /handovers/sign-many {ids:[]} — sign every pending signature addressed to me. */
+    /** POST /handovers/sign-many {ids:[], acknowledged:true} — sign every pending signature addressed
+     *  to me. Same acknowledgement requirement as sign() above — see #12. */
     public function signMany(Request $request)
     {
         $u = Auth::user();
@@ -204,6 +238,9 @@ class HandoverController extends Controller
             throw new AccessDeniedHttpException('Observers are read-only.');
         }
         $data = $request->validate(['ids' => ['required', 'array'], 'ids.*' => ['integer']]);
+        if (! $request->boolean('acknowledged')) {
+            return back()->with('flash', ['type' => 'error', 'message' => 'Confirm you have reviewed each handover before signing.']);
+        }
 
         $rows = HandoverSignature::whereIn('id', $data['ids'])->pending()
             ->when(! $u->isAdmin(), fn ($q) => $q->where('to_consultant_id', $u->id))

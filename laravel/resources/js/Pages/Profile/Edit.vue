@@ -51,7 +51,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm out
                     <div>
                         <h2 class="text-xl font-bold text-ink-900">{{ profile.name }}</h2>
                         <p class="text-sm text-ink-500">@{{ profile.username }} · {{ profile.role }}</p>
-                        <p class="text-xs text-ink-400">Password set {{ profile.pass_exp_date || '—' }} · MFA {{ profile.mfa_enabled ? 'enabled' : 'not enabled' }}</p>
+                        <p class="text-xs text-ink-400">Password set {{ profile.pass_exp_date || '—' }} · Two-factor {{ profile.mfa_enabled ? 'enabled' : 'not enabled' }}</p>
                     </div>
                 </div>
             </section>

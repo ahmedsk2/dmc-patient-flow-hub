@@ -155,6 +155,36 @@ describe('PatientFlags — AA-safe colour tokens', () => {
     });
 });
 
+// #23/#26/#28 (role/UX review 2026-09-24): each pill repeats per card, so it carries its explanation
+// as a native title (hover/tap) + aria-label rather than an inline "!" InfoTip — the same pattern
+// CheckpointChips.vue uses for its own repeated chips. Long-term's wording reflects the #6 fix in
+// this same review: the flag now carries forward on transfer instead of silently resetting.
+describe('PatientFlags — accessible tooltips (#23/#26/#28)', () => {
+    it('New pill explains the managed flag, explicitly ruling out a 24-hour timer', () => {
+        const s = only('is_new').get('span');
+        expect(s.attributes('title')).toMatch(/cleared on discharge or reassignment/i);
+        expect(s.attributes('title')).toMatch(/not a 24-hour timer/i);
+        expect(s.attributes('aria-label')).toMatch(/^New:/);
+    });
+    it('Long-term pill says it is manual and now carries over on transfer (post-#6)', () => {
+        const s = only('is_longterm').get('span');
+        expect(s.attributes('title')).toMatch(/manually set/i);
+        expect(s.attributes('title')).toMatch(/carries over when the patient transfers/i);
+        expect(s.attributes('title')).not.toMatch(/resets/i);
+    });
+    it('TB pill names the reference list', () => {
+        expect(only('is_tb').get('span').attributes('title')).toMatch(/tuberculosis/i);
+    });
+    it('Disch. still in pill explains the bed is still occupied', () => {
+        const s = mountFlags({ medically_discharged: true }).get('span');
+        expect(s.attributes('title')).toMatch(/still occupying the bed/i);
+    });
+    it('plain variant carries the same tooltips', () => {
+        const s = mountFlags({ is_longterm: true }, { variant: 'plain' }).get('span');
+        expect(s.attributes('title')).toMatch(/manually set/i);
+    });
+});
+
 // A colour-token migration must not disturb WHICH badges render or in WHAT order.
 describe('PatientFlags — badge order + conditions are unchanged by the token migration', () => {
     const labels = (w) => w.findAll('span').map((s) => s.text());

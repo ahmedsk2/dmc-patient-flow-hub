@@ -59,6 +59,12 @@ biggest live risk** (the original un-hardened build, on US hosting).
 
 ## B. Owner — decisions and console work
 
+- [ ] **A same-team hand-off for a plain consultant?** (found by the 2026-09-24 role/UX review, #13.)
+  Today a consultant without the Can-assign capability can only pass their own patient to a named
+  colleague through *Transfer → internal specialty*, which closes the episode and opens a new one (its
+  message and "!" now say so). Giving the primary consultant a direct "hand to a colleague" action would
+  be a **permission change** — your decision; nothing was changed.
+
 - [x] **Explain the 2026-09-16 outage** — investigated 2026-09-23 in the OCI audit trail and metrics.
   **Oracle stopped the server itself** (02:56 UTC, no user or API caller — service-side Compute calls
   just before) and **Oracle started it again** (16:00 UTC, network card re-attached — i.e. restored,
@@ -215,6 +221,11 @@ had a cross-cutting adversarial review (6 more real problems found and fixed, li
   survive one); the release checklist matches the encrypted dump.
 
 ### Still open — engineering
+
+- [ ] *Optional, from the 2026-09-24 role/UX review:* the Statistics physician drill-down has two
+  destination donuts ("Discharge destinations" by `transfer_type`, "Discharged to" by `discharge_to`)
+  that still count a ward→ICU move as an out-of-department transfer — explained by "!" marks now; a
+  consistent split needs coordinated changes to StatisticsController and both charts.
 
 - [x] ~~Reinstall the host copy of `db-backup.py`~~ — **done 2026-09-22** with the deploy; the nightly
   dump now records its exact binlog position.

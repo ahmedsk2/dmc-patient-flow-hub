@@ -44,6 +44,23 @@ defineProps({
     readmitWindow: { type: Number, default: 3 },
     variant: { type: String, default: 'badge', validator: (v) => ['badge', 'plain'].includes(v) },
 });
+
+// #23/#26/#28 (role/UX review 2026-09-24): these pills repeat on every card on the board and the
+// printable census, so an inline "!" InfoTip on each one would be noisy at that scale — a native
+// `title` (hover/tap) + `aria-label` (screen reader) on the pill itself, the same pattern
+// CheckpointChips.vue already uses for its own repeated per-card chips.
+//   - New/Old: the managed is_new_assignment flag (set on assign/handover/shuffle, cleared on
+//     discharge/reassignment) — NOT a rolling 24-hour window (a wording the app's own metrics doc
+//     currently gets wrong too; see DASHBOARD-AND-STATISTICS-METRICS.md).
+//   - Long-term: after #6 (this review), the flag now carries forward across a transfer instead of
+//     silently resetting — say so, not the old "resets after a transfer" behaviour.
+const TIP = {
+    new: 'Assigned, handed over, or shuffled — cleared on discharge or reassignment, not a 24-hour timer.',
+    readmit: 'Admitted again within the readmission window of a real discharge.',
+    longterm: 'Manually set by staff — not calculated from length of stay. Carries over when the patient transfers.',
+    tb: 'Tuberculosis — a diagnosis on the TB reference list.',
+    dischargedStillIn: 'Medically cleared to leave but still occupying the bed, awaiting a destination or bed.',
+};
 </script>
 
 <template>
@@ -52,18 +69,18 @@ defineProps({
          9.27/9.96/8.64/10.67:1 (dark).
          This is also what makes the printed census legible — warning-500 was 2.48:1 on white. -->
     <template v-if="variant === 'plain'">
-        <span v-if="patient.is_new" class="mr-1 font-semibold text-on-info">New</span>
-        <span v-if="patient.is_readmission" class="mr-1 font-semibold text-on-warning">Readmit ≤{{ readmitWindow ?? 3 }}d</span>
-        <span v-if="patient.is_longterm" class="mr-1 font-semibold text-on-accent">Long-term</span>
-        <span v-if="patient.is_tb" class="mr-1 font-semibold text-on-danger">TB</span>
-        <span v-if="patient.medically_discharged" class="font-semibold text-on-warning">Disch. still in</span>
+        <span v-if="patient.is_new" :title="TIP.new" :aria-label="`New: ${TIP.new}`" class="mr-1 font-semibold text-on-info">New</span>
+        <span v-if="patient.is_readmission" :title="TIP.readmit" :aria-label="`Readmit: ${TIP.readmit}`" class="mr-1 font-semibold text-on-warning">Readmit ≤{{ readmitWindow ?? 3 }}d</span>
+        <span v-if="patient.is_longterm" :title="TIP.longterm" :aria-label="`Long-term: ${TIP.longterm}`" class="mr-1 font-semibold text-on-accent">Long-term</span>
+        <span v-if="patient.is_tb" :title="TIP.tb" :aria-label="`TB: ${TIP.tb}`" class="mr-1 font-semibold text-on-danger">TB</span>
+        <span v-if="patient.medically_discharged" :title="TIP.dischargedStillIn" :aria-label="`Disch. still in: ${TIP.dischargedStillIn}`" class="font-semibold text-on-warning">Disch. still in</span>
     </template>
     <template v-else>
-        <span v-if="patient.is_new" class="rounded-full bg-tint-info px-1.5 py-0.5 text-[10px] font-semibold text-on-info">New</span>
-        <span v-if="patient.is_readmission" class="rounded-full bg-tint-warning px-1.5 py-0.5 text-[10px] font-semibold text-on-warning">Readmit ≤{{ readmitWindow ?? 3 }}d</span>
-        <span v-if="patient.is_longterm" class="rounded-full bg-tint-accent px-1.5 py-0.5 text-[10px] font-semibold text-on-accent">Long-term</span>
-        <span v-if="patient.is_tb" class="rounded-full bg-tint-danger px-1.5 py-0.5 text-[10px] font-semibold text-on-danger">TB</span>
+        <span v-if="patient.is_new" :title="TIP.new" :aria-label="`New: ${TIP.new}`" class="rounded-full bg-tint-info px-1.5 py-0.5 text-[10px] font-semibold text-on-info">New</span>
+        <span v-if="patient.is_readmission" :title="TIP.readmit" :aria-label="`Readmit: ${TIP.readmit}`" class="rounded-full bg-tint-warning px-1.5 py-0.5 text-[10px] font-semibold text-on-warning">Readmit ≤{{ readmitWindow ?? 3 }}d</span>
+        <span v-if="patient.is_longterm" :title="TIP.longterm" :aria-label="`Long-term: ${TIP.longterm}`" class="rounded-full bg-tint-accent px-1.5 py-0.5 text-[10px] font-semibold text-on-accent">Long-term</span>
+        <span v-if="patient.is_tb" :title="TIP.tb" :aria-label="`TB: ${TIP.tb}`" class="rounded-full bg-tint-danger px-1.5 py-0.5 text-[10px] font-semibold text-on-danger">TB</span>
         <span v-if="patient.discharged" class="rounded-full bg-ink-100 px-1.5 py-0.5 text-[10px] font-semibold text-ink-500">Discharged {{ patient.discharge_date }}</span>
-        <span v-else-if="patient.medically_discharged" class="rounded-full bg-tint-warning px-1.5 py-0.5 text-[10px] font-semibold text-on-warning">Disch. still in</span>
+        <span v-else-if="patient.medically_discharged" :title="TIP.dischargedStillIn" :aria-label="`Disch. still in: ${TIP.dischargedStillIn}`" class="rounded-full bg-tint-warning px-1.5 py-0.5 text-[10px] font-semibold text-on-warning">Disch. still in</span>
     </template>
 </template>

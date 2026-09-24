@@ -12,12 +12,26 @@ const { posts } = vi.hoisted(() => ({ posts: [] }));
 // reactive() so the watch(() => rForm.from_consultant_id, …) that auto-loads the preflight is
 // actually exercised (a plain object wouldn't trigger Vue reactivity).
 vi.mock('@inertiajs/vue3', async () => {
-    const { reactive } = await import('vue');
+    const { reactive, watch } = await import('vue');
     return {
         useForm: (obj) => {
-            const f = reactive({ ...obj, errors: {}, processing: false,
+            // #20 (role/UX review 2026-09-24): a faithful-enough stand-in for Inertia's own isDirty
+            // — tracks a `defaults` baseline, recomputed whenever a tracked field changes OR
+            // `.defaults()` (no-arg) re-anchors it to the CURRENT values. Mirrors ActionModal.spec.js.
+            const keys = Object.keys(obj);
+            let defaults = { ...obj };
+            const recompute = () => { f.isDirty = keys.some((k) => JSON.stringify(f[k]) !== JSON.stringify(defaults[k])); };
+            const f = reactive({ ...obj, errors: {}, processing: false, isDirty: false,
                 post: vi.fn((url, opts) => { posts.push({ url, form: { ...f } }); if (opts?.onSuccess) opts.onSuccess(); }),
-                reset: vi.fn(), clearErrors: vi.fn() });
+                reset: vi.fn(), clearErrors: vi.fn(),
+                defaults: vi.fn((...args) => {
+                    if (args.length === 0) defaults = Object.fromEntries(keys.map((k) => [k, f[k]]));
+                    else if (args.length === 1 && args[0] && typeof args[0] === 'object') defaults = { ...defaults, ...args[0] };
+                    else if (args.length === 2) defaults = { ...defaults, [args[0]]: args[1] };
+                    recompute();
+                    return f;
+                }) });
+            watch(keys.map((k) => () => f[k]), recompute, { flush: 'sync' });
             return f;
         },
     };
@@ -285,6 +299,76 @@ describe('ReassignModal — unsaved-changes guard', () => {
         w.vm.close();
         await w.vm.$nextTick(); await w.vm.$nextTick();
         expect(w.emitted('close')).toBeFalsy();
+    });
+});
+
+// #20 (role/UX review 2026-09-24): opening the modal PRE-FILLED from a group-header "Reassign"
+// button used to diverge from rForm's empty constructor default (from_consultant_id set, non-empty)
+// and read dirty before the user touched anything — Cancel raised a false "Discard changes?"
+// warning. Fixed via `.defaults()` right after the prefill in openModal().
+describe('ReassignModal — false "Discard changes?" regression (#20)', () => {
+    it('opening pre-filled from a group header reads clean, Cancel never asks', async () => {
+        preflight.mockResolvedValue([]);   // the watcher on from_consultant_id auto-loads it — give it a real resolution
+        const w = mountWith();
+        w.vm.openModal(5);
+        await nextTick(); await nextTick();
+        expect(w.vm.rForm.from_consultant_id).toBe(5);
+        expect(w.vm.modalDirty).toBe(false);
+        w.vm.close();
+        await nextTick();
+        expect(ask).not.toHaveBeenCalled();
+        expect(w.emitted('close')).toBeTruthy();
+    });
+
+    it('a genuine edit AFTER opening pre-filled still marks the form dirty', async () => {
+        preflight.mockResolvedValue([]);
+        const w = mountWith();
+        w.vm.openModal(5);
+        await nextTick(); await nextTick();
+        expect(w.vm.modalDirty).toBe(false);
+        w.vm.rForm.to_consultant_id = 6;   // a real user change
+        await nextTick();
+        expect(w.vm.modalDirty).toBe(true);
+    });
+});
+
+// #27 (role/UX review 2026-09-24): explains what ticking the bulk "Mark as new patients" checkbox
+// actually does (verified against PatientActionController::bulkReassign's mark_new handling).
+describe('ReassignModal — "Mark as new patients" InfoTip (#27)', () => {
+    it('renders an InfoTip mark next to the checkbox', () => {
+        const w = mountWith();
+        const tip = w.find('button[aria-label="More information: Mark as new patients"]');
+        expect(tip.exists()).toBe(true);
+    });
+});
+
+// #40 (role/UX review 2026-09-24): a server-side rejection of the "To" consultant now has somewhere
+// to render — previously the modal had no binding for rForm.errors.to_consultant_id at all.
+describe('ReassignModal — "To" consultant validation error display (#40)', () => {
+    it('renders the server message when to_consultant_id fails validation', async () => {
+        const w = mountWith();
+        w.vm.rForm.errors = { to_consultant_id: 'Only an active consultant can receive these patients — the selected user is not eligible.' };
+        await nextTick();
+        expect(w.text()).toContain('Only an active consultant can receive these patients');
+    });
+
+    // review fix-up: the error <p> is now programmatically associated with the "To" field via
+    // aria-describedby, matching ActionModal.vue's fid(...)+'-err' pattern — not just visually near it.
+    it('associates the error message with the "To" field via aria-describedby, and clears it once the error is gone', async () => {
+        const w = mountWith();
+        const toSelect = w.find('select[title="On-service consultants only"]');
+        expect(toSelect.attributes('aria-describedby')).toBeUndefined();
+
+        w.vm.rForm.errors = { to_consultant_id: 'Only an active consultant can receive these patients — the selected user is not eligible.' };
+        await nextTick();
+        expect(toSelect.attributes('aria-describedby')).toBe('reassign-to-consultant-err');
+        const err = w.find('#reassign-to-consultant-err');
+        expect(err.exists()).toBe(true);
+        expect(err.text()).toContain('Only an active consultant can receive these patients');
+
+        w.vm.rForm.errors = {};
+        await nextTick();
+        expect(toSelect.attributes('aria-describedby')).toBeUndefined();
     });
 });
 

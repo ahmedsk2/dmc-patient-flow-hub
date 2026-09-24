@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import ChartFigure from '@/Components/ChartFigure.vue';
+import InfoTip from '@/Components/InfoTip.vue';
 import { useChartTheme } from '@/composables/useChartTheme';
 import { useReducedMotion, chartAnimations } from '@/composables/useReducedMotion';
 import { barOptions, barData } from '@/lib/chartConfig';
@@ -96,13 +97,16 @@ const loadMax = computed(() => Math.max(1, ...(props.perConsultant || []).map((r
                 <p class="text-sm text-ink-500">{{ scopeLabel }} · updated {{ generatedAt }}</p>
             </div>
             <div class="flex items-center gap-3">
-                <select v-if="canPick" data-testid="specialty-picker"
-                        aria-label="Specialty"
-                        class="rounded-xl border border-line bg-card px-3 py-2 text-sm font-semibold text-ink-600 shadow-sm"
-                        :value="filters.specialty_id ?? ''" @change="pickSpecialty">
-                    <option value="">All specialties</option>
-                    <option v-for="s in specialties" :key="s.id" :value="s.id">{{ s.name }}</option>
-                </select>
+                <div v-if="canPick" class="flex items-center gap-1">
+                    <select data-testid="specialty-picker"
+                            aria-label="Specialty"
+                            class="rounded-xl border border-line bg-card px-3 py-2 text-sm font-semibold text-ink-600 shadow-sm"
+                            :value="filters.specialty_id ?? ''" @change="pickSpecialty">
+                        <option value="">All specialties</option>
+                        <option v-for="s in specialties" :key="s.id" :value="s.id">{{ s.name }}</option>
+                    </select>
+                    <InfoTip label="Specialty picker" text="Admins and consultation coordinators can view any team's book here. Everyone else sees only their own specialty." />
+                </div>
                 <button type="button" @click="openWorkspace(null)"
                         class="rounded-xl border border-line bg-card px-3 py-2 text-sm font-semibold text-ink-600 shadow-sm transition hover:border-brand-300 hover:text-brand-700">
                     Open workspace →
@@ -126,7 +130,7 @@ const loadMax = computed(() => Math.max(1, ...(props.perConsultant || []).map((r
         <div class="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
             <!-- today's follow-up completeness -->
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-                <h2 class="mb-2 font-semibold text-ink-700">Today's follow-ups</h2>
+                <h2 class="mb-2 flex items-center gap-1 font-semibold text-ink-700">Today's follow-ups <InfoTip label="Today's follow-ups" text="Due = active consultations in this scope needing a daily follow-up. Seen = those with a follow-up note already logged today." /></h2>
                 <p data-testid="today-completeness" class="font-display nums text-3xl font-extrabold text-ink-900">
                     Seen {{ today.seen }} of {{ today.due }}
                 </p>

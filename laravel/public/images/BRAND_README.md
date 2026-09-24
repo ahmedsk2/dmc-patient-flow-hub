@@ -83,9 +83,13 @@ Neither `ehc-logo.svg` nor `ehc-logo-mono.svg` exists in this directory. Three r
 
 ### 1.4 Fallback behaviour (why the app is never blocked)
 
-`resources/js/Components/EhcLogo.vue` renders `<img :src>` and, on `@error`, flips to an inline SVG
-recreation of the EHC five-point flame star with its central medallion. Both asset URLs currently
-404, so **every call site renders the recreation.**
+`resources/js/Components/EhcLogo.vue` can render `<img :src>` and, on `@error`, flip to an inline
+SVG recreation of the EHC five-point flame star with its central medallion — but as of the
+2026-09-24 role/UX review (#5) it does **not do that by default**. Neither asset has ever been
+committed (§1.3), so probing for them 404'd on **every single page load, for every user, forever**
+— pure console noise, since the recreation renders instantly either way. A module-scope constant,
+`USE_OFFICIAL_ASSET` (documented in the component itself), is now **`false`**: the component skips
+the `<img>` entirely and renders the vector recreation straight away, with zero network requests.
 
 All six production call sites use the **colour** variant — `AppLayout.vue` (sidebar chip),
 `Login.vue` (×2), `Register.vue`, `ForgotPassword.vue`, `ResetPassword.vue`. The `mono` prop has
@@ -102,8 +106,9 @@ Save the official **square mark only** (transparent background, no wordmark) as:
 laravel/public/images/ehc-logo.svg
 ```
 
-The whole app picks it up with **no code change and no rebuild**. That zero-code path is why `src`
-was left pointing at `.svg`.
+Dropping the file in is **not enough by itself any more** (§1.4): also flip `USE_OFFICIAL_ASSET` to
+`true` at the top of `resources/js/Components/EhcLogo.vue`, and update the comment above it. That
+one-line, no-rebuild-required design is why `src` was left pointing at `.svg`.
 
 - **If a raster is approved instead**, the verified-clean candidate is
   `https://www.ehc.med.sa/wp-content/uploads/2025/02/logo.png` (512 × 512, RGBA, transparent,

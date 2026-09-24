@@ -1,12 +1,24 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import InfoTip from '@/Components/InfoTip.vue';
 
 const props = defineProps({ year: Number, availableYears: Array, months: Array, totals: Object, avgLos: Number, icuLos: Number, topDx: Array, perConsultant: Array, destinations: Array, perConsultantLos: Array, generatedAt: String });
 const year = ref(props.year);
 const changeYear = () => router.get('/reports', { year: year.value }, { preserveState: true });
 const print = () => window.print();
+
+// UX-review §5: only "Long-stay %" needs an explanation — the rest are self-evident bare KPIs.
+const headlineKpis = computed(() => [
+    ['Admissions', props.totals.admissions],
+    ['Discharges', props.totals.discharges],
+    ['ICU', props.totals.icu],
+    ['Mortality %', props.totals.mortalityRate + '%'],
+    ['Ward LOS', props.avgLos + 'd'],
+    ['ICU LOS', props.icuLos + 'd'],
+    ['Long-stay %', props.totals.lsp + '%'],
+]);
 </script>
 
 <template>
@@ -52,9 +64,12 @@ const print = () => window.print();
 
             <!-- summary -->
             <div class="mb-6 grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-7">
-                <div v-for="kpi in [['Admissions', totals.admissions],['Discharges', totals.discharges],['ICU', totals.icu],['Mortality %', totals.mortalityRate + '%'],['Ward LOS', avgLos + 'd'],['ICU LOS', icuLos + 'd'],['Long-stay %', totals.lsp + '%']]" :key="kpi[0]"
+                <div v-for="kpi in headlineKpis" :key="kpi[0]"
                     class="rounded-xl bg-app p-3 text-center print:bg-card print:ring-1 print:ring-ink-200">
-                    <div class="text-[10px] font-semibold uppercase tracking-wide text-ink-400">{{ kpi[0] }}</div>
+                    <div class="flex items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                        {{ kpi[0] }}
+                        <InfoTip v-if="kpi[0] === 'Long-stay %'" label="Long-stay %" text="Ward discharges longer than the Long LOS threshold (Control → Settings), as a share of all ward discharges this year." />
+                    </div>
                     <div class="nums text-xl font-bold text-brand-700">{{ kpi[1] }}</div>
                 </div>
             </div>

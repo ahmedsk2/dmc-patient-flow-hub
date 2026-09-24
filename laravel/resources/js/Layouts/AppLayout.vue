@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import EhcLogo from '@/Components/EhcLogo.vue';
 import ConfirmDialog from '@/Components/ConfirmDialog.vue';
+import InfoTip from '@/Components/InfoTip.vue';
 import NavLink from '@/Components/NavLink.vue';
 import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import QuickJump from '@/Components/QuickJump.vue';
@@ -239,6 +240,15 @@ const url = computed(() => page.url);
 // active = exact match for the root, prefix match otherwise (so /reports/governance highlights both
 // Reports and the nested M&M child; the deeper /reports/governance prefix highlights only M&M).
 const isActive = (href) => href === '/' ? url.value === '/' : url.value.startsWith(href);
+
+// 2026-09-24 review #33: the "Live" pill renders in this header on EVERY page, but the only actual
+// timed auto-refresh in the app is Dashboard.vue's 5-minute, visibility-gated setInterval (grep
+// confirms no other page polls). Elsewhere "Live" is true only in the sense that Inertia always
+// fetches current data on navigation — there is no cached/offline snapshot. Route-aware so the
+// claim is never overstated on a page that doesn't actually poll.
+const livePillText = computed(() => url.value === '/'
+    ? 'This dashboard refreshes itself automatically every 5 minutes while the tab is visible, or any time you click Refresh.'
+    : 'Every page loads current data from the server when you open it — there is no offline or cached snapshot.');
 
 // Heroicons-style stroked paths (24x24, stroke).
 const icons = {
@@ -530,9 +540,10 @@ onUnmounted(() => {
                 <div class="ms-auto flex items-center gap-3">
                     <!-- Wave 2, Item 2: global patient quick-jump (press /) -->
                     <QuickJump />
-                    <div class="hidden items-center gap-2 rounded-full bg-tint-success px-3 py-1 text-xs font-semibold text-on-success xl:flex">
+                    <div class="hidden items-center gap-1.5 rounded-full bg-tint-success px-3 py-1 text-xs font-semibold text-on-success xl:flex">
                         <span class="relative flex h-2 w-2"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-success-500 opacity-60"></span><span class="relative inline-flex h-2 w-2 rounded-full bg-success-500"></span></span>
                         Live
+                        <InfoTip label="Live" :text="livePillText" />
                     </div>
                     <!-- Wave 2, Item 10: replay the onboarding tour (never sets the "seen" flag) -->
                     <button @click="replayTour" aria-label="Replay the guided tour" title="Guided tour"

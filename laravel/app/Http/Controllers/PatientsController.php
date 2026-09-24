@@ -91,6 +91,12 @@ class PatientsController extends Controller
             'needsHandoverCount' => Admission::handoverPending()
                 ->when($request->user()->seesOwnPatientsOnly(), fn ($q) => $q->where('consultant_id', $request->user()->id))
                 ->count(),
+            // #34 (role/UX review 2026-09-24): the pinned banner used to read "N of YOUR patients"
+            // for every role, including Observer and a no-capability Resident/Registrar/Admin who own
+            // zero patients — the count there is genuinely unit-wide (seesOwnPatientsOnly() is false),
+            // so the client needs to know which population the number above actually counts, rather
+            // than re-deriving the same role rule a second time.
+            'needsHandoverOwnScope' => $request->user()->seesOwnPatientsOnly(),
             'consultants' => User::consultantOptions(),
             'countries' => Country::orderBy('name')->pluck('name'),   // Modify modal nationality select
             'specialties' => Specialty::where('is_external', false)->orderBy('name')->get(['id', 'name']),

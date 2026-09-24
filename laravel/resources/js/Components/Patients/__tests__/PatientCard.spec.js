@@ -72,13 +72,13 @@ describe('PatientCard', () => {
         setUser({ id: 2, role: 5, is_admin: false, can: {} });
         const w = mountCard();
         expect(w.find('[title="Modify details"]').exists()).toBe(false);
-        expect(w.find('[title="Edit bed"]').exists()).toBe(false);
+        expect(w.find('[title="Click to edit the bed number"]').exists()).toBe(false);
         expect(w.text()).toContain('W-1');   // bed still shown, just not editable
     });
 
     it('inline bed edit posts only when the value actually changes', async () => {
         const w = mountCard();
-        await w.get('[title="Edit bed"]').trigger('click');
+        await w.get('[title="Click to edit the bed number"]').trigger('click');
         const input = w.get('input[aria-label="Bed"]');
         await input.setValue('W-9');
         await input.trigger('blur');
@@ -87,7 +87,7 @@ describe('PatientCard', () => {
 
     it('inline bed edit makes no request when unchanged', async () => {
         const w = mountCard();
-        await w.get('[title="Edit bed"]').trigger('click');
+        await w.get('[title="Click to edit the bed number"]').trigger('click');
         await w.get('input[aria-label="Bed"]').trigger('blur');   // value still 'W-1'
         expect(post).not.toHaveBeenCalled();
     });

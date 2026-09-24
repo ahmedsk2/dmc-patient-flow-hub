@@ -87,24 +87,82 @@ describe('Patients/Index — ?highlight deep-link (Fix B)', () => {
     });
 });
 
-// HC-T9: pinned "needs handover" banner — NOT dismissible, clears only when the personal count
-// (needsHandoverCount, always the viewer's OWN count) reaches zero.
-describe('Patients/Index — needs-handover banner (HC-T9)', () => {
+// HC-T9: pinned "needs handover" banner — NOT dismissible, clears only when the count reaches zero.
+// #34 (role/UX review 2026-09-24): the count is own-only for a plain consultant and unit-wide
+// otherwise (server: seesOwnPatientsOnly()) — the wording must say which population it counts,
+// carried to the client as `needsHandoverOwnScope` rather than re-derived from the role client-side.
+describe('Patients/Index — needs-handover banner (HC-T9 / #34 wording)', () => {
     beforeEach(() => {
         pageProps = { auth: { user: { id: 1, role: 0, is_admin: true, can: { assign: true, manage: true, modify: true } } } };
         localStorage.clear();
         if (!window.matchMedia) window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
     });
 
-    it('pins the needs-handover banner whenever the personal count is above zero', async () => {
-        const w = mount(Index, { props: baseProps({ needsHandoverCount: 3 }) });
+    it('says "of your patients" when the server scoped the count to the viewer (needsHandoverOwnScope=true)', async () => {
+        const w = mount(Index, { props: baseProps({ needsHandoverCount: 3, needsHandoverOwnScope: true }) });
         await flushPromises();
         expect(w.text()).toMatch(/3 of your patients/i);
     });
 
+    it('says "patients on the unit" — never "your patients" — when the count is unit-wide (needsHandoverOwnScope=false, e.g. Admin/Observer/no-capability role)', async () => {
+        const w = mount(Index, { props: baseProps({ needsHandoverCount: 5, needsHandoverOwnScope: false }) });
+        await flushPromises();
+        expect(w.text()).toMatch(/5 patient\(s\) on the unit/i);
+        expect(w.text()).not.toMatch(/your patients/i);
+    });
+
+    it('defaults to the unit-wide wording when needsHandoverOwnScope is omitted', async () => {
+        const w = mount(Index, { props: baseProps({ needsHandoverCount: 1 }) });
+        await flushPromises();
+        expect(w.text()).not.toMatch(/your patients/i);
+    });
+
     it('renders no banner when the count is zero', async () => {
-        const w = mount(Index, { props: baseProps({ needsHandoverCount: 0 }) });
+        const w = mount(Index, { props: baseProps({ needsHandoverCount: 0, needsHandoverOwnScope: true }) });
         await flushPromises();
         expect(w.text()).not.toMatch(/of your patients/i);
+        expect(w.text()).not.toMatch(/on the unit/i);
+    });
+});
+
+// #21 (role/UX review 2026-09-24): the board header's "Ward (non-ICU)" figure excludes patients
+// still awaiting assignment (PatientsController::index scopes stats.ward to whereNotNull
+// consultant_id), unlike the Dashboard's equivalent figure — an InfoTip now says so on the board.
+describe('Patients/Index — Ward (non-ICU) header InfoTip (#21)', () => {
+    beforeEach(() => {
+        pageProps = { auth: { user: { id: 1, role: 0, is_admin: true, can: { assign: true, manage: true, modify: true } } } };
+        localStorage.clear();
+        if (!window.matchMedia) window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+    });
+
+    it('renders an InfoTip mark next to the Ward (non-ICU) figure', async () => {
+        const w = mount(Index, { props: baseProps() });
+        await flushPromises();
+        const tip = w.find('button[aria-label="More information: Ward (non-ICU) count"]');
+        expect(tip.exists()).toBe(true);
+    });
+});
+
+// #35 / info marks (role/UX review 2026-09-24): the grouped board's per-consultant summary table
+// carries the same Old/New InfoTip marks as the printable Active List, plus a purely-decorative
+// scroll hint for phone width.
+describe('Patients/Index — Old/New column InfoTips + scroll hint (#35 / info marks)', () => {
+    beforeEach(() => {
+        pageProps = { auth: { user: { id: 1, role: 0, is_admin: true, can: { assign: true, manage: true, modify: true } } } };
+        localStorage.clear();
+        if (!window.matchMedia) window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+    });
+
+    it('carries an InfoTip on both the Old and New column headers of the grouped-view summary table', async () => {
+        const w = mount(Index, { props: baseProps() });
+        await flushPromises();
+        expect(w.find('button[aria-label="More information: Old column"]').exists()).toBe(true);
+        expect(w.find('button[aria-label="More information: New column"]').exists()).toBe(true);
+    });
+
+    it('renders the decorative right-edge scroll hint next to the summary table', async () => {
+        const w = mount(Index, { props: baseProps() });
+        await flushPromises();
+        expect(w.find('[data-testid="scroll-hint"]').attributes('aria-hidden')).toBe('true');
     });
 });

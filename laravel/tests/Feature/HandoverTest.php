@@ -348,7 +348,9 @@ class HandoverTest extends TestCase
         $latest = HandoverRevision::where('admission_id', $a->id)->max('id');
         $this->assertNotSame((int) $sig->revision_id, (int) $latest);
 
-        $this->actingAs($to)->post("/handovers/{$sig->id}/sign")->assertRedirect()->assertSessionHasNoErrors();
+        // 2026-09-24 role/UX review #12: sign now requires an explicit acknowledgement (see
+        // tests/Feature/UxReviewG3HandoversTest.php for the dedicated coverage of that refusal).
+        $this->actingAs($to)->post("/handovers/{$sig->id}/sign", ['acknowledged' => true])->assertRedirect()->assertSessionHasNoErrors();
 
         $sig->refresh();
         $this->assertNotNull($sig->signed_at);
@@ -378,7 +380,9 @@ class HandoverTest extends TestCase
         $notMine = HandoverSignature::create(['admission_id' => $a2->id, 'from_consultant_id' => $me->id,
             'to_consultant_id' => $other->id, 'required_at' => now()]);
 
-        $this->actingAs($me)->post('/handovers/sign-many', ['ids' => [$mine->id, $notMine->id]])
+        // 2026-09-24 role/UX review #12: sign-many now requires an explicit acknowledgement (see
+        // tests/Feature/UxReviewG3HandoversTest.php for the dedicated coverage of that refusal).
+        $this->actingAs($me)->post('/handovers/sign-many', ['ids' => [$mine->id, $notMine->id], 'acknowledged' => true])
             ->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertNotNull($mine->fresh()->signed_at);

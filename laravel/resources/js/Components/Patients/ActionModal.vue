@@ -4,6 +4,7 @@ import { useForm } from '@inertiajs/vue3';
 import BaseModal from '@/Components/BaseModal.vue';
 import IdentityChip from '@/Components/IdentityChip.vue';
 import ErrorSummary from '@/Components/ErrorSummary.vue';
+import InfoTip from '@/Components/InfoTip.vue';
 import SearchableSelect from '@/Components/SearchableSelect.vue';
 import AdmissionSummary from '@/Components/Patients/AdmissionSummary.vue';
 import HandoverCapture from '@/Components/Patients/HandoverCapture.vue';
@@ -157,6 +158,15 @@ const submitWithHandoverGuard = async (retry, formRef) => {
 };
 
 // prime the right sub-form when the modal opens for a (mode, patient). Mirrors the old openModal().
+//
+// #20 (role/UX review 2026-09-24): every branch below ends with `.defaults()` — it re-anchors
+// Inertia's own dirty baseline to the values JUST LOADED, not the form's original constructor
+// defaults. Without it, `isDirty` compared the freshly-PREFILLED values (e.g. `aForm.consultant_id`
+// set to the patient's CURRENT consultant on Reassign, or `tForm.target` set to 'Ward' for a patient
+// already in ICU) against the empty constructor defaults, so an untouched dialog already read dirty
+// and Cancel raised a false "Discard changes?" warning. `useUnsavedGuard` (Cancel/Esc/backdrop) and
+// BaseModal's `:dirty` prop both read `modalDirty` → `activeForm.value.isDirty`, so this is the one
+// place that needs to change; the guard itself is correct once the baseline is.
 watch(
     () => [props.open, props.mode, props.patient?.id],
     ([open]) => {
@@ -165,11 +175,11 @@ watch(
         hoRequestId++;   // invalidate any in-flight fetch tied to a previous patient/panel state
         ho.value = null; hoBody.value = ''; hoCheckpoints.value = withCheckpointDefaults(null);   // fresh proactive panel per patient
         hoDirty.value = false; hoError.value = '';
-        if (props.mode === 'assign') { aForm.consultant_id = row.consultant_id || ''; aForm.mark_new = true; aForm.clearErrors(); }
-        if (props.mode === 'medical') mdForm.reset();   // never carry a previous patient's type/destination over
-        if (props.mode === 'complete') { cdForm.reset(); cdForm.outcome = row.outcome || ''; cdForm.discharge_to = row.discharge_to || ''; }   // prefill the optional override from phase-1
-        if (props.mode === 'icu') icuForm.reset();
-        if (props.mode === 'transfer') { tForm.reset(); tForm.target = row.location === 'ICU' ? 'Ward' : 'ICU'; }
+        if (props.mode === 'assign') { aForm.consultant_id = row.consultant_id || ''; aForm.mark_new = true; aForm.clearErrors(); aForm.defaults(); }
+        if (props.mode === 'medical') { mdForm.reset(); mdForm.defaults(); }   // never carry a previous patient's type/destination over
+        if (props.mode === 'complete') { cdForm.reset(); cdForm.outcome = row.outcome || ''; cdForm.discharge_to = row.discharge_to || ''; cdForm.defaults(); }   // prefill the optional override from phase-1
+        if (props.mode === 'icu') { icuForm.reset(); icuForm.defaults(); }
+        if (props.mode === 'transfer') { tForm.reset(); tForm.target = row.location === 'ICU' ? 'Ward' : 'ICU'; tForm.defaults(); }
     },
     { immediate: true },
 );
@@ -255,7 +265,7 @@ defineExpose({
             <ErrorSummary :errors="modeErrors" />
             <form v-if="mode === 'assign'" @submit.prevent="changingConsultant ? submitWithHandoverGuard(submitAssign, aForm) : submitAssign()" class="space-y-4">
                 <div><label :for="fid('consultant_id')" class="sr-only">Consultant</label><SearchableSelect :id="fid('consultant_id')" v-model="aForm.consultant_id" title="On-service consultants only" :aria-describedby="aForm.errors.consultant_id ? fid('consultant_id') + '-err' : undefined" input-class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" placeholder="Select consultant…" :options="assignConsultantsLabelled" /><p v-if="aForm.errors.consultant_id" :id="fid('consultant_id') + '-err'" class="mt-1 text-xs text-on-danger">{{ aForm.errors.consultant_id }}</p></div>
-                <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="aForm.mark_new" class="rounded text-brand-700" /> Mark as new patient <span class="text-xs text-ink-400">(uncheck for a quiet administrative move — no “New” badge)</span></label>
+                <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="aForm.mark_new" class="rounded text-brand-700" /> Mark as new patient <span class="text-xs text-ink-400">(uncheck for a quiet administrative move — no “New” badge)</span><InfoTip label="Mark as new patient" text="Checked sets the board's New badge and clears it only on discharge or reassignment — it is not a 24-hour timer." /></label>
                 <!-- proactive handover panel (HC-T6): appears the moment the picked consultant differs
                      from the current one — never a reaction to a rejected submit -->
                 <div v-if="changingConsultant" class="rounded-xl bg-app/60 p-3 ring-1 ring-line">
@@ -283,13 +293,13 @@ defineExpose({
                         <select :id="fid('outcome')" v-model="mdForm.outcome" :aria-describedby="mdForm.errors.outcome ? fid('outcome') + '-err' : undefined" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option v-for="s in statuses" :key="s">{{ s }}</option></select>
                         <p v-if="mdForm.errors.outcome" :id="fid('outcome') + '-err'" class="mt-1 text-xs text-on-danger">{{ mdForm.errors.outcome }}</p></div>
                     <!-- destination is REQUIRED on a close unless Dead (auto-Mortuary) — N1-4 -->
-                    <div><label :for="fid('discharge_to')" class="mb-1 block text-sm font-semibold text-ink-700">Discharge to <span v-if="mdForm.outcome !== 'Dead'" class="text-on-danger">*</span></label>
+                    <div><label :for="fid('discharge_to')" class="mb-1 flex items-center gap-1 text-sm font-semibold text-ink-700">Discharge to <span v-if="mdForm.outcome !== 'Dead'" class="text-on-danger">*</span><InfoTip label="Discharge to" text="LAMA = left against medical advice." /></label>
                         <select :id="fid('discharge_to')" v-model="mdForm.discharge_to" :disabled="mdForm.outcome === 'Dead'" :required="mdForm.outcome !== 'Dead'" :aria-describedby="mdForm.errors.discharge_to ? fid('discharge_to') + '-err' : undefined" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">—</option><option v-for="d in destinations" :key="d">{{ d }}</option></select>
                         <p v-if="mdForm.errors.discharge_to" :id="fid('discharge_to') + '-err'" class="mt-1 text-xs text-on-danger">{{ mdForm.errors.discharge_to }}</p></div>
                 </div>
                 <!-- still-in delay reason is REQUIRED on a medical-only discharge — N1-4 -->
-                <div v-else><label :for="fid('delay_reason')" class="mb-1 block text-sm font-semibold text-ink-700">Delay reason <span class="text-on-danger">*</span></label>
-                    <select :id="fid('delay_reason')" v-model="mdForm.delay_reason" required :aria-describedby="mdForm.errors.delay_reason ? fid('delay_reason') + '-err' : undefined" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">—</option><option value="Physical">Physical bed availability</option><option value="System">System</option></select>
+                <div v-else><label :for="fid('delay_reason')" class="mb-1 flex items-center gap-1 text-sm font-semibold text-ink-700">Delay reason <span class="text-on-danger">*</span><InfoTip label="Delay reason" text="Physical = no bed available. System = an administrative delay (paperwork, transport, bed turnover) — not a bed shortage." /></label>
+                    <select :id="fid('delay_reason')" v-model="mdForm.delay_reason" required :aria-describedby="mdForm.errors.delay_reason ? fid('delay_reason') + '-err' : undefined" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">—</option><option value="Physical">Physical bed availability</option><option value="System">System (administrative delay)</option></select>
                     <p v-if="mdForm.errors.delay_reason" :id="fid('delay_reason') + '-err'" class="mt-1 text-xs text-on-danger">{{ mdForm.errors.delay_reason }}</p></div>
                 <p class="text-xs text-ink-400">{{ mdForm.complete ? 'Closes the file and frees the bed in one step.' : 'Marks the patient clinically discharged but still in a bed. Status and destination are recorded at Complete discharge, when they physically leave.' }}</p>
                 <!-- W0-T3d. `text-white` on bg-warning-500 was 2.48:1 — a WCAG AA failure for this
@@ -329,8 +339,11 @@ defineExpose({
                     <div><label :for="fid('outcome')" class="mb-1 block text-sm font-semibold text-ink-700">Status</label>
                         <select :id="fid('outcome')" v-model="cdForm.outcome" :aria-describedby="cdForm.errors.outcome ? fid('outcome') + '-err' : undefined" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">—</option><option v-for="s in statuses" :key="s">{{ s }}</option></select>
                         <p v-if="cdForm.errors.outcome" :id="fid('outcome') + '-err'" class="mt-1 text-xs text-on-danger">{{ cdForm.errors.outcome }}</p></div>
-                    <!-- destination is REQUIRED on the close unless Dead (auto-Mortuary) — N1-4 -->
-                    <div><label :for="fid('discharge_to')" class="mb-1 block text-sm font-semibold text-ink-700">Destination <span v-if="cdForm.outcome !== 'Dead'" class="text-on-danger">*</span></label>
+                    <!-- destination is REQUIRED on the close unless Dead (auto-Mortuary) — N1-4.
+                         #37 (role/UX review 2026-09-24): this used to say "Destination" while the
+                         medical-discharge form's identical field says "Discharge to" seconds earlier
+                         in the same flow — one term now, matching the medical/ICU forms. -->
+                    <div><label :for="fid('discharge_to')" class="mb-1 flex items-center gap-1 text-sm font-semibold text-ink-700">Discharge to <span v-if="cdForm.outcome !== 'Dead'" class="text-on-danger">*</span><InfoTip label="Discharge to" text="LAMA = left against medical advice." /></label>
                         <select :id="fid('discharge_to')" v-model="cdForm.discharge_to" :disabled="cdForm.outcome === 'Dead'" :required="cdForm.outcome !== 'Dead'" :aria-describedby="cdForm.errors.discharge_to ? fid('discharge_to') + '-err' : undefined" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">—</option><option v-for="d in destinations" :key="d">{{ d }}</option></select>
                         <p v-if="cdForm.errors.discharge_to" :id="fid('discharge_to') + '-err'" class="mt-1 text-xs text-on-danger">{{ cdForm.errors.discharge_to }}</p></div>
                 </div>
@@ -343,7 +356,7 @@ defineExpose({
                 <AdmissionSummary :patient="patient" />
                 <div><label :for="fid('outcome')" class="mb-1 block text-sm font-semibold text-ink-700">Status</label><select :id="fid('outcome')" v-model="icuForm.outcome" :aria-describedby="icuForm.errors.outcome ? fid('outcome') + '-err' : undefined" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option v-for="s in statuses" :key="s">{{ s }}</option></select><p v-if="icuForm.errors.outcome" :id="fid('outcome') + '-err'" class="mt-1 text-xs text-on-danger">{{ icuForm.errors.outcome }}</p></div>
                 <!-- destination is REQUIRED on the ICU close unless Dead (auto-Mortuary) — N1-4 -->
-                <div><label :for="fid('discharge_to')" class="mb-1 block text-sm font-semibold text-ink-700">Discharge to <span v-if="icuForm.outcome !== 'Dead'" class="text-on-danger">*</span></label>
+                <div><label :for="fid('discharge_to')" class="mb-1 flex items-center gap-1 text-sm font-semibold text-ink-700">Discharge to <span v-if="icuForm.outcome !== 'Dead'" class="text-on-danger">*</span><InfoTip label="Discharge to" text="LAMA = left against medical advice." /></label>
                     <select :id="fid('discharge_to')" v-model="icuForm.discharge_to" :disabled="icuForm.outcome === 'Dead'" :required="icuForm.outcome !== 'Dead'" :aria-describedby="icuForm.errors.discharge_to ? fid('discharge_to') + '-err' : undefined" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 disabled:bg-ink-50"><option value="">—</option><option v-for="d in destinations" :key="d">{{ d }}</option></select>
                     <p v-if="icuForm.errors.discharge_to" :id="fid('discharge_to') + '-err'" class="mt-1 text-xs text-on-danger">{{ icuForm.errors.discharge_to }}</p></div>
                 <div><label :for="fid('discharge_date')" class="mb-1 block text-sm font-semibold text-ink-700">Discharge date</label><input :id="fid('discharge_date')" v-model="icuForm.discharge_date" type="date" :max="today" :aria-describedby="icuForm.errors.discharge_date ? fid('discharge_date') + '-err' : undefined" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" /><p v-if="icuForm.errors.discharge_date" :id="fid('discharge_date') + '-err'" class="mt-1 text-xs text-on-danger">{{ icuForm.errors.discharge_date }}</p></div>
@@ -360,7 +373,10 @@ defineExpose({
                     <p class="text-xs text-ink-400">Keeps the same consultant; opens a new episode in the receiving location.</p>
                 </template>
                 <template v-else-if="tForm.mode === 'specialty'">
-                    <div><label :for="fid('specialty_id')" class="mb-1 block text-sm font-semibold text-ink-700">Receiving specialty</label>
+                    <!-- #13 (role/UX review 2026-09-24): this is the only capability-free way to hand a
+                         patient to a named colleague, including a same-team hand-off — it always closes
+                         the episode and opens a new one, which a plain consultant may not expect. -->
+                    <div><label :for="fid('specialty_id')" class="mb-1 flex items-center gap-1 text-sm font-semibold text-ink-700">Receiving specialty <InfoTip label="Internal specialty transfer" text="Closes this episode and opens a new one under the chosen consultant — even for a same-team hand-off." /></label>
                         <select :id="fid('specialty_id')" v-model="tForm.specialty_id" :aria-describedby="tForm.errors.specialty_id ? fid('specialty_id') + '-err' : undefined" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">Select specialty…</option><option v-for="s in specialties" :key="s.id" :value="s.id">{{ s.name }}</option></select>
                         <p v-if="tForm.errors.specialty_id" :id="fid('specialty_id') + '-err'" class="mt-1 text-xs text-on-danger">{{ tForm.errors.specialty_id }}</p></div>
                     <div><label :for="fid('consultant_id')" class="mb-1 block text-sm font-semibold text-ink-700">Receiving consultant <span class="font-normal text-ink-400">(on-service only)</span></label>

@@ -128,8 +128,10 @@ describe('Dashboard — "My unit today" tiles (W0-T3i)', () => {
     const mountConsultant = () => mountAs({ role: 3, is_admin: false }, { myUnit });
 
     it('renders all seven tiles for a consultant', () => {
+        // 2026-09-24 review #28: relabelled from "New (24h)" — the tile counts the managed
+        // is_new_assignment flag, never a rolling 24-hour window; the old label was a wrong claim.
         expect(Object.keys(tiles(mountConsultant()))).toEqual(
-            ['Active', 'Ward', 'ICU', 'Boarding', 'Handover due', 'New (24h)', 'Consults'],
+            ['Active', 'Ward', 'ICU', 'Boarding', 'Handover due', 'New', 'Consults'],
         );
     });
 
@@ -137,7 +139,7 @@ describe('Dashboard — "My unit today" tiles (W0-T3i)', () => {
         const t = tiles(mountConsultant());
         expect(t['ICU']).toContain('bg-tint-danger/30');
         expect(t['Boarding']).toContain('bg-tint-warning/30');
-        expect(t['New (24h)']).toContain('bg-tint-info/30');
+        expect(t['New']).toContain('bg-tint-info/30');
     });
 
     it('no tile references an undeclared *-50/-100 colour step (the defect: zero emitted CSS)', () => {

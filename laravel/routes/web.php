@@ -199,6 +199,12 @@ Route::middleware(['auth', 'session.timeout', 'email.verify', 'mfa.enroll', 'pwd
     Route::get('/admissions', [AdmissionsController::class, 'index'])->name('admissions.index')->middleware('throttle:phi');
     Route::get('/admissions/create', [AdmissionsController::class, 'create'])->name('admissions.create');
     Route::post('/admissions', [AdmissionsController::class, 'store'])->name('admissions.store');
+    // Role/UX review 2026-09-24, Problem #1: MRN lookup for the admit form — tells the clinician
+    // BEFORE submit whether this MRN already belongs to a known patient (and whether they already
+    // have an active episode), so createAdmission()'s "refresh demographics on the canonical
+    // record" overwrite is never a silent surprise. MRN travels in the POST body, never the URL
+    // (SPC-TM-011); same authorization as the admit form itself.
+    Route::post('/admissions/lookup-mrn', [AdmissionsController::class, 'lookupMrn'])->name('admissions.lookupMrn')->middleware('throttle:phi');
     Route::get('/api/icd10', [AdmissionsController::class, 'icd10'])->name('icd10.search')->middleware('throttle:phi');
 
     // Wave 2, Item 10: first-login onboarding tour — mark "seen" so the auto-tour stops nagging.
@@ -274,7 +280,13 @@ Route::middleware(['auth', 'session.timeout', 'email.verify', 'mfa.enroll', 'pwd
         Route::post('/control/users/{user}/reset-mfa', [ControlController::class, 'resetMfa'])->name('control.users.resetMfa');
         Route::post('/control/users/{user}/send-reset', [ControlController::class, 'sendReset'])->name('control.users.sendReset');
         Route::post('/control/specialties', [ControlController::class, 'addSpecialty'])->name('control.specialties.add');
+        // #2 (2026-09-24 role/UX review): rename + delete, previously missing entirely — a typo'd
+        // specialty/reason name was permanent. Admin-only via the enclosing `admin` group above.
+        Route::put('/control/specialties/{specialty}', [ControlController::class, 'updateSpecialty'])->name('control.specialties.update');
+        Route::delete('/control/specialties/{specialty}', [ControlController::class, 'destroySpecialty'])->name('control.specialties.destroy');
         Route::post('/control/reasons', [ControlController::class, 'addReason'])->name('control.reasons.add');
+        Route::put('/control/reasons/{reason}', [ControlController::class, 'updateReason'])->name('control.reasons.update');
+        Route::delete('/control/reasons/{reason}', [ControlController::class, 'destroyReason'])->name('control.reasons.destroy');
         // Phase 3 — §3.3: monthly-report email recipients
         Route::post('/control/report-recipients', [ControlController::class, 'addReportRecipient'])->name('control.recipients.add');
         Route::delete('/control/report-recipients/{recipient}', [ControlController::class, 'removeReportRecipient'])->name('control.recipients.destroy');

@@ -35,3 +35,30 @@ describe('CheckpointChips', () => {
         expect(span.classes()).toContain('bg-brand-100');
     });
 });
+
+// #23 (role/UX review 2026-09-24): the chips render only the short abbreviation with no on-page
+// expansion anywhere they appear (board card, handover editor, Handovers inbox) — the full wording
+// already exists in CHECKPOINT_FIELDS/CODE_STATUS_OPTIONS; this wires it up as an accessible tooltip.
+describe('CheckpointChips — accessible tooltips (#23)', () => {
+    it('a checkpoint flag chip carries its full label as title + aria-label', () => {
+        const w = mount(CheckpointChips, { props: { checkpoints: { vte_completed: true, ready_for_discharge: true } } });
+        const spans = w.findAll('span');
+        const vte = spans.find((s) => s.text() === 'VTE');
+        const dc = spans.find((s) => s.text() === 'D/C ready');
+        expect(vte.attributes('title')).toBe('VTE prophylaxis');
+        expect(vte.attributes('aria-label')).toBe('VTE prophylaxis');
+        expect(dc.attributes('title')).toBe('Ready for discharge');
+    });
+
+    it.each([
+        ['dnr', 'DNR', 'Do-not-resuscitate'],
+        ['dni', 'DNI', 'Do-not-intubate'],
+        ['full', 'Full', 'Full resuscitation'],
+    ])('code status %s (%s) spells out "%s"', (value, label, title) => {
+        const w = mount(CheckpointChips, { props: { checkpoints: { code_status: value } } });
+        const span = w.find('span');
+        expect(span.text()).toBe(label);
+        expect(span.attributes('title')).toBe(title);
+        expect(span.attributes('aria-label')).toBe(title);
+    });
+});

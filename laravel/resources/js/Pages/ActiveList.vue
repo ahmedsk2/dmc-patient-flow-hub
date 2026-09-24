@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import InfoTip from '@/Components/InfoTip.vue';
 import PatientFlags from '@/Components/PatientFlags.vue';
 import { locTone } from '@/lib/ui.js';
 
@@ -67,10 +68,18 @@ const print = () => window.print();
                  Only meaningful when printing every consultant — hidden when one is selected. -->
             <section v-if="groups.length && selected === 'all'" class="group-block mb-6">
                 <h2 class="mb-1.5 border-b border-line pb-1 text-sm font-bold uppercase tracking-wide text-navy-800">Patient count per consultant</h2>
-                <table class="w-full border-collapse text-xs">
+                <!-- #35 (role/UX review 2026-09-24): on a phone this table can exceed the viewport
+                     width — a right-edge fade + chevron signals "more columns this way" (screen
+                     only; print:overflow-visible and the InfoTip marks' own print:hidden keep the
+                     printed page exactly as before). -->
+                <div class="relative print:overflow-visible">
+                <div class="overflow-x-auto print:overflow-visible">
+                <table class="w-full min-w-[480px] border-collapse text-xs print:min-w-0">
                     <thead>
                         <tr class="bg-app/80 text-left font-semibold uppercase tracking-wide text-ink-500 print:bg-ink-100">
-                            <th scope="col" class="px-2 py-1.5">Consultant</th><th scope="col" class="px-2 py-1.5 text-center">Old</th><th scope="col" class="px-2 py-1.5 text-center">New</th>
+                            <th scope="col" class="px-2 py-1.5">Consultant</th>
+                            <th scope="col" class="px-2 py-1.5 text-center"><span class="inline-flex items-center gap-0.5">Old<InfoTip label="Old column" text="Active patients not currently flagged New — the opposite of New, not an age/record-age count." /></span></th>
+                            <th scope="col" class="px-2 py-1.5 text-center"><span class="inline-flex items-center gap-0.5">New<InfoTip label="New column" text="Set when assigned, handed over, or shuffled; cleared on discharge or reassignment — not a 24-hour timer." /></span></th>
                             <th scope="col" class="px-2 py-1.5 text-center">Active</th><th scope="col" class="px-2 py-1.5 text-center">Ward</th>
                             <th scope="col" class="px-2 py-1.5 text-center">ICU</th><th scope="col" class="px-2 py-1.5 text-center">TB</th>
                         </tr>
@@ -90,6 +99,12 @@ const print = () => window.print();
                         </template>
                     </tbody>
                 </table>
+                </div>
+                <div data-testid="scroll-hint" class="no-print pointer-events-none absolute inset-y-0 right-0 block w-8 bg-gradient-to-l from-card to-transparent sm:hidden" aria-hidden="true"></div>
+                <div class="no-print pointer-events-none absolute inset-y-0 right-1 flex items-center sm:hidden" aria-hidden="true">
+                    <svg class="h-3.5 w-3.5 text-ink-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+                </div>
+                </div>
             </section>
 
             <section v-for="g in visibleGroups" :key="g.id" class="group-block mb-5">

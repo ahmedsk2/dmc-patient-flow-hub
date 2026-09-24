@@ -169,6 +169,7 @@
             <td><div class="label">Long-stay %</div><div class="val">{{ $totals['lsp'] }}%</div></td>
         </tr>
     </table>
+    <div style="font-size: 7.5px; color: #5b6a6e; margin: -4px 0 8px;">Long-stay % = ward discharges over the Long LOS threshold (Control &rarr; Settings), as a share of all ward discharges in {{ $year }}.</div>
 
     <h2>Monthly breakdown</h2>
     <table class="data">
