@@ -299,7 +299,11 @@
    the consultation "To service" rule shown up front, Long-term kept on transfer, handover Sign needs an
    explicit acknowledgement, themed confirms for merge/import, …) and removes the unconfirmed
    "22 hospitals / 3,400 beds" figures from the sign-in page. Gates green locally (PHPUnit 1125 + 92 pdf,
-   Vitest 940, lint, build reproducible, allow-list 705, contrast). **Not deployed** until the owner says.
+   Vitest 940, lint, build reproducible, allow-list 705, contrast). Owner said deploy: **Production runs
+   `ec5d5fc`** (merge of PR #43, release `v2026.09.24`), deployed 2026-09-24 after a pre-deploy dump
+   (`dmc_demo-2026-09-24T111757Z`); no migrations; smoke 16/16 with the served bundle matching the
+   manifest, `/health` ok, audit chain intact (912 rows), no error-level log lines after the swap, the
+   new MRN-lookup route live, and the sign-in page's JavaScript no longer carries the removed figures.
    **Still open and all owner / infrastructure decisions, not code:** enable deploy-on-green
    (declined so far — "I don't want to autodeploy"), pick a log sink and set `LOG_STACK`
    (OBS-01/03/04/05), instance principal (CFG-10), SLOs and an
