@@ -118,8 +118,8 @@ of mail-client stores; Claude Code's own session transcripts (not examined for f
   locked 14-day retention rule (`RetentionRuleViolation`) and become deletable on 2026-10-07 03:00 UTC.
   Verified afterwards: 13 remain in the bucket.
 - **The laptop's copies of those 53** (in the owner's `coolify-backups` mirror) were hashed and moved
-  to the Recycle Bin by Claude Code — 53 files, 1,042,441,366 bytes. They are destroyed when the
-  owner empties the bin: `[DATE EMPTIED]`. The mirror's other 13 stay while their bucket originals do
+  to the Recycle Bin by Claude Code — 53 files, 1,042,441,366 bytes. They were
+  **destroyed 2026-09-24** when the owner emptied the bin (a first attempt through Explorer left them in place; `Clear-RecycleBin -DriveLetter C` then cleared it). Verified the same day by Claude Code, metadata only: the Recycle Bin holds no items and no data files on disk, and none of the 53 is back in the mirror. The mirror's other 13 stay while their bucket originals do
   (the sync re-downloads whatever the bucket holds).
 
 | # | File | Bytes | Last modified (laptop) | SHA-256 |
