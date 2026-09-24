@@ -309,6 +309,9 @@
    assign action (`User::canHandOffAdmission`), so the handover signature, the receiver's notification,
    the same-day reminder and the audit row (`via: consultant_hand_off`) all apply; registrars/residents
    who self-assigned don't get it. Reviewed adversarially (authorization + regression), 10 new tests.
+   Owner said deploy: **Production runs `28dab1b`** (merge of PR #45, release `v2026.09.24.2`), deployed
+   2026-09-24 after a pre-deploy dump (`dmc_demo-2026-09-24T131952Z`); no migrations; smoke 16/16, `/health`
+   ok, audit chain intact (914 rows), no error-level log lines after the swap.
    **Still open and all owner / infrastructure decisions, not code:** enable deploy-on-green
    (declined so far — "I don't want to autodeploy"), pick a log sink and set `LOG_STACK`
    (OBS-01/03/04/05), instance principal (CFG-10), SLOs and an
