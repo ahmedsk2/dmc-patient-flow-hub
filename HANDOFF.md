@@ -317,6 +317,23 @@
    department; totals and KPIs unchanged; a 7th chart colour (violet) so a 7-slice donut never repeats a
    colour (also fixing the overall destinations donut). Documented as a deliberate deviation from legacy
    charts.php in DASHBOARD-AND-STATISTICS-METRICS.md.
+   **2026-09-25 (owner: "act like a user for each user type … from A to Z", then "fix all"):** a second
+   role-by-role walkthrough on local synthetic copies (nine testers; report and resolutions in
+   `laravel/docs/ROLE-UX-REVIEW-2026-09-25.md`). Permissions held everywhere; statistics reflected every
+   action. Fixed: Back after sign-out showed the last patient page (Inertia history encryption +
+   `clearHistory()` on every sign-out path), sign-up revealed whether a staff email exists, error pages
+   unstyled since the nonce-only CSP, the handover reminder after a specialty transfer could not be cleared
+   from "My outgoing" (new nullable `admissions.predecessor_admission_id`), plus clarity, phone and
+   accessibility fixes and new "!" marks. Owner decisions: the long-term flag stays open to every clinical
+   role; patient merge wording now says a merge cannot be undone in the app; **SSH reopened to any address**
+   (the workstation address changes; key-only, root login off, fail2ban). "Assign to me" for
+   non-consultants was explained (production: all 118 active patients and every admission of the last 12
+   months are held by consultants) — decision pending, recommendation consultants only. Owner said deploy
+   (as part of "fix all"): **Production runs `ef0ca91`** (merge of PR #48, release `v2026.09.25`, which also
+   carries PR #47's statistics ICU split), deployed 2026-09-25 after a pre-deploy dump
+   (`dmc_demo-2026-09-25T133224Z`); one additive migration (`2026_09_25_000100`, ran); smoke 16/16 with the
+   served bundle matching the manifest, `/health` ok, audit chain intact (938 rows),
+   `inertia.history.encrypt` true in the container.
    **Still open and all owner / infrastructure decisions, not code:** enable deploy-on-green
    (declined so far — "I don't want to autodeploy"), pick a log sink and set `LOG_STACK`
    (OBS-01/03/04/05), instance principal (CFG-10), SLOs and an
