@@ -337,7 +337,9 @@
    Then the owner chose **"B": "Assign to me" is for consultants only** (server check + queue page; an
    Admin or a Registrar with Can-assign names a consultant, anyone else sees "Awaiting a consultant"), and
    the New Admission form now accepts only an active consultant (it accepted any user, the same door) —
-   merged to `main`, **not yet deployed** at the time of writing.
+   Owner said deploy: **Production runs `1a2f132`** (merge of PR #50, release `v2026.09.25.2`), deployed
+   2026-09-25 after a pre-deploy dump (`dmc_demo-2026-09-25T170757Z`); no migrations; smoke 16/16, `/health`
+   ok, audit chain intact (942 rows), no error-level log lines after the swap.
    **Still open and all owner / infrastructure decisions, not code:** enable deploy-on-green
    (declined so far — "I don't want to autodeploy"), pick a log sink and set `LOG_STACK`
    (OBS-01/03/04/05), instance principal (CFG-10), SLOs and an
