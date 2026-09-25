@@ -120,8 +120,61 @@ describe('Statistics/Index — KPI-card and column info marks', () => {
                 series: { labels: [], admissions: [], discharges: [], consultations: [], signoffs: [] },
             },
         });
-        const heading = w.findAll('h4').find((h) => h.text().startsWith('Discharged to'));
+        // role walkthrough 2026-09-25: this subheading moved from h4 to h3 (its parent card title
+        // moved h3 -> h2) so the outline stays sequential — see the h1->h2->h3 fix below.
+        const heading = w.findAll('h3').find((h) => h.text().startsWith('Discharged to'));
         expect(heading.find('button[data-infotip]').exists()).toBe(true);
+    });
+});
+
+// role walkthrough 2026-09-25 (ui-ux #3/#4/#6, axe critical/critical/moderate): the From/To date
+// labels had no for/id association, the "Discharge destinations" consultant select had no
+// accessible name (its "Physician drill-down" sibling did), and every section title skipped from
+// the page's own h1 straight to h3.
+describe('Statistics/Index — a11y fixes (role walkthrough 2026-09-25)', () => {
+    it('associates the From and To labels with their date inputs', () => {
+        const w = mountStats();
+        const fromInput = w.find('#stats-from-date');
+        const toInput = w.find('#stats-to-date');
+        expect(fromInput.exists()).toBe(true);
+        expect(toInput.exists()).toBe(true);
+        expect(w.find(`label[for="${fromInput.attributes('id')}"]`).text()).toContain('From');
+        expect(w.find(`label[for="${toInput.attributes('id')}"]`).text()).toContain('To');
+    });
+
+    // review fix (2026-09-25): the InfoTip "!" button used to nest INSIDE <label for="stats-to-date">
+    // — a labelable/interactive element inside the label pollutes its computed accessible name
+    // ("To !" instead of "To"). It now sits as a sibling, so the label's own element has no nested
+    // button and its trimmed text content is exactly "To".
+    it('keeps the InfoTip button out of the To label so its accessible name stays "To"', () => {
+        const w = mountStats();
+        const toLabel = w.find('label[for="stats-to-date"]');
+        expect(toLabel.find('button[data-infotip]').exists()).toBe(false);
+        expect(toLabel.text().trim()).toBe('To');
+    });
+
+    it('gives the Discharge destinations consultant select an accessible name', () => {
+        const w = mountStats();
+        const select = w.findAll('select').find((s) => s.findAll('option').some((o) => o.text() === 'All consultants'));
+        expect(select.attributes('aria-label')).toBe('Discharge destinations consultant');
+    });
+
+    it('never skips from h1 to h3 — every section title is an h2, one level under the page h1', () => {
+        // physician drill-down populated so its nested h3 subheadings (Discharge destinations,
+        // Discharged to, Top diagnoses, Activity over range) render too.
+        const w = mountStats({
+            physician: {
+                id: 1, name: 'Dr A',
+                destinations: { labels: ['Discharged'], data: [5] },
+                dischargedTo: { labels: ['Home'], data: [5] },
+                topDx: [], numbers: { admissions: 5, discharges: 5, transToIcu: 0, deaths: 0, avgLos: 3, readmissions: 0, consultations: 0, signoffs: 0 },
+                series: { labels: [], admissions: [], discharges: [], consultations: [], signoffs: [] },
+            },
+        });
+        expect(w.findAll('h1')).toHaveLength(0);   // the page's own h1 lives in AppLayout, stubbed out here
+        expect(w.findAll('h2').length).toBeGreaterThanOrEqual(8);   // every section-card title
+        // every h3 is a subheading nested one level under an h2 card (Discharge destinations, etc.)
+        expect(w.findAll('h3').length).toBeGreaterThan(0);
     });
 });
 

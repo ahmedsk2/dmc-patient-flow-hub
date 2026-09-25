@@ -152,6 +152,11 @@ watch(() => page.props.flash, (f) => {
 //   • Observers (role 5) are read-only: the admissions queue + consultations workspace are
 //     clinical-role pages (403 server-side) — drop their entries (J2-12).
 // A bucket that filters down to zero items renders nothing (no orphaned empty section heading).
+// role walkthrough 2026-09-25, U11: "N awaiting assignment" — the shared lazy prop
+// (HandleInertiaRequests) is 0 for anyone who can't open the queue (Observer, guest), so the
+// badge's own `can` gate above is what actually decides whether it's shown, not this value.
+const unassignedCount = computed(() => Number(page.props.unassignedAdmissionsCount || 0));
+
 const clinicalNavSections = computed(() => {
     const user = page.props.auth?.user;
     const observer = user?.role === 5;
@@ -164,7 +169,11 @@ const clinicalNavSections = computed(() => {
             // New Admissions is where you ADD a patient. Gate on is_admin OR the can_add capability —
             // an admin whose can_add flag is 0 can still add server-side (is_admin bypass), so hiding
             // the link on the raw flag alone stranded admins ("can't find where to add a patient").
-            { label: 'New Admissions', href: '/admissions', icon: 'plus', can: (user?.is_admin || !!can.add) && !observer },
+            // role walkthrough 2026-09-25, U11: badge shows how many active admissions still await
+            // a consultant — the exact same count/definition as HandleInertiaRequests' shared prop
+            // (mirrors AdmissionsController::index's own queue filter). null (not 0) hides the chip.
+            { label: 'New Admissions', href: '/admissions', icon: 'plus', can: (user?.is_admin || !!can.add) && !observer,
+                badge: unassignedCount.value || null, badgeLabel: `${unassignedCount.value} awaiting assignment` },
             { label: 'Patients', href: '/patients', icon: 'bed', can: true },
             // Printable whole-ward census (unscoped, all roles) — high-traffic, so it gets its own row
             // instead of living only behind the board's print icon.
@@ -488,7 +497,8 @@ onUnmounted(() => {
                     <template v-for="section in clinicalNavSections" :key="section.section">
                         <p class="px-3 pb-2 pt-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-navy-400 first:pt-0" :class="{ 'lg:sr-only': sidebarCollapsed }">{{ section.section }}</p>
                         <template v-for="item in section.items" :key="item.href">
-                            <NavLink :href="item.href" :icon-path="iconPath(item.icon)" :label="item.label" :active="isActive(item.href)" :collapsed="sidebarCollapsed" />
+                            <NavLink :href="item.href" :icon-path="iconPath(item.icon)" :label="item.label" :active="isActive(item.href)" :collapsed="sidebarCollapsed"
+                                :badge="item.badge ?? null" :badge-label="item.badgeLabel ?? null" />
                             <!-- sub-routes render indented under their parent, same as the admin sections -->
                             <NavLink v-for="child in (item.children || [])" :key="child.href"
                                 :href="child.href" :icon-path="iconPath(child.icon)" :label="child.label" :active="isActive(child.href)" :indent="true" :collapsed="sidebarCollapsed" />
@@ -527,7 +537,7 @@ onUnmounted(() => {
             <!-- min-h, not h: a breadcrumb trail that wraps on a narrow screen grows the bar instead of pushing
                  the page title out of view (2026-09-23 UAT, NF-02); with one line it is still 64px. -->
             <header class="sticky top-0 z-20 flex min-h-16 items-center gap-4 border-b border-line bg-card/80 px-5 py-2 backdrop-blur">
-                <button ref="hamburger" class="grid h-9 w-9 coarse:h-10 coarse:w-10 place-items-center rounded-full text-ink-500 transition hover:bg-ink-50 lg:hidden" @click="openDrawer" aria-label="Open navigation menu" :aria-expanded="sidebarOpen" aria-controls="app-sidebar">
+                <button ref="hamburger" data-tour="nav-menu-button" class="grid h-9 w-9 coarse:h-10 coarse:w-10 place-items-center rounded-full text-ink-500 transition hover:bg-ink-50 lg:hidden" @click="openDrawer" aria-label="Open navigation menu" :aria-expanded="sidebarOpen" aria-controls="app-sidebar">
                     <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" /></svg>
                 </button>
                 <div class="min-w-0 flex-1">

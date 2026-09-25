@@ -173,6 +173,39 @@ describe('AppLayout — role/capability-aware nav (Item 4)', () => {
     });
 });
 
+describe('AppLayout — "N awaiting assignment" badge on New Admissions (role walkthrough 2026-09-25, U11)', () => {
+    beforeEach(() => {
+        localStorage.clear();
+        if (!window.matchMedia) window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+    });
+
+    const setPageWithCount = (user, count) => {
+        setPage(user);
+        pageProps.unassignedAdmissionsCount = count;
+    };
+
+    it('shows the count as a badge with an accessible "N awaiting assignment" name', () => {
+        setPageWithCount(baseUser({ role: 2, is_admin: false, can: { add: true } }), 3);
+        const w = mountLayout();
+        const link = w.findAllComponents(NavLink).find((n) => n.props('label') === 'New Admissions');
+        expect(link.props('badge')).toBe(3);
+        expect(link.find('[aria-label="3 awaiting assignment"]').exists()).toBe(true);
+    });
+
+    it('hides the badge at 0 (no chip rendered)', () => {
+        setPageWithCount(baseUser({ role: 2, is_admin: false, can: { add: true } }), 0);
+        const w = mountLayout();
+        const link = w.findAllComponents(NavLink).find((n) => n.props('label') === 'New Admissions');
+        expect(link.props('badge')).toBeNull();
+    });
+
+    it('is absent for Observer — the row itself is hidden, not just the badge', () => {
+        setPageWithCount(baseUser({ role: 5, is_admin: false, can: { add: false } }), 3);
+        const w = mountLayout();
+        expect(labels(w)).not.toContain('New Admissions');
+    });
+});
+
 describe('AppLayout — breadcrumbs + document title (Items 5 + 6)', () => {
     beforeEach(() => {
         localStorage.clear();

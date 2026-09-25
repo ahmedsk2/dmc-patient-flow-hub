@@ -150,9 +150,16 @@ const saveHandoverThen = async (retry) => {
  */
 const submitWithHandoverGuard = async (retry, formRef) => {
     if (complete.value) { await saveHandoverThen(retry); return; }
+    // (role walkthrough 2026-09-25, U5) raiseIncompleteHandoverReminders() (PatientActionController)
+    // notifies Auth::id() + the OUTGOING consultant, deduped via ->unique() — in a self-service
+    // hand-off the actor IS the outgoing consultant (canHandOffAdmission requires it), so that
+    // collapses to one recipient. The shared "you and the outgoing consultant" copy then names the
+    // same person twice; say the true thing for this path instead.
     const ok = await ask(
         'Handover not complete',
-        `${props.patient?.name || 'This patient'} has no handover saved today. A reminder will be sent to you and the outgoing consultant until it is completed.`,
+        `${props.patient?.name || 'This patient'} has no handover saved today. ${props.handOff
+            ? 'A reminder will be sent to you until it is completed.'
+            : 'A reminder will be sent to you and the outgoing consultant until it is completed.'}`,
         'warning',
     );
     if (!ok) return;   // "Complete handover now" — stay put, the panel is already open
@@ -196,7 +203,10 @@ watch(() => cdForm.outcome, (o) => { if (o === 'Dead') cdForm.discharge_to = 'Mo
 watch(() => icuForm.outcome, (o) => { if (o === 'Dead') icuForm.discharge_to = 'Mortuary'; else if (icuForm.discharge_to === 'Mortuary') icuForm.discharge_to = ''; });
 // a closed file has no "still-in" delay; medical-only locks the status to Alive (legacy phase-1 —
 // the status + destination are asked at the COMPLETE step instead)
-watch(() => mdForm.complete, (c) => { if (c) { mdForm.delay_reason = ''; } else { mdForm.outcome = 'Alive'; mdForm.discharge_to = ''; } });
+watch(() => mdForm.complete, (c) => { if (c) { mdForm.delay_reason = ''; mdForm.clearErrors('delay_reason'); } else { mdForm.outcome = 'Alive'; mdForm.discharge_to = ''; } });
+// (role walkthrough 2026-09-25, U7) clear the client-set "required" error the moment the user
+// actually picks one, same as every server-round-trip error already does once its field changes.
+watch(() => mdForm.delay_reason, () => mdForm.clearErrors('delay_reason'));
 
 // internal-specialty handover: consultants offered are the ON-SERVICE ones of the chosen specialty
 const specConsultants = computed(() => consultantOptions(props.consultants, { specialtyId: tForm.specialty_id }));
@@ -216,8 +226,12 @@ const transferReady = computed(() =>
 
 // Wave 2, Item 5: one title map so "assign" always reads "Assign consultant" — matching the queue's
 // assign modal (Admissions/Index) and the standardized verb table (Item 8: "Assign" / "Reassign").
+// (role walkthrough 2026-09-25, U5) with handOff set, the opening button already says "Hand this
+// patient to a colleague" — the dialog then switched to "Assign consultant" / "Assign" mid-flow,
+// three different verbs for one action. Use the hand-off wording end-to-end for that path only;
+// the capability-gated assign flow (Admissions queue, Reassign) keeps its existing terms.
 const modalTitle = computed(() => ({
-    assign: 'Assign consultant',
+    assign: props.handOff ? 'Hand patient to a colleague' : 'Assign consultant',
     medical: 'Discharge',
     complete: 'Complete discharge',
     icu: 'ICU discharge',
@@ -242,7 +256,19 @@ const modeErrors = computed(() => Object.fromEntries(
 
 const opts = { preserveScroll: true, onSuccess: () => emit('saved') };
 const submitAssign = guardSubmit(aForm, () => aForm.post(`/admissions/${props.patient.id}/assign`, opts));
-const submitMedical = guardSubmit(mdForm, () => mdForm.post(`/admissions/${props.patient.id}/medical-discharge`, opts));
+// (role walkthrough 2026-09-25, U7) the field used a plain `required` attribute, so an empty
+// submit was blocked by the BROWSER's native validation popup before this handler (or even the
+// `submit.prevent`) ever ran — no error appeared in the page for a screen reader, and nothing an
+// automated check could see. `required` is dropped from the <select> below; this mirrors it as a
+// real client-side check that feeds the app's own ErrorSummary/inline-message pattern, with the
+// server's own `delay_reason` rule (PatientActionController::medicalDischarge) as the backstop.
+const submitMedical = guardSubmit(mdForm, () => {
+    if (!mdForm.complete && !mdForm.delay_reason) {
+        mdForm.setError('delay_reason', 'Delay reason is required.');
+        return;
+    }
+    mdForm.post(`/admissions/${props.patient.id}/medical-discharge`, opts);
+});
 const submitComplete = guardSubmit(cdForm, () => cdForm.post(`/admissions/${props.patient.id}/complete-discharge`, opts));
 const submitIcu = guardSubmit(icuForm, () => icuForm.post(`/admissions/${props.patient.id}/icu-discharge`, opts));
 const submitTransfer = guardSubmit(tForm, () => tForm.post(`/admissions/${props.patient.id}/transfer`, opts));
@@ -281,7 +307,7 @@ defineExpose({
                         @update:body="hoBody = $event; hoDirty = true" @update:checkpoints="hoCheckpoints = $event; hoDirty = true" />
                     <p v-if="hoError" class="mt-2 text-xs text-on-danger">{{ hoError }}</p>
                 </div>
-                <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="aForm.processing || !aForm.consultant_id || hoSaving" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">{{ changingConsultant ? 'Save handover & assign' : 'Assign' }}</button></div>
+                <div class="flex justify-end gap-2"><button type="button" @click="close" class="rounded-xl px-4 py-2 text-sm font-semibold text-ink-500">Cancel</button><button type="submit" :disabled="aForm.processing || !aForm.consultant_id || hoSaving" class="rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover disabled:opacity-50">{{ changingConsultant ? (handOff ? 'Save handover & hand off' : 'Save handover & assign') : (handOff ? 'Hand off' : 'Assign') }}</button></div>
             </form>
             <form v-else-if="mode === 'medical'" @submit.prevent="submitMedical" class="space-y-4">
                 <!-- record-review step (J1-15c): legacy discharge embedded the admission record
@@ -289,7 +315,18 @@ defineExpose({
                 <AdmissionSummary :patient="patient" />
                 <div><label class="mb-1 block text-sm font-semibold text-ink-700">Discharge type</label>
                     <div class="flex gap-2">
-                        <label v-for="t in [[false, 'Medical only (still in bed)'], [true, 'Complete (leaving now)']]" :key="String(t[0])" class="flex-1 cursor-pointer rounded-xl border-2 px-3 py-2.5 text-center text-sm font-semibold transition" :class="mdForm.complete === t[0] ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'"><input type="radio" v-model="mdForm.complete" :value="t[0]" class="hidden" /> {{ t[1] }}</label>
+                        <!-- (role walkthrough 2026-09-25, E5) `class="hidden"` is `display:none`, which the
+                             browser's native Tab order skips outright — a keyboard user could never reach
+                             this choice, and the modal's focus trap (whose "last focusable" query still
+                             matched the hidden input) never wrapped back, so focus leaked into the board
+                             behind the dialog. `sr-only` keeps the real radio focusable and in the Tab
+                             order while staying visually hidden; `focus-within` on the label draws the
+                             highlight so a keyboard user can see which choice has focus. A shared `name` (via
+                             `fid`, so it's unique per modal instance) is what makes the browser treat the
+                             two inputs as one native radio group — without it Tab reaches each input, but
+                             arrow keys don't move selection between them, which the a11y review flagged
+                             as a follow-up gap. -->
+                        <label v-for="t in [[false, 'Medical only (still in bed)'], [true, 'Complete (leaving now)']]" :key="String(t[0])" class="flex-1 cursor-pointer rounded-xl border-2 px-3 py-2.5 text-center text-sm font-semibold transition focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2" :class="mdForm.complete === t[0] ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'"><input type="radio" v-model="mdForm.complete" :value="t[0]" :name="fid('md-complete')" class="sr-only" /> {{ t[1] }}</label>
                     </div>
                 </div>
                 <div><label :for="fid('medical_discharge_date')" class="mb-1 block text-sm font-semibold text-ink-700">Medical discharge date</label><input :id="fid('medical_discharge_date')" v-model="mdForm.medical_discharge_date" type="date" :max="today" :aria-describedby="mdForm.errors.medical_discharge_date ? fid('medical_discharge_date') + '-err' : undefined" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500" /><p v-if="mdForm.errors.medical_discharge_date" :id="fid('medical_discharge_date') + '-err'" class="mt-1 text-xs text-on-danger">{{ mdForm.errors.medical_discharge_date }}</p></div>
@@ -305,7 +342,7 @@ defineExpose({
                 </div>
                 <!-- still-in delay reason is REQUIRED on a medical-only discharge — N1-4 -->
                 <div v-else><label :for="fid('delay_reason')" class="mb-1 flex items-center gap-1 text-sm font-semibold text-ink-700">Delay reason <span class="text-on-danger">*</span><InfoTip label="Delay reason" text="Physical = no bed available. System = an administrative delay (paperwork, transport, bed turnover) — not a bed shortage." /></label>
-                    <select :id="fid('delay_reason')" v-model="mdForm.delay_reason" required :aria-describedby="mdForm.errors.delay_reason ? fid('delay_reason') + '-err' : undefined" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">—</option><option value="Physical">Physical bed availability</option><option value="System">System (administrative delay)</option></select>
+                    <select :id="fid('delay_reason')" v-model="mdForm.delay_reason" :aria-describedby="mdForm.errors.delay_reason ? fid('delay_reason') + '-err' : undefined" class="w-full rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500"><option value="">—</option><option value="Physical">Physical bed availability</option><option value="System">System (administrative delay)</option></select>
                     <p v-if="mdForm.errors.delay_reason" :id="fid('delay_reason') + '-err'" class="mt-1 text-xs text-on-danger">{{ mdForm.errors.delay_reason }}</p></div>
                 <p class="text-xs text-ink-400">{{ mdForm.complete ? 'Closes the file and frees the bed in one step.' : 'Marks the patient clinically discharged but still in a bed. Status and destination are recorded at Complete discharge, when they physically leave.' }}</p>
                 <!-- W0-T3d. `text-white` on bg-warning-500 was 2.48:1 — a WCAG AA failure for this
@@ -375,7 +412,10 @@ defineExpose({
                 </div>
                 <template v-if="tForm.mode === 'location'">
                     <p class="text-sm text-ink-600">Currently in <span class="font-semibold">{{ patient.location || '—' }}</span>. Transfer to:</p>
-                    <div class="flex gap-2"><label v-for="loc in ['Ward','ICU']" :key="loc" class="flex-1 cursor-pointer rounded-xl border-2 px-4 py-3 text-center text-sm font-semibold transition" :class="tForm.target === loc ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'"><input type="radio" v-model="tForm.target" :value="loc" class="hidden" /> {{ loc }}</label></div>
+                    <!-- (role walkthrough 2026-09-25, E5) same sr-only-not-hidden fix as the discharge-type
+                         picker above — see that comment for why `display:none` broke the focus trap, and
+                         why the shared `name` is what gives arrow-key group navigation, not just Tab. -->
+                    <div class="flex gap-2"><label v-for="loc in ['Ward','ICU']" :key="loc" class="flex-1 cursor-pointer rounded-xl border-2 px-4 py-3 text-center text-sm font-semibold transition focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2" :class="tForm.target === loc ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'"><input type="radio" v-model="tForm.target" :value="loc" :name="fid('transfer-target')" class="sr-only" /> {{ loc }}</label></div>
                     <p class="text-xs text-ink-400">Keeps the same consultant; opens a new episode in the receiving location.</p>
                 </template>
                 <template v-else-if="tForm.mode === 'specialty'">

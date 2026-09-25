@@ -43,6 +43,10 @@ const props = defineProps({
     topDxWeekNum: Number,
     recent: Array,
     generatedAt: String,
+    // role walkthrough 2026-09-25: whether THIS viewer sees the unscoped
+    // consultation ledger (admin or a coordinator), per Consultation::scopeVisibleTo — not derivable
+    // from the shared auth.user.can bag, which has no coordinate-consultations flag.
+    canCoordinateConsults: { type: Boolean, default: false },
 });
 
 const page = usePage();
@@ -173,6 +177,21 @@ const canShuffle = computed(() => auth.value?.role !== 5 && (auth.value?.is_admi
 // below explaining the scope.
 const canOpenConsultations = computed(() => auth.value?.role !== 5);
 
+// role walkthrough 2026-09-25 (observer #2): the InfoTip text was fixed regardless of role, so an
+// Observer read "the consultations you can open ... may be fewer, based on your specialty" as if
+// some scoped access remained — but ConsultationsController::index() refuses the ledger to Observer
+// entirely (403), for every specialty, not a narrower view of it. Role-aware wording instead.
+//
+// review fix (2026-09-25): the Observer branch alone wasn't enough — Consultation::scopeVisibleTo
+// gives admins AND coordinators (canCoordinateConsultations()) the FULL unscoped ledger, so telling
+// them the count "may be fewer, based on your specialty" is equally wrong, just in the other
+// direction. `canCoordinateConsults` (DashboardController::index()) mirrors that scope exactly.
+const activeConsultsTip = computed(() => {
+    if (auth.value?.role === 5) return 'Unit-wide total. The consultation ledger itself is not part of the Observer role.';
+    if (props.canCoordinateConsults) return 'Unit-wide total — the consultations you can open on the ledger match this total exactly (admin/coordinator access).';
+    return 'Unit-wide total — the consultations you can open on the ledger may be fewer, based on your specialty.';
+});
+
 const boardSections = computed(() => {
     const bucket = (c) => c.on_service && c.specialty_id === 1 ? 'hosp' : c.on_service ? 'subs' : 'off';
     return [
@@ -196,13 +215,18 @@ const kpiCards = computed(() => [
     // #7 — link dropped for Observer (mirrors the server 403); InfoTip clarifies the count is
     // unit-wide even though the ledger a click opens may show fewer rows (Consultation::scopeVisibleTo).
     { label: 'Active Consultations', value: props.kpis.activeConsults, sub: 'awaiting sign-off', icon: 'chat', tone: 'gold', href: canOpenConsultations.value ? '/consultations' : null, polarity: 'neutral', spark: props.consults.new,
-        tip: 'Unit-wide total — the consultations you can open on the ledger may be fewer, based on your specialty.' },
+        tip: activeConsultsTip.value },
     // #15 — verified against DashboardController::index(): occupancy = active ward ÷ settings.ward_beds,
     // uncapped, so an unset/low bed count reads well over 100% even at a normal census.
     { label: 'Bed Occupancy', value: props.kpis.occupancy + '%', sub: `of ${props.kpis.wardBeds} ward beds · vs 1w ago`, icon: 'gauge', tone: 'teal', deltaKey: 'occupancy', polarity: 'bad',
         tip: 'Calculated against the ward bed count set in Control → Settings — a low or unset count can read over 100% at a safe census.' },
-    { label: 'Avg LOS (month)', value: props.kpis.avgLosMonth, sub: 'days · non-ICU discharges', icon: 'clock', tone: 'navy', polarity: 'bad' },
-    { label: 'Mortality (Month)', value: props.kpis.deathsMonth, sub: 'this calendar month · vs prior month', icon: 'trendDown', tone: 'red', deltaKey: 'deathsMonth', polarity: 'bad' },
+    // role walkthrough 2026-09-25 (observer #missing-infotips): these two tiles had no `tip:` key,
+    // unlike every other tile on the row. Text mirrors DashboardController::index() ($avgLosMonth /
+    // $deathsMonth, both month-to-date) and DASHBOARD-AND-STATISTICS-METRICS.md §1's Avg LOS / Mortality rows.
+    { label: 'Avg LOS (month)', value: props.kpis.avgLosMonth, sub: 'days · non-ICU discharges', icon: 'clock', tone: 'navy', polarity: 'bad',
+        tip: 'Whole-day length of stay (discharge date minus admission date), non-ICU discharges only, averaged for the current calendar month so far.' },
+    { label: 'Mortality (Month)', value: props.kpis.deathsMonth, sub: 'this calendar month · vs prior month', icon: 'trendDown', tone: 'red', deltaKey: 'deathsMonth', polarity: 'bad',
+        tip: 'Admissions with outcome Dead and a discharge date so far this calendar month, versus the same point last month.' },
     { label: 'Boarding', value: props.boardingCount, sub: 'medically cleared · bed still occupied', icon: 'boarding', tone: 'warning', href: '/patients?view=boarding', polarity: 'bad' },
 ]);
 const toneClass = {
@@ -682,7 +706,7 @@ onUnmounted(() => clearInterval(autoRefresh));
                         <th scope="col" class="px-5 py-2.5">Consultant</th>
                         <th scope="col" class="px-3 py-2.5 text-center"><span class="inline-flex items-center justify-center gap-1">Old<InfoTip label="Old column" text="Active patients not currently flagged 'New' — the opposite of New, not an age or record-age count." /></span></th>
                         <th scope="col" class="px-3 py-2.5 text-center"><span class="inline-flex items-center justify-center gap-1">New<InfoTip label="New column" text="Set when assigned, handed over, or shuffled; cleared on discharge or reassignment — not a 24-hour timer." /></span></th>
-                        <th scope="col" class="px-3 py-2.5 text-center">Active</th><th scope="col" class="px-3 py-2.5 text-center">Ward</th><th scope="col" class="px-3 py-2.5 text-center">ICU</th><th scope="col" class="px-3 py-2.5 text-center">TB</th>
+                        <th scope="col" class="px-3 py-2.5 text-center"><span class="inline-flex items-center justify-center gap-1">Active<InfoTip label="Active column" text="Ward patients still under active care: excludes ICU, medically discharged (still in), long-term and TB patients, so it can be lower than Ward." /></span></th><th scope="col" class="px-3 py-2.5 text-center">Ward</th><th scope="col" class="px-3 py-2.5 text-center">ICU</th><th scope="col" class="px-3 py-2.5 text-center">TB</th>
                     </tr></thead>
                     <tbody class="divide-y divide-line">
                         <template v-for="sec in boardSections" :key="sec.key">

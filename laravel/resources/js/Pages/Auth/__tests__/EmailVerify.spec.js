@@ -15,7 +15,10 @@ vi.mock('@inertiajs/vue3', () => ({
 
 import EmailVerify from '@/Pages/Auth/EmailVerify.vue';
 
-const mountPage = (email = 'a•••@dmc-im.com') => mount(EmailVerify, { props: { email } });
+// E4 (role walkthrough 2026-09-25): the page's prop is `maskedEmail` (EmailVerificationController
+// passes a masked address, e.g. "j***@example.com") — it used to declare/render `email`, which the
+// controller never sends, so the address was always blank.
+const mountPage = (maskedEmail = 'a•••@dmc-im.com') => mount(EmailVerify, { props: { maskedEmail } });
 const btn = (w, text) => w.findAll('button').find((b) => b.text() === text);
 const btnStartsWith = (w, text) => w.findAll('button').find((b) => b.text().startsWith(text));
 

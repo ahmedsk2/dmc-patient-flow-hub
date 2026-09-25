@@ -86,7 +86,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
         >
             <div :class="['flex items-start justify-between', subtitle ? 'mb-4' : 'mb-4 items-center']">
                 <div>
-                    <h3 :id="titleId" class="text-lg font-bold text-ink-900">{{ title }}</h3>
+                    <h2 :id="titleId" class="text-lg font-bold text-ink-900">{{ title }}</h2>
                     <!-- Wave 1 (EHC UI): callers may replace the plain-text subtitle with richer
                          header content (e.g. the IdentityChip tuple); the string prop remains the
                          default so every existing modal renders exactly as before -->

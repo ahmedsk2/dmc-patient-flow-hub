@@ -59,7 +59,9 @@ const losTone = (b) => b === 'short' ? 'bg-tint-success text-on-success' : b ===
         <div v-show="tab === 'discharges'">
             <div v-for="g in dischargeGroups" :key="g.name" class="mb-4 overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
                 <div class="border-b border-line px-5 py-3">
-                    <h3 class="font-bold text-ink-800">{{ g.name === 'Unassigned' ? 'Unassigned' : `Dr. ${g.name}` }} Patient List <span class="ml-1 text-sm font-normal text-ink-400">· {{ g.rows.length }} discharge(s)</span></h3>
+                    <!-- role walkthrough 2026-09-25 (ui-ux #6): this was an h3 straight under the page's
+                         own h1 (AppLayout), skipping h2 — an axe "heading levels" violation. -->
+                    <h2 class="font-bold text-ink-800">{{ g.name === 'Unassigned' ? 'Unassigned' : `Dr. ${g.name}` }} Patient List <span class="ml-1 text-sm font-normal text-ink-400">· {{ g.rows.length }} discharge(s)</span></h2>
                 </div>
                 <div class="overflow-x-auto">
                 <table class="w-full text-sm">

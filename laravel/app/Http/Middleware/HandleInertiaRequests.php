@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Admission;
 use App\Models\Notification;
 use App\Models\Setting;
 use Illuminate\Http\Request;
@@ -57,6 +58,14 @@ class HandleInertiaRequests extends Middleware
                 ? Notification::where('user_id', $user->id)->where(fn ($q) => $q
                     ->where(fn ($x) => $x->where('type', '!=', 'handover.incomplete')->whereNull('read_at'))
                     ->orWhere(fn ($x) => $x->where('type', 'handover.incomplete')->whereNull('resolved_at')))->count()
+                : 0,
+            // role walkthrough 2026-09-25, U11: nav badge for "New Admissions" — a registrar arrives
+            // with no signal that patients await assignment. Kept IDENTICAL to
+            // AdmissionsController::index's own queue filter (discharge_date/consultant_id both
+            // NULL; SoftDeletes' global scope already excludes trashed rows). Observer never sees
+            // that page (denyObservers()), so it never sees the count either; a guest gets 0.
+            'unassignedAdmissionsCount' => fn () => ($user && ! $user->isObserver())
+                ? Admission::query()->whereNull('discharge_date')->whereNull('consultant_id')->count()
                 : 0,
         ]);
     }

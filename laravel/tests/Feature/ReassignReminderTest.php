@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Admission;
 use App\Models\AuditLog;
 use App\Models\Handover;
+use App\Models\HandoverSignature;
 use App\Models\Notification;
 use App\Models\Patient;
 use App\Models\Specialty;
@@ -257,6 +258,187 @@ class ReassignReminderTest extends TestCase
         // … the RECEIVER is not (they get the ordinary handover.transfer notice instead)
         $this->assertDatabaseMissing('notifications', ['user_id' => $to->id, 'type' => 'handover.incomplete']);
         $this->assertDatabaseHas('notifications', ['user_id' => $to->id, 'type' => 'handover.transfer']);
+    }
+
+    // ---- E2 (role walkthrough 2026-09-25): the outgoing consultant's "My outgoing" save must
+    // resolve the NEW episode's reminder too, not just the closed one it can actually write to ----
+
+    /**
+     * Reproduces admin-clinical.md finding #1: the outgoing consultant's HandoverSignature — and
+     * therefore their only write access — is on the CLOSING (old) episode, while the
+     * `handover.incomplete` reminder that "Needs handover" / the bell track is on the NEW episode.
+     * Saving on the old episode (POST /admissions/{old}/handover, exactly what "My outgoing" →
+     * "Update text" does) must now resolve the new episode's reminder for every recipient, drop the
+     * patient out of every "Needs handover" count, and leave the receiving consultant still needing
+     * to sign.
+     */
+    public function test_saving_on_the_old_closing_episode_resolves_the_new_episodes_reminder(): void
+    {
+        [$admin, $from, $to, $admission] = $this->reassignFixture();
+        $spec = Specialty::create(['name' => 'Cardiology', 'is_subspecialty' => true]);
+        $to->forceFill(['specialty_id' => $spec->id])->save();
+
+        $this->actingAs($admin)->post("/admissions/{$admission->id}/transfer", [
+            'mode' => 'specialty', 'specialty_id' => $spec->id, 'consultant_id' => $to->id,
+        ])->assertRedirect();
+
+        $old = $admission->fresh();
+        $new = Admission::where('patient_id', $admission->patient_id)->where('id', '!=', $old->id)->firstOrFail();
+        $this->assertSame($old->id, $new->predecessor_admission_id, 'the new episode must record its predecessor');
+        $this->assertGreaterThan(0, Notification::where('type', 'handover.incomplete')->whereNull('resolved_at')
+            ->where('admission_id', $new->id)->count());
+        $this->assertSame(1, Admission::handoverPending()->where('id', $new->id)->count(),
+            'the new episode starts out under "Needs handover"');
+
+        // the outgoing consultant's ONLY write route: "My outgoing" posts to the OLD episode
+        $this->actingAs($from)->postJson("/admissions/{$old->id}/handover", ['body' => 'Stable overnight, cardiology aware.'])
+            ->assertOk();
+
+        $this->assertSame(0, Notification::where('type', 'handover.incomplete')->whereNull('resolved_at')
+            ->where('admission_id', $new->id)->count(),
+            'the new episode reminder must resolve for every recipient, not just the closed one');
+        $this->assertSame(0, Admission::handoverPending()->where('id', $new->id)->count(),
+            'the new episode must drop out of "Needs handover" — DashboardController::handoverDue and '.
+            'PatientsController::needsHandoverCount both key off this exact scope, so this one assertion '.
+            'proves every consumer moved together');
+
+        // the receiving consultant's signature is UNTOUCHED — they still must read + sign
+        $sig = HandoverSignature::where('admission_id', $old->id)->latest('id')->first();
+        $this->assertNotNull($sig);
+        $this->assertNull($sig->signed_at, 'writing the outgoing note must never auto-sign the receiver\'s acknowledgement');
+    }
+
+    /** Saving on some unrelated closed episode (no predecessor link to anything) resolves nothing. */
+    public function test_saving_on_an_unrelated_closed_episode_resolves_nothing(): void
+    {
+        [$admin, $from, $to, $admission] = $this->reassignFixture();
+        $spec = Specialty::create(['name' => 'Cardiology', 'is_subspecialty' => true]);
+        $to->forceFill(['specialty_id' => $spec->id])->save();
+
+        $this->actingAs($admin)->post("/admissions/{$admission->id}/transfer", [
+            'mode' => 'specialty', 'specialty_id' => $spec->id, 'consultant_id' => $to->id,
+        ])->assertRedirect();
+        $new = Admission::where('patient_id', $admission->patient_id)->where('id', '!=', $admission->id)->firstOrFail();
+
+        // an unrelated, never-transferred, already-discharged admission for a different patient
+        $p2 = Patient::create(['mrn' => (string) random_int(10000000, 99999999), 'name' => 'RR Other Patient']);
+        $unrelated = Admission::create([
+            'patient_id' => $p2->id, 'admit_date' => now()->subDays(5)->toDateString(),
+            'discharge_date' => now()->subDay()->toDateString(), 'current_location' => 'Ward',
+            'is_longterm' => 0, 'is_new_assignment' => 0, 'consultant_id' => $from->id,
+        ]);
+        $this->assertNull($unrelated->predecessor_admission_id);
+
+        $before = Notification::where('type', 'handover.incomplete')->whereNull('resolved_at')->count();
+        $this->actingAs($admin)->postJson("/admissions/{$unrelated->id}/handover", ['body' => 'unrelated note'])
+            ->assertOk();
+
+        $this->assertSame($before, Notification::where('type', 'handover.incomplete')->whereNull('resolved_at')->count(),
+            'an admission with no successor must resolve nothing beyond its own (empty) reminders');
+        $this->assertGreaterThan(0, Notification::where('type', 'handover.incomplete')->whereNull('resolved_at')
+            ->where('admission_id', $new->id)->count(), 'the real transfer reminder must be untouched');
+    }
+
+    /** A same-episode assign (no episode split) behaves exactly as before this fix. */
+    public function test_same_episode_assign_still_resolves_only_its_own_reminder(): void
+    {
+        [$admin, $from, $to, $admission] = $this->reassignFixture();
+        $this->actingAs($admin)->post("/admissions/{$admission->id}/assign", ['consultant_id' => $to->id])
+            ->assertRedirect();
+        $this->assertNull($admission->fresh()->predecessor_admission_id);
+
+        $this->actingAs($to)->postJson("/admissions/{$admission->id}/handover", ['body' => 'seen'])->assertOk();
+        $this->assertSame(0, Notification::where('type', 'handover.incomplete')->whereNull('resolved_at')->count());
+    }
+
+    // ---- E2 fix-up (role walkthrough 2026-09-25, adversarial review): predecessor_admission_id
+    // carries no uniqueness guarantee, so more than one admission can point back at the same
+    // predecessor — the resolution must not silently strand whichever one it didn't pick ----
+
+    /**
+     * A same-day admin reverseDischarge reopens the closing episode without voiding the successor
+     * transferSpecialty already created from it (reverseDischarge is not owned by this group — see
+     * the report's NEEDS ANOTHER GROUP). A second, legitimate transferSpecialty of the reopened
+     * episode then creates a SECOND successor with the same predecessor_admission_id. Both must
+     * still resolve when the outgoing consultant saves on the shared old episode — a naive
+     * single-row ->value('id') pick would leave whichever one it didn't choose stuck under "Needs
+     * handover" forever.
+     */
+    public function test_two_successors_from_the_same_predecessor_both_resolve(): void
+    {
+        [$admin, $from, $to, $admission] = $this->reassignFixture();
+        $spec = Specialty::create(['name' => 'Cardiology', 'is_subspecialty' => true]);
+        $to->forceFill(['specialty_id' => $spec->id])->save();
+
+        $this->actingAs($admin)->post("/admissions/{$admission->id}/transfer", [
+            'mode' => 'specialty', 'specialty_id' => $spec->id, 'consultant_id' => $to->id,
+        ])->assertRedirect();
+        $old = $admission->fresh();
+        $first = Admission::where('predecessor_admission_id', $old->id)->firstOrFail();
+
+        $this->actingAs($admin)->withSession(['stepup.verified_at' => now()->getTimestamp()])
+            ->post("/admissions/{$old->id}/reverse-discharge")->assertRedirect();
+        $this->assertNull($old->fresh()->discharge_date, 'the reopened episode must be active again for a second transfer');
+
+        $this->actingAs($admin)->post("/admissions/{$old->id}/transfer", [
+            'mode' => 'specialty', 'specialty_id' => $spec->id, 'consultant_id' => $to->id,
+        ])->assertRedirect();
+        $second = Admission::where('predecessor_admission_id', $old->id)->where('id', '!=', $first->id)->firstOrFail();
+
+        $this->assertSame(2, Admission::where('predecessor_admission_id', $old->id)->count(),
+            'both successors must share the same predecessor for this to be a real test of the double-successor case');
+        $this->assertGreaterThan(0, Notification::where('type', 'handover.incomplete')->whereNull('resolved_at')
+            ->where('admission_id', $first->id)->count());
+        $this->assertGreaterThan(0, Notification::where('type', 'handover.incomplete')->whereNull('resolved_at')
+            ->where('admission_id', $second->id)->count());
+
+        // the outgoing consultant's single save on the shared old episode
+        $this->actingAs($from)->postJson("/admissions/{$old->id}/handover", ['body' => 'Both moves reviewed.'])
+            ->assertOk();
+
+        $this->assertSame(0, Notification::where('type', 'handover.incomplete')->whereNull('resolved_at')
+            ->where('admission_id', $first->id)->count(), 'the FIRST successor must resolve too, not just the last one a single-row pick would find');
+        $this->assertSame(0, Notification::where('type', 'handover.incomplete')->whereNull('resolved_at')
+            ->where('admission_id', $second->id)->count());
+    }
+
+    /**
+     * The window transfer()'s pre-transaction discharge_date guard cannot close: two requests that
+     * both read discharge_date as null before either has committed. Simulates the second, "already
+     * committed" transfer landing between this request's Specialty lookup and the new lockForUpdate
+     * re-check inside transferSpecialty's transaction (same technique as
+     * AdmissionDoubleSubmitTest::test_transaction_level_lock_blocks_an_episode_created_mid_request).
+     */
+    public function test_a_concurrent_second_transfer_is_rejected_not_duplicated(): void
+    {
+        [$admin, $from, $to, $admission] = $this->reassignFixture();
+        $spec = Specialty::create(['name' => 'Cardiology', 'is_subspecialty' => true]);
+        $to->forceFill(['specialty_id' => $spec->id])->save();
+
+        $fired = false;
+        Specialty::retrieved(function (Specialty $s) use ($spec, $admission, $to, &$fired) {
+            if ($fired || $s->id !== $spec->id) {
+                return;
+            }
+            $fired = true;
+            // the "other request" — already committed by the time this one takes its lock
+            Admission::whereKey($admission->id)->update([
+                'discharge_date' => now()->toDateString(), 'transfer_type' => 'transfer to other speciality',
+            ]);
+            Admission::create([
+                'patient_id' => $admission->patient_id, 'admit_date' => now()->toDateString(),
+                'current_location' => 'Ward', 'consultant_id' => $to->id, 'is_longterm' => 0,
+                'is_new_assignment' => 1, 'predecessor_admission_id' => $admission->id,
+            ]);
+        });
+
+        $this->actingAs($admin)->post("/admissions/{$admission->id}/transfer", [
+            'mode' => 'specialty', 'specialty_id' => $spec->id, 'consultant_id' => $to->id,
+        ])->assertSessionHasErrors(['consultant_id' => 'This admission was just transferred by another request.']);
+
+        $this->assertTrue($fired, 'the simulated concurrent transfer never ran — the race was not exercised');
+        $this->assertSame(1, Admission::where('predecessor_admission_id', $admission->id)->count(),
+            'the raced request must not create a second successor');
     }
 
     public function test_reminders_are_written_with_the_admission_id_column_and_resolve_by_it(): void

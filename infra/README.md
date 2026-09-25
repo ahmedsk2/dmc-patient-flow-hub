@@ -222,7 +222,8 @@ The Terraform above was written from the docs and has never been planned. Readin
   every app on the host. (A manual full backup from 2026-07-19 with no expiry was deleted 2026-09-24.)
 - **`dmc-audit-log`:** has a **7-year retention rule** (`audit-worm-7y`, write-once) and suspended
   versioning — the code here says "no retention rule".
-- **Network:** SSH on the security list is limited to the owner's workstation address (/32, since
-  2026-09-23 — supply it through `ssh_allowed_cidrs`, never commit it); 80/443 from Cloudflare's ranges
+- **Network:** SSH on the security list is open to any address (`ssh_allowed_cidrs = ["0.0.0.0/0"]`;
+  it was a /32 for the owner's workstation from 2026-09-23 to 2026-09-25 and was reopened by owner
+  decision because that address changes — login is key-only); 80/443 from Cloudflare's ranges
   only; the VNIC also carries a network security group that admits 443 only from another app's load
   balancer on the same host.

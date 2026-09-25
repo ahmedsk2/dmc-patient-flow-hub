@@ -48,6 +48,16 @@ describe('Handovers/Index — Needs handover tab (HC-T9)', () => {
         expect(w.text()).toContain('No patients are missing a handover today.');
     });
 
+    // (role walkthrough 2026-09-25, info mark c) the tab's own caption reads "patients with no
+    // handover saved today", which understates the real (notification-driven) rule — an InfoTip
+    // only appears once this tab is selected, not on the other two tabs' captions.
+    it('carries an InfoTip on the caption, only while this tab is selected', async () => {
+        const w = mount(Index, { props: baseProps() });
+        expect(w.find('button[aria-label="More information: Needs handover"]').exists()).toBe(false);
+        await w.findAll('button').find((b) => b.text().includes('Needs handover')).trigger('click');
+        expect(w.find('button[aria-label="More information: Needs handover"]').exists()).toBe(true);
+    });
+
     it('shows the Write link only for a row the viewer can actually write (can_write, #32)', async () => {
         const w = mount(Index, {
             props: baseProps({

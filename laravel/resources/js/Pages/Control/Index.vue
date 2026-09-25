@@ -134,11 +134,22 @@ const editUser = (u) => {
     uForm.can_coordinate_consultations = !!u.can.coordinate;
     uForm.defaults?.();
 };
-const saveUser = guardSubmit(uForm, () => uForm.put(`/control/users/${editing.value.id}`, { preserveScroll: true, onSuccess: doCloseEditUser }));
+// (role walkthrough 2026-09-25, U2) unlike every other field in this modal, unticking Active and
+// pressing the ordinary Save button ends the user's live sessions and revokes their trusted devices
+// immediately, with no warning. Confirm it the same way Delete / Reset MFA do, only on that transition.
+const saveUser = guardSubmit(uForm, async () => {
+    if (editing.value.active && !uForm.active) {
+        const ok = await ask('Deactivate user', `Deactivate ${editing.value.username}? This signs them out everywhere right now and revokes their trusted devices. They can sign back in once reactivated.`, 'danger');
+        if (!ok) return;
+    }
+    uForm.put(`/control/users/${editing.value.id}`, { preserveScroll: true, onSuccess: doCloseEditUser });
+});
 const resetMfa = async (u) => { if (await ask('Reset two-factor', `Reset two-factor for ${u.username}. They'll re-enrol on next login.`, 'neutral')) router.post(`/control/users/${u.id}/reset-mfa`, {}, { preserveScroll: true }); };
 const sendReset = (u) => router.post(`/control/users/${u.id}/send-reset`, {}, { preserveScroll: true });
 const deleteUser = async (u) => {
-    if (await ask('Delete user', `Permanently delete ${u.username}. Their historical admissions/consultations are kept (attribution cleared). This cannot be undone.`, 'danger'))
+    // (role walkthrough 2026-09-25, U3) this is a soft delete — ControlController::destroyUser keeps
+    // the row and TrashedController::restoreUser brings it back — so "cannot be undone" was false.
+    if (await ask('Delete user', `Sign out ${u.username} everywhere and remove their account — they will not be able to sign in. An admin can restore the account from Recently Deleted.`, 'danger'))
         router.delete(`/control/users/${u.id}`, { preserveScroll: true, onSuccess: doCloseEditUser });
 };
 
@@ -511,11 +522,13 @@ const registeredWhen = (iso) => (iso ? iso.slice(0, 10) : '—');
                             <span v-if="uForm.errors.email" class="mt-1 block text-xs text-on-danger">{{ uForm.errors.email }}</span>
                         </label>
                     </div>
-                    <label class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Role</span>
-                        <select v-model.number="uForm.role" :class="field"><option v-for="(label, id) in roles" :key="id" :value="Number(id)">{{ label }}</option></select>
-                    </label>
+                    <!-- the "!" button sits OUTSIDE the label so it doesn't join the select's accessible name -->
+                    <div>
+                        <div class="mb-1 flex items-center gap-1.5"><label for="user-edit-role" class="text-sm font-semibold text-ink-700">Role</label><InfoTip label="Role" text="Decides which pages they can open; the checkboxes below add specific actions on top of it. Granting Administrator needs a fresh re-authentication." /></div>
+                        <select id="user-edit-role" v-model.number="uForm.role" :class="field"><option v-for="(label, id) in roles" :key="id" :value="Number(id)">{{ label }}</option></select>
+                    </div>
                     <div class="flex items-center gap-4">
-                        <label class="flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" v-model="uForm.active" class="rounded text-brand-700" /> Active</label>
+                        <label class="flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" v-model="uForm.active" class="rounded text-brand-700" /> Active<InfoTip label="Active" text="Unchecking this and saving signs the user out everywhere right now and revokes their trusted devices. Re-check to let them sign in again." /></label>
                         <label class="flex items-center gap-2 text-sm font-medium text-ink-700"><input type="checkbox" v-model="uForm.on_service" class="rounded text-brand-700" /> On service<InfoTip label="On service" text="Included in the automatic Shuffle assignment pool for new unassigned patients." /></label>
                     </div>
                     <label v-if="uForm.role === 3" class="block"><span class="mb-1 block text-sm font-semibold text-ink-700">Specialty</span>

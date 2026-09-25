@@ -30,6 +30,16 @@ class ProfileController extends Controller
                 'role' => $u->roleLabel(),
                 'pass_exp_date' => optional($u->pass_exp_date)->toDateString(),
                 'mfa_enabled' => (bool) $u->mfa_enrolled_at,
+                // U-signin(d) (role walkthrough 2026-09-25): landing here because the password
+                // expired used to rely entirely on AppLayout's flash TOAST — bottom-right, fixed,
+                // and self-dismissing after 4.5s — to explain why. The reason a forced navigation
+                // happened should stay visible without scrolling for as long as the reason is still
+                // true, not just for a few seconds; Edit.vue now renders a persistent banner above
+                // everything else on the page when this is true. Same rule as
+                // EnsurePasswordNotExpired (NULL = unknown age = expired; duplicated inline rather
+                // than shared, since that middleware is outside this file's ownership for this fix).
+                'password_expired' => $u->pass_exp_date === null
+                    || now()->greaterThan($u->pass_exp_date->copy()->addMonths(3)),
             ],
             'trustedDevices' => $this->trustedDevicesFor($u->id),
         ]);

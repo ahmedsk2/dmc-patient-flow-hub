@@ -117,7 +117,10 @@ const destroyAdmission = async (p) => {
 
         <!-- queue grouped by admit date -->
         <div v-for="[date, patients] in byDate" :key="date" class="mb-5">
-            <h3 class="mb-2 text-sm font-semibold text-ink-500">{{ dayName(date) }} <span class="text-ink-400">— {{ date }}</span> <span class="text-ink-300">({{ patients.length }})</span></h3>
+            <!-- Headings (role walkthrough 2026-09-25): this used to be an h3 directly under the
+                 page's own h1 (AppLayout), skipping h2 — axe's "heading levels should only
+                 increase by one". Same visual size either way; only the outline changes. -->
+            <h2 class="mb-2 text-sm font-semibold text-ink-500">{{ dayName(date) }} <span class="text-ink-400">— {{ date }}</span> <span class="text-ink-300">({{ patients.length }})</span></h2>
             <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 <div v-for="p in patients" :key="p.id" class="rounded-2xl bg-card p-4 shadow-card ring-1 ring-line">
                     <div class="flex items-start justify-between">

@@ -125,6 +125,90 @@ describe('opening and closing', () => {
         expect(document.activeElement).toBe(trigger.element);
         w.unmount();
     });
+
+    // Role walkthrough 2026-09-25, Palette: opening via Ctrl+K (not a click) with nothing already
+    // focused left openerEl null, and the old fallback pointed at a fixed ref (the xl+ trigger)
+    // regardless of which trigger was actually visible on screen. Below the xl breakpoint that
+    // button is display:none, and a real browser's .focus() on a display:none element is a no-op —
+    // focus was silently dropped onto <body>. Simulate that viewport with checkVisibility (jsdom
+    // has none of its own, same pattern as useModalA11y's E5-trap specs).
+    it('Ctrl+K with nothing focused falls back to whichever trigger is actually visible, not <body>', async () => {
+        const w = mountPalette();
+        const wide = w.get('[data-qj-trigger]').element;
+        const compact = w.get('[data-qj-trigger-mobile]').element;
+        wide.checkVisibility = () => false;    // hidden below xl — the real-browser case reported
+        compact.checkVisibility = () => true;
+        document.body.focus();
+        expect(document.activeElement).toBe(document.body);
+
+        key({ key: 'k', ctrlKey: true });
+        await w.vm.$nextTick();
+        await input(w).trigger('keydown', { key: 'Escape' });
+        await w.vm.$nextTick();
+
+        expect(document.activeElement).toBe(compact);
+        w.unmount();
+    });
+
+    it('Ctrl+K falls back to the wide trigger when IT is the one visible', async () => {
+        const w = mountPalette();
+        const wide = w.get('[data-qj-trigger]').element;
+        const compact = w.get('[data-qj-trigger-mobile]').element;
+        wide.checkVisibility = () => true;
+        compact.checkVisibility = () => false;
+        document.body.focus();
+
+        key({ key: 'k', ctrlKey: true });
+        await w.vm.$nextTick();
+        await input(w).trigger('keydown', { key: 'Escape' });
+        await w.vm.$nextTick();
+
+        expect(document.activeElement).toBe(wide);
+        w.unmount();
+    });
+
+    // Role walkthrough 2026-09-25 (review pass): browsers without checkVisibility() used to fall
+    // through to "always the first candidate" — always the wide trigger — silently reintroducing
+    // the display:none-focus bug on those browsers. The fallback must consult the actual CSS
+    // breakpoint (xl, 1280px) instead. jsdom has no checkVisibility of its own, so leaving it
+    // unmocked exercises this path directly.
+    describe('when the browser has no checkVisibility() (fallback to the xl breakpoint)', () => {
+        let originalMatchMedia;
+        beforeEach(() => { originalMatchMedia = window.matchMedia; });
+        afterEach(() => { window.matchMedia = originalMatchMedia; });
+
+        it('falls back to the compact trigger under the xl breakpoint', async () => {
+            window.matchMedia = (q) => ({ matches: false, media: q });   // narrower than xl
+            const w = mountPalette();
+            const wide = w.get('[data-qj-trigger]').element;
+            const compact = w.get('[data-qj-trigger-mobile]').element;
+            expect(wide.checkVisibility).toBeUndefined();
+            document.body.focus();
+
+            key({ key: 'k', ctrlKey: true });
+            await w.vm.$nextTick();
+            await input(w).trigger('keydown', { key: 'Escape' });
+            await w.vm.$nextTick();
+
+            expect(document.activeElement).toBe(compact);
+            w.unmount();
+        });
+
+        it('falls back to the wide trigger at/above the xl breakpoint', async () => {
+            window.matchMedia = (q) => ({ matches: q === '(min-width: 1280px)', media: q });
+            const w = mountPalette();
+            const wide = w.get('[data-qj-trigger]').element;
+            document.body.focus();
+
+            key({ key: 'k', ctrlKey: true });
+            await w.vm.$nextTick();
+            await input(w).trigger('keydown', { key: 'Escape' });
+            await w.vm.$nextTick();
+
+            expect(document.activeElement).toBe(wide);
+            w.unmount();
+        });
+    });
 });
 
 describe('SPC-TM-011 — the term travels in a POST body, never a URL', () => {

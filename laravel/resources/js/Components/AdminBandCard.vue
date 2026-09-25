@@ -58,7 +58,10 @@ defineProps({
             </span>
             <div class="min-w-0">
                 <p class="nums text-2xl font-bold leading-none" :class="urgent && count > 0 ? 'text-on-danger' : 'text-ink-900'">{{ count }}</p>
-                <p class="mt-1 truncate text-xs font-medium text-ink-500">{{ label }}</p>
+                <!-- role walkthrough 2026-09-25 (ui-ux #8): fixed-width truncate ellipsized 5 of these
+                     labels at 375px with no way to recover the text (no title, tap doesn't help). Wraps
+                     to two lines below `sm`; the desktop single-line truncate is unchanged at sm+. -->
+                <p class="mt-1 text-xs font-medium text-ink-500 sm:truncate">{{ label }}</p>
             </div>
         </Link>
         <!-- Sits just outside the card's own top-right corner, at the count's height rather than the

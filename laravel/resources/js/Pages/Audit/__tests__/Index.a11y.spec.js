@@ -94,4 +94,22 @@ describe('Audit/Index — accessible names (UX-04)', () => {
         expect(w.find('input[placeholder="Entity ID"]').attributes('aria-label')).toBe('Entity ID');
         expect(w.find('input[placeholder="IP address"]').attributes('aria-label')).toBe('IP address');
     });
+
+    // role walkthrough 2026-09-25 (ui-ux #5, axe "insufficient color contrast"): the disabled
+    // "« Previous"/"Next »" pagination span was text-ink-300 on bg-card (~2:1) — below WCAG AA's
+    // 4.5:1. Registry's identical paginator already used ink-500 (passes in both themes); Audit's
+    // now matches it.
+    it('renders a disabled pagination link in the AA-passing ink-500 tone, not ink-300', () => {
+        const w = mountAttached(props({
+            logs: { data: [], total: 0, from: 0, to: 0, last_page: 2, links: [
+                { url: null, label: '&laquo; Previous', active: false },
+                { url: '/audit?page=2', label: '2', active: false },
+                { url: '/audit?page=2', label: 'Next &raquo;', active: false },
+            ] },
+        }));
+        const disabled = w.findAll('span').find((s) => s.text().includes('Previous'));
+        expect(disabled).toBeTruthy();
+        expect(disabled.classes()).toContain('text-ink-500');
+        expect(disabled.classes()).not.toContain('text-ink-300');
+    });
 });

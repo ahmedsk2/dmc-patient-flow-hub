@@ -85,7 +85,11 @@ const confirmMerge = async () => {
     if (!preview.value) return;
     const body = `#${preview.value.source.id} (${preview.value.source.mrn}) will retire, moving `
         + `${preview.value.source.admissions} admission(s) and ${preview.value.source.consultations} consultation(s) `
-        + `onto #${preview.value.target.id} (${preview.value.target.mrn}). The source stays recoverable from Recently Deleted.`;
+        // (role walkthrough 2026-09-25) Recently Deleted has no Patients section and no restore route
+        // for a patient — the retired source is NOT self-service recoverable. Say what actually happens.
+        + `onto #${preview.value.target.id} (${preview.value.target.mrn}). The source record is then retired `
+        + `(kept but hidden) and this merge is recorded in the audit log. It cannot be undone in the app — `
+        + `reversing it needs a database restore by the maintainer — so check the preview carefully.`;
     if (!(await ask(`Merge into #${preview.value.target.id}?`, body, 'danger'))) return;
 
     form.source_id = preview.value.source.id;
@@ -120,8 +124,12 @@ const btn = 'rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opac
         <p class="mb-5 max-w-3xl text-sm text-ink-400">
             Merge a duplicate patient record into a canonical one. All of the <strong>source</strong> patient's
             admissions and consultations are re-pointed onto the <strong>target</strong> in a single transaction,
-            then the source is retired (recoverable from Recently Deleted). This is a high-risk, identity-changing
-            action and requires a recent re-authentication.
+            then the source record is retired (kept but hidden) and the merge is recorded in the audit log.
+            <!-- (role walkthrough 2026-09-25) a merge cannot be undone from inside the app — there is no
+                 Patients section on Recently Deleted; reversing one needs a maintainer database restore. -->
+            A merge cannot be undone in the app — reversing one needs a restore from backup by the
+            maintainer — so check the preview carefully before confirming. This is a high-risk,
+            identity-changing action and requires a recent re-authentication.
         </p>
 
         <!-- two-panel pickers -->

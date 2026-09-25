@@ -3,6 +3,7 @@ import { ref, computed, onBeforeUnmount } from 'vue';
 import { Head, useForm, Link } from '@inertiajs/vue3';
 import QRCode from 'qrcode';
 import EhcLogo from '@/Components/EhcLogo.vue';
+import InfoTip from '@/Components/InfoTip.vue';
 import PasswordMeter from '@/Components/PasswordMeter.vue';
 import { xsrf } from '@/lib/ui.js';
 
@@ -188,12 +189,20 @@ const codeField = 'w-32 rounded-xl border border-ink-200 px-3 py-2 text-center t
             <form @submit.prevent="submit" class="space-y-3 rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label for="reg-username" class="mb-1 block text-sm font-semibold text-ink-700">Username</label>
+                        <label for="reg-username" class="mb-1 block text-sm font-semibold text-ink-700">Username <span class="text-on-danger" aria-hidden="true">*</span></label>
                         <input id="reg-username" v-model="form.username" :class="[field, form.errors.username && 'border-danger-500']" />
                         <p v-if="form.errors.username" class="mt-1 text-xs text-on-danger">{{ form.errors.username }}</p>
                     </div>
                     <div>
-                        <label for="reg-role" class="mb-1 block text-sm font-semibold text-ink-700">Role</label>
+                        <!-- fix-up (role walkthrough 2026-09-25): InfoTip used to nest INSIDE this
+                             <label for="reg-role">, folding its accessible name into #reg-role's
+                             computed name ("Role !" instead of "Role") — same anti-pattern already
+                             fixed the same day in Statistics/Index.vue and AdminBandCard.vue. Moved
+                             out as a sibling of the <label>, inside the same flex wrapper. -->
+                        <span class="mb-1 flex items-center gap-1 text-sm font-semibold text-ink-700">
+                            <label for="reg-role">Role <span class="text-on-danger" aria-hidden="true">*</span></label>
+                            <InfoTip label="Role" text="Sets your starting permissions. An administrator reviews your account before activating it and can change the role at any time." />
+                        </span>
                         <select id="reg-role" v-model="form.role" :class="[field, form.errors.role && 'border-danger-500']">
                             <option value="">Select…</option>
                             <option v-for="(label, id) in roles" :key="id" :value="Number(id)">{{ label }}</option>
@@ -203,7 +212,7 @@ const codeField = 'w-32 rounded-xl border border-ink-200 px-3 py-2 text-center t
                 </div>
 
                 <div>
-                    <label for="reg-fullname" class="mb-1 block text-sm font-semibold text-ink-700">Full name</label>
+                    <label for="reg-fullname" class="mb-1 block text-sm font-semibold text-ink-700">Full name <span class="text-on-danger" aria-hidden="true">*</span></label>
                     <input id="reg-fullname" v-model="form.full_name" :class="[field, form.errors.full_name && 'border-danger-500']" />
                     <p v-if="form.errors.full_name" class="mt-1 text-xs text-on-danger">{{ form.errors.full_name }}</p>
                 </div>

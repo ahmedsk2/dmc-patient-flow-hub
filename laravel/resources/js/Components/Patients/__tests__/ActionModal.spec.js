@@ -25,7 +25,11 @@ vi.mock('@inertiajs/vue3', () => ({
             isDirty: false,
             post: vi.fn((url, opts) => { posts.push({ url, form: f }); if (opts?.onSuccess) opts.onSuccess(); }),
             reset: vi.fn(),
-            clearErrors: vi.fn(),
+            clearErrors: vi.fn((...keys) => { if (!keys.length) { Object.keys(f.errors).forEach((k) => delete f.errors[k]); } else { keys.forEach((k) => delete f.errors[k]); } }),
+            // (role walkthrough 2026-09-25, U7) real Inertia forms expose setError(field, message)
+            // as a purely client-side error — no round trip. The medical-discharge delay-reason
+            // check under test relies on it.
+            setError: vi.fn((key, msg) => { f.errors[key] = msg; }),
             defaults: vi.fn((...args) => {
                 if (args.length === 0) defaults = Object.fromEntries(keys.map((k) => [k, f[k]]));
                 else if (args.length === 1 && args[0] && typeof args[0] === 'object') defaults = { ...defaults, ...args[0] };
@@ -118,7 +122,9 @@ describe('ActionModal — board assign sub-form', () => {
 
 describe('ActionModal — submit endpoints per mode', () => {
     it('medical → /medical-discharge, complete → /complete-discharge, icu → /icu-discharge, transfer → /transfer', () => {
-        mountWith('medical').vm.submitMedical();
+        const md = mountWith('medical');
+        md.vm.mdForm.delay_reason = 'Physical';   // U7: a blank delay reason is now client-blocked below
+        md.vm.submitMedical();
         expect(posts.pop().url).toBe('/admissions/7/medical-discharge');
         mountWith('complete').vm.submitComplete();
         expect(posts.pop().url).toBe('/admissions/7/complete-discharge');
@@ -776,5 +782,129 @@ describe('ActionModal — consultant hand-off note', () => {
         expect(mountWith('assign', patient, { handOff: true }).find('[data-hand-off-note]').exists()).toBe(true);
         expect(mountWith('assign', patient).find('[data-hand-off-note]').exists()).toBe(false);
         expect(mountWith('medical', patient, { handOff: true }).find('[data-hand-off-note]').exists()).toBe(false);
+    });
+});
+
+// (role walkthrough 2026-09-25, E5) the Ward/ICU and discharge-type radios used `class="hidden"`
+// (display:none), which the native Tab order skips outright — a keyboard user could never reach
+// them, and the modal's own focus trap never wrapped back onto them either. `sr-only` keeps the
+// real input focusable and in the a11y tree while staying visually hidden.
+describe('ActionModal — radio choices are focusable, not display:none (E5)', () => {
+    it('the discharge-type radios are not display:none-classed and share a name (native radio group)', () => {
+        const w = mountWith('medical');
+        const inputs = w.findAll('input[type="radio"]');
+        expect(inputs.length).toBeGreaterThan(0);
+        inputs.forEach((i) => {
+            expect(i.classes()).not.toContain('hidden');
+            expect(i.classes()).toContain('sr-only');
+        });
+        // (review finding) Tab alone reaching each input is not enough — without a shared `name`
+        // the browser never treats them as one native radio group, so arrow keys can't move the
+        // selection between choices. A shared, non-empty name is what turns that on.
+        const names = inputs.map((i) => i.attributes('name'));
+        expect(names[0]).toBeTruthy();
+        expect(new Set(names).size).toBe(1);
+    });
+    it('the Ward/ICU transfer radios are not display:none-classed, remain focusable, and share a name', async () => {
+        // real document.activeElement only reflects a focus() call on an element actually attached
+        // to the document (jsdom); a detached mount (the other assertions in this file) can't be
+        // used for this one — mirrors ConfirmDialog.test.js's attachTo pattern.
+        const w = mount(ActionModal, {
+            attachTo: document.body,
+            props: { open: true, mode: 'transfer', patient, consultants, specialties: [{ id: 1, name: 'Cardio' }], externalServices: ['Surgery'], today: '2026-06-14' },
+        });
+        w.vm.tForm.mode = 'location';
+        await nextTick();
+        const inputs = w.findAll('input[type="radio"]');
+        expect(inputs.length).toBe(2);
+        inputs.forEach((i) => {
+            expect(i.classes()).not.toContain('hidden');
+            expect(i.classes()).toContain('sr-only');
+            i.element.focus();
+            expect(document.activeElement).toBe(i.element);   // sr-only stays in the Tab order; display:none would not
+        });
+        const names = inputs.map((i) => i.attributes('name'));
+        expect(names[0]).toBeTruthy();
+        expect(new Set(names).size).toBe(1);   // shared name → browser groups them for arrow-key navigation
+        w.unmount();
+    });
+    // the two radio groups must not collide with each other (or across modal instances) — `fid()`
+    // namespaces by mode/uid, so the discharge-type group and the transfer group get different names.
+    it('the discharge-type group and the Ward/ICU group use different names', async () => {
+        const md = mountWith('medical');
+        const mdName = md.findAll('input[type="radio"]')[0].attributes('name');
+        const tr = mount(ActionModal, {
+            props: { open: true, mode: 'transfer', patient, consultants, specialties: [{ id: 1, name: 'Cardio' }], externalServices: ['Surgery'], today: '2026-06-14' },
+        });
+        tr.vm.tForm.mode = 'location';
+        await nextTick();
+        const trName = tr.findAll('input[type="radio"]')[0].attributes('name');
+        expect(trName).not.toBe(mdName);
+    });
+});
+
+// (role walkthrough 2026-09-25, U5) with handOff set, the dialog used to switch from the opening
+// button's "Hand this patient to a colleague" to "Assign consultant" / "Assign" mid-flow — three
+// verbs for one action. It now says "Hand" end-to-end for that path only.
+describe('ActionModal — hand-off wording is consistent end-to-end (U5)', () => {
+    it('titles the dialog "Hand patient to a colleague" only when handOff is set', () => {
+        expect(mountWith('assign', patient, { handOff: true }).vm.modalTitle).toBe('Hand patient to a colleague');
+        expect(mountWith('assign').vm.modalTitle).toBe('Assign consultant');   // capability-gated assign keeps its term
+    });
+    it('the submit button reads "Hand off" (or "Save handover & hand off" once a colleague is picked)', async () => {
+        const w = mountWith('assign', patient, { handOff: true });
+        const btn = () => w.findAll('form button[type="submit"]')[0];
+        expect(btn().text()).toBe('Hand off');
+        w.vm.aForm.consultant_id = 6;   // differs from patient.consultant_id (5) → changingConsultant
+        await nextTick(); await nextTick();
+        expect(btn().text()).toBe('Save handover & hand off');
+    });
+    it('the "handover not complete" confirmation names only the actor in a hand-off, not "you and the outgoing consultant" twice', async () => {
+        ask.mockResolvedValue(false);
+        const w = mountWith('assign', patient, { handOff: true });
+        w.vm.aForm.consultant_id = 6;
+        await nextTick(); await nextTick();
+        await w.vm.submitWithHandoverGuard(w.vm.submitAssign, w.vm.aForm);
+        const message = ask.mock.calls[0][1];
+        expect(message).toContain('A reminder will be sent to you until it is completed.');
+        expect(message).not.toContain('outgoing consultant');
+    });
+    it('the non-hand-off (capability-gated) confirmation keeps naming both recipients', async () => {
+        ask.mockResolvedValue(false);
+        const w = mountWith('assign');
+        w.vm.aForm.consultant_id = 6;
+        await nextTick(); await nextTick();
+        await w.vm.submitWithHandoverGuard(w.vm.submitAssign, w.vm.aForm);
+        expect(ask.mock.calls[0][1]).toContain('A reminder will be sent to you and the outgoing consultant until it is completed.');
+    });
+});
+
+// (role walkthrough 2026-09-25, U7) an empty "Delay reason" on a medical-only discharge used to be
+// caught only by the browser's native `required` popup — invisible to a screen reader/automation,
+// and it blocked the submit event before this handler ever ran. It's now a real client-side check
+// that surfaces through the same errors object <ErrorSummary>/inline messages already read.
+describe('ActionModal — medical discharge shows an inline error for a blank delay reason (U7)', () => {
+    it('blocks the submit and sets a client-side error instead of relying on native validation', () => {
+        const w = mountWith('medical');
+        expect(w.find('select#' + w.vm.fid('delay_reason')).attributes('required')).toBeUndefined();
+        w.vm.submitMedical();
+        expect(posts.length).toBe(0);
+        expect(w.vm.mdForm.errors.delay_reason).toBeTruthy();
+    });
+    it('clears the error once a reason is picked, and submits', async () => {
+        const w = mountWith('medical');
+        w.vm.submitMedical();
+        expect(w.vm.mdForm.errors.delay_reason).toBeTruthy();
+        w.vm.mdForm.delay_reason = 'Physical';
+        await nextTick();
+        expect(w.vm.mdForm.errors.delay_reason).toBeUndefined();
+        w.vm.submitMedical();
+        expect(posts.pop().url).toBe('/admissions/7/medical-discharge');
+    });
+    it('never blocks a "Complete (leaving now)" discharge, which has no delay reason', () => {
+        const w = mountWith('medical');
+        w.vm.mdForm.complete = true;
+        w.vm.submitMedical();
+        expect(posts.pop().url).toBe('/admissions/7/medical-discharge');
     });
 });

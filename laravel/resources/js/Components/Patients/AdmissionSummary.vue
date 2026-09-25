@@ -5,6 +5,12 @@
  * Patients/Index. Display-only — no actions, no wiring — so it doubles as a future patient-detail
  * panel host. Diagnoses render as a plain list (matching the legacy review block exactly), not the
  * removable DxChips edit row.
+ *
+ * (role walkthrough 2026-09-25, U12) heading text changed from the all-caps-authored "KINDLY REVIEW
+ * ADMISSION DETAILS" (read literally, not just styled that way — the shouty legacy phrasing) to
+ * sentence case; the `uppercase tracking-wide` CLASS stays — it's the same section-label treatment
+ * used consistently across the app (e.g. the discharge type / delay reason labels), so only the
+ * words changed, not the visual style.
  */
 defineProps({
     patient: { type: Object, required: true },
@@ -13,7 +19,7 @@ defineProps({
 
 <template>
     <div class="rounded-xl bg-app/70 p-3 ring-1 ring-line">
-        <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-on-warning">Kindly review admission details</p>
+        <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-on-warning">Review the admission details</p>
         <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
             <div><dt class="font-semibold text-ink-400">Name</dt><dd class="text-ink-700">{{ patient.name }}</dd></div>
             <div><dt class="font-semibold text-ink-400">MRN</dt><dd class="nums text-ink-700">{{ patient.mrn || '—' }}</dd></div>

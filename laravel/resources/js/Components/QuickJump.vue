@@ -12,7 +12,8 @@ import IdentityChip from '@/Components/IdentityChip.vue';
 import { xsrf } from '@/lib/ui.js';
 import { recentIds, pushRecent } from '@/lib/recentPatients';
 
-const trigger = ref(null);   // the header button — focus falls back here on close (a11y)
+const trigger = ref(null);        // the wide (xl+) header button — focus falls back here on close (a11y)
+const triggerMobile = ref(null);  // the compact button shown below xl — same fallback role there
 const input = ref(null);
 const open = ref(false);
 const q = ref('');
@@ -145,11 +146,35 @@ const focusInput = () => {
     loadRecents();
     nextTick(() => input.value?.focus());
 };
+// Two triggers exist (the wide xl+ button and the compact one below xl) and only one is ever
+// actually rendered/visible at a given viewport — the other is `display:none` via Tailwind's
+// responsive classes. Opening via a click always sets openerEl to whichever was clicked (it's
+// document.activeElement by the time focusInput() runs), but opening via the Ctrl+K/"/" keyboard
+// shortcut with nothing focused leaves openerEl null; falling back to a fixed ref (always
+// `trigger`, the xl+ button) silently failed below xl — a real browser's .focus() on a
+// display:none element is a no-op, so focus was left on <body> instead of the visible mobile
+// trigger. Prefer whichever trigger checkVisibility() says is actually on screen; where the
+// browser doesn't support checkVisibility (jsdom, and older engines), that used to fall through to
+// "just take the first candidate" — which is always the wide trigger and silently reintroduces the
+// same display:none bug on those browsers. Mirror the CSS breakpoint that actually toggles these
+// two buttons instead: Tailwind's `xl`, 1280px (the `xl:flex` / `xl:hidden` pair above) — NOT the
+// `lg` / 1023px cutoff AppLayout.vue and tourSteps.js use for the sidebar drawer, a different
+// component with a different breakpoint. (role walkthrough 2026-09-25, Palette — review fix)
+const visibleTrigger = () => {
+    const candidates = [trigger.value, triggerMobile.value].filter(Boolean);
+    if (!candidates.length) return null;
+    if (typeof candidates[0].checkVisibility === 'function') {
+        return candidates.find((el) => el.checkVisibility()) ?? candidates[0];
+    }
+    const wide = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+        && window.matchMedia('(min-width: 1280px)').matches;
+    return (wide ? trigger.value : triggerMobile.value) ?? candidates[0];
+};
 const close = () => {
     open.value = false;
     q.value = ''; results.value = []; error.value = false; busy.value = false; active.value = 0;
     seq++;   // invalidate any in-flight search
-    const back = openerEl || trigger.value;
+    const back = openerEl || visibleTrigger();
     nextTick(() => back?.focus());
 };
 
@@ -215,7 +240,7 @@ const chipStatus = (row) => (row.deceased ? 'deceased' : (row.status || ''));
         </button>
         <!-- compact trigger below xl: phones, and the tablet / docked-sidebar widths where the wide box
              squeezed the page title out of the header (2026-09-23 UAT, NF-02) -->
-        <button type="button" data-qj-trigger-mobile @click="focusInput"
+        <button ref="triggerMobile" type="button" data-qj-trigger-mobile @click="focusInput"
             aria-label="Search patients and commands (Ctrl+K)" title="Search patients & commands (Ctrl+K)"
             class="grid h-9 w-9 coarse:h-10 coarse:w-10 place-items-center rounded-full text-ink-400 transition hover:bg-ink-50 hover:text-ink-700 xl:hidden">
             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" aria-hidden="true">

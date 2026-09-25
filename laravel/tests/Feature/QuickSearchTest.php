@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Admission;
 use App\Models\Patient;
+use App\Models\Specialty;
 use App\Models\User;
 use App\Support\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -215,5 +216,19 @@ class QuickSearchTest extends TestCase
         // the create-consultation form must pin both, never conflate them.
         $this->assertSame($adm->id, $row['id']);
         $this->assertSame($p->id, $row['patient_id']);
+    }
+
+    public function test_rows_carry_the_current_consultants_specialty_for_the_consultation_prefill(): void
+    {
+        // role walkthrough 2026-09-25: New Consultation prefills "From service" from this field
+        $admin = $this->user(User::ROLE_ADMIN);
+        $cardio = Specialty::firstOrCreate(['name' => 'Cardiology'], ['is_subspecialty' => true, 'is_external' => false]);
+        $cons = $this->user(User::ROLE_CONSULTANT, ['specialty_id' => $cardio->id]);
+        $this->admission($this->patient('Hala Team'), ['consultant_id' => $cons->id]);
+        $this->admission($this->patient('Hala Queue'));   // unassigned: no consultant, so no team
+
+        $rows = collect($this->actingAs($admin)->postJson('/api/patients/quick-search', ['q' => 'Hala'])->assertOk()->json());
+        $this->assertSame('Cardiology', $rows->firstWhere('name', 'Hala Team')['consultant_specialty']);
+        $this->assertNull($rows->firstWhere('name', 'Hala Queue')['consultant_specialty']);
     }
 }

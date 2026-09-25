@@ -172,6 +172,17 @@ class ConsultationsController extends Controller
             ? null
             : ($viewer->specialty_id === null ? ConsultationRequest::NO_SPECIALTY_MESSAGE : ConsultationRequest::OWN_SPECIALTY_ONLY_MESSAGE);
 
+        // U1 pt.2 (role walkthrough 2026-09-25): scopeVisibleTo (above) narrows a viewer with no
+        // specialty_id AND no coordinator capability all the way down to `consultant_id = them OR
+        // entered_by = them` — no specialty clause at all, unlike every other non-privileged viewer
+        // (who at least sees their whole team's book). That narrow case reads exactly like a broken
+        // ledger rather than the intended scope (reproduced: registrar.md, resident.md), so name it
+        // explicitly. Deliberately the SAME predicate as scopeVisibleTo's own inner condition, not a
+        // re-derived guess, so this notice can never disagree with what the query actually returns.
+        $scopeNotice = (! $canBookAnyTeam && $viewer->specialty_id === null)
+            ? 'You see only the consultations you booked or are the consultant for — your account has no specialty and no coordinator role.'
+            : null;
+
         return Inertia::render('Consultations/Index', [
             'consultations' => $consultations,
             'filters' => ['search' => $filters['search'] ?? '', 'status' => $status, 'scope' => $mine ? 'mine' : '', 'consultant_id' => $consultantId],
@@ -181,6 +192,7 @@ class ConsultationsController extends Controller
             'canBookAnyTeam' => $canBookAnyTeam,
             'bookableToServices' => $bookableToServices,
             'bookingNotice' => $bookingNotice,
+            'scopeNotice' => $scopeNotice,
             'stats' => [
                 Consultation::STATUS_NEW => (int) ($counts[Consultation::STATUS_NEW] ?? 0),
                 Consultation::STATUS_ACTIVE => (int) ($counts[Consultation::STATUS_ACTIVE] ?? 0),

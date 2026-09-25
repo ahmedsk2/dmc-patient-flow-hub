@@ -11,7 +11,7 @@ const patient = {
 describe('AdmissionSummary', () => {
     it('renders the review header + every demographic field', () => {
         const w = mount(AdmissionSummary, { props: { patient } });
-        expect(w.text()).toContain('Kindly review admission details');
+        expect(w.text()).toContain('Review the admission details');
         expect(w.text()).toContain('Ali');
         expect(w.text()).toContain('111');
         expect(w.text()).toContain('40y');

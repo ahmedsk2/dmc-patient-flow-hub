@@ -66,7 +66,16 @@ const stateLabel = computed(() => ({ signed: 'Signed', voided: 'Voided', pending
                 <button @click="tab = 'outgoing'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="tab === 'outgoing' ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">My outgoing ({{ outgoing.length }})</button>
                 <button @click="tab = 'needs'" class="rounded-lg px-4 py-2 text-sm font-semibold transition" :class="tab === 'needs' ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">Needs handover ({{ needsHandover.length }})</button>
             </div>
-            <span class="text-sm text-ink-400">{{ tab === 'awaiting' ? 'patients handed over to you — review and sign' : tab === 'outgoing' ? 'patients you handed over in the last 7 days' : 'patients with no handover saved today' }}</span>
+            <!-- (role walkthrough 2026-09-25, info mark c) "Needs handover" tracks a raised
+                 handover.incomplete reminder, not literally "wrote nothing today anywhere" — the
+                 caption above reads that way. It's only raised from a consultant-changing move
+                 (assign/hand-off, bulk reassign, internal specialty transfer) whose handover wasn't
+                 current at the time (PatientActionController::raiseIncompleteHandoverReminders).
+                 It clears when a note is saved on that admission, OR — since HandoverController
+                 ::save()'s one-hop successor resolution (role walkthrough 2026-09-25, E2) — via the
+                 outgoing consultant saving on the transfer's CLOSING episode from "My outgoing"
+                 (Admission::handoverPending / predecessor_admission_id). -->
+            <span class="inline-flex items-center gap-1 text-sm text-ink-400">{{ tab === 'awaiting' ? 'patients handed over to you — review and sign' : tab === 'outgoing' ? 'patients you handed over in the last 7 days' : 'patients with no handover saved today' }}<InfoTip v-if="tab === 'needs'" label="Needs handover" text="Raised only by a consultant-changing move (assign, reassign, transfer) whose handover wasn't current — clears when a note is saved, including via the transfer's closing episode." /></span>
             <button v-if="tab === 'awaiting' && awaiting.length > 1" @click="signAll" class="ml-auto rounded-xl bg-brand-solid px-4 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover">Sign all ({{ awaiting.length }})</button>
         </div>
 

@@ -41,6 +41,18 @@ const serialize = () => [
 // many of the shown rows still read OK (edits since Preview aren't re-validated until Confirm);
 // for a truncated (>200-row) preview, the server's own last-known valid count.
 const importCount = computed(() => (editable.value ? editRows.value.filter((r) => r.ok).length : (props.preview?.valid ?? 0)));
+// (role walkthrough 2026-09-25, U4) the primary button used to count EVERY row in the editable
+// table (editRows.length), invalid ones included, while the confirm dialog it opens (above) already
+// said the true valid-only count — so a 5-row paste with 2 bad rows showed "Confirm import (5 rows)"
+// then "Write 3 admission row(s)…" seconds later. Both now read off the same importCount.
+const skippedCount = computed(() => (editable.value
+    ? Math.max(0, editRows.value.length - importCount.value)
+    : (props.preview?.invalid ?? 0)));
+const importButtonLabel = computed(() => {
+    const n = importCount.value;
+    const base = `Import ${n} valid row${n === 1 ? '' : 's'}`;
+    return skippedCount.value ? `${base} (${skippedCount.value} skipped)` : base;
+});
 const doImport = async () => {
     const n = importCount.value;
     if (!(await ask('Confirm bulk import', `Write ${n} admission row(s) to the database now? Invalid rows are skipped automatically; this cannot be bulk-undone afterward.`, 'danger'))) return;
@@ -157,7 +169,7 @@ const cell = 'w-full min-w-16 rounded-lg border border-ink-200 bg-card px-1.5 py
                 <div class="mt-4 flex items-center justify-end gap-3">
                     <span class="mr-auto text-xs text-ink-400">Invalid rows are skipped automatically.</span>
                     <button @click="doImport" :disabled="form.processing || (editable ? !editRows.length : !preview.valid)" class="rounded-xl bg-brand-solid px-6 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-brand-solid-hover disabled:opacity-50">
-                        {{ form.processing ? 'Importing…' : (editable ? `Confirm import (${editRows.length} row${editRows.length === 1 ? '' : 's'})` : `Confirm import (${preview.valid})`) }}
+                        {{ form.processing ? 'Importing…' : importButtonLabel }}
                     </button>
                 </div>
             </section>

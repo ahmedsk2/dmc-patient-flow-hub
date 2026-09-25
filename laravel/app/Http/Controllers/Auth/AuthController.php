@@ -22,6 +22,12 @@ class AuthController extends Controller
 {
     public function show(): Response
     {
+        // S1 (role walkthrough 2026-09-25): every route that lands a browser back on the login
+        // page — a manual sign-out, an idle/absolute timeout, an eviction, or just navigating here
+        // directly — rotates the Inertia history-encryption key, so a stale encrypted snapshot from
+        // a previous session can never be decrypted even if bfcache still holds the DOM around it.
+        Inertia::clearHistory();
+
         return Inertia::render('Auth/Login');
     }
 
@@ -139,6 +145,14 @@ class AuthController extends Controller
         Auth::guard('web')->logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+
+        // S1 (role walkthrough 2026-09-25): must run AFTER invalidate()/regenerateToken() — those
+        // wipe the session's data, so writing the clear-history flag before them would just be
+        // thrown away. Inertia::clearHistory() stores the flag in the (now-fresh) session; it is
+        // read and cleared when the browser's next request renders an Inertia page — the login page
+        // this redirect lands on — so that page's response carries clearHistory: true. Belt and
+        // braces alongside show()'s own clearHistory() call.
+        Inertia::clearHistory();
 
         return redirect()->route('login');
     }
