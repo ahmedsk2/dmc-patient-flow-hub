@@ -273,15 +273,23 @@ class PatientActionController extends Controller
     }
 
     /**
-     * Self-assign — open to ANY clinical role (admin/registrar/consultant/resident), like the
-     * legacy handler (Q1 note): a registrar self-assigning was normal there. The assignment
-     * always lands on the AUTH user; observers stay read-only — K1-9 (was admin/consultant only).
+     * Self-assign — CONSULTANTS ONLY (owner decision 2026-09-25, role walkthrough option B; K1-9
+     * had opened it to every clinical role for legacy parity). An admission has one consultant
+     * slot, and whoever holds it may transfer and discharge the patient (canManageAdmission), is
+     * listed as "Dr." on the board and counted as a consultant in some statistics but not others —
+     * so a resident with no permissions could take a patient and discharge it. Production showed
+     * nobody but consultants actually holds patients (3 of 37,645 episodes ever by a registrar), so
+     * everyone else now uses Assign to name a consultant. The assignment always lands on the AUTH
+     * user; observers stay read-only.
      */
     public function assignToMe(Request $request, Admission $admission): RedirectResponse
     {
         $u = Auth::user();
         if ($u->isObserver()) {
             throw new AccessDeniedHttpException('Observers are read-only.');
+        }
+        if ((int) $u->role !== User::ROLE_CONSULTANT) {
+            throw new AccessDeniedHttpException('Only consultants can assign a patient to themselves — use Assign to choose a consultant.');
         }
         // unassigned-queue action ONLY (legacy parity: assign-to-me existed on the new-admissions
         // queue) — taking over an ASSIGNED patient must go through Assign/Transfer, which carry

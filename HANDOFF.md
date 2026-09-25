@@ -334,6 +334,10 @@
    (`dmc_demo-2026-09-25T133224Z`); one additive migration (`2026_09_25_000100`, ran); smoke 16/16 with the
    served bundle matching the manifest, `/health` ok, audit chain intact (938 rows),
    `inertia.history.encrypt` true in the container.
+   Then the owner chose **"B": "Assign to me" is for consultants only** (server check + queue page; an
+   Admin or a Registrar with Can-assign names a consultant, anyone else sees "Awaiting a consultant"), and
+   the New Admission form now accepts only an active consultant (it accepted any user, the same door) —
+   merged to `main`, **not yet deployed** at the time of writing.
    **Still open and all owner / infrastructure decisions, not code:** enable deploy-on-green
    (declined so far — "I don't want to autodeploy"), pick a log sink and set `LOG_STACK`
    (OBS-01/03/04/05), instance principal (CFG-10), SLOs and an

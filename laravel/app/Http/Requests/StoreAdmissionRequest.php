@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\Admission;
 use App\Models\Patient;
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -68,7 +69,12 @@ class StoreAdmissionRequest extends FormRequest
             'admit_date' => ['required', 'date', 'before_or_equal:today'],
             'admitted_from' => ['nullable', 'string', 'max:64', 'in:'.implode(',', self::ADMIT_FROM)],
             'current_location' => ['required', 'in:ER,Ward,ICU'],
-            'consultant_id' => ['nullable', 'exists:users,id'],
+            // Only an ACTIVE CONSULTANT may be named at admission (role walkthrough 2026-09-25): the
+            // consultant slot carries management rights and consultant statistics, and Assign-to-me is
+            // consultants-only — with a bare exists:users,id anyone with Can-add could name themselves
+            // (or any non-consultant) here. Same rule as Assign / bulk reassign / specialty transfer.
+            'consultant_id' => ['nullable', Rule::exists('users', 'id')
+                ->where('role', User::ROLE_CONSULTANT)->where('active', 1)->whereNull('deleted_at')],
             self::CONFIRM_IDENTITY_FIELD => ['sometimes', 'boolean'],
         ]);
     }
@@ -79,6 +85,7 @@ class StoreAdmissionRequest extends FormRequest
             'diagnoses.required' => 'Add at least one admission diagnosis.',
             'diagnoses.min' => 'Add at least one admission diagnosis.',
             'nationality.exists' => 'Pick a nationality from the list.',
+            'consultant_id.exists' => 'Choose an active consultant from the list — the selected user cannot hold patients.',
         ];
     }
 
