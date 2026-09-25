@@ -50,15 +50,21 @@ List), the board's "Census", Control → Users "Active" and "Role", sign-up "Rol
 readmissions", the consult indication picker ("pick one or more"), the dashboard's Mortality and Avg
 LOS tiles, and the Handovers "Needs handover" tab.
 
-## "Assign to me" (explained, decision pending)
+## "Assign to me" (decided: consultants only)
 
-Any clinical role can take an unassigned patient from the New Admissions queue. The one "consultant"
+Any clinical role could take an unassigned patient from the New Admissions queue. The one "consultant"
 slot then holds that person, which (a) lets them transfer and discharge that patient without the
 Manage permission, (b) lists them as "Dr. …" on the board, Active List and dashboard, and (c) splits
 per-consultant figures inconsistently (some pages count them, others list active consultants only).
 A read-only count on production (numbers only) showed all 118 active patients and all 9,262
 admissions of the last twelve months held by consultants; only 3 of 37,645 ever by a registrar. The
-recommendation to the owner is to offer "Assign to me" to consultants only.
+recommendation was to offer "Assign to me" to consultants only, and the owner chose it ("B", the
+same day): only consultants see the button and the server refuses everyone else; an Admin or a
+Registrar with Can-assign names a consultant with "Assign to primary", and anyone who can do neither
+sees that the patient is awaiting a consultant. The three historical episodes held by a registrar stay
+as they are and stay editable. The review of that change found a second door: the New Admission
+form accepted any user as the consultant, so anyone with Can-add could name themselves; it now
+accepts only an active consultant, like Assign, bulk reassign and specialty transfer.
 
 ## Operations the same day
 

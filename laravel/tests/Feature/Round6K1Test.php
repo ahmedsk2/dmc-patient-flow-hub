@@ -23,7 +23,8 @@ use Tests\TestCase;
  *  7. physician drill-down readmissions ALSO require the prior discharge to be the same
  *     consultant's (legacy charts.php:1199); the headline KPI is unchanged
  *  8. statistics drill-down consultant picker includes INACTIVE consultants
- *  9. assign-to-me is open to ANY clinical role (not Observer); assignment lands on the auth user
+ *  9. assign-to-me is CONSULTANTS ONLY since 2026-09-25 (owner decision; was any clinical role);
+ *     assignment lands on the auth user
  * (5 = MFA-never-remembered lives in MfaTest; 10 = narrowed edit gate updated in ResidualR1Test)
  */
 class Round6K1Test extends TestCase
@@ -239,22 +240,25 @@ class Round6K1Test extends TestCase
                 ->where('consultants', fn ($list) => collect($list)->pluck('id')->contains($gone->id)));
     }
 
-    // ---- 9. assign-to-me open to any clinical role -----------------------------------------------
+    // ---- 9. assign-to-me: consultants only (owner decision 2026-09-25) --------------------------
 
-    public function test_assign_to_me_open_to_any_clinical_role_but_not_observer(): void
+    public function test_assign_to_me_is_for_consultants_only(): void
     {
-        foreach ([User::ROLE_REGISTRAR, User::ROLE_CONSULTANT, User::ROLE_RESIDENT] as $role) {
-            $u = $this->user($role);
-            $a = $this->admission();
-            $this->actingAs($u)->post("/admissions/{$a->id}/assign-to-me")->assertRedirect();
-            $a->refresh();
-            $this->assertSame($u->id, (int) $a->consultant_id, "role {$role} must be able to self-assign (legacy Q1)");
-            $this->assertTrue($a->is_new_assignment);
-        }
-
-        $obs = $this->user(User::ROLE_OBSERVER);
+        $u = $this->user(User::ROLE_CONSULTANT);
         $a = $this->admission();
-        $this->actingAs($obs)->post("/admissions/{$a->id}/assign-to-me")->assertForbidden();
-        $this->assertNull($a->fresh()->consultant_id, 'observers stay read-only');
+        $this->actingAs($u)->post("/admissions/{$a->id}/assign-to-me")->assertRedirect();
+        $a->refresh();
+        $this->assertSame($u->id, (int) $a->consultant_id, 'a consultant takes the patient');
+        $this->assertTrue($a->is_new_assignment);
+
+        // holding the one consultant slot would let them transfer/discharge without Can-manage and
+        // list them as a consultant — everyone else names a consultant with Assign instead. A
+        // capability flag (even Can-assign or Can-manage) does not change that.
+        foreach ([User::ROLE_ADMIN, User::ROLE_REGISTRAR, User::ROLE_RESIDENT, User::ROLE_OBSERVER] as $role) {
+            $other = $this->user($role, ['can_assign' => 1, 'can_manage' => 1]);
+            $b = $this->admission();
+            $this->actingAs($other)->post("/admissions/{$b->id}/assign-to-me")->assertForbidden();
+            $this->assertNull($b->fresh()->consultant_id, "role {$role} must not self-assign");
+        }
     }
 }

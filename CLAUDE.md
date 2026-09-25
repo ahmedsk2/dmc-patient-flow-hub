@@ -241,7 +241,10 @@ Active ICU by `current_location`; Medically discharged ("still in") = `medical_d
   also hand their own active patient to another active consultant without `can_assign` (owner decision
   2026-09-24, `User::canHandOffAdmission`) — through the same assign action, so the handover signature,
   the receiver's notification, the same-day reminder and the audit row all apply; a Registrar/Resident
-  who self-assigned does not get this. Assign-to-me is open to any clinical role, never Observer.
+  who holds a patient does not get this. **Assign-to-me is for consultants only** (owner decision
+  2026-09-25; it was open to every clinical role): holding the one consultant slot lets the holder
+  transfer and discharge without `can_manage` and counts them as a consultant, so everyone else names a
+  consultant with Assign.
 - **Enforced server-side** in controllers and FormRequests, not just by hidden buttons. Capability
   grants are broad by owner decision (e.g. Residents with Can-Manage); do not "tidy" them.
 - **Auth lifecycle:** mandatory TOTP MFA for every user (challenge expires after 5 minutes, 8

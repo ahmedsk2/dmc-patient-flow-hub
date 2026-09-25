@@ -156,7 +156,7 @@ If any of these fail, stop and report — deeper testing is pointless until they
 | See the consultations pages (ledger, dashboard, handover sheet) | ✓ | ✓ | ✓ | ✓ | ✗ | | |
 | Add a new admission | ✓ | ✓ (if Can Add) | ✓ (if Can Add) | ✓ (if Can Add) | ✗ | | |
 | Assign a patient to a consultant | ✓ | ✓ (if Can Assign) | ✓ (if Can Assign) | ✗ | ✗ | | |
-| "Assign to me" | ✓ | — | ✓ | — | ✗ | | |
+| "Assign to me" | ✗ | ✗ | ✓ | ✗ | ✗ | | consultants only since 2026-09-25 |
 | Hand own patient to a colleague (no Can Assign) | ✓ | ✗ | ✓ (own active patient only) | ✗ | ✗ | | since 2026-09-24 |
 | Modify a patient's details | ✓ | ✓ (if Can Modify) | ✓ (if Can Modify) | ✓ (if Can Modify) | ✗ | | |
 | Transfer / discharge a patient | ✓ | ✗ | ✓ (own patient **or** Can Manage) | ✓ (if Can Manage) | ✗ | | |
