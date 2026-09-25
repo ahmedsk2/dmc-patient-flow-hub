@@ -94,11 +94,29 @@ class HandoverController extends Controller
         });
         Audit::log('handover.update', 'admission', (string) $admission->id, ['revision_id' => HandoverRevision::latestIdFor($admission->id)]);
 
-        // Resolve any persistent "incomplete handover" reminders for this admission (all recipients).
+        // Resolve any persistent "incomplete handover" reminders for this admission (all recipients),
+        // AND for the direct successor episode a consultant-changing transfer opened from it (role
+        // walkthrough 2026-09-25, E2). A specialty transfer deliberately binds the outgoing
+        // consultant's HandoverSignature to the CLOSING episode while the reminder that "Needs
+        // handover" and the bell track sits on the episode it opened (admissions
+        // .predecessor_admission_id) — so a save here, on the old episode via "My outgoing", must
+        // also clear the new episode's reminder or the patient never leaves "Needs handover". One
+        // hop only: it is the move THIS save's episode caused that is being addressed, not whatever
+        // happened further down the chain. This is the single place the list, the counts and the
+        // bell all key off (Admission::handoverPending / HandoverController::notifications), so
+        // there is nothing else to keep in sync.
         // Keyed on the indexed admission_id column — the previous JSON payload compare required a
         // (string) cast to match at all, which was a real bug once.
+        // (role walkthrough 2026-09-25, E2 fix-up, adversarial review) resolve EVERY direct
+        // successor, not just one: predecessor_admission_id carries no uniqueness guarantee (an
+        // admin same-day reverseDischarge can reopen this episode for a second transferSpecialty,
+        // and the transaction-level lock added there only closes the concurrent-double-submit
+        // window, not this sequential one), so more than one admission can legitimately point back
+        // at the same predecessor. A single ->value('id') would silently strand whichever successor
+        // it didn't pick under "Needs handover" forever.
+        $resolveIds = [$admission->id, ...Admission::where('predecessor_admission_id', $admission->id)->pluck('id')->all()];
         Notification::where('type', 'handover.incomplete')->whereNull('resolved_at')
-            ->where('admission_id', $admission->id)->update(['resolved_at' => now()]);
+            ->whereIn('admission_id', $resolveIds)->update(['resolved_at' => now()]);
 
         return $request->expectsJson()
             ? response()->json(['saved' => true, 'updated_at' => now()->toIso8601String()])

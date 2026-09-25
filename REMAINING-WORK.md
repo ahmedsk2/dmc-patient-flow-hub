@@ -130,8 +130,9 @@ biggest live risk** (the original un-hardened build, on US hosting).
 - [ ] **Decide `log_record_opens`** (record every chart open — now a switch in Control → Settings) and **who reviews the export/report audit
   rows**, how often. *(R6, R12)*
 - [ ] **Quarterly access review + joiner/leaver process** for both systems' accounts. *(R4, R11)*
-- [ ] **Host and account hygiene:** ~~SSH source restriction (G7)~~ done 2026-09-23 — SSH only from the
-  owner's workstation address (update the rule in the OCI console if it changes); patched and rebooted
+- [ ] **Host and account hygiene:** SSH source restriction (G7): done 2026-09-23, then **reopened to any address on 2026-09-25 by
+  owner decision** (the workstation address keeps changing) — SSH is key-only, root login off,
+  fail2ban on; a fixed-address option (a bastion or a VPN) remains open if wanted; patched and rebooted
   2026-09-23 (38 packages incl. Docker; every app on the host came back) — **still needed: a
   recurring** patch/reboot window (R9, R10); confirm every GitHub collaborator has MFA; confirm the historically
   leaked legacy credentials were changed at their providers (CFG-04); a routine rotation schedule.

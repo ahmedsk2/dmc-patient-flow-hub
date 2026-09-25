@@ -10,7 +10,10 @@ import { xsrf } from '@/lib/ui.js';
 // other redirect-producing action in this app already uses (AppLayout's logout(), Patients/Index
 // assign/discharge, etc.) — never a raw fetch, which cannot follow a real Inertia redirect.
 
-defineProps({ email: String });
+// E4 (role walkthrough 2026-09-25): EmailVerificationController::show() passes `maskedEmail`
+// (e.g. "j***@example.com" — deliberately masked, see the controller's mask() helper), but this
+// component declared/rendered `email`, which is never sent — the address was always blank.
+defineProps({ maskedEmail: String });
 
 const sent = ref(false);
 const sending = ref(false);
@@ -84,7 +87,7 @@ const signOut = () => router.post('/logout');
                     <svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0-.621.504-1.125 1.125-1.125h17.25c.621 0 1.125.504 1.125 1.125v10.5c0 .621-.504 1.125-1.125 1.125H3.375A1.125 1.125 0 0 1 2.25 17.25V6.75Zm1.5.3 8.25 5.625L20.25 7.05" /></svg>
                 </div>
                 <h1 class="mt-4 text-xl font-bold text-ink-900">Verify your email</h1>
-                <p class="mt-1 text-sm text-ink-500">We need to confirm <span class="font-semibold text-ink-700">{{ email }}</span> before you can continue.</p>
+                <p class="mt-1 text-sm text-ink-500">We need to confirm <span class="font-semibold text-ink-700">{{ maskedEmail }}</span> before you can continue.</p>
             </div>
 
             <div class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">

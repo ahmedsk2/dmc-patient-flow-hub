@@ -61,6 +61,44 @@ reminder** is raised (§4) so the note gets completed after the fact. This was a
 owner-approved policy change from the previous hard block. The event is auditable:
 `handover.reassign_incomplete` records the affected admission ids and who was reminded.
 
+The single-patient equivalents — Assign (`PatientActionController::assign`), a consultant
+hand-off, and bulk reassign — move the **same admission row** to the new consultant, so the
+signature and the reminder both land on that one row and there is nothing further to reconcile.
+
+### 2.2.1 Internal specialty transfer — signature and reminder land on DIFFERENT episodes
+An internal-specialty transfer (`PatientActionController::transferSpecialty`) is different: it
+**closes the current episode and opens a new one** under the receiving consultant (§8 of
+DATABASE-AND-BEHAVIOR.md). When the consultant also changes, this splits the two records
+deliberately:
+
+- The `handover_signatures` row — and so the outgoing consultant's *only* remaining write access
+  to the note, via "My outgoing" → Update text (`/handovers`) — is bound to the **closing (old)
+  episode**, because that is the episode carrying the text and revisions the receiving consultant
+  is acknowledging.
+- The `handover.incomplete` reminder is bound to the **new (active) episode**, because the closing
+  episode is discharged and invisible to the board/inbox (`Admission::active()`,
+  `scopeHandoverPending()`) — a reminder anchored there would be a dead end once the 7-day "My
+  outgoing" window lapses.
+
+To keep these reconcilable, the new episode records `admissions.predecessor_admission_id` = the
+closing episode's id at transfer time. Saving a note on **either** episode resolves the new
+episode's reminder (§4) — the outgoing consultant is not required to know which episode the
+system currently considers "active" to complete their part of the handover.
+
+The link has **no uniqueness guarantee**: it is set once, per transfer, and nothing stops a
+closing episode from acquiring more than one successor over time — an admin's same-day
+`reverseDischarge` can reopen a closing episode without voiding the successor a transfer already
+created from it, and a later, separate transfer of that same reopened episode then creates a
+second one. `HandoverController::save` resolves **every** admission whose
+`predecessor_admission_id` points at the saved one, not just the first found, so a second
+successor is never stranded under "Needs handover" (fixed 2026-09-25). A separate, narrower
+safeguard closes the *concurrent* version of the same problem — a double-submitted transfer
+request racing itself, which the top-level `transfer()` discharge-date guard cannot catch because
+it runs before any transaction opens: inside `transferSpecialty`'s own transaction, a
+`lockForUpdate()` re-check of the closing episode's `discharge_date` rejects the loser with an
+ordinary validation error before it can create a second successor at all (same pattern as
+`AdmissionsController::createAdmission`'s admit-race guard).
+
 ### 2.3 Receiving-consultant sign-off
 The incoming consultant (or an admin) acknowledges the handover from their inbox
 (`/handovers` → `HandoverController::sign` / `signMany`). Signing:
@@ -116,7 +154,14 @@ so it does not fall through the cracks:
   attention"** group.
 - **Resolution:** the reminder auto-resolves for **every** recipient the moment **any** handover
   note is saved for that admission — `resolved_at` is stamped. There is no manual dismiss; the
-  clinical action (writing the note) is what clears it.
+  clinical action (writing the note) is what clears it. A save also resolves the open reminders of
+  **every** direct successor episode `admissions.predecessor_admission_id` links to the saved one
+  — normally exactly one, the case an internal specialty transfer creates (§2.2.1): the outgoing
+  consultant can only write on the closing episode, but the reminder that gates "Needs handover"
+  sits on the episode the transfer opened. More than one successor can exist (§2.2.1's uniqueness
+  note); all of them resolve together, never just the first found. This is the ONE place resolution
+  happens (`HandoverController::save`), so the "Needs handover" list, the dashboard/board counts
+  and the bell can never drift from each other or from this rule.
 
 This gives a closed-loop, timestamped trail: raised (with recipients) → resolved (when the note
 was written).

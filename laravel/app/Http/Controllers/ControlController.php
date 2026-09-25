@@ -361,6 +361,10 @@ class ControlController extends Controller
         // the auth chain re-checked `active` per request. End every session row now, mirroring
         // resetMfa() below; SessionTimeout also re-checks `active` per request as defence in depth
         // for any path that flips it outside this controller.
+        // (role walkthrough 2026-09-25 fix-up review) the transition, not the submitted value, is
+        // what "just deactivated" means — resaving an already-inactive user (active stayed false)
+        // must not claim a deactivation just happened. $before was captured above, pre-update.
+        $justDeactivated = (bool) $before['active'] && ! $data['active'];
         $sessionsEnded = null;
         if (! $data['active']) {
             TrustedDevice::revokeAllFor($user->id);
@@ -372,7 +376,18 @@ class ControlController extends Controller
             $diff + ($escalated ? $this->stepUpDetail() : [])
             + ($sessionsEnded !== null ? ['sessions_ended' => $sessionsEnded] : []));
 
-        return back()->with('flash', ['type' => 'success', 'message' => "Updated {$user->username}."]);
+        // (role walkthrough 2026-09-25, U2) the ordinary success toast said only "Updated
+        // {username}." even when this save just ended every one of their live sessions — say so, and
+        // give the real count ($sessionsEnded is the DB::delete() row count, so it's exact, not
+        // guessed). Gated on $justDeactivated (not merely $sessionsEnded !== null) so resaving a
+        // user who was ALREADY inactive — no real transition, just the revoke/delete running again
+        // as a harmless no-op — keeps the plain message instead of falsely claiming a fresh
+        // deactivation (fix-up review finding, 2026-09-25).
+        $message = $justDeactivated
+            ? "Deactivated {$user->username} and signed them out ({$sessionsEnded} session(s) ended)."
+            : "Updated {$user->username}.";
+
+        return back()->with('flash', ['type' => 'success', 'message' => $message]);
     }
 
     /**

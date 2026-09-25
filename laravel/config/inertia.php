@@ -135,11 +135,19 @@ return [
     | being accessible after logout. Can also be enabled per-request
     | or via the `inertia.encrypt` middleware.
     |
+    | S1 (role walkthrough 2026-09-25): defaulted to TRUE (not the package default) — every page
+    | carries PHI, so the browser-history snapshot Inertia keeps for the back/forward button needs
+    | encrypting everywhere, guest pages included (login/register/forgot-* hold nothing sensitive
+    | enough to justify a per-route allowlist, and a uniform default is one fewer place to forget it
+    | on a new route). Client-side, encryption silently no-ops (console.warn, plaintext passthrough)
+    | when window.crypto.subtle is unavailable — i.e. a non-secure context; prod is https and local
+    | dev (127.0.0.1 / *.localhost) are both secure contexts, so this always actually encrypts there.
+    |
     */
 
     'history' => [
 
-        'encrypt' => (bool) env('INERTIA_ENCRYPT_HISTORY', false),
+        'encrypt' => (bool) env('INERTIA_ENCRYPT_HISTORY', true),
 
     ],
 

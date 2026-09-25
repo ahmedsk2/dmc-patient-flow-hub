@@ -50,3 +50,27 @@ describe('Recent/Index — "Discharges" scope info mark (UX-review #8)', () => {
         expect(tip.attributes('aria-label')).not.toContain('Discharges');
     });
 });
+
+// role walkthrough 2026-09-25 (ui-ux #6, axe "heading levels should only increase by one"): each
+// per-consultant discharge group was an h3 directly under the page's own h1 (AppLayout), skipping h2.
+describe('Recent/Index — heading order (role walkthrough 2026-09-25)', () => {
+    it('renders each per-consultant "Patient List" group heading as an h2, not h3', () => {
+        const host = document.createElement('div');
+        document.body.appendChild(host);
+        const w = mount(RecentIndex, {
+            props: {
+                discharges: [{
+                    id: 1, name: 'Jane Doe', mrn: '1001', consultant: 'A Smith',
+                    admitted: '2026-09-01', discharged: '2026-09-05', los: 4, los_band: 'short',
+                    diagnoses: [], from: null, to: null, outcome: 'Alive', admitted_by: null, by: null, reasons: [],
+                }],
+                signoffs: [], since: '2026-09-23',
+            },
+            attachTo: host,
+        });
+        wrappers.push({ w, host });
+        const heading = w.findAll('h2').find((h) => h.text().includes('Patient List'));
+        expect(heading).toBeTruthy();
+        expect(w.findAll('h3').some((h) => h.text().includes('Patient List'))).toBe(false);
+    });
+});

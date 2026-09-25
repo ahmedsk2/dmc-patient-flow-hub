@@ -91,3 +91,12 @@ describe('ActiveList — Old/New column InfoTips + scroll hint (#35 / info marks
         expect(w.find('[data-testid="scroll-hint"]').exists()).toBe(false);
     });
 });
+
+// (role walkthrough 2026-09-25, info mark a) same tip as the Patients board's identical table —
+// three testers read "Active" as Ward+ICU; it's narrower (PatientsController.php:407-425).
+describe('ActiveList — "Active" column InfoTip (role walkthrough 2026-09-25, info mark a)', () => {
+    it('carries an InfoTip naming the exclusions', () => {
+        const tip = mountList().find('button[aria-label="More information: Active column"]');
+        expect(tip.exists()).toBe(true);
+    });
+});

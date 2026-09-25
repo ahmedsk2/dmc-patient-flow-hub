@@ -141,4 +141,37 @@ describe('buildSteps role + DOM filtering', () => {
         expect(steps[0].element).toBeUndefined();
         expect(steps[steps.length - 1].element).toBeUndefined();
     });
+
+    // Role walkthrough 2026-09-25, Tour: the sidebar this step used to anchor to is off-canvas
+    // behind the hamburger below the `lg` breakpoint, so nothing was highlighted on a phone. Same
+    // matchMedia-stub pattern as AppLayout.header.spec.js.
+    describe('mobile targeting for the Clinical navigation step', () => {
+        let originalMatchMedia;
+        beforeEach(() => { originalMatchMedia = window.matchMedia; });
+        afterEach(() => { window.matchMedia = originalMatchMedia; });
+
+        it('targets the sidebar on a wide (lg+) viewport, unchanged', () => {
+            window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+            document.body.innerHTML = '<div data-tour="nav-clinical"></div><button data-tour="nav-menu-button"></button>';
+            const steps = buildSteps(consultant);
+            const navStep = steps.find((s) => s.popover?.title === 'Clinical navigation');
+            expect(navStep.element).toBe('[data-tour="nav-clinical"]');
+        });
+
+        it('targets the menu button below the lg breakpoint instead of the off-canvas sidebar', () => {
+            window.matchMedia = (q) => ({ matches: q === '(max-width: 1023px)', addEventListener() {}, removeEventListener() {} });
+            document.body.innerHTML = '<div data-tour="nav-clinical"></div><button data-tour="nav-menu-button"></button>';
+            const steps = buildSteps(consultant);
+            const navStep = steps.find((s) => s.popover?.title === 'Clinical navigation');
+            expect(navStep.element).toBe('[data-tour="nav-menu-button"]');
+            expect(navStep.popover.description).toMatch(/tap here to open the menu/i);
+        });
+
+        it('drops the step on mobile too when even the menu button anchor is absent', () => {
+            window.matchMedia = (q) => ({ matches: q === '(max-width: 1023px)', addEventListener() {}, removeEventListener() {} });
+            document.body.innerHTML = '';
+            const steps = buildSteps(consultant);
+            expect(steps.map((s) => s.popover?.title)).not.toContain('Clinical navigation');
+        });
+    });
 });

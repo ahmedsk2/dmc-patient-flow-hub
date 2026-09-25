@@ -233,7 +233,15 @@ const toggleExpand = (id) => {
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.longterm" class="rounded text-brand-700" /> Long-term<InfoTip label="Long-term filter" text="Matches a flag staff set manually — not calculated from length of stay." /></label>
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.discharged" class="rounded text-brand-700" /> Discharged only</label>
                     <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.tb" class="rounded text-brand-700" /> TB</label>
-                    <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.readmit72" class="rounded text-brand-700" /> {{ options.readmitWindow ?? 3 }}-day readmissions</label>
+                    <!-- role walkthrough 2026-09-25 (ui-ux, "!" info marks): the sibling Long-term
+                         checkbox already carried an InfoTip; this one didn't. Text matches
+                         RegistryController's readmit72 filter (Admission::readmissionExists against
+                         settings.readmission_window_days) — the label above already reads the same
+                         setting via options.readmitWindow, so the tip interpolates the live number
+                         too (review fix 2026-09-25: the first pass said "the label's own number",
+                         which doesn't stand on its own as an explanation — this reads the same prop
+                         directly instead of pointing back at the label). -->
+                    <label class="flex items-center gap-2 text-sm text-ink-600"><input type="checkbox" v-model="f.readmit72" class="rounded text-brand-700" /> {{ options.readmitWindow ?? 3 }}-day readmissions<InfoTip label="Readmissions filter" :text="`Same patient admitted again within ${options.readmitWindow ?? 3} days of a real discharge — not a clinical severity flag.`" /></label>
                     <button @click="apply" class="ms-auto rounded-xl bg-brand-solid px-5 py-2 text-sm font-semibold text-white hover:bg-brand-solid-hover">Search</button>
                     <button @click="reset" class="rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 hover:text-ink-700">Reset</button>
                     <template v-if="hasTerm">

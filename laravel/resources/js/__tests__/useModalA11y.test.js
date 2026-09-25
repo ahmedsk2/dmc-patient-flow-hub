@@ -111,4 +111,86 @@ describe('useModalA11y', () => {
         a11y.onClose();
         expect(document.activeElement).toBe(opener);
     });
+
+    // Role walkthrough 2026-09-25, E5-trap: the Transfer dialog's Ward/ICU choice is a real native
+    // `<input type="radio" class="hidden">` — matched by querySelectorAll, but never an actual Tab
+    // stop because `class="hidden"` computes to display:none. Before the fix, the trap's "last
+    // focusable" pointed at that invisible radio, so the wrap check on the real last VISIBLE
+    // element never fired and Tab escaped the dialog. jsdom has no checkVisibility(), so these
+    // specs mock it per-element the way a real browser's result would look.
+    describe('hidden/inert elements are not real Tab stops (E5-trap)', () => {
+        const buildModalWithTrailingHiddenRadio = (a11y) => {
+            const root = document.createElement('div');
+            root.innerHTML = `
+                <button id="b1">one</button>
+                <button id="b3">three</button>
+                <input id="hiddenRadio" type="radio" class="hidden" />
+            `;
+            document.body.appendChild(root);
+            a11y.trapRef.value = root;
+            // Simulate the browser: class="hidden" (display:none) → not visible. The other two
+            // stay real Tab stops (checkVisibility → true).
+            root.querySelector('#hiddenRadio').checkVisibility = () => false;
+            root.querySelector('#b1').checkVisibility = () => true;
+            root.querySelector('#b3').checkVisibility = () => true;
+            return root;
+        };
+
+        it('Tab on the last VISIBLE item wraps to the first, skipping the hidden trailing radio', () => {
+            const a11y = useModalA11y();
+            buildModalWithTrailingHiddenRadio(a11y);
+            document.getElementById('b3').focus();
+            a11y.onKeydown(new KeyboardEvent('keydown', { key: 'Tab' }));
+            expect(document.activeElement.id).toBe('b1');
+        });
+
+        it('Shift+Tab on the first item wraps to the last VISIBLE item, not the hidden radio', () => {
+            const a11y = useModalA11y();
+            buildModalWithTrailingHiddenRadio(a11y);
+            document.getElementById('b1').focus();
+            a11y.onKeydown(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true }));
+            expect(document.activeElement.id).toBe('b3');
+        });
+
+        it('an element inside [hidden] is excluded even without a checkVisibility mock', () => {
+            const a11y = useModalA11y();
+            const root = document.createElement('div');
+            root.innerHTML = `
+                <button id="b1">one</button>
+                <div hidden><button id="ghost">ghost</button></div>
+                <button id="b3">three</button>
+            `;
+            document.body.appendChild(root);
+            a11y.trapRef.value = root;
+            document.getElementById('b3').focus();
+            a11y.onKeydown(new KeyboardEvent('keydown', { key: 'Tab' }));
+            expect(document.activeElement.id).toBe('b1');
+        });
+
+        it('an element inside [inert] is excluded even without a checkVisibility mock', () => {
+            const a11y = useModalA11y();
+            const root = document.createElement('div');
+            root.innerHTML = `
+                <button id="b1">one</button>
+                <div inert><button id="ghost">ghost</button></div>
+                <button id="b3">three</button>
+            `;
+            document.body.appendChild(root);
+            a11y.trapRef.value = root;
+            document.getElementById('b1').focus();
+            a11y.onKeydown(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true }));
+            expect(document.activeElement.id).toBe('b3');
+        });
+
+        it('unsupported checkVisibility (jsdom\'s normal case) still treats plain elements as visible', () => {
+            // No mocking at all here — proves the "unsupported → visible" fallback keeps the
+            // ordinary (non-hidden) case working exactly as before this fix.
+            const a11y = useModalA11y();
+            buildModal(a11y);
+            expect(typeof document.getElementById('b1').checkVisibility).not.toBe('function');
+            document.getElementById('b3').focus();
+            a11y.onKeydown(new KeyboardEvent('keydown', { key: 'Tab' }));
+            expect(document.activeElement.id).toBe('b1');
+        });
+    });
 });

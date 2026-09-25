@@ -14,6 +14,10 @@ defineProps({
     active: { type: Boolean, default: false },
     indent: { type: Boolean, default: false },   // M&M nesting under Reports (Item 2)
     badge: { type: Number, default: null },        // optional count chip (e.g. pending items)
+    // role walkthrough 2026-09-25, U11: override the generic "N items" accessible name with
+    // wording specific to what the count means (e.g. "3 awaiting assignment"). Falls back to the
+    // original generic label when not given, so every other badge call site is unaffected.
+    badgeLabel: { type: String, default: null },
     // Wave 2, Item 1: desktop icon-only mode. Every class this drives is `lg:`-scoped below,
     // so a stale/true value NEVER visually collapses the mobile drawer — that overlay reuses this
     // SAME component and must always show full labels regardless of the desktop preference
@@ -47,7 +51,7 @@ defineProps({
              on navy-900, the lighter end of the gradient) and 7.68:1 at the navy-950 end. -->
         <span v-if="badge !== null" class="nums ml-auto rounded-full bg-danger-600/20 px-1.5 py-0.5 text-[11px] font-bold text-danger-200"
             :class="collapsed ? 'lg:hidden' : ''"
-            :aria-label="`${badge} items`">{{ badge }}</span>
+            :aria-label="badgeLabel ?? `${badge} items`">{{ badge }}</span>
         <span v-else-if="active" class="ml-auto h-1.5 w-1.5 rounded-full bg-brand-400" :class="collapsed ? 'lg:hidden' : ''"></span>
     </Link>
 </template>

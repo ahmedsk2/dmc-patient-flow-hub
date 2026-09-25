@@ -141,9 +141,14 @@ hides case mistakes that Linux CI catches; the Inertia config is published to po
   `QUEUE_CONNECTION=sync` they run inside the request.
 
 **Inertia** shares `auth.user` (id, name, role, `is_admin`, `mfa_enrolled`, `email_verified`, the four
-`can.*` flags), the idle/absolute timeout minutes and `flash` on every page
-(`HandleInertiaRequests`). The browser renders everything; the `useSessionTimeout` composable
-warns and logs out on idle.
+`can.*` flags), the idle/absolute timeout minutes, `flash` and (for every role but Observer) the
+unassigned-queue count behind the "New Admissions" badge on every page (`HandleInertiaRequests`). The
+browser renders everything; the `useSessionTimeout` composable warns and logs out on idle. **History
+encryption is on** (`config/inertia.php`, default true since 2026-09-25): the page data Inertia keeps
+for the Back button is encrypted with a per-tab key, the login page and every sign-out path (manual,
+idle/absolute timeout, eviction) call `Inertia::clearHistory()`, and `app.js` reloads any page
+restored whole from the back/forward cache — so Back after sign-out never shows the last patient
+page again.
 
 **Runtime config.** `RuntimeConfigServiceProvider` overrides `mail.*` and the timezone at boot from
 the `settings` row edited in Control → System, so SMTP and timezone changes need no restart. The SMTP
@@ -191,7 +196,10 @@ writes: [`laravel/docs/DATABASE-AND-BEHAVIOR.md`](laravel/docs/DATABASE-AND-BEHA
   `transfer_type`, `current_location` (ER/Ward/ICU), `is_longterm`, `is_new_assignment` (the board's
   "New" badge — a managed flag set on assign / handover / shuffle and cleared on discharge or
   reassign, **not** a 24-hour timer), `assigned_at` (the precise assignment moment),
-  `admitted_by` / `discharged_by` from the session. Soft-deleted.
+  `admitted_by` / `discharged_by` from the session, `predecessor_admission_id` (set by an internal
+  specialty transfer on the episode it opens, pointing at the one it closed — the handover signature
+  sits on the old episode and the "incomplete handover" reminder on the new one, and saving either
+  clears the reminder; HANDOVER-COMPLIANCE.md §2.2.1). Soft-deleted.
 - `admission_diagnoses` — one ICD-10 row per diagnosis (unique per admission).
 - `consultations` — the ledger: `status` ∈ `new / active / ongoing / signed_off`, indication JSON,
   `to_service`, receiving `consultant_id`, `entered_by`, `signoff_date`, encrypted `response_note`.
@@ -240,7 +248,9 @@ Active ICU by `current_location`; Medically discharged ("still in") = `medical_d
   attempts, replay-guarded); an MFA login is never remembered; self-disable of MFA is removed, only
   Control → Reset MFA clears it; mandatory email verification; phased self-registration (email
   OTP + authenticator confirmed **before** the account row exists, then `active=0` pending admin
-  activation, role never Admin); password expiry at three months; idle timeout; step-up for §5's
+  activation, role never Admin; its first step answers identically whether or not the address is
+  already registered — the owner of a registered address gets a notice mail instead of a code — so it
+  cannot be used to discover staff emails); password expiry at three months; idle timeout; step-up for §5's
   sensitive actions; failed-login throttling keyed by IP and username. Deactivating or deleting a
   user ends their sessions at once, and `SessionTimeout` re-checks on every request that the account
   is still active and not deleted (`session.evicted`). On admin-only step-up routes `admin` runs
@@ -501,7 +511,8 @@ CBAHI. State on 2026-09-03:
   hospital's legal/DPO confirms it. Never invent a legal citation, retention period or entity name.
 - **Known compliance-relevant facts:** US-based SMTP relay for outbound mail (a transfer question);
   in-Kingdom hosting, backups and audit archive; a 90-day backup retention placeholder;
-  `APP_KEY` escrowed by the owner; SSH restricted to the owner's workstation address since 2026-09-23.
+  `APP_KEY` escrowed by the owner; SSH open to any address again since 2026-09-25 (owner decision: the
+  workstation address changes), key-only with root login off and fail2ban active.
 - **Readiness scoring:** two runs on **2026-09-03**. Morning, after the remediation: **BLOCKED
   58/100** (emphasis 70; two CI/CD process Criticals), up from 27/37 on 2026-09-02 —
   [`evidence/prod-ready-2026-09-03.md`](laravel/docs/compliance/evidence/prod-ready-2026-09-03.md).

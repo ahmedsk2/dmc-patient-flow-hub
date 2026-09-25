@@ -260,12 +260,21 @@ const consChartLabel = computed(() => `By consultant — ${consModes.value.find(
         <!-- range -->
         <div class="no-print mb-5 flex flex-wrap items-end gap-3 rounded-2xl bg-card p-4 shadow-card ring-1 ring-line">
             <div>
-                <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-400">From</label>
-                <input v-model="from" type="date" class="rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" />
+                <!-- role walkthrough 2026-09-25 (ui-ux #3, axe critical): the label had no `for`, so a
+                     screen reader announced both date fields as unnamed "date, edit text". -->
+                <label for="stats-from-date" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-400">From</label>
+                <input id="stats-from-date" v-model="from" type="date" class="rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" />
             </div>
             <div>
-                <label class="mb-1 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink-400">To<InfoTip label="From/To dates" text="If the start date is after the end date, they're swapped automatically." /></label>
-                <input v-model="to" type="date" class="rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" />
+                <!-- review fix (2026-09-25): the InfoTip button used to nest INSIDE this <label
+                     for="stats-to-date">, which is a labelable control that isn't the label's target
+                     — it folded "!" into #stats-to-date's computed accessible name ("To !" instead of
+                     "To"). Moved out as a sibling span, the same restructuring already used on
+                     AdminBandCard.vue and the Dashboard KPI tiles, so the label's name stays "To". -->
+                <span class="mb-1 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink-400">
+                    <label for="stats-to-date">To</label><InfoTip label="From/To dates" text="If the start date is after the end date, they're swapped automatically." />
+                </span>
+                <input id="stats-to-date" v-model="to" type="date" class="rounded-xl border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" />
             </div>
             <div class="flex items-end gap-1">
                 <div class="flex gap-1 rounded-xl bg-app p-1 ring-1 ring-line">
@@ -325,22 +334,22 @@ const consChartLabel = computed(() => `By consultant — ${consModes.value.find(
         <!-- charts -->
         <div class="grid gap-5 lg:grid-cols-2">
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line lg:col-span-2">
-                <h3 class="mb-3 font-bold text-ink-800">{{ interval === 'day' ? 'Daily' : interval === 'quarter' ? 'Quarterly' : 'Monthly' }} admissions, discharges, mortality & consultations <span v-if="interval === 'day'" class="text-xs font-normal text-on-warning">(Fri/Sat ticks in amber)</span></h3>
+                <h2 class="mb-3 font-bold text-ink-800">{{ interval === 'day' ? 'Daily' : interval === 'quarter' ? 'Quarterly' : 'Monthly' }} admissions, discharges, mortality & consultations <span v-if="interval === 'day'" class="text-xs font-normal text-on-warning">(Fri/Sat ticks in amber)</span></h2>
                 <ChartCanvas role="img" :aria-label="mainChartLabel" type="line" :height="300" :data="monthlyData" :options="monthlyOptions" />
             </div>
 
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-                <h3 class="mb-3 font-bold text-ink-800">Length of stay distribution</h3>
+                <h2 class="mb-3 font-bold text-ink-800">Length of stay distribution</h2>
                 <ChartCanvas role="img" :aria-label="losChartLabel" type="bar" :height="280" :data="losData" :options="losOptions" />
             </div>
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-                <h3 class="mb-3 font-bold text-ink-800">Admission source</h3>
+                <h2 class="mb-3 font-bold text-ink-800">Admission source</h2>
                 <ChartCanvas role="img" :aria-label="sourceMixLabel" type="doughnut" :height="280" :data="sourceMixData" :options="sourceMixOptions" />
             </div>
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
                 <div class="mb-3 flex items-center justify-between gap-2">
-                    <h3 class="font-bold text-ink-800">Discharge destinations</h3>
-                    <select v-model="destChoice" class="max-w-[55%] truncate rounded-lg border border-ink-200 px-2 py-1 text-xs outline-none focus:border-brand-500">
+                    <h2 class="font-bold text-ink-800">Discharge destinations</h2>
+                    <select v-model="destChoice" aria-label="Discharge destinations consultant" class="max-w-[55%] truncate rounded-lg border border-ink-200 px-2 py-1 text-xs outline-none focus:border-brand-500">
                         <option value="">All consultants</option>
                         <option v-for="c in destByConsultant" :key="c.name" :value="c.name">{{ c.name }}</option>
                     </select>
@@ -350,17 +359,17 @@ const consChartLabel = computed(() => `By consultant — ${consModes.value.find(
             </div>
 
             <div class="print-break-before rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-                <h3 class="mb-3 font-bold text-ink-800">Top diagnoses</h3>
+                <h2 class="mb-3 font-bold text-ink-800">Top diagnoses</h2>
                 <ChartCanvas role="img" :aria-label="topDxLabel" type="bar" :height="320" :data="topDxData" :options="topDxOptions" />
             </div>
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line">
-                <h3 class="mb-3 font-bold text-ink-800">Consultation indications</h3>
+                <h2 class="mb-3 font-bold text-ink-800">Consultation indications</h2>
                 <ChartCanvas role="img" :aria-label="reasonsLabel" type="bar" :height="320" :data="reasonsData" :options="reasonsOptions" />
             </div>
 
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line lg:col-span-2">
                 <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <h3 class="font-bold text-ink-800">By consultant</h3>
+                    <h2 class="font-bold text-ink-800">By consultant</h2>
                     <div class="flex gap-1 rounded-xl bg-app p-1 ring-1 ring-line">
                         <button v-for="m in consModes" :key="m[0]" @click="consMode = m[0]" class="rounded-lg px-3 py-1.5 text-xs font-semibold transition" :class="consMode === m[0] ? 'bg-brand-solid text-white' : 'text-ink-500 hover:bg-ink-50'">{{ m[1] }}</button>
                     </div>
@@ -371,7 +380,7 @@ const consChartLabel = computed(() => `By consultant — ${consModes.value.find(
             <!-- per-physician drill-down -->
             <div class="rounded-2xl bg-card p-5 shadow-card ring-1 ring-line lg:col-span-2">
                 <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <h3 class="font-bold text-ink-800">Physician drill-down</h3>
+                    <h2 class="font-bold text-ink-800">Physician drill-down</h2>
                     <select v-model="physChoice" @change="apply" aria-label="Drill-down consultant" class="max-w-[55%] truncate rounded-lg border border-ink-200 px-2 py-1.5 text-sm outline-none focus:border-brand-500">
                         <option value="">Select a consultant…</option>
                         <option v-for="c in consultants" :key="c.id" :value="c.id">{{ c.name }}</option>
@@ -391,7 +400,7 @@ const consChartLabel = computed(() => `By consultant — ${consModes.value.find(
                     </a>
                     <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                         <div>
-                            <h4 class="mb-2 flex items-center gap-1 text-sm font-semibold text-ink-600">Discharge destinations<InfoTip label="Discharge destinations" text="This consultant's non-ICU episodes closed in the range, by transfer type. 'Transfer to ICU' is a move within the hospital; 'Out-dept transfer' left Internal Medicine. Closes with no recorded type aren't shown." /></h4>
+                            <h3 class="mb-2 flex items-center gap-1 text-sm font-semibold text-ink-600">Discharge destinations<InfoTip label="Discharge destinations" text="This consultant's non-ICU episodes closed in the range, by transfer type. 'Transfer to ICU' is a move within the hospital; 'Out-dept transfer' left Internal Medicine. Closes with no recorded type aren't shown." /></h3>
                             <ChartCanvas v-if="physHasDischarges" role="img" :aria-label="`Discharge destinations for ${physician.name}`" type="doughnut" :height="260" :data="physDonutData" :options="donutOpts" />
                             <p v-else class="py-10 text-center text-sm text-ink-300">No closed episodes in range.</p>
                         </div>
@@ -399,12 +408,12 @@ const consChartLabel = computed(() => `By consultant — ${consModes.value.find(
                              Absconded / Mortuary / Transfer over non-ICU closed episodes (J2-4); since
                              2026-09-24 moves to ICU have their own slice -->
                         <div>
-                            <h4 class="mb-2 flex items-center gap-1 text-sm font-semibold text-ink-600">Discharged to<InfoTip label="Discharged to" text="Where this consultant's non-ICU episodes in the range went. 'ICU' is a move to intensive care; 'Transfer' is everything else — another service or specialty, or not recorded." /></h4>
+                            <h3 class="mb-2 flex items-center gap-1 text-sm font-semibold text-ink-600">Discharged to<InfoTip label="Discharged to" text="Where this consultant's non-ICU episodes in the range went. 'ICU' is a move to intensive care; 'Transfer' is everything else — another service or specialty, or not recorded." /></h3>
                             <ChartCanvas v-if="physHasDest" role="img" :aria-label="`Discharged-to destinations for ${physician.name}`" type="doughnut" :height="260" :data="physDestData" :options="donutOpts" />
                             <p v-else class="py-10 text-center text-sm text-ink-300">No non-ICU closed episodes in range.</p>
                         </div>
                         <div>
-                            <h4 class="mb-2 text-sm font-semibold text-ink-600">Top diagnoses</h4>
+                            <h3 class="mb-2 text-sm font-semibold text-ink-600">Top diagnoses</h3>
                             <ol v-if="physician.topDx.length" class="space-y-1.5">
                                 <li v-for="(d, i) in physician.topDx" :key="d.label" class="flex items-center justify-between gap-2 rounded-lg bg-app px-3 py-2 text-sm ring-1 ring-line">
                                     <span class="text-ink-700"><span class="nums mr-2 font-bold text-brand-700">{{ i + 1 }}.</span>{{ d.label }}</span>
@@ -415,7 +424,7 @@ const consChartLabel = computed(() => `By consultant — ${consModes.value.find(
                         </div>
                     </div>
                     <div>
-                        <h4 class="mb-2 text-sm font-semibold text-ink-600">Activity over range <span class="font-normal text-ink-400">({{ interval === 'day' ? 'daily' : interval === 'quarter' ? 'quarterly' : 'monthly' }})</span></h4>
+                        <h3 class="mb-2 text-sm font-semibold text-ink-600">Activity over range <span class="font-normal text-ink-400">({{ interval === 'day' ? 'daily' : interval === 'quarter' ? 'quarterly' : 'monthly' }})</span></h3>
                         <ChartCanvas v-if="physHasActivity" role="img" :aria-label="`Bucketed admissions, discharges, consultations and sign-offs for ${physician.name}`" type="bar" :height="240" :data="physData" :options="physSeriesOptions" />
                         <p v-else class="py-8 text-center text-sm text-ink-300">No activity in range.</p>
                     </div>
@@ -424,7 +433,7 @@ const consChartLabel = computed(() => `By consultant — ${consModes.value.find(
             </div>
 
             <div class="overflow-hidden rounded-2xl bg-card p-5 shadow-card ring-1 ring-line lg:col-span-2">
-                <h3 class="mb-3 font-bold text-ink-800">{{ gridTitle }} <span class="nums text-sm font-normal text-ink-400">({{ range.from }} – {{ range.to }})</span></h3>
+                <h2 class="mb-3 font-bold text-ink-800">{{ gridTitle }} <span class="nums text-sm font-normal text-ink-400">({{ range.from }} – {{ range.to }})</span></h2>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead><tr class="border-b border-line text-left text-xs font-semibold uppercase tracking-wide text-ink-400">

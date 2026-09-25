@@ -118,12 +118,10 @@ variable "public_subnet_cidr" {
 
 variable "ssh_allowed_cidrs" {
   description = <<-EOT
-    Source CIDRs allowed to reach port 22. Deliberately has NO default: CLAUDE.md §14 records
-    "SSH IP allow-list deferred by the owner" as a known, open item — i.e. SSH is documented as
-    NOT currently IP-restricted. Rather than default this to a fabricated "looks locked down"
-    value, the plan simply cannot proceed until the operator makes an explicit choice. Passing
-    ["0.0.0.0/0"] reproduces today's documented (open) state; passing a real allow-list is the
-    fix CLAUDE.md §14 is waiting on.
+    Source CIDRs allowed to reach port 22. Deliberately has NO default, so the operator makes an
+    explicit choice. Passing ["0.0.0.0/0"] reproduces the live state since 2026-09-25 (owner
+    decision: the workstation address changes; login is key-only). Passing a real allow-list
+    restores the 2026-09-23 restriction.
   EOT
   type        = list(string)
 }

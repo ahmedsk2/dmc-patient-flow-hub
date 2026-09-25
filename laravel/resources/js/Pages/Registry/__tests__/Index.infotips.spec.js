@@ -21,6 +21,7 @@ vi.mock('@/Layouts/AppLayout.vue', () => ({
 vi.mock('@/Components/IcdTypeahead.vue', () => ({ default: { name: 'IcdTypeahead', template: '<div></div>' } }));
 
 import Registry from '@/Pages/Registry/Index.vue';
+import InfoTip from '@/Components/InfoTip.vue';
 
 const options = {
     consultants: [{ id: 5, name: 'Dr A' }], countries: ['Saudi Arabia'], locations: ['Ward', 'ICU', 'ER'],
@@ -60,6 +61,28 @@ describe('Registry/Index — info marks', () => {
         const w = mountAttached();
         const label = w.findAll('label').find((l) => l.text().startsWith('Long-term'));
         expect(label.find('button[data-infotip]').exists()).toBe(true);
+    });
+
+    // role walkthrough 2026-09-25 (ui-ux, "!" info marks still missing): the readmissions checkbox's
+    // sibling "Long-term" already had one; this filter's label reads the settings-driven window
+    // (options.readmitWindow) but had no InfoTip at all.
+    it('adds an info mark next to the N-day readmissions filter checkbox, using the configured window', () => {
+        const w = mountAttached();
+        const label = w.findAll('label').find((l) => l.text().includes('day readmissions'));
+        expect(label.text()).toContain('3-day readmissions');   // options.readmitWindow from fixture
+        const tip = label.find('button[data-infotip]');
+        expect(tip.exists()).toBe(true);
+    });
+
+    // review fix (2026-09-25): the first pass's tip text read "...within the configured window
+    // (currently the label's own number) of a real discharge" — a self-referential placeholder that
+    // doesn't explain anything on its own. It now interpolates options.readmitWindow directly.
+    it('interpolates the live readmission window into the tip text, not a self-referential placeholder', () => {
+        const w = mountAttached();
+        const tip = w.findAllComponents(InfoTip).find((t) => t.props('label') === 'Readmissions filter');
+        expect(tip).toBeTruthy();
+        expect(tip.props('text')).toContain('within 3 days of a real discharge');
+        expect(tip.props('text')).not.toMatch(/label's own number/i);
     });
 
     it('adds an info mark to the Clinical discharge, Physical discharge and Transfer detail labels', async () => {

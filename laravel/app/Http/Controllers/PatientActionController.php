@@ -769,6 +769,20 @@ class PatientActionController extends Controller
 
         $sig = null;
         $new = DB::transaction(function () use ($admission, $data, $specialty, $gated, $oldConsultant, &$sig) {
+            // (role walkthrough 2026-09-25, E2 fix-up, adversarial review) race-safe re-check, same
+            // pattern as AdmissionsController::createAdmission: transfer()'s discharge_date guard
+            // runs BEFORE this transaction opens, so a double-submitted request (double-click, a
+            // retried POST) could otherwise both pass it and each create a successor admission
+            // pointing at the same predecessor_admission_id — leaving two rows HandoverController
+            // ::save()'s one-hop resolution can't tell apart. lockForUpdate() serializes the two
+            // requests; the loser gets an ordinary validation error instead of a duplicate successor.
+            $admission = Admission::whereKey($admission->id)->lockForUpdate()->first();
+            if (! $admission || $admission->discharge_date) {   // closed (or deleted) by the other request
+                throw ValidationException::withMessages([
+                    'consultant_id' => 'This admission was just transferred by another request.',
+                ]);
+            }
+
             // close the episode as a specialty handover (continuation of care); legacy stamps
             // MORTALITY='Alive' AND med_DISDATE on every close (dmc-patients.php:120) — the
             // close date supersedes any pending phase-1 medical-discharge date (J1-5).
@@ -800,6 +814,11 @@ class PatientActionController extends Controller
                 // one — a transfer is a continuation of the same stay, not a reason to lose it. Every
                 // Admission::create() below that reopens an episode carries it the same way.
                 'is_longterm' => $admission->is_longterm,
+                // (role walkthrough 2026-09-25, E2) the reliable link back to the closing episode —
+                // this is the only transfer that splits the signature (old episode) from the
+                // handover.incomplete reminder (new episode); HandoverController::save() walks it
+                // to resolve the new episode's reminder when the outgoing consultant saves on the old one.
+                'predecessor_admission_id' => $admission->id,
             ]);
 
             // carry the diagnoses forward

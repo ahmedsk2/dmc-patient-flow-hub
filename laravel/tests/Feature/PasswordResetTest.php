@@ -64,4 +64,16 @@ class PasswordResetTest extends TestCase
 
         $this->assertTrue(Hash::check('OldPass12345', $user->fresh()->password));
     }
+
+    /**
+     * U-signin(b) (role walkthrough 2026-09-25): the field is labelled "Username or email" and
+     * deliberately accepts either (PasswordResetController::email() looks up by username when the
+     * value has no '@'), but an empty submit used to read "The email field is required." — Laravel's
+     * default message just echoing the field's own name, as if only an email address counted.
+     */
+    public function test_empty_submit_gives_a_message_matching_the_username_or_email_label(): void
+    {
+        $this->post('/forgot-password', ['email' => ''])
+            ->assertSessionHasErrors(['email' => 'Enter your username or email.']);
+    }
 }

@@ -8,7 +8,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@yield('title') · DMC IM</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <style>
+    {{-- style-src is nonce-only since 2026-09-22: without the nonce the browser drops this block and
+         every error page raised inside a web-group route renders unstyled (role walkthrough
+         2026-09-25). Router-level 404/405s never enter the web group, so there is no nonce (and no
+         CSP header) there — the empty default is harmless. --}}
+    <style nonce="{{ $cspNonce ?? '' }}">
         body { margin: 0; min-height: 100vh; display: grid; place-items: center;
                font-family: ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif;
                background: #f2f7f7; color: #1f2a2e; }

@@ -174,8 +174,12 @@ const pretty = (details) => JSON.stringify(
 
         <div v-if="logs.last_page > 1" class="mt-4 flex items-center justify-between text-sm text-ink-500">
             <span class="nums">Showing {{ logs.from }}–{{ logs.to }} of {{ logs.total }}</span>
+            <!-- role walkthrough 2026-09-25 (ui-ux #5, axe): the disabled "« Previous"/"Next »" span was
+                 text-ink-300 on bg-card — ~2:1, well under WCAG AA's 4.5:1. Registry's identical paginator
+                 already used ink-500 (5.63:1 light / 8.36:1 dark, per Dashboard.vue's ink-step note); Audit's
+                 matches it now, as does Consultations/Index.vue's. -->
             <!-- eslint-disable-next-line vue/no-v-text-v-html-on-component -- Link forwards attrs to its single <a> root and gets no slot content, so v-html renders the paginator's HTML entities as intended --->
-            <div class="flex gap-1 overflow-x-auto"><component :is="l.url ? Link : 'span'" v-for="l in logs.links" :key="l.label" :href="l.url || undefined" preserve-scroll class="grid h-9 min-w-9 shrink-0 place-items-center rounded-lg px-2 text-sm font-semibold transition" :class="l.active ? 'bg-brand-solid text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" /></div>
+            <div class="flex gap-1 overflow-x-auto"><component :is="l.url ? Link : 'span'" v-for="l in logs.links" :key="l.label" :href="l.url || undefined" preserve-scroll class="grid h-9 min-w-9 shrink-0 place-items-center rounded-lg px-2 text-sm font-semibold transition" :class="l.active ? 'bg-brand-solid text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-500')" v-html="l.label" /></div>
         </div>
     </AppLayout>
 </template>

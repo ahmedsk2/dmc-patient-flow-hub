@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Mail\RegistrationAttemptNoticeMail;
 use App\Mail\RegistrationCodeMail;
 use App\Models\PendingRegistration;
 use App\Models\User;
@@ -70,15 +71,120 @@ class RegistrationFlowTest extends TestCase
         $this->assertNotNull($this->pending()->email_verified_at);
     }
 
-    public function test_email_send_rejects_an_address_already_registered(): void
+    // ---- S2 (role walkthrough 2026-09-25): anti-enumeration on sendEmailCode -------------------
+    // A registered address, a collision with someone else's live pending registration, and an
+    // unknown address must all produce the SAME response — see RegisterController::sendEmailCode.
+
+    public function test_email_send_for_an_already_registered_address_looks_identical_to_a_real_send(): void
     {
         User::create(['username' => 'existing_u', 'name' => 'Existing', 'email' => 'taken@example.test',
             'password' => 'secret12345', 'role' => User::ROLE_RESIDENT, 'active' => 1]);
 
         Mail::fake();
         $this->postJson('/register/email/send', ['email' => 'taken@example.test'])
-            ->assertUnprocessable()->assertJsonValidationErrors('email');
-        Mail::assertNothingSent();
+            ->assertOk()->assertExactJson(['sent' => true]);
+
+        // a notice goes to the real (already-registered) inbox instead of a verification code
+        Mail::assertSent(RegistrationAttemptNoticeMail::class, fn ($m) => $m->hasTo('taken@example.test') && $m->hasAccount === true);
+        Mail::assertNotSent(RegistrationCodeMail::class);
+    }
+
+    public function test_email_send_for_an_already_registered_address_never_issues_a_usable_code(): void
+    {
+        User::create(['username' => 'existing_u2', 'name' => 'Existing Two', 'email' => 'taken2@example.test',
+            'password' => 'secret12345', 'role' => User::ROLE_RESIDENT, 'active' => 1]);
+
+        Mail::fake();
+        $this->postJson('/register/email/send', ['email' => 'taken2@example.test'])->assertOk();
+
+        // a brand-new session's row IS created (it carries the cooldown bookkeeping), but with an
+        // EMPTY address, never the probed one — see RegisterController::sendEmailCode's `email`
+        // fill comment — and no code hash, so it stays unverifiable: any guess at /verify fails
+        // exactly like an ordinary wrong code (never "no pending row"/"no code was ever sent").
+        $this->assertFalse(PendingRegistration::where('email', 'taken2@example.test')->exists());
+        $row = PendingRegistration::firstOrFail();
+        $this->assertSame('', $row->email);
+        $this->assertNull($row->email_code_hash);
+        $this->assertNull($row->email_verified_at);
+        $this->postJson('/register/email/verify', ['code' => '123456'])
+            ->assertUnprocessable()->assertJsonValidationErrors('code');
+    }
+
+    public function test_email_send_for_an_address_colliding_with_another_live_pending_registration_looks_identical(): void
+    {
+        // seed another session's in-flight (unexpired) pending registration for the address
+        PendingRegistration::create([
+            'token' => 'other-session-token', 'email' => 'inflight@example.test',
+            'expires_at' => now()->addMinutes(20),
+        ]);
+
+        Mail::fake();
+        $this->postJson('/register/email/send', ['email' => 'inflight@example.test'])
+            ->assertOk()->assertExactJson(['sent' => true]);
+
+        Mail::assertNotSent(RegistrationCodeMail::class);
+        // fix-up (role walkthrough 2026-09-25): a collision-only block used to send NO mail at all,
+        // while the already-registered block sent one — under QUEUE_CONNECTION=sync that made "mail
+        // sent" vs. "no mail sent" a timing side channel distinguishing the two blocked reasons even
+        // though the HTTP response is identical. Both blocked reasons now send one mail; only the
+        // wording differs (hasAccount === false — this address has no account yet).
+        Mail::assertSent(RegistrationAttemptNoticeMail::class, fn ($m) => $m->hasTo('inflight@example.test') && $m->hasAccount === false);
+
+        // the probe must not park a second row on that address: every row carrying it counts as a
+        // "collision", so the real registrant could otherwise be locked out by a stranger's probe
+        $this->assertSame(1, PendingRegistration::where('email', 'inflight@example.test')->count());
+    }
+
+    public function test_email_send_for_a_soft_deleted_users_address_is_blocked_like_an_active_one(): void
+    {
+        // the DB-level 'unique:users,email' rule this replaced ignores soft deletes, and store()'s
+        // own unique check still does — a soft-deleted user's email must stay "taken" here too, or
+        // step 1 would promise an address that step 4 (store()) then refuses
+        $u = User::create(['username' => 'was_here', 'name' => 'Was Here', 'email' => 'gone@example.test',
+            'password' => 'secret12345', 'role' => User::ROLE_RESIDENT, 'active' => 1]);
+        $u->delete();
+
+        Mail::fake();
+        $this->postJson('/register/email/send', ['email' => 'gone@example.test'])
+            ->assertOk()->assertExactJson(['sent' => true]);
+
+        Mail::assertNotSent(RegistrationCodeMail::class);
+        Mail::assertSent(RegistrationAttemptNoticeMail::class, fn ($m) => $m->hasTo('gone@example.test'));
+    }
+
+    public function test_email_send_for_an_unknown_address_still_sends_a_real_code(): void
+    {
+        Mail::fake();
+        $this->postJson('/register/email/send', ['email' => 'genuinely-new@example.test'])
+            ->assertOk()->assertExactJson(['sent' => true]);
+
+        Mail::assertSent(RegistrationCodeMail::class, fn ($m) => $m->hasTo('genuinely-new@example.test'));
+    }
+
+    public function test_probing_a_registered_address_does_not_disturb_the_sessions_own_verified_progress(): void
+    {
+        // this session legitimately verifies its OWN address first...
+        $this->completeEmailAndMfaEmailStepOnly('mine@example.test');
+        $this->assertNotNull($this->pending()->email_verified_at);
+
+        // ...then idly probes a known staff address — must not clobber the session's own row
+        // (past the resend cooldown so this second send isn't itself rejected)
+        $this->travel(61)->seconds();
+        User::create(['username' => 'existing_u3', 'name' => 'Existing Three', 'email' => 'staff@example.test',
+            'password' => 'secret12345', 'role' => User::ROLE_RESIDENT, 'active' => 1]);
+        $this->postJson('/register/email/send', ['email' => 'staff@example.test'])->assertOk();
+
+        $pending = $this->pending();
+        $this->assertSame('mine@example.test', $pending->email, "the probe must not overwrite the session's own address");
+        $this->assertNotNull($pending->email_verified_at, "the probe must not un-verify the session's own address");
+    }
+
+    /** Drives only the email send+verify half (no MFA), for the probe-isolation test above. */
+    private function completeEmailAndMfaEmailStepOnly(string $email): void
+    {
+        Mail::fake();
+        $this->postJson('/register/email/send', ['email' => $email])->assertOk();
+        $this->postJson('/register/email/verify', ['code' => $this->lastCode()])->assertOk();
     }
 
     public function test_email_verify_rejects_an_expired_code(): void

@@ -34,7 +34,14 @@ class PasswordResetController extends Controller
      */
     public function email(Request $request): RedirectResponse
     {
-        $request->validate(['email' => ['required', 'string', 'max:255']]);
+        // U-signin(b) (role walkthrough 2026-09-25): the field is labelled "Username or email" and
+        // deliberately accepts either — Laravel's default required-field message just echoes the
+        // field's own name ("The email field is required."), which reads as if only an email
+        // address is acceptable. A custom message matches what the label actually promises.
+        $request->validate(
+            ['email' => ['required', 'string', 'max:255']],
+            ['email.required' => 'Enter your username or email.']
+        );
         $value = trim((string) $request->input('email'));
         $email = str_contains($value, '@')
             ? $value

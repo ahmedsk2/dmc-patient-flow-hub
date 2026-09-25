@@ -80,7 +80,9 @@ const print = () => window.print();
                             <th scope="col" class="px-2 py-1.5">Consultant</th>
                             <th scope="col" class="px-2 py-1.5 text-center"><span class="inline-flex items-center gap-0.5">Old<InfoTip label="Old column" text="Active patients not currently flagged New — the opposite of New, not an age/record-age count." /></span></th>
                             <th scope="col" class="px-2 py-1.5 text-center"><span class="inline-flex items-center gap-0.5">New<InfoTip label="New column" text="Set when assigned, handed over, or shuffled; cleared on discharge or reassignment — not a 24-hour timer." /></span></th>
-                            <th scope="col" class="px-2 py-1.5 text-center">Active</th><th scope="col" class="px-2 py-1.5 text-center">Ward</th>
+                            <!-- (role walkthrough 2026-09-25, info mark a) same tip as the Patients
+                                 board's identical table — PatientsController.php:407-425. -->
+                            <th scope="col" class="px-2 py-1.5 text-center"><span class="inline-flex items-center gap-0.5">Active<InfoTip label="Active column" text="Ward patients still under active care: excludes ICU, medically discharged (still in), long-term and TB patients, so it can be lower than Ward." /></span></th><th scope="col" class="px-2 py-1.5 text-center">Ward</th>
                             <th scope="col" class="px-2 py-1.5 text-center">ICU</th><th scope="col" class="px-2 py-1.5 text-center">TB</th>
                         </tr>
                     </thead>

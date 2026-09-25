@@ -167,7 +167,7 @@ class PatientsController extends Controller
         $base = Admission::query()
             // admin sees full history; everyone else only open episodes, D1-scoped
             ->when(! $isAdmin, fn ($a) => $a->whereNull('discharge_date')->tap($scope))
-            ->with(['patient:id,mrn,name,gender,age', 'consultant:id,full_name,name']);
+            ->with(['patient:id,mrn,name,gender,age', 'consultant:id,full_name,name,specialty_id', 'consultant.specialty:id,name']);
 
         $ids = collect((array) $request->input('ids', []))
             ->filter(fn ($v) => is_numeric($v))->map(fn ($v) => (int) $v)->unique()->take(10)->values();
@@ -204,6 +204,9 @@ class PatientsController extends Controller
                 'deceased' => $a->outcome === 'Dead',
                 'status' => $discharged ? 'discharged' : ($a->consultant_id ? 'active' : 'unassigned'),
                 'consultant' => $a->consultant ? ($a->consultant->full_name ?: $a->consultant->name) : null,
+                // the current consultant's team — New Consultation prefills "From service" with it
+                // (role walkthrough 2026-09-25); a specialty name, not patient data
+                'consultant_specialty' => $a->consultant?->specialty?->name,
                 // active/unassigned → the board; discharged (admin-only result) → the registry.
                 // The client POSTs the MRN there — no URL ever carries it (SPC-TM-011).
                 'dest' => $discharged ? 'registry' : 'board',

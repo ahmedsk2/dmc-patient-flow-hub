@@ -20,6 +20,7 @@ vi.mock('@/Components/IcdTypeahead.vue', () => ({ default: { template: '<div />'
 vi.mock('@/Components/ActivityPanel.vue', () => ({ default: { template: '<div />' } }));
 
 import PatientsIndex from '@/Pages/Patients/Index.vue';
+import InfoTip from '@/Components/InfoTip.vue';
 
 const consultant = (over = {}) => ({ role: 3, is_admin: false, id: 5, can: { assign: true, manage: true, modify: true }, ...over });
 const admin = { role: 0, is_admin: true, id: 1, can: { assign: false, manage: false, modify: false } };
@@ -78,17 +79,79 @@ describe('Item 7 — persist expand/collapse + my-group-only', () => {
         vm.allClosed();
         expect(JSON.parse(localStorage.getItem('dmc-board-open'))).toEqual([]);
     });
+    // (role walkthrough 2026-09-25, U6) setMyGroupOnly() is gone with its one caller (the toggle
+    // button) — myGroupOnly is now only ever set from a leftover localStorage value (see below), so
+    // these set the ref directly to prove the underlying filter itself still behaves.
     it('myGroupOnly filters visibleGroups to the consultant\'s own group', () => {
         const vm = mountWith(consultant({ id: 5 }), { groups: groups([5, 6, 7]) }).vm;
         expect(vm.visibleGroups.map((g) => g.id)).toEqual([5, 6, 7]);
-        vm.setMyGroupOnly(true);
+        vm.myGroupOnly = true;
         expect(vm.visibleGroups.map((g) => g.id)).toEqual([5]);
-        expect(localStorage.getItem('dmc-board-my-group')).toBe('1');
     });
     it('admin is never filtered by myGroupOnly', () => {
         const vm = mountWith(admin, { groups: groups([1, 2, 3]) }).vm;
-        vm.setMyGroupOnly(true);
+        vm.myGroupOnly = true;
         expect(vm.visibleGroups.map((g) => g.id)).toEqual([1, 2, 3]);
+    });
+    it('a leftover "1" in localStorage from before this change still no-ops (no UI can set it any more)', () => {
+        localStorage.setItem('dmc-board-my-group', '1');
+        const vm = mountWith(consultant({ id: 5 }), { groups: groups([5, 6, 7]) }).vm;
+        expect(vm.myGroupOnly).toBe(true);   // restored as before
+        expect(vm.visibleGroups.map((g) => g.id)).toEqual([5]);   // same filter, just unreachable via the UI now
+    });
+    // (role walkthrough 2026-09-25, review finding) the guard used to be `!me.is_admin` alone, so a
+    // stale flag (shared browser, or set before U6 removed the button) filtered visibleGroups to
+    // `g.id === me.id` for EVERY non-admin role — but group ids are consultant ids, so a Registrar's,
+    // Resident's or Observer's own id never matches any group and the board silently went empty.
+    it('a leftover "1" in localStorage does NOT filter a non-consultant role\'s board (Registrar)', () => {
+        localStorage.setItem('dmc-board-my-group', '1');
+        const registrar = { role: 2, is_admin: false, id: 5, can: { assign: true, manage: true, modify: true } };
+        const vm = mountWith(registrar, { groups: groups([5, 6, 7]) }).vm;
+        expect(vm.myGroupOnly).toBe(true);   // the flag itself is still restored from storage...
+        expect(vm.visibleGroups.map((g) => g.id)).toEqual([5, 6, 7]);   // ...but never applied for this role
+    });
+    it('a leftover "1" in localStorage does NOT filter a non-consultant role\'s board (Resident)', () => {
+        localStorage.setItem('dmc-board-my-group', '1');
+        const resident = { role: 4, is_admin: false, id: 9, can: { assign: false, manage: true, modify: false } };
+        const vm = mountWith(resident, { groups: groups([5, 6, 7]) }).vm;
+        expect(vm.visibleGroups.map((g) => g.id)).toEqual([5, 6, 7]);
+    });
+});
+
+// (role walkthrough 2026-09-25, info marks a/b) three testers misread "Active" as Ward+ICU
+// (PatientsController.php:407-425), and "Census" had no explanation for why it can differ from the
+// Dashboard's Active Census tile (PatientsController.php line ~107 vs DASHBOARD-AND-STATISTICS-
+// METRICS.md's "Active Census" row) — Ward (non-ICU) right next to it already carried one.
+describe('info marks a/b — Active column + Census pill InfoTips', () => {
+    it('the per-consultant table\'s "Active" column carries an InfoTip', () => {
+        // shallowMount (mountWith) auto-stubs AppLayout's slot away even though it's mocked to a
+        // slot-passthrough template — renderWith (full mount) is this file's own pattern for
+        // template/text assertions (see the fallback-banner tests below).
+        const w = renderWith(consultant(), { groups: groups([5]) });
+        const labels = w.findAllComponents(InfoTip).map((t) => t.props('label'));
+        expect(labels).toContain('Active column');
+    });
+    it('the toolbar\'s "Census" pill carries an InfoTip explaining the Dashboard mismatch', () => {
+        const w = renderWith(consultant(), { groups: groups([5]) });
+        const labels = w.findAllComponents(InfoTip).map((t) => t.props('label'));
+        expect(labels).toContain('Census count');
+    });
+});
+
+// (role walkthrough 2026-09-25, U6) the "My patients only" toggle only ever rendered for
+// User::seesOwnPatientsOnly()'s exact condition (role===3 && !is_admin) — the one role the SERVER
+// already scopes the board to unconditionally (PatientsController::boardScope), so it was a no-op
+// click. Replaced with a static note for that role; every other role never saw the control at all.
+describe('U6 — "My patients only" toggle replaced with a static note for a plain consultant', () => {
+    it('a plain consultant sees the static note, not the interactive toggle', () => {
+        const w = renderWith(consultant());
+        expect(w.text()).toContain('Showing your patients');
+        expect(w.findAll('button').some((b) => b.text() === 'My patients only')).toBe(false);
+    });
+    it('an admin (or any other role) sees neither the toggle nor the static note', () => {
+        const w = renderWith(admin);
+        expect(w.text()).not.toContain('Showing your patients');
+        expect(w.findAll('button').some((b) => b.text() === 'My patients only')).toBe(false);
     });
 });
 

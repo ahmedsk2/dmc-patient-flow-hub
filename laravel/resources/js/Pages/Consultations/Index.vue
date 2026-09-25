@@ -18,7 +18,12 @@ const { ask } = useConfirm();
 // .errors onto per-instance field ids (useId()-scoped) with aria-describedby wired to the
 // existing field-level messages. Submit handlers are wrapped in guardSubmit() (Item 5).
 
-const props = defineProps({ consultations: Object, filters: Object, stats: Object, reasons: Array, consultants: Array, specialties: Array, worklist: { type: Object, default: () => ({ date: '', seen: 0, total: 0, items: [] }) }, canBookAnyTeam: { type: Boolean, default: true }, bookableToServices: { type: Array, default: () => [] }, bookingNotice: { type: String, default: null } });
+const props = defineProps({ consultations: Object, filters: Object, stats: Object, reasons: Array, consultants: Array, specialties: Array, worklist: { type: Object, default: () => ({ date: '', seen: 0, total: 0, items: [] }) }, canBookAnyTeam: { type: Boolean, default: true }, bookableToServices: { type: Array, default: () => [] }, bookingNotice: { type: String, default: null },
+    // U1 pt.2 (role walkthrough 2026-09-25): ConsultationsController::index's own verdict on whether
+    // THIS viewer is narrowed to just their own rows by Consultation::scopeVisibleTo (no specialty_id
+    // AND no coordinator capability) — null for everyone else. Server-computed rather than guessed
+    // here, same reasoning as `can_modify` per row above: the client never sees `specialty_id`.
+    scopeNotice: { type: String, default: null } });
 const page = usePage();
 const me = computed(() => page.props.auth.user);
 // Observers (role 5) are read-only everywhere, and the read-only guarantee is never bought with a
@@ -114,6 +119,15 @@ const search = ref(props.filters.search || '');
 const status = ref(props.filters.status || 'new');
 const scope = ref(props.filters.scope || '');
 let timer = null;
+
+// U1 (role walkthrough 2026-09-25): the ledger defaults to the "New" tab (the owner's workflow —
+// unreviewed work is what a fresh visit should land on), but that tab can be empty while rows this
+// SAME viewer can see sit under another one — reproduced as a no-capability resident (summary tiles
+// read "Open (all) 1 / Ongoing 1" while the New tab's table said "No consultations match your
+// filters"). `stats` already carries every tab's count under this viewer's own
+// Consultation::scopeVisibleTo scope (server-computed, same object the tab badges read), so no new
+// prop is needed — just naming what it already says instead of only the current, empty tab.
+const otherOpenTabs = computed(() => STATUS_TABS.filter((t) => t.id !== status.value && (props.stats[t.id] ?? 0) > 0));
 
 // SPC-TM-011 (Wave 1): the free-text term is patient name/MRN, so it POSTs in the body to
 // /consultations/search (POST /consultations is taken by "create"); status/scope stay in the
@@ -236,6 +250,16 @@ const lookupBusy = ref(false);
 const lookupError = ref('');
 let lookupTimer = null;
 let lookupSeq = 0;
+// Typeahead a11y (role walkthrough 2026-09-25): the input already declared role="combobox"
+// aria-autocomplete="list" but the suggestions rendered as a plain <ul><li><button> — no
+// role="listbox"/"option", so a screen reader announced nothing. Mirrors IcdTypeahead.vue's
+// pattern: role="option" lives on the clickable row itself (never a button nested inside it),
+// aria-activedescendant tracks the arrow-key highlight while focus stays on the input.
+const lookupHi = ref(-1);
+const lookupOptionId = (i) => `${cUid}-lookup-opt-${i}`;
+// One rule, wherever lookupResults changes (a fresh answer, a clear, a direct test stub): the
+// highlight always tracks it, rather than every writer having to remember to set it too.
+watch(lookupResults, (r) => { lookupHi.value = r.length ? 0 : -1; });
 const runLookup = async () => {
     const term = lookupQuery.value.trim();
     if (term.length < 2) { lookupResults.value = []; return; }
@@ -258,6 +282,16 @@ const runLookup = async () => {
     }
 };
 watch(lookupQuery, () => { clearTimeout(lookupTimer); lookupTimer = setTimeout(runLookup, 300); });
+// Closing cancels a lookup not yet sent and orphans one already in flight — same idiom as
+// IcdTypeahead's close().
+const closeLookup = () => { clearTimeout(lookupTimer); lookupSeq++; lookupResults.value = []; };
+const onLookupKeydown = (e) => {
+    if (!lookupResults.value.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); lookupHi.value = Math.min(lookupHi.value + 1, lookupResults.value.length - 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); lookupHi.value = Math.max(lookupHi.value - 1, 0); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (lookupHi.value >= 0) pickPatient(lookupResults.value[lookupHi.value]); }
+    else if (e.key === 'Escape') { e.stopPropagation(); closeLookup(); }
+};
 let pinning = false;
 const pickPatient = (rowData) => {
     pinning = true;                       // the mrn watcher below must not unpin what we just pinned
@@ -269,6 +303,23 @@ const pickPatient = (rowData) => {
     cForm.patient_id = rowData.patient_id ?? null; // rowData.id is the ADMISSION id (the stay); patient_id
     cForm.admission_id = rowData.id ?? null;       // is a distinct FK into the patients table — never conflate them
     cForm.unmatched_mrn_ack = false;
+    // U8 (role walkthrough 2026-09-25): the picked patient's admission already names their current
+    // team — prefill "From service" with it instead of asking the coordinator to retype what the app
+    // already knows, same idea as bed/location above. quickSearch ships the consultant's specialty
+    // (consultant_specialty); older responses without it fall back to matching the consultant's name
+    // against `consultants`, and an unmatched or ambiguous name is left alone rather than risk a wrong
+    // prefill. The field stays freely editable, and never overwrites something already typed.
+    if (!cForm.consultation_from.trim()) {
+        let specName = rowData.consultant_specialty || '';
+        if (!specName && rowData.consultant) {
+            const matches = props.consultants.filter((c) => c.name === rowData.consultant);
+            const spec = matches.length === 1 && matches[0].specialty_id
+                ? props.specialties.find((s) => s.id === matches[0].specialty_id)
+                : null;
+            specName = spec ? spec.name : '';
+        }
+        if (specName) cForm.consultation_from = specName;
+    }
     lookupResults.value = [];
     lookupQuery.value = '';
     nextTick(() => { pinning = false; });
@@ -441,6 +492,11 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
             </button>
         </div>
 
+        <!-- U1 pt.2: a viewer with no specialty and no coordinator role is narrowed by
+             Consultation::scopeVisibleTo to just their own rows (booked, or the named consultant) —
+             easy to read as "the ledger is broken" rather than "this is your scope". -->
+        <p v-if="scopeNotice" class="mb-3 text-xs text-ink-500">{{ scopeNotice }}</p>
+
         <!-- Today's follow-up: the ACTIVE set only — the one status that asserts a daily round -->
         <section v-if="wl.total" data-test="worklist" class="mb-5 overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-line">
             <header class="flex flex-wrap items-center gap-3 border-b border-line px-5 py-3">
@@ -532,7 +588,18 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                             </div>
                         </td>
                     </tr>
-                    <tr v-if="!consultations.data.length"><td colspan="8" class="px-5 py-10 text-center text-ink-400">No consultations match your filters.</td></tr>
+                    <tr v-if="!consultations.data.length"><td colspan="8" class="px-5 py-10 text-center text-ink-400">
+                        <p>No {{ statusLabel(status).toLowerCase() }} consultations{{ search.trim() ? ' match your search' : '' }}.</p>
+                        <!-- U1: name what the viewer's OWN counts say exists elsewhere, and offer a
+                             one-click switch, instead of a bare dead-end "no results". -->
+                        <template v-if="otherOpenTabs.length">
+                            <p class="mt-1">You have {{ otherOpenTabs.map((t) => `${stats[t.id]} ${t.name.toLowerCase()}`).join(', ') }} elsewhere.</p>
+                            <div class="mt-2 flex flex-wrap items-center justify-center gap-2">
+                                <button v-for="t in otherOpenTabs" :key="t.id" type="button" @click="setStatus(t.id)"
+                                    class="rounded-lg bg-card px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-sm ring-1 ring-line hover:bg-brand-50">Show {{ t.tab }}</button>
+                            </div>
+                        </template>
+                    </td></tr>
                 </tbody>
             </table>
           </div>
@@ -549,7 +616,7 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                 <!-- eslint-disable vue/no-v-text-v-html-on-component -- `:is` only ever resolves to a native element here; v-html renders the paginator's HTML entities -->
                 <component :is="l.url ? 'button' : 'span'" v-for="l in consultations.links" :key="l.label" :type="l.url ? 'button' : undefined" @click="l.url && goPage(l.url)"
                     class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold transition"
-                    :class="l.active ? 'bg-brand-solid text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-300')" v-html="l.label" />
+                    :class="l.active ? 'bg-brand-solid text-white' : (l.url ? 'bg-card text-ink-600 ring-1 ring-line hover:bg-ink-50' : 'text-ink-500')" v-html="l.label" />
                 <!-- eslint-enable vue/no-v-text-v-html-on-component -->
             </div>
         </div>
@@ -576,8 +643,22 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                     </div>
                     <div>
                         <label :id="efid('indication') + '-label'" class="mb-1 block text-sm font-semibold text-ink-700">Indication <span class="text-danger-500">*</span></label>
-                        <div :id="efid('indication')" tabindex="-1" role="group" :aria-labelledby="efid('indication') + '-label'" class="flex flex-wrap gap-2">
-                            <label v-for="r in reasons" :key="r.id" class="cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold transition" :class="eForm.indication.includes(r.id) ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'"><input type="checkbox" :value="r.id" v-model="eForm.indication" class="hidden" /> {{ r.name }}</label>
+                        <!-- Indication picker (role walkthrough 2026-09-25): these checkboxes used to
+                             be hidden with display:none (`class="hidden"`), which drops them from the
+                             native Tab order entirely — a keyboard user could never reach or toggle
+                             one. sr-only keeps each checkbox a real, focusable, invisible control
+                             (same idiom already used for the Transfer/Discharge radio chips in
+                             Components/Patients/ActionModal.vue), and focus-within puts the visible
+                             highlight on the chip label that wraps it. -->
+                        <!-- The hint needs its own id and a place in aria-describedby, not just
+                             aria-labelledby on the label — otherwise a screen-reader user who tabs
+                             straight into a checkbox never hears "Pick one or more." (role
+                             walkthrough 2026-09-25 review). -->
+                        <p :id="efid('indication') + '-hint'" class="mb-1.5 text-xs text-ink-400">Pick one or more.</p>
+                        <div :id="efid('indication')" tabindex="-1" role="group" :aria-labelledby="efid('indication') + '-label'"
+                            :aria-describedby="eForm.errors.indication ? `${efid('indication')}-hint ${efid('indication')}-err` : efid('indication') + '-hint'"
+                            class="flex flex-wrap gap-2">
+                            <label v-for="r in reasons" :key="r.id" class="cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold transition focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2" :class="eForm.indication.includes(r.id) ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'"><input type="checkbox" :value="r.id" v-model="eForm.indication" class="sr-only" /> {{ r.name }}</label>
                         </div>
                         <p v-if="eForm.errors.indication" :id="efid('indication') + '-err'" class="mt-1 text-xs text-on-danger">{{ eForm.errors.indication }}</p>
                         <input :id="efid('other_indication')" v-model="eForm.other_indication" :aria-describedby="eForm.errors.other_indication ? efid('other_indication') + '-err' : undefined" :class="[field, 'mt-2', eForm.errors.other_indication && 'border-danger-500']" placeholder="Other indication (required when 'Other' is selected)" />
@@ -594,16 +675,22 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                     <!-- Patient lookup: POST body only (SPC-TM-011 — PHI never rides a URL) -->
                     <div class="rounded-xl bg-ink-50 p-3">
                         <label :for="cfid('lookup')" class="mb-1 block text-sm font-semibold text-ink-700">Find the patient</label>
-                        <input :id="cfid('lookup')" v-model="lookupQuery" autocomplete="off"
+                        <input :id="cfid('lookup')" v-model="lookupQuery" autocomplete="off" role="combobox"
+                            aria-autocomplete="list" :aria-expanded="lookupResults.length > 0" :aria-controls="cfid('lookup') + '-listbox'"
+                            :aria-activedescendant="lookupHi >= 0 ? lookupOptionId(lookupHi) : undefined"
+                            @keydown="onLookupKeydown" @blur="closeLookup"
                             placeholder="Type a name or MRN to look up an admitted patient…" :class="field" />
                         <p v-if="lookupBusy" class="mt-1 text-xs text-ink-400">Searching…</p>
                         <p v-else-if="lookupError" class="mt-1 text-xs text-on-danger">{{ lookupError }}</p>
-                        <ul v-if="lookupResults.length" class="mt-2 divide-y divide-line overflow-hidden rounded-xl bg-card ring-1 ring-line">
-                            <li v-for="r in lookupResults" :key="r.id">
-                                <button type="button" @click="pickPatient(r)" class="w-full px-3 py-2 text-start transition hover:bg-brand-50/40">
+                        <ul v-if="lookupResults.length" :id="cfid('lookup') + '-listbox'" role="listbox"
+                            class="mt-2 divide-y divide-line overflow-hidden rounded-xl bg-card ring-1 ring-line">
+                            <li v-for="(r, i) in lookupResults" :key="r.id" role="presentation">
+                                <div :id="lookupOptionId(i)" role="option" :aria-selected="i === lookupHi"
+                                    @mousedown.prevent="pickPatient(r)" @mouseenter="lookupHi = i"
+                                    class="cursor-pointer px-3 py-2 text-start transition hover:bg-brand-50/40" :class="i === lookupHi ? 'bg-brand-50' : ''">
                                     <span class="font-semibold text-ink-800">{{ r.name }}</span>
                                     <span class="nums ms-2 text-xs text-ink-400">MRN {{ r.mrn }} · {{ r.age ?? '—' }}y · Bed {{ r.bed || '—' }} · {{ r.location || '—' }}</span>
-                                </button>
+                                </div>
                             </li>
                         </ul>
                         <p v-if="cForm.patient_id" class="mt-2 text-xs font-semibold text-on-success">Linked to this patient's current admission.</p>
@@ -632,10 +719,15 @@ const field = 'w-full rounded-xl border border-ink-200 px-3 py-2 text-sm outline
                     </div>
                     <div>
                         <label :id="cfid('indication') + '-label'" class="mb-1 block text-sm font-semibold text-ink-700">Indication <span class="text-danger-500">*</span></label>
-                        <div :id="cfid('indication')" tabindex="-1" role="group" :aria-labelledby="cfid('indication') + '-label'" class="flex flex-wrap gap-2">
-                            <label v-for="r in reasons" :key="r.id" class="cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold transition"
+                        <!-- Indication picker (role walkthrough 2026-09-25): see the matching comment
+                             on the edit form's copy of this control above. -->
+                        <p :id="cfid('indication') + '-hint'" class="mb-1.5 text-xs text-ink-400">Pick one or more.</p>
+                        <div :id="cfid('indication')" tabindex="-1" role="group" :aria-labelledby="cfid('indication') + '-label'"
+                            :aria-describedby="cForm.errors.indication ? `${cfid('indication')}-hint ${cfid('indication')}-err` : cfid('indication') + '-hint'"
+                            class="flex flex-wrap gap-2">
+                            <label v-for="r in reasons" :key="r.id" class="cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold transition focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2"
                                 :class="cForm.indication.includes(r.id) ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-500'">
-                                <input type="checkbox" :value="r.id" v-model="cForm.indication" class="hidden" /> {{ r.name }}
+                                <input type="checkbox" :value="r.id" v-model="cForm.indication" class="sr-only" /> {{ r.name }}
                             </label>
                         </div>
                         <p v-if="cForm.errors.indication" :id="cfid('indication') + '-err'" class="mt-1 text-xs text-on-danger">{{ cForm.errors.indication }}</p>

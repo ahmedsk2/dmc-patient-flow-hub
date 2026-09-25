@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue';
-import { useForm } from '@inertiajs/vue3';
+import { useForm, router } from '@inertiajs/vue3';
 import QRCode from 'qrcode';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
@@ -13,6 +13,12 @@ const form = useForm({ code: '' });
 const confirm = () => form.post('/mfa/confirm', { onFinish: () => form.reset('code') });
 
 const copyCodes = () => navigator.clipboard?.writeText(props.recoveryCodes.join('\n'));
+
+// U-signin(a) (role walkthrough 2026-09-25): the old "Cancel" link went to /profile, which
+// EnsureMfaEnrolled immediately bounces back to /mfa/setup — enrolment is mandatory (CLAUDE.md §7),
+// so there was never anywhere to cancel TO. A real "Sign out" replaces it — same POST /logout every
+// other sign-out in the app uses (AppLayout's own logout(), EmailVerify.vue's signOut()).
+const signOut = () => router.post('/logout');
 </script>
 
 <template>
@@ -61,7 +67,10 @@ const copyCodes = () => navigator.clipboard?.writeText(props.recoveryCodes.join(
                 </div>
             </section>
 
-            <div class="text-center"><a href="/profile" class="text-sm font-semibold text-ink-500 hover:text-ink-700">Cancel</a></div>
+            <div class="text-center text-sm text-ink-500">
+                <p>Setting up two-factor authentication is required before you can use the app.</p>
+                <button type="button" @click="signOut" class="mt-2 font-semibold text-ink-500 hover:text-ink-700">Sign out</button>
+            </div>
         </div>
     </AppLayout>
 </template>

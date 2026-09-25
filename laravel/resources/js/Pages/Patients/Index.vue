@@ -79,10 +79,22 @@ const compact = computed(() => density.value === 'compact');
 
 // Wave 2, Item 7: "show only my group" (consultant role only) — purely presentational; server data
 // + D1 scoping are unchanged. Persisted per-browser, mirroring density.
+// (role walkthrough 2026-09-25, U6) the setter that flipped this on is gone — its one caller was
+// the "My patients only" button, which only ever rendered for User::seesOwnPatientsOnly()'s exact
+// condition, a role the server already scopes to its own single group unconditionally
+// (PatientsController::boardScope), so the filter below could never actually change anything for
+// the one role that could reach it. `myGroupOnly`/`visibleGroups` stay (props.groups is read through
+// visibleGroups in several places below) — only the now-unreachable setter and its UI are removed. A
+// leftover `true` in an old browser's localStorage still no-ops through this same guard — but ONLY
+// for the one role it was ever built for. (role walkthrough 2026-09-25, review) the guard used to
+// read `!me.value.is_admin` alone, so a Registrar/Resident/Observer with a stale flag (shared
+// browser, or set before this change removed the button) got filtered to `g.id === me.value.id`;
+// group ids are CONSULTANT ids, so a non-consultant's id never matches any group and the board
+// silently went empty. Scoped to exactly User::seesOwnPatientsOnly()'s condition, matching the
+// static-note check below (line ~357) and PatientsController::boardScope server-side.
 const myGroupOnly = ref(false);
-const setMyGroupOnly = (v) => { myGroupOnly.value = v; localStorage.setItem('dmc-board-my-group', v ? '1' : '0'); };
 const visibleGroups = computed(() =>
-    myGroupOnly.value && !me.value.is_admin
+    myGroupOnly.value && me.value.role === 3 && !me.value.is_admin
         ? props.groups.filter((g) => g.id === me.value.id)
         : props.groups);
 
@@ -283,7 +295,14 @@ const closeModify = () => guardModify(() => { editing.value = null; });
         </span>
         <!-- toolbar -->
         <div class="mb-4 flex flex-wrap items-center gap-2">
-            <span class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Census <span class="nums ms-1 text-brand-700">{{ stats.total }}</span></span>
+            <!-- (role walkthrough 2026-09-25, info mark b) stats.total is Admission::active()->
+                 whereNotNull('consultant_id') — SAME "assigned only" filter as stats.ward just below,
+                 which already carries its own tip explaining the Dashboard mismatch
+                 (PatientsController.php line ~107). The Dashboard's "Active Census" KPI tile is
+                 COUNT(admissions WHERE discharge_date IS NULL), ALL locations, assigned or not
+                 (DASHBOARD-AND-STATISTICS-METRICS.md "Active Census" row) — so it is always ≥ this
+                 pill whenever anyone is awaiting assignment. -->
+            <span class="inline-flex items-center gap-1 rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm ring-1 ring-line">Census <InfoTip label="Census count" text="Assigned patients only — excludes those still awaiting assignment. The Dashboard's Active Census includes them, so the two can differ." /><span class="nums ms-1 text-brand-700">{{ stats.total }}</span></span>
             <!-- #21 (role/UX review 2026-09-24): this figure excludes patients still awaiting
                  assignment (PatientsController::index — stats.ward is whereNotNull('consultant_id')),
                  while the Dashboard's ward figure counts every active ward patient regardless of
@@ -333,12 +352,15 @@ const closeModify = () => guardModify(() => { editing.value = null; });
             <button v-if="filtering" @click="clearFilters" class="inline-flex items-center gap-1.5 rounded-xl bg-ink-100 px-3 py-2 text-sm font-semibold text-ink-600 transition hover:bg-ink-200">
                 Clear filters ✕
             </button>
-            <!-- Item 7: "My patients only" — consultant role only (admins/registrars/residents see
-                 all groups, which is correct). Pure client filter, persisted per-browser. -->
-            <button v-if="me.role === 3 && !me.is_admin" @click="setMyGroupOnly(!myGroupOnly)"
-                :aria-pressed="myGroupOnly" :title="myGroupOnly ? 'Showing only your group' : 'Show only your group'"
-                class="rounded-xl px-3 py-2 text-sm font-semibold shadow-sm ring-1 transition"
-                :class="myGroupOnly ? 'bg-accent-500 text-white ring-accent-500' : 'bg-card text-ink-500 ring-line hover:bg-ink-50'">My patients only</button>
+            <!-- Item 7: "My patients only" was a consultant-role-only client filter — but that exact
+                 condition (`me.role === 3 && !me.is_admin`) is User::seesOwnPatientsOnly(), which the
+                 SERVER already scopes the board to unconditionally (PatientsController::boardScope,
+                 D1). props.groups for this role only ever holds their own one group, so the toggle
+                 filtered an array that could never contain anything else — a no-op click (role
+                 walkthrough 2026-09-25, U6). A static note in its place instead of a dead control;
+                 visibleGroups/myGroupOnly stay as-is underneath (harmless, still unit-tested) since no
+                 UI path can set myGroupOnly true any more. -->
+            <span v-if="me.role === 3 && !me.is_admin" class="rounded-xl bg-card px-3 py-2 text-sm font-semibold text-ink-500 ring-1 ring-line">Showing your patients</span>
             <!-- density: Comfortable/Compact (localStorage 'dmc-density'); compact tightens card padding + gaps -->
             <div class="flex gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-line" role="group" aria-label="Board density">
                 <button v-for="d in [['comfortable','Comfortable'],['compact','Compact']]" :key="d[0]" @click="setDensity(d[0])"
@@ -402,7 +424,12 @@ const closeModify = () => guardModify(() => { editing.value = null; });
                         <th scope="col" class="px-5 py-2.5">Consultant</th>
                         <th scope="col" class="px-3 py-2.5 text-center"><span class="inline-flex items-center gap-0.5">Old<InfoTip label="Old column" text="Active patients not currently flagged New — the opposite of New, not an age/record-age count." /></span></th>
                         <th scope="col" class="px-3 py-2.5 text-center"><span class="inline-flex items-center gap-0.5">New<InfoTip label="New column" text="Set when assigned, handed over, or shuffled; cleared on discharge or reassignment — not a 24-hour timer." /></span></th>
-                        <th scope="col" class="px-3 py-2.5 text-center">Active</th>
+                        <!-- (role walkthrough 2026-09-25, info mark a) three testers read "Active" as
+                             Ward+ICU and thought the count was wrong; it's a narrower definition than
+                             "active" everywhere else (PatientsController.php:407-425 / c['active'],
+                             matching DASHBOARD-AND-STATISTICS-METRICS.md §1's "Patient count per
+                             consultant" row) — Old/New already carried a tip, this one didn't. -->
+                        <th scope="col" class="px-3 py-2.5 text-center"><span class="inline-flex items-center gap-0.5">Active<InfoTip label="Active column" text="Ward patients still under active care: excludes ICU, medically discharged (still in), long-term and TB patients, so it can be lower than Ward." /></span></th>
                         <th scope="col" class="px-3 py-2.5 text-center">Ward</th><th scope="col" class="px-3 py-2.5 text-center">ICU</th><th scope="col" class="px-3 py-2.5 text-center">TB</th>
                     </tr>
                 </thead>

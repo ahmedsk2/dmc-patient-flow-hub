@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Mail\RegistrationAttemptNoticeMail;
 use App\Mail\RegistrationCodeMail;
 use App\Models\AuditLog;
 use App\Models\PendingRegistration;
@@ -55,24 +56,42 @@ class RegisterController extends Controller
      * Step 1: validate the email, mint/reuse the pending row for this session, mail a fresh
      * 6-digit code. Rate-limited by a resend cooldown + a per-row send cap (in addition to the
      * route-level throttle:register).
+     *
+     * S2 (role walkthrough 2026-09-25): this used to `422 "already been taken"` a registered
+     * staff email and `422 "already registered"` one colliding with another live pending row,
+     * while an unknown address got a plain `200 {"sent":true}` — three distinguishable outcomes an
+     * unauthenticated caller could use to enumerate real clinician emails one guess at a time
+     * (PasswordResetController/UsernameReminderController were both already written to avoid
+     * exactly this). Both "blocked" cases now fall through to the SAME `200 {"sent":true}` as a
+     * genuine send, with the SAME resend-cooldown/send-cap bookkeeping on the session's own pending
+     * row (so the rate limiting an attacker feels never differs by target), and — for the
+     * known-account case only, since that's the one address we can actually vouch for — a notice
+     * mailed to the real inbox instead of a verification code. A blocked probe never gets a real
+     * code, never moves the session's OWN pending row onto that address (`$blocked` guards the
+     * `email`/`email_verified_at` fields below), and can never complete verifyEmailCode() for it —
+     * a guess there fails with the same "Incorrect or expired code" a wrong code always gets.
      */
     public function sendEmailCode(Request $request): JsonResponse
     {
         $data = $this->jsonValidate($request, [
-            'email' => ['required', 'email', 'max:191', 'unique:users,email'],
+            'email' => ['required', 'email', 'max:191'],
         ]);
 
         $pending = $this->currentPending($request);
 
-        // reject a collision with ANOTHER in-flight (non-expired) pending registration — defense
-        // in depth alongside the users-table uniqueness check above
+        // withTrashed(): the 'unique:users,email' rule this replaces ran against the raw table
+        // (Laravel's unique rule bypasses Eloquent scopes), so it already counted a soft-deleted
+        // user's email as taken — matching that keeps store()'s own still-DB-level unique check (a
+        // few lines down in this file) from rejecting, at the final step, an address this step just
+        // told the caller was free.
+        $alreadyRegistered = User::withTrashed()->where('email', $data['email'])->exists();
+        // a collision with ANOTHER in-flight (non-expired) pending registration is blocked the same
+        // way — someone else is already mid-registration with this address
         $collision = PendingRegistration::where('email', $data['email'])
             ->where('expires_at', '>', now())
             ->when($pending, fn ($q) => $q->where('id', '!=', $pending->id))
             ->exists();
-        if ($collision) {
-            $this->jsonFail(['email' => 'That email is already registered.']);
-        }
+        $blocked = $alreadyRegistered || $collision;
 
         if (! $pending) {
             $token = Str::random(40);
@@ -87,8 +106,12 @@ class RegisterController extends Controller
         // this endpoint into an email-bomb relay for mailing unlimited codes to arbitrary victims.
         // (`email_attempts` is reset unconditionally by the fill() below on every send.) The
         // already-provisioned TOTP secret is left alone — it isn't tied to the email, and store()
-        // re-checks the email match anyway.
-        if ($pending->email !== $data['email']) {
+        // re-checks the email match anyway. A blocked target never resets (or is allowed to
+        // overwrite) an email the row ALREADY has — the session's own, possibly already-verified,
+        // progress on its real address must survive someone idly probing a second, unrelated
+        // address; see the `email` fill below for the one exception (a brand-new row that has never
+        // had a real address on it, where `email` is a NOT NULL column with no default).
+        if (! $blocked && $pending->email !== $data['email']) {
             $pending->email_verified_at = null;
         }
 
@@ -97,6 +120,40 @@ class RegisterController extends Controller
         }
         if ($pending->email_send_count >= self::MAX_SEND_COUNT) {
             $this->jsonFail(['email' => 'Too many codes requested — please try again later.']);
+        }
+
+        if ($blocked) {
+            // fix-up (role walkthrough 2026-09-25): this used to mail ONLY the already-registered
+            // case, leaving the collision-only branch (someone else's in-flight pending
+            // registration) silent — under QUEUE_CONNECTION=sync a mail send blocks the request, so
+            // "mail sent" vs. "no mail sent" was itself a timing side channel an attacker could use
+            // to tell the two blocked reasons apart even though the HTTP response is byte-identical.
+            // Every blocked outcome now sends one mail; $hasAccount only changes the WORDING.
+            // Best-effort: a mail failure here must not change the response — doing so would
+            // reopen exactly the enumeration this fix closes — so it's swallowed and logged,
+            // mirroring UsernameReminderController's pattern.
+            try {
+                Mail::to($data['email'])->send(new RegistrationAttemptNoticeMail($alreadyRegistered));
+            } catch (\Throwable $e) {
+                report($e);
+            }
+
+            // No code hash is stored — verifyEmailCode() has nothing that could ever match, so a
+            // guess against this row fails exactly like a wrong code. Only the same
+            // cooldown/send-count bookkeeping the real-send path uses below still applies.
+            // `email` itself: an EXISTING row keeps its own address untouched (never the blocked
+            // target). A brand-new row needs SOMETHING (NOT NULL, no default) but must NOT get the
+            // probed address: every other pending row with that address would then see this probe
+            // as a "collision" and a real registrant mid-flow could be locked out by a stranger
+            // typing their email. An empty string never matches a real address.
+            $pending->fill([
+                'email' => $pending->email ?? '',
+                'email_sent_at' => now(),
+                'email_send_count' => $pending->email_send_count + 1,
+                'expires_at' => now()->addMinutes(self::ROW_TTL_MINUTES),
+            ])->save();
+
+            return response()->json(['sent' => true]);
         }
 
         $code = self::generateCode();

@@ -56,4 +56,14 @@ describe('AdminBandCard', () => {
         expect(c).toContain('bg-card');
         expect(w.find('p.text-on-danger').exists()).toBe(false);
     });
+
+    // role walkthrough 2026-09-25 (ui-ux #8): at 375px, a fixed-width `truncate` ellipsized 5 of
+    // these labels ("Recently Del…", "Handover D…") with no way to recover the text. The label now
+    // wraps below `sm` and stays single-line-truncated at `sm` and up (desktop unchanged).
+    it('wraps the label below the sm breakpoint and truncates it at sm and up', () => {
+        const w = mountCard({ label: 'Handover Due (unit)' });
+        const label = w.find('p.text-xs');
+        expect(label.classes()).not.toContain('truncate');
+        expect(label.classes()).toContain('sm:truncate');
+    });
 });

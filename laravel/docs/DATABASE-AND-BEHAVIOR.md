@@ -63,7 +63,7 @@ the legacy MyISAM/no-FK schema), plus named CHECK constraints on the admission d
 | `id` | PK | |
 | `mrn` | varchar(64) | Medical record number — **unique**, indexed. |
 | `name`, `gender`, `age`, `nationality` | — | Demographics. `age` carries CHECK `chk_age_range` (0–150). |
-| `deleted_at` | timestamp | **Soft delete** (`2026_06_14_010007`) — the admin patient-merge tool retires the SOURCE patient this way, so the merge is recoverable. |
+| `deleted_at` | timestamp | **Soft delete** (`2026_06_14_010007`) — the admin patient-merge tool retires the SOURCE patient this way (kept but hidden; the merge is recorded in the audit log). There is no restore for a patient in Recently Deleted, and restoring the empty source row would not move its episodes back, so **a merge cannot be undone in the app** — reversing one needs the maintainer and a restore from backup (owner decision 2026-09-25: say so plainly rather than build an un-merge). |
 
 ### `admissions` — one row per admission **episode** (the central table)
 A re-admission or a ward↔ICU transfer creates a **new** row, so one patient = many admissions over time.
@@ -164,6 +164,7 @@ HMAC under `APP_KEY`. Operationally:
 | `handovers` | The **current** handover per admission (unique `admission_id`, upserted on save): `body` (encrypted), `checkpoints` (JSON), `updated_by`, timestamps. `updated_at` drives the same-day gate and is stamped explicitly, so an unchanged body still satisfies it. |
 | `handover_revisions` | Append-only history — every save adds one row (`body` encrypted, `checkpoints` JSON, `author_id`, `created_at`; no `updated_at`). |
 | `handover_signatures` | Created on **consultant-to-consultant moves** (reassign, bulk reassign, internal specialty transfer): `from/to_consultant_id`, `revision_id`, `required_at`, `signed_at`/`signed_by`, `voided_at`. |
+| `admissions.predecessor_admission_id` | FK→admissions, nullable (`2026_09_25_000100`, additive, not a "handover table" but exists solely to support this subsystem). Set only by an internal specialty transfer, to the episode it closed. **Not unique** — a same-day admin `reverseDischarge` followed by a second transfer of the reopened episode can give one predecessor two successors; `HandoverController::save` resolves every matching successor's reminder, not just one, when the outgoing consultant can only write on the (closed) predecessor — see the Behavior bullet below. |
 | `notifications` | In-app inbox feed (the bell): `user_id`, `type`, `admission_id` (indexed, no FK — reminders outlive their admission), `payload` JSON, `read_at`, `resolved_at`, `created_at`. |
 
 `checkpoints` (both handover tables, `2026_07_13_010000`) holds the six clinical flags validated by
@@ -181,6 +182,20 @@ Behavior:
   reminder instead *(verified against `PatientActionController::assign` on 2026-09-03)*. First
   assignments from the unassigned queue are exempt. Bulk reassign checks per selected patient
   (`/handovers/preflight` shows per-admission freshness).
+- **Split-episode resolution (2026-09-25, role walkthrough E2):** an internal specialty transfer
+  closes the episode and opens a new one, so the signature (write access) lands on the closing
+  episode while the `handover.incomplete` reminder lands on the new one (`admissions
+  .predecessor_admission_id` links them — see the table above). `HandoverController::save`
+  resolves the reminder on the saved episode and **every** admission linked to it as a direct
+  successor — normally one, but the link carries no uniqueness guarantee, so an admin's same-day
+  `reverseDischarge` of the closing episode followed by a second transfer can leave two; both
+  resolve together, never just the first found (fixed 2026-09-25, adversarial review) — so the
+  outgoing consultant's "My outgoing" save (which can only post to the closing episode) still
+  clears "Needs handover" for the patient regardless. One hop only — it resolves the move(s) that
+  episode itself caused, not a longer chain of later transfers. A second, *concurrent* successor
+  (a double-submitted transfer racing itself) is instead prevented outright by a `lockForUpdate()`
+  re-check inside `transferSpecialty`'s transaction, which rejects the loser with a validation
+  error before it can create a duplicate.
 - **Signatures bind the latest revision:** each move pins `revision_id` to the latest handover
   revision at transfer time, and it is **re-bound at signing** to the revision the receiving
   consultant actually read. Only the primary consultant, a manager, or the outgoing consultant of a
@@ -304,7 +319,7 @@ queries in Dashboard/Statistics/Reports bypass the SoftDeletes global scope.
 | **Bed** (inline edit) | POST `/admissions/{id}/bed` | UPDATE `admissions.bed`. Any clinical role. → `admission.bed` |
 | **Long-term** toggle | POST `/admissions/{id}/longterm` | UPDATE `admissions.is_longterm` (flip). → `admission.longterm` |
 | **Transfer** (Ward↔ICU) | POST `/admissions/{id}/transfer` | Transaction: close the current episode as a transfer (`discharge_date`=today, `transfer_type`, `discharge_to` = `Intensive Care (ICU)`/`Ward`, `medical_discharge_date`=today, `outcome='Alive'`, `delay_reason`=NULL, `discharged_by`=you) + INSERT a new admission in the target location (same patient/consultant, carried diagnoses). The new episode **carries the bed** and stamps `admitted_from` with the source side. → `admission.transfer` | The **Long-term** flag (`is_longterm`) is carried to the new episode (since 2026-09-24; it used to reset).
-| **Specialty transfer** (internal) | POST `/admissions/{id}/transfer` | Closes the episode and opens a new one keeping the ORIGINAL `admitted_from`, forcing `current_location='Ward'` and carrying the bed. Creates a handover signature when the consultant changes. → `admission.transfer_specialty` | `is_longterm` carries to the new episode (since 2026-09-24).
+| **Specialty transfer** (internal) | POST `/admissions/{id}/transfer` | Closes the episode and opens a new one keeping the ORIGINAL `admitted_from`, forcing `current_location='Ward'` and carrying the bed. Creates a handover signature (on the CLOSING episode) when the consultant changes, and stamps the new episode's `predecessor_admission_id` = the closing episode's id so a later save on either resolves the pair's reminder (2026-09-25). Re-checks the closing episode's `discharge_date` under `lockForUpdate()` inside its own transaction first — a double-submitted transfer racing itself is rejected as an ordinary validation error, not a duplicate successor (fixed 2026-09-25). → `admission.transfer_specialty` | `is_longterm` carries to the new episode (since 2026-09-24).
 | **Specialty transfer** (external service) | POST `/admissions/{id}/transfer` | Closes the episode **without** reopening one — except a transfer to `'Intensive Care (ICU)'`, which ALSO opens the receiving ICU episode (same consultant, bed + diagnoses carried, `admitted_from='Ward'`, `assigned_on`=today but NOT new-flagged) so the patient stays on the census. → `admission.transfer_external` |
 | **Discharge** (ward, not yet medically discharged) | POST `/admissions/{id}/medical-discharge` | UPDATE `medical_discharge_date`, `outcome`, `discharge_to`, `delay_reason`, `discharged_by`; a one-step variant also closes the episode. (Patient stays on the board as "discharged still in".) → `admission.medical_discharge` / `admission.discharge_both` |
 | **Complete discharge** | POST `/admissions/{id}/complete-discharge` | UPDATE `discharge_date`, `transfer_type` (`discharge from ward`/`ICU`), `discharged_by`. Voids unsigned signatures patient-wide if this was the last open episode. Leaves the board. → `admission.complete_discharge` |
@@ -373,7 +388,7 @@ verified against `RegistryController`, `AuditController`, `StatisticsController`
 | Button | Endpoint | Database effect · audit action |
 |---|---|---|
 | **Open handover** | GET `/admissions/{id}/handover` | Read only. Writes `handover.read` **only when `log_record_opens` is ON** *(verified against `HandoverController::show` on 2026-09-03 — it is not unconditional)*. |
-| **Save handover** | POST `/admissions/{id}/handover` | Transaction: upsert `handovers` (encrypted `body`, `checkpoints`, `updated_by`, explicit `updated_at`) + INSERT a `handover_revisions` row. Then resolves any open `handover.incomplete` notifications for the admission (`resolved_at`). Gate: `canManageAdmission` OR the outgoing consultant of a pending signature. → `handover.update` |
+| **Save handover** | POST `/admissions/{id}/handover` | Transaction: upsert `handovers` (encrypted `body`, `checkpoints`, `updated_by`, explicit `updated_at`) + INSERT a `handover_revisions` row. Then resolves any open `handover.incomplete` notifications for the admission **and** for every direct successor episode (`predecessor_admission_id`, 2026-09-25 — the specialty-transfer split, §"Handover subsystem" above; not just the first found, since the link is not unique) (`resolved_at`). Gate: `canManageAdmission` OR the outgoing consultant of a pending signature. → `handover.update` |
 | **Sign** / **Sign many** | POST `/handovers/{signature}/sign` · `/handovers/sign-many` | UPDATE `handover_signatures` (`signed_at`, `signed_by`, `revision_id` re-bound to the revision actually read). → `handover.sign` | Both require `acknowledged=true` (since 2026-09-24): a request without it is refused, and the single **Sign** now asks for confirmation first, like **Sign all**.
 | **Mark notifications read** | POST `/notifications/read-all` | UPDATE `notifications.read_at` for the user's non-`handover.incomplete` rows. Reminder rows are cleared by `resolved_at` only. Notification rows are **never deleted**. |
 

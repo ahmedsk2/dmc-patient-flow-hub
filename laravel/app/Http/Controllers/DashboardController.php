@@ -450,6 +450,12 @@ class DashboardController extends Controller
 
         return Inertia::render('Dashboard', [
             'adminBand' => $adminBand,
+            // role walkthrough 2026-09-25: the Active Consultations InfoTip needs
+            // to know whether THIS viewer sees the unscoped ledger (admin or a coordinator) so it never
+            // claims a specialty scope that Consultation::scopeVisibleTo doesn't actually apply — the
+            // shared Inertia `auth.user.can` bag has no coordinate-consultations flag, so it travels
+            // as a page prop instead of widening that shared shape for one tile.
+            'canCoordinateConsults' => (bool) ($viewer && $viewer->canCoordinateConsultations()),
             'kpis' => [
                 'census' => $active, 'ward' => $activeWard, 'icu' => $activeIcu,
                 'admissionsToday' => $admissionsToday, 'dischargesToday' => $dischargesToday,

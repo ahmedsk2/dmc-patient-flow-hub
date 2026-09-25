@@ -22,7 +22,10 @@ const form = useForm({
 // ICD-10 async picker
 const selectedDx = ref([]);
 const addDx = (d) => {
-    if (!selectedDx.value.find((x) => x.code === d.code)) { selectedDx.value.push(d); form.diagnoses.push(d.code); }
+    if (!selectedDx.value.find((x) => x.code === d.code)) {
+        selectedDx.value.push(d); form.diagnoses.push(d.code);
+        form.clearErrors('diagnoses');   // E6 (role walkthrough 2026-09-25): see submit() note below
+    }
 };
 const removeDx = (code) => {
     selectedDx.value = selectedDx.value.filter((x) => x.code !== code);
@@ -107,6 +110,10 @@ const submit = async () => {
     await lookupMrn();
     form.post('/admissions');
 };
+// E6 (role walkthrough 2026-09-25): every field below now clears its OWN server-side error the
+// moment its value changes, instead of only on the next full page load. Without this, a clinician
+// who corrected every field after a failed submit still saw all the original "required" messages —
+// through a second, successful submit — because Create.vue never called form.clearErrors().
 const field = 'w-full rounded-xl border border-ink-200 bg-card px-3.5 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20';
 </script>
 
@@ -123,7 +130,7 @@ const field = 'w-full rounded-xl border border-ink-200 bg-card px-3.5 py-2.5 tex
                         <label :for="fid('mrn')" class="mb-1 flex items-center gap-1.5 text-sm font-semibold text-ink-700">MRN <span class="text-danger-500">*</span>
                             <InfoTip label="MRN" text="If this MRN belongs to a known patient, their stored details fill in below — confirm before any change to them is saved." />
                         </label>
-                        <input :id="fid('mrn')" v-model="form.mrn" @blur="lookupMrn" :aria-describedby="form.errors.mrn ? fid('mrn') + '-err' : undefined" :class="[field, form.errors.mrn && 'border-danger-500']" placeholder="Medical record number" inputmode="numeric" />
+                        <input :id="fid('mrn')" v-model="form.mrn" @input="form.clearErrors('mrn')" @blur="lookupMrn" :aria-describedby="form.errors.mrn ? fid('mrn') + '-err' : undefined" :class="[field, form.errors.mrn && 'border-danger-500']" placeholder="Medical record number" inputmode="numeric" />
                         <p v-if="form.errors.mrn" :id="fid('mrn') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.mrn }}</p>
                         <p v-if="mrnStatus === 'loading'" class="mt-1 text-xs text-ink-400">Checking MRN…</p>
                         <p v-else-if="mrnStatus === 'found' && !hasActiveEpisode" class="mt-1 text-xs font-semibold text-brand-700">Existing patient — details filled from their record. Changing them updates this patient for all visits.</p>
@@ -131,24 +138,24 @@ const field = 'w-full rounded-xl border border-ink-200 bg-card px-3.5 py-2.5 tex
                     </div>
                     <div>
                         <label :for="fid('name')" class="mb-1 block text-sm font-semibold text-ink-700">Full name <span class="text-danger-500">*</span></label>
-                        <input :id="fid('name')" v-model="form.name" :aria-describedby="form.errors.name ? fid('name') + '-err' : undefined" :class="[field, form.errors.name && 'border-danger-500']" placeholder="Patient name" />
+                        <input :id="fid('name')" v-model="form.name" @input="form.clearErrors('name')" :aria-describedby="form.errors.name ? fid('name') + '-err' : undefined" :class="[field, form.errors.name && 'border-danger-500']" placeholder="Patient name" />
                         <p v-if="form.errors.name" :id="fid('name') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.name }}</p>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label :for="fid('age')" class="mb-1 block text-sm font-semibold text-ink-700">Age <span class="text-danger-500">*</span></label>
-                            <input :id="fid('age')" v-model="form.age" :aria-describedby="form.errors.age ? fid('age') + '-err' : undefined" :class="[field, form.errors.age && 'border-danger-500']" inputmode="numeric" placeholder="Years" />
+                            <input :id="fid('age')" v-model="form.age" @input="form.clearErrors('age')" :aria-describedby="form.errors.age ? fid('age') + '-err' : undefined" :class="[field, form.errors.age && 'border-danger-500']" inputmode="numeric" placeholder="Years" />
                             <p v-if="form.errors.age" :id="fid('age') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.age }}</p>
                         </div>
                         <div>
                             <label :for="fid('gender')" class="mb-1 block text-sm font-semibold text-ink-700">Gender <span class="text-danger-500">*</span></label>
-                            <select :id="fid('gender')" v-model="form.gender" :aria-describedby="form.errors.gender ? fid('gender') + '-err' : undefined" :class="[field, form.errors.gender && 'border-danger-500']"><option value="">—</option><option>Male</option><option>Female</option></select>
+                            <select :id="fid('gender')" v-model="form.gender" @change="form.clearErrors('gender')" :aria-describedby="form.errors.gender ? fid('gender') + '-err' : undefined" :class="[field, form.errors.gender && 'border-danger-500']"><option value="">—</option><option>Male</option><option>Female</option></select>
                             <p v-if="form.errors.gender" :id="fid('gender') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.gender }}</p>
                         </div>
                     </div>
                     <div>
                         <label :for="fid('nationality')" class="mb-1 block text-sm font-semibold text-ink-700">Nationality <span class="text-danger-500">*</span></label>
-                        <select :id="fid('nationality')" v-model="form.nationality" :aria-describedby="form.errors.nationality ? fid('nationality') + '-err' : undefined" :class="[field, form.errors.nationality && 'border-danger-500']">
+                        <select :id="fid('nationality')" v-model="form.nationality" @change="form.clearErrors('nationality')" :aria-describedby="form.errors.nationality ? fid('nationality') + '-err' : undefined" :class="[field, form.errors.nationality && 'border-danger-500']">
                             <option value="">Select country…</option>
                             <option v-for="c in countries" :key="c">{{ c }}</option>
                         </select>
@@ -157,7 +164,7 @@ const field = 'w-full rounded-xl border border-ink-200 bg-card px-3.5 py-2.5 tex
                 </div>
                 <FlowAlert v-if="identityChanged || form.errors.confirm_identity_update" tone="warning" title="This changes an existing patient's record" class="mt-4">
                     <label class="flex items-start gap-2">
-                        <input type="checkbox" v-model="form.confirm_identity_update" class="mt-0.5 rounded text-brand-700" />
+                        <input type="checkbox" v-model="form.confirm_identity_update" @change="form.clearErrors('confirm_identity_update')" class="mt-0.5 rounded text-brand-700" />
                         <span>MRN {{ form.mrn }} already belongs to {{ lookedUpPatient?.name || 'a known patient' }}. Confirm you want to update their stored details — this changes what's shown for every one of their visits, past and future.</span>
                     </label>
                     <p v-if="form.errors.confirm_identity_update" class="mt-1.5 font-semibold">{{ form.errors.confirm_identity_update }}</p>
@@ -172,7 +179,7 @@ const field = 'w-full rounded-xl border border-ink-200 bg-card px-3.5 py-2.5 tex
                 <div class="grid gap-4 sm:grid-cols-3">
                     <div>
                         <label :for="fid('admit_date')" class="mb-1 block text-sm font-semibold text-ink-700">Admit date <span class="text-danger-500">*</span></label>
-                        <input :id="fid('admit_date')" v-model="form.admit_date" type="date" :max="today" :aria-describedby="form.errors.admit_date ? fid('admit_date') + '-err' : undefined" :class="[field, form.errors.admit_date && 'border-danger-500']" />
+                        <input :id="fid('admit_date')" v-model="form.admit_date" @input="form.clearErrors('admit_date')" type="date" :max="today" :aria-describedby="form.errors.admit_date ? fid('admit_date') + '-err' : undefined" :class="[field, form.errors.admit_date && 'border-danger-500']" />
                         <p v-if="form.errors.admit_date" :id="fid('admit_date') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.admit_date }}</p>
                     </div>
                     <div>
@@ -185,7 +192,7 @@ const field = 'w-full rounded-xl border border-ink-200 bg-card px-3.5 py-2.5 tex
                     </div>
                     <div>
                         <label :for="fid('bed')" class="mb-1 block text-sm font-semibold text-ink-700">Bed <span class="text-danger-500">*</span></label>
-                        <input :id="fid('bed')" v-model="form.bed" :aria-describedby="form.errors.bed ? fid('bed') + '-err' : undefined" :class="[field, form.errors.bed && 'border-danger-500']" placeholder="Bed / room" />
+                        <input :id="fid('bed')" v-model="form.bed" @input="form.clearErrors('bed')" :aria-describedby="form.errors.bed ? fid('bed') + '-err' : undefined" :class="[field, form.errors.bed && 'border-danger-500']" placeholder="Bed / room" />
                         <p v-if="form.errors.bed" :id="fid('bed') + '-err'" class="mt-1 text-xs text-on-danger">{{ form.errors.bed }}</p>
                     </div>
                     <div class="sm:col-span-2">

@@ -84,11 +84,14 @@ describe('Consultations/Index — patient lookup on create', () => {
         w.vm.lookupResults = [row];
         await w.vm.$nextTick();
 
-        // drive the rendered UI (not the vm method directly) so the click handler + template wiring
-        // are actually proven, not just the function they happen to call
-        const buttons = w.findAll('ul button');
-        expect(buttons).toHaveLength(1);
-        await buttons[0].trigger('click');
+        // drive the rendered UI (not the vm method directly) so the mousedown handler + template
+        // wiring are actually proven, not just the function they happen to call. Typeahead a11y
+        // (role walkthrough 2026-09-25): the row is now role="option" (mirrors IcdTypeahead.vue),
+        // selected on mousedown (not click) so the input never loses focus first — see
+        // Components/__tests__/IcdTypeahead.spec.js for the same idiom.
+        const options = w.findAll('[role="option"]');
+        expect(options).toHaveLength(1);
+        await options[0].trigger('mousedown');
         await w.vm.$nextTick();
 
         expect(w.vm.cForm.mrn).toBe('40020001');

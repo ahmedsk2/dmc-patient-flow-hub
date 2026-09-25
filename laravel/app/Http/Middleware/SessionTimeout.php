@@ -8,6 +8,7 @@ use App\Support\Audit;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -75,6 +76,11 @@ class SessionTimeout
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
+            // S1 (role walkthrough 2026-09-25): after invalidate()/regenerateToken(), so it lands in
+            // the fresh session — clears the client's encrypted-history key on the login page this
+            // eviction redirects to (deactivated/deleted/vanished account, mid-session).
+            Inertia::clearHistory();
+
             return redirect()->route('login')->with('flash', [
                 'type' => 'error',
                 'message' => 'Your account access has changed — please sign in again or contact an administrator.',
@@ -104,6 +110,10 @@ class SessionTimeout
             Auth::guard('web')->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
+
+            // S1 (role walkthrough 2026-09-25): see the eviction branch above — same reasoning,
+            // same placement after invalidate()/regenerateToken().
+            Inertia::clearHistory();
 
             return redirect()->route('login')->with('flash', [
                 'type' => 'error',

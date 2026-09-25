@@ -44,6 +44,15 @@ const field = 'w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm out
 <template>
     <AppLayout title="My Profile">
         <div class="mx-auto grid max-w-3xl gap-6">
+            <!-- U-signin(d) (role walkthrough 2026-09-25): the reason a forced navigation landed
+                 you here must stay visible without scrolling for as long as it's still true — the
+                 flash TOAST alone (fixed bottom corner, self-dismissing after 4.5s) isn't enough.
+                 First element on the page, above the identity card. -->
+            <div v-if="profile.password_expired" role="alert"
+                class="rounded-2xl bg-danger-600 p-4 text-sm font-semibold text-white shadow-card">
+                Your password has expired — please set a new one to continue.
+            </div>
+
             <!-- identity -->
             <section class="rounded-2xl bg-card p-6 shadow-card ring-1 ring-line">
                 <div class="flex items-center gap-4">

@@ -40,6 +40,23 @@ window.addEventListener('unhandledrejection', (event) => {
     console.error('[unhandled promise rejection]', event.reason);
 });
 
+// S1 (role walkthrough 2026-09-25): a browser can restore the ENTIRE document — DOM, JS heap and
+// all — from the back/forward cache (bfcache) instead of asking the server for anything, which is
+// how "sign out, then press Back" used to show the last patient page verbatim with no network
+// request at all. `Cache-Control: no-store` (SecurityHeaders) stops the HTTP cache from doing this
+// but does not stop bfcache in modern Chromium/Firefox/Safari. `event.persisted` is true only on a
+// bfcache restore (never on a normal load), so this reload is a no-op the rest of the time; the
+// reload re-runs the full auth/session/MFA/email-verify/password-expiry gate chain server-side,
+// exactly as if the page had been requested fresh. Inertia's own history encryption (config
+// inertia.history.encrypt) covers the narrower case of the *page data* Inertia itself keeps in
+// history.state — this covers the whole rendered document, which bfcache restores independently
+// of that.
+window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+        window.location.reload();
+    }
+});
+
 // The per-request CSP nonce, from the meta tag app.blade.php renders. Inertia stamps it on the
 // <style> elements it inserts at runtime (the navigation progress bar, and the modal it shows for a
 // non-Inertia error response such as the 429 page), which is why style-src needs no inline

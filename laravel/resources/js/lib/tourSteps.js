@@ -6,6 +6,14 @@
 const present = (selector) =>
     typeof document !== 'undefined' && document.querySelector(selector) !== null;
 
+// Same breakpoint AppLayout.vue uses to decide the sidebar is the off-canvas mobile drawer
+// (`lgMql`, matches Tailwind's `lg:` cutoff). Below it, `[data-tour="nav-clinical"]` is present in
+// the DOM (present() would happily match it) but sits inert/off-canvas behind the hamburger, so
+// driver.js has nothing to visibly highlight — the step floats with no anchor underneath it.
+const isMobileViewport = () =>
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+        && window.matchMedia('(max-width: 1023px)').matches;
+
 /**
  * @param {object} user  auth.user — { role, is_admin, can: {...} }
  * @returns {Array} driver.js steps
@@ -22,14 +30,26 @@ export function buildSteps(user = {}) {
         },
     };
 
-    // Candidate element-anchored steps, in tour order. `admin: true` ones are only offered to admins.
-    const candidates = [
-        {
+    // On a phone/narrow tablet the sidebar this step used to point at is hidden behind the menu
+    // button, so nothing was highlighted (role walkthrough 2026-09-25, Tour). Target the menu
+    // button itself there instead, with wording that matches "tap to open" rather than "it's here".
+    const navClinical = isMobileViewport()
+        ? {
+            el: '[data-tour="nav-menu-button"]',
+            title: 'Clinical navigation',
+            description: 'Tap here to open the menu — your day-to-day workspaces (the board, new admissions, handovers, consultations and recent activity) live inside.',
+            side: 'bottom', align: 'start',
+        }
+        : {
             el: '[data-tour="nav-clinical"]',
             title: 'Clinical navigation',
             description: 'Your day-to-day workspaces — the board, new admissions, handovers, consultations and recent activity — live here.',
             side: 'right', align: 'start',
-        },
+        };
+
+    // Candidate element-anchored steps, in tour order. `admin: true` ones are only offered to admins.
+    const candidates = [
+        navClinical,
         {
             el: '[data-tour="quick-jump"]',
             title: 'Jump to any patient',
